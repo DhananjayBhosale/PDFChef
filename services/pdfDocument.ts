@@ -991,7 +991,7 @@ export interface ParagraphFace {
 export type ParagraphSaveEdit = ParagraphDirectEdit | ParagraphReflowEdit;
 
 /** Shown when a document's own permissions forbid writing it back. */
-export const PDF_EDIT_PERMISSION_MESSAGE = 'This PDF carries a password that allows reading but not changes, so the edited version cannot be written. Remove it with the Unlock PDF tool first, then edit the result.';
+export const PDF_EDIT_PERMISSION_MESSAGE = 'This PDF is password-protected against changes, so it cannot be saved. Remove the password with the Unlock PDF tool first.';
 
 export const savePDFWithAnnotations = async (
   file: File,

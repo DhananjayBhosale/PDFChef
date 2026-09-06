@@ -178,7 +178,7 @@ const waitForParagraphs = (page) =>
  */
 const waitForPlan = async (page) => {
   await page.waitForFunction(
-    () => /goes straight into the document|will be redrawn|cannot be saved/i.test(
+    () => /goes straight into the document|will be redrawn|cannot be changed/i.test(
       document.querySelector('[data-testid="pdf-paragraph-provenance"]')?.textContent ?? '',
     ),
     null,
@@ -548,7 +548,8 @@ try {
 
     assert.equal(await page.locator('[data-testid="pdf-text-block"]').count(), 0);
     const notice = await page.locator('[role="status"]').first().innerText();
-    assert.match(notice, /no text layer/i);
+    assert.match(notice, /is a picture, so its words cannot be edited/i);
+    assert.match(notice, /text box/i, 'a page that cannot be edited must say what to do instead');
     assert.match(notice, /OCR/);
     assert.equal(await page.getByRole('link', { name: 'OCR' }).count(), 1, 'the notice must link to the OCR tool');
     console.log('PASS a scanned page says why it cannot be edited and points at the fix');

@@ -81,7 +81,9 @@ export const PdfParagraphInspector: React.FC<Props> = ({
       // a reader who meets them here has been handed our problem instead of an answer.
       ? 'Your change goes straight into the document. It keeps this typeface, and nothing is covered over.'
       : plan.mode === 'blocked'
-      ? `This change cannot be saved, because ${plan.reason}. Undo it, or add the text as a new text box instead.`
+      // The reason is left out on purpose: it names a font encoding or a text object, which is not
+      // something a reader can do anything about. The one thing they can do is on the end.
+      ? 'This paragraph cannot be changed. Add a text box over it instead.'
       : `This paragraph will be redrawn rather than typed over, so its lettering may sit a little differently.${
         overrun > 0
           ? ' It is now taller than the space it had, and what follows will not move down — shorten it, or make the text smaller, so the two do not overlap.'
@@ -242,7 +244,9 @@ export const PdfParagraphInspector: React.FC<Props> = ({
           body size rather than the smallest one available. It was the only text in the editor
           below the type scale, and the one a reader most needs to be able to read. */}
       <p data-testid="pdf-paragraph-provenance" className="mt-1 px-0.5 text-sm font-medium leading-snug text-[var(--text-secondary)]">
-        {provenance}. {outcome}
+        {/* Which typeface is drawing the paragraph is worth knowing while it can still be changed.
+            Once the answer is no it is only noise in front of the one sentence that matters. */}
+        {plan?.mode === 'blocked' ? outcome : `${provenance}. ${outcome}`}
       </p>
     </section>
   );

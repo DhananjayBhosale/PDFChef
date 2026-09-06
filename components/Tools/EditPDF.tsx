@@ -149,35 +149,31 @@ const MAX_REWRITE_ISOLATION_ATTEMPTS = 12;
 const PLAN_SETTLE_MS = 180;
 
 /**
- * Say which paragraphs could not be written, and why, in the reader's terms.
+ * Say which paragraphs cannot be changed, and what to do instead.
  *
- * Reasons repeat — one unavailable glyph usually blocks the same handful of paragraphs — so they
- * are grouped, and the pages are named because on a long document that is the only way to find
- * them again.
+ * The page numbers stay because on a long document they are the only way to find the paragraphs
+ * again. Why the file will not take them does not: the reasons are about font encodings and text
+ * objects, which tell a reader nothing they can act on. What they can act on is a text box, so
+ * that is what the sentence ends with. The reason is still written to the console for support.
  */
 const describeBlockedParagraphs = (
   blocked: Array<{ block: { pageIndex: number }; plan: { mode: string; reason?: string } }>,
 ) => {
-  const byReason = new Map<string, number[]>();
-  blocked.forEach(({ block, plan }) => {
-    const reason = plan.reason ?? 'it cannot be written back to this PDF';
-    byReason.set(reason, [...(byReason.get(reason) ?? []), block.pageIndex + 1]);
-  });
+  const pages = [...new Set(blocked.map(({ block }) => block.pageIndex + 1))]
+    .sort((first, second) => first - second);
+  const where = pages.length === 1
+    ? `on page ${pages[0]}`
+    : pages.length <= 4
+      ? `on pages ${pages.slice(0, -1).join(', ')} and ${pages[pages.length - 1]}`
+      : `on ${pages.length} pages, starting at page ${pages[0]}`;
 
-  const listPages = (pages: number[]) => {
-    const unique = [...new Set(pages)].sort((first, second) => first - second);
-    if (unique.length === 1) return `page ${unique[0]}`;
-    if (unique.length <= 4) return `pages ${unique.slice(0, -1).join(', ')} and ${unique[unique.length - 1]}`;
-    return `${unique.length} pages, starting at page ${unique[0]}`;
-  };
-
-  const parts = [...byReason.entries()]
-    .slice(0, 2)
-    .map(([reason, pages]) => `on ${listPages(pages)}, ${reason}`);
-  const rest = byReason.size - parts.length;
-
-  return `${blocked.length === 1 ? 'One paragraph was' : `${blocked.length.toLocaleString()} paragraphs were`} left as the document wrote them: ${parts.join('; ')}${rest > 0 ? `; and ${rest} other reason${rest === 1 ? '' : 's'}` : ''}.`;
+  return blocked.length === 1
+    ? `This paragraph ${where} cannot be changed. Add a text box over it instead.`
+    : `${blocked.length.toLocaleString()} paragraphs ${where} cannot be changed. Add text boxes over them instead.`;
 };
+
+/** A refusal the editor chose to make, rather than a fault: an answer, not an error. */
+const refusal = (message: string) => Object.assign(new Error(message), { name: 'PdfChefRefusal' });
 
 /** Used only when a run carries no font information at all, which real PDFs rarely do. */
 const FALLBACK_RESOLVED_FONT = {
@@ -2145,7 +2141,7 @@ export const EditPDF: React.FC = () => {
       // Narrowed if the rewrite has to fall back to redrawing, which not every paragraph can do.
       const redrawable = new Set(savablePlans);
       if (savablePlans.length === 0 && blockedPlans.length > 0) {
-        throw new Error(`This edit cannot be saved: ${describeBlockedParagraphs(blockedPlans)}`);
+        throw refusal(describeBlockedParagraphs(blockedPlans));
       }
       try {
         bytes = await savePDFWithAnnotations(file.file, elements, formValues, buildParagraphSaveEdits({ plans: savablePlans }));
@@ -2213,7 +2209,7 @@ export const EditPDF: React.FC = () => {
           });
         });
         if (redrawable.size === 0) {
-          throw new Error(`This edit cannot be saved: ${describeBlockedParagraphs(blockedPlans)}`);
+          throw refusal(describeBlockedParagraphs(blockedPlans));
         }
         setStatus({ isProcessing: true, progress: 60, message: 'Redrawing the edited paragraphs instead…' });
         try {
@@ -2273,17 +2269,18 @@ export const EditPDF: React.FC = () => {
         return;
       }
       const message = error instanceof Error ? error.message : '';
+      const chosen = error instanceof Error && error.name === 'PdfChefRefusal';
       // A refusal we chose to make is an answer, not a fault, so it does not go to the console.
-      if (!message.startsWith('This edit cannot be saved') && message !== PDF_EDIT_PERMISSION_MESSAGE) {
+      if (!chosen && message !== PDF_EDIT_PERMISSION_MESSAGE) {
         console.error(error);
       }
       setStatus({
         isProcessing: false,
         progress: 0,
         message: '',
-        error: message === PDF_TEXT_OVERFLOW_MESSAGE
+        error: chosen
+          || message === PDF_TEXT_OVERFLOW_MESSAGE
           || message === PDF_EDIT_PERMISSION_MESSAGE
-          || message.startsWith('This edit cannot be saved')
           || message.startsWith('Visual fallback is unavailable')
           ? message
           : message.startsWith('Direct text edit failed:')
@@ -2324,10 +2321,9 @@ export const EditPDF: React.FC = () => {
   const scannedNotice = pagesWithoutText.includes(targetPageIndex) ? (
     <div role="status" className={compactViewport ? 'mx-auto mb-2 max-w-md' : 'mb-2'}>
       <StatusLine tone="caution">
-        Page {targetPageIndex + 1} has no text layer, so its words are part of a picture and cannot
-        be edited here. Run <Link to="/ocr" className="font-bold underline">OCR</Link> on this PDF
-        first to add a text layer, then reopen it here. You can still add text, shapes and images
-        to this page.
+        Page {targetPageIndex + 1} is a picture, so its words cannot be edited. Add a text box over
+        it instead, or run <Link to="/ocr" className="font-bold underline">OCR</Link> first to make
+        the text editable.
       </StatusLine>
     </div>
   ) : null;
@@ -2338,10 +2334,7 @@ export const EditPDF: React.FC = () => {
     <div role="status" className={compactViewport ? 'mx-auto mb-2 max-w-md' : 'mb-2'}>
       <StatusLine tone="caution">
         <span className="block">
-          {describeBlockedParagraphs(blockedParagraphs)} Saving now writes the{' '}
-          {(paragraphPlans.length - blockedParagraphs.length).toLocaleString()} other edited
-          {paragraphPlans.length - blockedParagraphs.length === 1 ? ' paragraph' : ' paragraphs'} and
-          leaves {blockedParagraphs.length === 1 ? 'this one' : 'these'} untouched.
+          {describeBlockedParagraphs(blockedParagraphs)} Your other edits will still be saved.
         </span>
         <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
           <button

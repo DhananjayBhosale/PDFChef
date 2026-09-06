@@ -278,9 +278,10 @@ test('the one action a reader cannot guess at keeps its word on every phone', ()
   assert.match(editor, /Badge tone="caution" className="shrink-0 max-\[400px\]:hidden"/);
 });
 
-test('a page with no text layer says so and names the tool that fixes it', () => {
+test('a page that is only a picture says so and offers the two ways forward', () => {
   assert.match(editor, /const scannedNotice = pagesWithoutText\.includes\(targetPageIndex\)/);
-  assert.match(editor, /has no text layer/);
+  assert.match(editor, /is a picture, so its words cannot be edited/);
+  assert.match(editor, /Add a text box over\s+it instead/);
   assert.match(editor, /to="\/ocr"/);
   assert.equal((editor.match(/\{scannedNotice\}/g) ?? []).length, 2);
 });
@@ -299,7 +300,8 @@ test('an edit the document cannot draw is refused while it is being typed', () =
   assert.match(read('services/pdfFontResolution.ts'), /export const substituteForStandardFont/);
   assert.match(read('services/pdfDocument.ts'), /substituteForStandardFont\(rawSegment\)\.text/);
   // The refusal is an answer the editor chose, so it is not also logged as a fault.
-  assert.match(editor, /!message\.startsWith\('This edit cannot be saved'\) && message !== PDF_EDIT_PERMISSION_MESSAGE/);
+  assert.match(editor, /const chosen = error instanceof Error && error\.name === 'PdfChefRefusal'/);
+  assert.match(editor, /if \(!chosen && message !== PDF_EDIT_PERMISSION_MESSAGE\)/);
 });
 
 test('a password-protected PDF is explained rather than reported as broken', () => {
@@ -389,4 +391,21 @@ test('an in-place rewrite is only used when the PDF\'s own font has the glyphs',
   // Missing glyphs downgrade the plan to a redraw, which uses a face that can draw them — they
   // must not block the edit outright, and must not be left to the in-place path.
   assert.match(editor, /missingFromOwnFont\?\.checked && !missingFromOwnFont\.covered\s*\?\s*\{\s*mode: 'reflow'/);
+});
+
+test('a refusal is one short sentence that ends with what to do instead', () => {
+  // Someone who cannot edit a paragraph needs two things: to know it, and to know the way round it.
+  // Why the file will not take the change is about font encodings, which is ours to log, not theirs
+  // to read.
+  const shown = [
+    ...editor.matchAll(/`?(This paragraph[^`'\n]*cannot be changed[^`'\n]*)`?/g),
+    ...paragraphInspector.matchAll(/'(This paragraph[^']*)'/g),
+  ].map(match => match[1]);
+  assert.ok(shown.length >= 2, `expected the refusals, found ${shown.length}`);
+  shown.forEach((sentence) => {
+    assert.match(sentence, /text box/, `a refusal must say what to do instead: ${sentence}`);
+    assert.ok(sentence.length < 110, `a refusal must stay short, this is ${sentence.length}: ${sentence}`);
+  });
+  // The reason the planner recorded is no longer pasted into what the reader sees.
+  assert.doesNotMatch(paragraphInspector, /cannot be saved, because \$\{plan\.reason\}/);
 });
