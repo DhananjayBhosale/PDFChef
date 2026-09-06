@@ -356,3 +356,15 @@ test("a form's own fields do not make the phone zoom the page away from Save", (
   assert.match(editor, /height: unit\(field\.height\)/);
   assert.match(editor, /'--chef-field-hit-w': `\$\{Math\.round\(unit\(hitArea\.width\)\)\}px`/);
 });
+
+test('an in-place rewrite is only used when the PDF\'s own font has the glyphs', () => {
+  // Most PDFs embed only the glyphs they already used, and the PDF engine does not refuse when a
+  // replacement needs one that is missing — it writes the character code anyway. The file then
+  // reads back correctly through the engines that wrote it while rendering as an empty box in
+  // Preview, Acrobat and print, which no downstream check catches. So the font is asked here.
+  assert.match(editor, /const missingFromOwnFont = planned\.mode === 'direct' && descriptor && introduced/);
+  assert.match(editor, /\? checkGlyphCoverage\(descriptor, introduced\)/);
+  // Missing glyphs downgrade the plan to a redraw, which uses a face that can draw them — they
+  // must not block the edit outright, and must not be left to the in-place path.
+  assert.match(editor, /missingFromOwnFont\?\.checked && !missingFromOwnFont\.covered\s*\?\s*\{\s*mode: 'reflow'/);
+});

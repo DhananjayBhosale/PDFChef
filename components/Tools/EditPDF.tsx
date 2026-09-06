@@ -31,6 +31,7 @@ import {
   type StyledSegment,
 } from '../../services/pdfBlockEditPlanning';
 import {
+  checkGlyphCoverage,
   describeCharacters,
   measureTextWidth,
   resetFontResolutionCaches,
@@ -1805,7 +1806,7 @@ export const EditPDF: React.FC = () => {
         || (edit.fontSize !== undefined && edit.fontSize !== block.fontSize)
         || (edit.color !== undefined && edit.color !== blockColorsRef.current[edit.blockId]?.ink);
       const rotated = Math.abs(block.angle) > 0.02;
-      const plan: BlockEditPlan = restyled
+      const planned: BlockEditPlan = restyled
         // Restyling changes every glyph on the line, which no in-place text rewrite can express.
         ? rotated
           ? { mode: 'blocked', reason: 'rotated or skewed text cannot be restyled, because redrawing it would not follow its baseline' }
@@ -1815,12 +1816,28 @@ export const EditPDF: React.FC = () => {
             measureTextWidth(text, runFont(fontKey).resolved, fontSize),
           maxU: pageText?.pageWidth,
         });
-      // Rewriting the PDF's own text objects uses the PDF's own font, which is drawing this
-      // paragraph already — so only characters the edit introduces can be a problem there, and the
-      // PDF engine reports those itself. A redraw is different: it writes with the face resolved
-      // here, so everything in the paragraph has to be drawable by it.
+
       const original = new Set(block.text);
       const introduced = [...new Set(edit.text)].filter((character) => !original.has(character)).join('');
+      /**
+       * Whether the PDF's own font can draw what the edit introduces.
+       *
+       * Rewriting a text object in place keeps the document's font, and most PDFs embed only the
+       * glyphs they already used — a heading set in a display face may carry no "b" and no "0" at
+       * all. The PDF engine does not refuse when one is missing: it writes the character code
+       * anyway, and the file then reads back correctly through the very engines that wrote it while
+       * rendering as an empty box in Preview, Acrobat and print. Nothing downstream catches that,
+       * so the font is asked here, and a paragraph it cannot draw is redrawn with one that can.
+       */
+      const missingFromOwnFont = planned.mode === 'direct' && descriptor && introduced
+        ? checkGlyphCoverage(descriptor, introduced)
+        : null;
+      const plan: BlockEditPlan = missingFromOwnFont?.checked && !missingFromOwnFont.covered
+        ? {
+          mode: 'reflow',
+          reason: `this PDF's own font has no ${describeCharacters(missingFromOwnFont.missing)} in it`,
+        }
+        : planned;
       // A redraw writes each stretch in its own face, so a character only counts as unwritable when
       // the face that will actually draw it has no glyph for it.
       const unencodable = plan.mode === 'reflow'
