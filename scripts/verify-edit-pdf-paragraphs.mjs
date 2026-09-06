@@ -35,6 +35,10 @@ const LEAD_IN = 'Note:';
 const LEAD_BODY = 'this stretch is the body face and continues past the lead-in above.';
 const COLUMNS = 4;
 const WORD_PER_OBJECT = 'Each word here is its very own separate text object indeed';
+const STAMPED = [
+  'Confidential draft circulated for internal review only.',
+  'The second line of the stamped block sits underneath it.',
+];
 
 const createFixture = async () => {
   const document = await PDFDocument.create();
@@ -101,6 +105,29 @@ const createTinyCheckboxes = async () => {
     box.addToPage(page, { x: 72 + index * 12, y: 620, width: 8, height: 8 });
   });
   return Buffer.from(await document.save());
+};
+
+/**
+ * A page that draws part of itself through a form XObject.
+ *
+ * That is how a stamp, a watermark or an imposed page carries its text, and the objects inside one
+ * are not reachable from the page. A redraw has to follow the page into the form to take the old
+ * wording out, or the words the reader replaced are still in the file for a search to find.
+ */
+const createFormXObjectPage = async () => {
+  const inner = await PDFDocument.create();
+  const innerFont = await inner.embedFont(StandardFonts.Helvetica);
+  const innerPage = inner.addPage([595, 842]);
+  STAMPED.forEach((line, index) => innerPage.drawText(line, {
+    x: 72, y: 700 - index * 20, size: 13, font: innerFont,
+  }));
+
+  const outer = await PDFDocument.create();
+  const outerFont = await outer.embedFont(StandardFonts.Helvetica);
+  const page = outer.addPage([595, 842]);
+  page.drawText('A heading the page draws for itself.', { x: 72, y: 780, size: 13, font: outerFont });
+  page.drawPage(await outer.embedPage(innerPage), { x: 0, y: 0, width: 595, height: 842 });
+  return Buffer.from(await outer.save());
 };
 
 /** A page whose only content is a picture: nothing to edit, and the editor must say so. */
@@ -668,6 +695,42 @@ try {
     console.log('PASS crowded fields split the gap between them rather than overlapping');
 
     assert.deepEqual(consoleErrors, [], 'console errors while tapping form fields');
+    await context.close();
+  }
+  // --- Text the page draws through a form leaves the file when the paragraph is redrawn --------
+  {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const { page, consoleErrors } = await openEditor(context, await createFormXObjectPage());
+    const nextOutput = await installOutputCapture(page);
+    await waitForParagraphs(page);
+
+    const stamped = page.locator('[data-testid="pdf-text-block"]')
+      .filter({ hasText: 'Confidential draft' }).first();
+    await stamped.waitFor({ timeout: 30_000 });
+    await stamped.evaluate((element) => {
+      element.focus();
+      const node = document.createTreeWalker(element, NodeFilter.SHOW_TEXT).nextNode();
+      const at = node.textContent.indexOf('Confidential');
+      const range = document.createRange();
+      range.setStart(node, at);
+      range.setEnd(node, at + 'Confidential'.length);
+      const selection = getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    });
+    await page.keyboard.insertText('Unclassified');
+    await waitForPlan(page);
+
+    const saved = await saveAndRead(page, nextOutput);
+    assert.match(saved.text, /Unclassified draft/, 'the correction is missing from the saved file');
+    assert.doesNotMatch(
+      saved.text.replace(/\s+/g, ' '),
+      /Confidential draft/,
+      'the wording inside the form XObject survived the redraw, where a search would still find it',
+    );
+    console.log('PASS text drawn through a form XObject is removed, not left underneath');
+
+    assert.deepEqual(consoleErrors, [], 'console errors on the form XObject redraw');
     await context.close();
   }
 } finally {

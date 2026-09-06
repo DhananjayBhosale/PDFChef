@@ -138,6 +138,13 @@ const FIELD_TOUCH_TARGET_PX = 24;
 const EDITOR_MAX_ZOOM = 4;
 /** PDF permission flag for "modify contents", as PDF.js reports it. */
 const PDF_PERMISSION_MODIFY_CONTENTS = 8;
+/**
+ * How many paragraphs are worth retrying one at a time when a batch rewrite fails.
+ *
+ * Each attempt writes the whole document, so this trades a bounded delay for keeping every
+ * paragraph that can still be rewritten in the document's own typeface.
+ */
+const MAX_REWRITE_ISOLATION_ATTEMPTS = 12;
 /** How long after the last keystroke the paragraph's save plan is worked out. */
 const PLAN_SETTLE_MS = 180;
 
@@ -2007,14 +2014,20 @@ export const EditPDF: React.FC = () => {
   }, [blockedParagraphs, replaceBlockEdits]);
 
   const buildParagraphSaveEdits = useCallback((
-    { forceReflow = false, deleteOriginalRuns = true, plans = paragraphPlans } = {},
+    { forceReflow = false, deleteOriginalRuns = true, plans = paragraphPlans }: {
+      /** True for every paragraph, or the ids of the ones that must be redrawn rather than rewritten. */
+      forceReflow?: boolean | ReadonlySet<string>;
+      deleteOriginalRuns?: boolean;
+      plans?: typeof paragraphPlans;
+    } = {},
   ): ParagraphSaveEdit[] => (
     plans.flatMap(({ edit, block, plan, descriptor, reflow }) => {
+      const redrawThisOne = typeof forceReflow === 'boolean' ? forceReflow : forceReflow.has(edit.blockId);
       // A paragraph the file cannot express is left exactly as the document wrote it. Refusing the
       // whole save instead would throw away every other edit — and on a long document that is
       // thousands of them, discarded because of one character on one page.
       if (plan.mode === 'blocked') return [];
-      if (plan.mode === 'direct' && !forceReflow) {
+      if (plan.mode === 'direct' && !redrawThisOne) {
         return [{ mode: 'direct' as const, pageIndex: block.pageIndex, runEdits: plan.runEdits }];
       }
 
@@ -2151,10 +2164,39 @@ export const EditPDF: React.FC = () => {
         fallbackReason = directEditError.message.replace(/^Direct text edit failed:\s*/, '');
         // eslint-disable-next-line no-console
         console.warn('Paragraph redrawn instead of edited in place:', fallbackReason);
-        // Rewriting in place failed, so every remaining paragraph has to be redrawn — and a redraw
-        // can only write what its face has glyphs for. Those are set aside and reported alongside
-        // the ones the planner already knew about, rather than failing the batch.
-        savablePlans.forEach((entry) => {
+
+        /**
+         * Which paragraphs actually refused.
+         *
+         * The save offers every rewrite to the PDF engine at once, so one paragraph it will not
+         * take fails the whole call — and redrawing all of them on that account costs the others
+         * their own typeface for a fault that was never theirs. Each is offered again on its own,
+         * and only the ones that still refuse are redrawn. The retries are bounded because each is
+         * a full pass over the document, and a reader who has edited more paragraphs than that is
+         * better served by one redraw than by a minute of attempts.
+         */
+        const directPlans = savablePlans.filter((entry) => entry.plan.mode === 'direct');
+        const stubborn = new Set<string>();
+        if (directPlans.length > 1 && directPlans.length <= MAX_REWRITE_ISOLATION_ATTEMPTS) {
+          setStatus({ isProcessing: true, progress: 45, message: 'Working out which paragraphs can still be rewritten…' });
+          for (const entry of directPlans) {
+            if (generation !== documentGeneration.current) return;
+            try {
+              // Annotations and form values are left out: this asks only whether the rewrite holds.
+              await savePDFWithAnnotations(file.file, [], {}, buildParagraphSaveEdits({ plans: [entry] }));
+            } catch {
+              stubborn.add(entry.edit.blockId);
+            }
+          }
+        } else {
+          directPlans.forEach((entry) => stubborn.add(entry.edit.blockId));
+        }
+
+        // Only the paragraphs that will actually be redrawn have to be drawable by a standard face.
+        const willRedraw = savablePlans.filter(
+          (entry) => entry.plan.mode !== 'direct' || stubborn.has(entry.edit.blockId),
+        );
+        willRedraw.forEach((entry) => {
           const characters = unencodableCharacters(
             entry.edit.text,
             entry.font ?? FALLBACK_RESOLVED_FONT,
@@ -2176,12 +2218,13 @@ export const EditPDF: React.FC = () => {
         setStatus({ isProcessing: true, progress: 60, message: 'Redrawing the edited paragraphs instead…' });
         try {
           // Removing the originals first is what keeps the file honest, and it usually still works
-          // even when rewriting them in place did not.
+          // even when rewriting them in place did not. Paragraphs whose rewrite held on its own
+          // keep it: only the ones that refused are redrawn.
           bytes = await savePDFWithAnnotations(
             file.file,
             elements,
             formValues,
-            buildParagraphSaveEdits({ forceReflow: true, plans: [...redrawable] }),
+            buildParagraphSaveEdits({ forceReflow: stubborn, plans: [...redrawable] }),
           );
         } catch (deletionError) {
           if (!(deletionError instanceof Error) || !deletionError.message.startsWith('Direct text edit failed:')) {
@@ -2194,7 +2237,7 @@ export const EditPDF: React.FC = () => {
             file.file,
             elements,
             formValues,
-            buildParagraphSaveEdits({ forceReflow: true, deleteOriginalRuns: false, plans: [...redrawable] }),
+            buildParagraphSaveEdits({ forceReflow: stubborn, deleteOriginalRuns: false, plans: [...redrawable] }),
           );
         }
       }

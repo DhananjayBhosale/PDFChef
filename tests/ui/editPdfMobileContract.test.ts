@@ -132,16 +132,38 @@ test('leaving a page mid-render stops the draw instead of letting it finish', ()
 
 test('a rewrite that the document cannot express falls back to a clean redraw first', () => {
   // A rewrite in place uses the document's own font, so only new characters can be a problem
-  // there. Whether that font actually has them is something only the PDF engine can answer.
-  // A rewrite in place uses the document's own font, so only new characters can be a problem
   // there; a redraw is checked run by run, against the face that will actually draw each one.
   assert.match(editor, /const unencodable = plan\.mode === 'reflow'/);
   assert.match(editor, /unencodableCharacters\(run\.text, face\.resolved, face\.descriptor\)/);
   assert.match(editor, /unencodableCharacters\(introduced, font \?\? FALLBACK_RESOLVED_FONT, descriptor\)/);
-  // When it cannot, the redraw that removes the originals is tried before the one that covers them.
-  assert.match(editor, /buildParagraphSaveEdits\(\{ forceReflow: true, plans: \[\.\.\.redrawable\] \}\)/);
-  assert.match(editor, /buildParagraphSaveEdits\(\{ forceReflow: true, deleteOriginalRuns: false, plans: \[\.\.\.redrawable\] \}\)/);
+  // The redraw is aimed at the paragraphs that actually refused, not at every edited one.
+  assert.match(editor, /buildParagraphSaveEdits\(\{ forceReflow: stubborn, plans: \[\.\.\.redrawable\] \}\)/);
+  assert.match(editor, /buildParagraphSaveEdits\(\{ forceReflow: stubborn, deleteOriginalRuns: false, plans: \[\.\.\.redrawable\] \}\)/);
   assert.match(editor, /your old wording is still in the file underneath the new text/);
+});
+
+test('one paragraph the engine will not rewrite does not redraw the others', () => {
+  // The save offers every rewrite at once, so a single refusal used to fail the whole call and
+  // cost every other paragraph its own typeface — and on some documents the save then gave up
+  // entirely. Each is offered again alone, and only the ones that still refuse are redrawn.
+  assert.match(editor, /const directPlans = savablePlans\.filter\(\(entry\) => entry\.plan\.mode === 'direct'\)/);
+  assert.match(editor, /const stubborn = new Set<string>\(\)/);
+  assert.match(editor, /stubborn\.add\(entry\.edit\.blockId\)/);
+  assert.match(editor, /const MAX_REWRITE_ISOLATION_ATTEMPTS = 12/);
+  // Only what will actually be redrawn has to be drawable by a standard face.
+  assert.match(editor, /const willRedraw = savablePlans\.filter\([\s\S]*?stubborn\.has\(entry\.edit\.blockId\)/);
+});
+
+test("a redraw follows the page into a form it draws part of itself through", () => {
+  // A stamp, a watermark or an imposed page carries its text inside a form XObject, which is not
+  // reachable from the page. Walking only the top level left that wording in the file after the
+  // paragraph above it had been repainted, where a search would still find it.
+  assert.match(nativeTextEditor, /const PDF_PAGE_OBJECT_FORM = 5/);
+  assert.match(nativeTextEditor, /engine\.FPDFFormObj_CountObjects\(object\)/);
+  assert.match(nativeTextEditor, /engine\.FPDFFormObj_RemoveObject\(owner, object\)/);
+  // Bounds inside a form are stated in the form's own coordinates, so they are carried across.
+  assert.match(nativeTextEditor, /const bounds = mapRect\(toPage, \[/);
+  assert.match(nativeTextEditor, /composeMatrix\(toPage, own\)/);
 });
 
 test('what the reader placed on the page stays above the paragraph overlay', () => {

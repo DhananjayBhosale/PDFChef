@@ -14,6 +14,7 @@ import {
 } from './pdfNativeTextPlanning';
 
 const PDF_PAGE_OBJECT_TEXT = 1;
+const PDF_PAGE_OBJECT_FORM = 5;
 const PDF_TEXT_RENDER_MODE_INVISIBLE = 3;
 const MAX_NATIVE_TEXT_FILE_BYTES = 64 * 1024 * 1024;
 const MAX_FIRST_INSPECTION_MS = 400;
@@ -838,6 +839,32 @@ const containedWithin = (bounds: PdfSpaceRect, area: PdfSpaceRect) => (
   && bounds[3] <= area[3] + CLEARANCE_TOLERANCE_POINTS
 );
 
+type Matrix = [number, number, number, number, number, number];
+
+/** `outer` applied after `inner`, so a nested form's contents land in page coordinates. */
+const composeMatrix = (outer: Matrix, inner: Matrix): Matrix => [
+  inner[0] * outer[0] + inner[1] * outer[2],
+  inner[0] * outer[1] + inner[1] * outer[3],
+  inner[2] * outer[0] + inner[3] * outer[2],
+  inner[2] * outer[1] + inner[3] * outer[3],
+  inner[4] * outer[0] + inner[5] * outer[2] + outer[4],
+  inner[4] * outer[1] + inner[5] * outer[3] + outer[5],
+];
+
+/** Every corner is carried across, because a rotated form does not keep them in their corners. */
+const mapRect = (matrix: Matrix, rect: PdfSpaceRect): PdfSpaceRect => {
+  const corners: Array<[number, number]> = [
+    [rect[0], rect[1]], [rect[2], rect[1]], [rect[0], rect[3]], [rect[2], rect[3]],
+  ];
+  const points = corners.map(([x, y]) => [
+    matrix[0] * x + matrix[2] * y + matrix[4],
+    matrix[1] * x + matrix[3] * y + matrix[5],
+  ]);
+  const xs = points.map(([x]) => x);
+  const ys = points.map(([, y]) => y);
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+};
+
 const overlaps = (first: PdfSpaceRect, second: PdfSpaceRect) => (
   Math.min(first[2], second[2]) - Math.max(first[0], second[0]) > 0
   && Math.min(first[3], second[3]) - Math.max(first[1], second[1]) > 0
@@ -890,30 +917,80 @@ export const clearNativePdfTextInAreas = async (
         if (!page) continue;
         const pointers = [malloc(engine, 4), malloc(engine, 4), malloc(engine, 4), malloc(engine, 4)];
         const [leftPointer, bottomPointer, rightPointer, topPointer] = pointers;
-        try {
+
+        /**
+         * Remove the text this area covers, following the page into any form it draws.
+         *
+         * A page can draw part of itself through a form — that is how a stamp, a watermark or an
+         * imposed page carries its text — and the objects inside one are not reachable from the
+         * page. Walking only the top level leaves that text in the file after the paragraph above
+         * it has been repainted, where a search still finds the words the reader thought they had
+         * replaced. The form's own contents come out through the form instead, and their bounds
+         * are stated in the form's coordinates, so they are carried into the page's by its matrix
+         * before being compared with the area.
+         */
+        const clearWithin = (
+          owner: number,
+          count: number,
+          childAt: (index: number) => number,
+          toPage: [number, number, number, number, number, number],
+          isPage: boolean,
+        ) => {
           // Backwards, so removing one object does not renumber the ones still to be examined.
-          for (let objectIndex = engine.FPDFPage_CountObjects(page) - 1; objectIndex >= 0; objectIndex -= 1) {
-            const object = engine.FPDFPage_GetObject(page, objectIndex);
-            if (!object || engine.FPDFPageObj_GetType(object) !== PDF_PAGE_OBJECT_TEXT) continue;
+          for (let index = count - 1; index >= 0; index -= 1) {
+            const object = childAt(index);
+            if (!object) continue;
+            const type = engine.FPDFPageObj_GetType(object);
+
+            if (type === PDF_PAGE_OBJECT_FORM) {
+              const own = readObjectMatrix(engine, object);
+              clearWithin(
+                object,
+                engine.FPDFFormObj_CountObjects(object),
+                (child) => engine.FPDFFormObj_GetObject(object, child),
+                own ? composeMatrix(toPage, own) : toPage,
+                false,
+              );
+              continue;
+            }
+
+            if (type !== PDF_PAGE_OBJECT_TEXT) continue;
             if (!engine.FPDFPageObj_GetBounds(object, leftPointer, bottomPointer, rightPointer, topPointer)) continue;
-            const bounds: PdfSpaceRect = [
+            const bounds = mapRect(toPage, [
               readFloat32(engine, leftPointer),
               readFloat32(engine, bottomPointer),
               readFloat32(engine, rightPointer),
               readFloat32(engine, topPointer),
-            ];
+            ]);
             if (!areas.some((area) => overlaps(bounds, area))) continue;
             if (!areas.some((area) => containedWithin(bounds, area))) {
               uncleared += 1;
               continue;
             }
-            if (engine.FPDFPage_RemoveObject(page, object)) {
-              engine.FPDFPageObj_Destroy(object);
+            // A page owns its objects and hands them back to be destroyed; a form destroys its own.
+            if (isPage) {
+              if (engine.FPDFPage_RemoveObject(page, object)) {
+                engine.FPDFPageObj_Destroy(object);
+                removed += 1;
+              } else {
+                uncleared += 1;
+              }
+            } else if (engine.FPDFFormObj_RemoveObject(owner, object)) {
               removed += 1;
             } else {
               uncleared += 1;
             }
           }
+        };
+
+        try {
+          clearWithin(
+            page,
+            engine.FPDFPage_CountObjects(page),
+            (index) => engine.FPDFPage_GetObject(page, index),
+            [1, 0, 0, 1, 0, 0],
+            true,
+          );
           if (removed > 0 && !engine.FPDFPage_GenerateContent(page)) {
             throw new Error('Direct text edit failed: the page could not be rewritten after removing its old text.');
           }
