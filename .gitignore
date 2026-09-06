@@ -38,3 +38,7 @@ pdf-chef-ios-*.png
 *.njsproj
 *.sln
 *.sw?
+
+# Local PDF corpus used for editor QA runs (downloaded fixtures, not source)
+corpus/
+corpus2/

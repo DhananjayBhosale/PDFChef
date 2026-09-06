@@ -410,10 +410,11 @@ export const ConfirmSheet: React.FC<{
 
 /* ---------------------------------------------------------- Empty state --- */
 
+/** `body` is optional: a title that already says it does not need saying twice. */
 export const EmptyState: React.FC<{
   icon: React.ReactNode;
   title: string;
-  body: string;
+  body?: string;
   action?: React.ReactNode;
 }> = ({ icon, title, body, action }) => (
   <div className="flex flex-col items-center px-5 py-9 text-center sm:py-12">
@@ -421,7 +422,7 @@ export const EmptyState: React.FC<{
       {icon}
     </div>
     <h2 className="type-title3 font-semibold text-[var(--text-primary)]">{title}</h2>
-    <p className="mt-1.5 max-w-measure text-[var(--text-secondary)]">{body}</p>
+    {body && <p className="mt-1.5 max-w-measure text-[var(--text-secondary)]">{body}</p>}
     {action && <div className="mt-4">{action}</div>}
   </div>
 );

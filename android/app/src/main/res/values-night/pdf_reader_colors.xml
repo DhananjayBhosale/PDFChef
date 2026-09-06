@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- PDF Chef dark: the same warm ground, resolved down, with the dark accent. -->
+<!-- PDF Chef dark: the same reddish ground, resolved down, with the dark accent. -->
 <resources>
-    <color name="pdf_reader_surface">#16140F</color>
-    <color name="pdf_reader_chrome">#1B1813</color>
-    <color name="pdf_reader_raised">#201D17</color>
-    <color name="pdf_reader_hairline">#332F27</color>
-    <color name="pdf_reader_text_primary">#F3EFE7</color>
-    <color name="pdf_reader_text_secondary">#A79E90</color>
+    <color name="pdf_reader_surface">#17100F</color>
+    <color name="pdf_reader_chrome">#1E1615</color>
+    <color name="pdf_reader_raised">#271F1E</color>
+    <color name="pdf_reader_hairline">#37302E</color>
+    <color name="pdf_reader_text_primary">#FFF8F4</color>
+    <color name="pdf_reader_text_secondary">#B09F9A</color>
     <color name="pdf_reader_accent">#FF4D52</color>
     <color name="pdf_reader_on_accent">#2A0A0A</color>
-    <color name="pdf_reader_drag_cue">#4A4439</color>
+    <color name="pdf_reader_drag_cue">#4D4340</color>
 </resources>

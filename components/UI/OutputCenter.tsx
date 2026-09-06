@@ -215,7 +215,6 @@ export const OutputCenter: React.FC = () => {
         open={renameOpen}
         onClose={() => setRenameOpen(false)}
         title="Rename result"
-        description="Changes the name used when you save or share this result."
         footer={
           <>
             <Button tone="secondary" onClick={() => setRenameOpen(false)}>

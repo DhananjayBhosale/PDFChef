@@ -4,6 +4,7 @@ import { boundsFitWithinCropBox, PDF_TEXT_OVERFLOW_MESSAGE } from './pdfTextEdit
 import {
   planNativePdfTextEdits,
   resolveNativePdfTextTarget,
+  sameSourceRun,
   type NativePdfTextTarget,
   type NativePdfTextAppearance,
   type PdfSpaceRect,
@@ -16,7 +17,19 @@ const PDF_PAGE_OBJECT_TEXT = 1;
 const PDF_TEXT_RENDER_MODE_INVISIBLE = 3;
 const MAX_NATIVE_TEXT_FILE_BYTES = 64 * 1024 * 1024;
 const MAX_FIRST_INSPECTION_MS = 400;
-const SERIALIZED_BOUNDS_TOLERANCE_POINTS = 0.05;
+/**
+ * How far a glyph the reader did not touch may sit from where it started, before the rewrite is
+ * abandoned and the paragraph is redrawn instead.
+ *
+ * Two different things show up in this measurement and the threshold has to separate them. Writing
+ * a text object back re-derives every advance, and float arithmetic alone shifts glyphs by a few
+ * hundredths of a point — measured at 0.07 and 0.10 on documents whose text is otherwise untouched.
+ * Where a PDF spaced its glyphs by hand, though, that spacing is lost and the same measurement
+ * jumps to whole points: 1.4 typical and 2.9 at worst on one document here, which is text visibly
+ * moving on the page. 0.15 sits an order of magnitude below the damage and twice above the noise,
+ * and is itself finer than the thinnest rule a PDF can draw.
+ */
+const SERIALIZED_BOUNDS_TOLERANCE_POINTS = 0.15;
 
 type PdfiumHeap = WrappedPdfiumModule['pdfium'] & {
   HEAPU8: Uint8Array;
@@ -320,6 +333,7 @@ const collectTextObjects = (
   const rawCharactersByObject = new Map<number, Array<{
     pageCharacterIndex: number;
     text: string;
+    generated: boolean;
     bounds: PdfSpaceRect;
   }>>();
 
@@ -354,30 +368,39 @@ const collectTextObjects = (
 
     const characterCount = engine.FPDFText_CountChars(textPage);
     for (let pageCharacterIndex = 0; pageCharacterIndex < characterCount; pageCharacterIndex += 1) {
-      if (engine.FPDFText_IsGenerated(textPage, pageCharacterIndex) === 1) continue;
       const object = engine.FPDFText_GetTextObject(textPage, pageCharacterIndex);
       const snapshot = objectByPointer.get(object);
       if (!snapshot) continue;
       const unicode = engine.FPDFText_GetUnicode(textPage, pageCharacterIndex);
       if (unicode <= 0 || unicode > 0x10ffff) continue;
-      if (!engine.FPDFText_GetCharBox(
+      // Kept, not skipped. A PDF that positions each word separately stores no space characters,
+      // so every space in this object's text is one the extractor generated. Dropping them leaves
+      // a hole in the object's character run at each one, and a word whose text matches its object
+      // exactly then fails to map onto it — which is what pushed whole documents onto the redraw
+      // path. They are marked instead, and everything that measures or rewrites ink ignores them.
+      const generated = engine.FPDFText_IsGenerated(textPage, pageCharacterIndex) === 1;
+      const hasBounds = engine.FPDFText_GetCharBox(
         textPage,
         pageCharacterIndex,
         charLeftPointer,
         charRightPointer,
         charBottomPointer,
         charTopPointer,
-      )) continue;
+      );
+      if (!hasBounds && !generated) continue;
       const rawCharacters = rawCharactersByObject.get(object) ?? [];
       rawCharacters.push({
         pageCharacterIndex,
         text: String.fromCodePoint(unicode),
-        bounds: [
-          readFloat64(engine, charLeftPointer),
-          readFloat64(engine, charBottomPointer),
-          readFloat64(engine, charRightPointer),
-          readFloat64(engine, charTopPointer),
-        ],
+        generated,
+        bounds: hasBounds
+          ? [
+            readFloat64(engine, charLeftPointer),
+            readFloat64(engine, charBottomPointer),
+            readFloat64(engine, charRightPointer),
+            readFloat64(engine, charTopPointer),
+          ]
+          : [0, 0, 0, 0],
       });
       rawCharactersByObject.set(object, rawCharacters);
     }
@@ -586,6 +609,17 @@ const collectPageObjectStates = (
   return states;
 };
 
+/** Only the characters the PDF actually stores; generated spacing is not ink and never matches. */
+const inkCharacters = (characters: PdfTextCharacterSnapshot[] | undefined) => (
+  characters?.filter((character) => !character.generated) ?? []
+);
+
+const withoutTrailingWhitespace = (characters: PdfTextCharacterSnapshot[]) => {
+  let end = characters.length;
+  while (end > 0 && !characters[end - 1].text.trim()) end -= 1;
+  return characters.slice(0, end);
+};
+
 const closeEnough = (first: number, second: number) => (
   Math.abs(first - second) <= SERIALIZED_BOUNDS_TOLERANCE_POINTS
 );
@@ -597,7 +631,7 @@ const verifyTextObjectFitsPage = (
   if (
     !object.bounds
     || !boundsFitWithinCropBox(object.bounds, cropBox)
-    || object.characters?.some((character) => (
+    || inkCharacters(object.characters).some((character) => (
       character.text.trim() && !boundsFitWithinCropBox(character.bounds, cropBox)
     ))
   ) {
@@ -705,18 +739,18 @@ const verifySerializedOutput = async (
         }
         const change = changes.get(original.objectIndex);
         if (change) {
-          if (reopened.text !== change.replacementText) {
+          if (!sameSourceRun(reopened.text, change.replacementText)) {
             throw new Error('Direct text edit failed: saved text disagreed with the requested edit.');
           }
           // Check the serialized result with its retained font and transform.
           // The full object also includes any untouched suffix pushed by the
           // replacement, even if the text extractor omits off-page characters.
           if (change.replacementText.trim()) verifyTextObjectFitsPage(reopened, cropBox);
-          const stablePrefixCharacters = original.characters?.filter(
+          const stablePrefixCharacters = inkCharacters(original.characters).filter(
             (character) => character.end <= change.stablePrefixLength,
-          ) ?? [];
+          );
           for (const character of stablePrefixCharacters) {
-            const reopenedCharacter = reopened.characters?.find((candidate) => (
+            const reopenedCharacter = inkCharacters(reopened.characters).find((candidate) => (
               candidate.start === character.start
               && candidate.end === character.end
               && candidate.text === character.text
@@ -728,12 +762,15 @@ const verifySerializedOutput = async (
               throw new Error('Direct text edit failed: unedited PDF text moved during serialization.');
             }
           }
-          const originalSuffixCharacters = original.characters?.filter(
+          // A shorter replacement widens the gap to the next object, and extractors answer that by
+          // generating a trailing space that was never in the file. It is not content, so it is
+          // dropped from both sides before the untouched suffix is compared.
+          const originalSuffixCharacters = withoutTrailingWhitespace(inkCharacters(original.characters).filter(
             (character) => character.start >= change.originalStableSuffixStart,
-          ) ?? [];
-          const reopenedSuffixCharacters = reopened.characters?.filter(
+          ));
+          const reopenedSuffixCharacters = withoutTrailingWhitespace(inkCharacters(reopened.characters).filter(
             (character) => character.start >= change.replacementStableSuffixStart,
-          ) ?? [];
+          ));
           const suffixCharactersMatch = originalSuffixCharacters.length === reopenedSuffixCharacters.length
             && originalSuffixCharacters.every((character, index) => {
               const reopenedCharacter = reopenedSuffixCharacters[index];
@@ -774,7 +811,7 @@ const verifySerializedOutput = async (
           }
           continue;
         }
-        if (original.text !== reopened.text) {
+        if (!sameSourceRun(original.text, reopened.text)) {
           throw new Error('Direct text edit failed: unrelated PDF text changed during serialization.');
         }
         if (
@@ -790,6 +827,106 @@ const verifySerializedOutput = async (
     }
   }
 });
+
+/** How far outside a run's rectangle a glyph may sit and still count as part of that run. */
+const CLEARANCE_TOLERANCE_POINTS = 0.75;
+
+const containedWithin = (bounds: PdfSpaceRect, area: PdfSpaceRect) => (
+  bounds[0] >= area[0] - CLEARANCE_TOLERANCE_POINTS
+  && bounds[1] >= area[1] - CLEARANCE_TOLERANCE_POINTS
+  && bounds[2] <= area[2] + CLEARANCE_TOLERANCE_POINTS
+  && bounds[3] <= area[3] + CLEARANCE_TOLERANCE_POINTS
+);
+
+const overlaps = (first: PdfSpaceRect, second: PdfSpaceRect) => (
+  Math.min(first[2], second[2]) - Math.max(first[0], second[0]) > 0
+  && Math.min(first[3], second[3]) - Math.max(first[1], second[1]) > 0
+);
+
+export interface NativePdfTextClearance {
+  pageIndex: number;
+  pdfRect: PdfSpaceRect;
+}
+
+/**
+ * Remove the text objects sitting inside a redrawn paragraph's own rectangles.
+ *
+ * A redraw paints the paragraph's area over and writes the new words on top, so whatever the PDF
+ * drew there has to come out of the file as well — otherwise the old wording is still in the
+ * content stream and still turns up in search and copy, which is exactly what someone editing a
+ * name or a figure out of a document does not expect.
+ *
+ * Removing by area rather than by matching text is what makes this reliable. The previous approach
+ * asked the PDF engine to find one text object whose whole text equalled a word the reader could
+ * see, which fails whenever a document sets its words with individually positioned glyphs — a form
+ * that draws "1040" as four separate objects, or anything typeset by TeX. Geometry has no such
+ * blind spot: an object either lies inside the area being repainted or it does not.
+ *
+ * Objects that straddle the edge are deliberately left alone. A line that runs on past the
+ * paragraph is not this paragraph's to delete, and leaving it is visibly better than cutting away
+ * text the reader never touched.
+ */
+export const clearNativePdfTextInAreas = async (
+  input: Uint8Array,
+  clearances: NativePdfTextClearance[],
+): Promise<{ bytes: Uint8Array; uncleared: number }> => {
+  if (clearances.length === 0) return { bytes: input, uncleared: 0 };
+
+  return serializePdfiumOperation(async () => {
+    const engine = await loadEngine();
+    return withDocument(engine, input, (document) => {
+      const areasByPage = new Map<number, PdfSpaceRect[]>();
+      clearances.forEach((clearance) => {
+        const areas = areasByPage.get(clearance.pageIndex) ?? [];
+        areas.push(clearance.pdfRect);
+        areasByPage.set(clearance.pageIndex, areas);
+      });
+
+      let removed = 0;
+      let uncleared = 0;
+      for (const [pageIndex, areas] of areasByPage) {
+        if (!pageExists(engine, document, pageIndex)) continue;
+        const page = engine.FPDF_LoadPage(document, pageIndex);
+        if (!page) continue;
+        const pointers = [malloc(engine, 4), malloc(engine, 4), malloc(engine, 4), malloc(engine, 4)];
+        const [leftPointer, bottomPointer, rightPointer, topPointer] = pointers;
+        try {
+          // Backwards, so removing one object does not renumber the ones still to be examined.
+          for (let objectIndex = engine.FPDFPage_CountObjects(page) - 1; objectIndex >= 0; objectIndex -= 1) {
+            const object = engine.FPDFPage_GetObject(page, objectIndex);
+            if (!object || engine.FPDFPageObj_GetType(object) !== PDF_PAGE_OBJECT_TEXT) continue;
+            if (!engine.FPDFPageObj_GetBounds(object, leftPointer, bottomPointer, rightPointer, topPointer)) continue;
+            const bounds: PdfSpaceRect = [
+              readFloat32(engine, leftPointer),
+              readFloat32(engine, bottomPointer),
+              readFloat32(engine, rightPointer),
+              readFloat32(engine, topPointer),
+            ];
+            if (!areas.some((area) => overlaps(bounds, area))) continue;
+            if (!areas.some((area) => containedWithin(bounds, area))) {
+              uncleared += 1;
+              continue;
+            }
+            if (engine.FPDFPage_RemoveObject(page, object)) {
+              engine.FPDFPageObj_Destroy(object);
+              removed += 1;
+            } else {
+              uncleared += 1;
+            }
+          }
+          if (removed > 0 && !engine.FPDFPage_GenerateContent(page)) {
+            throw new Error('Direct text edit failed: the page could not be rewritten after removing its old text.');
+          }
+        } finally {
+          pointers.forEach((pointer) => free(engine, pointer));
+          engine.FPDF_ClosePage(page);
+        }
+      }
+
+      return { bytes: removed > 0 ? saveDocument(engine, document) : input, uncleared };
+    });
+  });
+};
 
 export const applyNativePdfTextEdits = async (
   input: Uint8Array,
@@ -823,10 +960,19 @@ export const applyNativePdfTextEdits = async (
         try {
           const objects = collectTextObjects(engine, page, textPage);
           const originalObjects = collectPageObjectStates(engine, page, textPage);
-          const plan = planNativePdfTextEdits(objects, pageEdits as PlannedNativePdfTextEdit[]);
-          if ('reason' in plan) {
-            throw new Error(`Direct text edit failed: ${plan.reason}`);
+          const rawPlan = planNativePdfTextEdits(objects, pageEdits as PlannedNativePdfTextEdit[]);
+          if ('reason' in rawPlan) {
+            throw new Error(`Direct text edit failed: ${rawPlan.reason}`);
           }
+          // PDFium aborts when a text object is set to the empty string, so an object whose whole
+          // content is removed keeps a single space. It draws nothing, and it means deleting the
+          // last word of a run behaves like deleting any other word instead of trapping.
+          const plan = {
+            ...rawPlan,
+            changes: rawPlan.changes.map((change) => (
+              change.replacementText === '' ? { ...change, replacementText: ' ' } : change
+            )),
+          };
           serializedExpectations.push({
             pageIndex,
             originalObjects,
@@ -888,9 +1034,11 @@ export const applyNativePdfTextEdits = async (
               const object = engine.FPDFPage_GetObject(page, change.objectIndex);
               const verified = object
                 && engine.FPDFPageObj_GetType(object) === PDF_PAGE_OBJECT_TEXT
-                && readTextObject(engine, object, verificationTextPage) === change.replacementText;
+                // Text extractors add a trailing space of their own when the next object starts
+                // after a gap, so the comparison ignores whitespace at the very end.
+                && sameSourceRun(readTextObject(engine, object, verificationTextPage), change.replacementText);
               if (!verified) {
-                throw new Error('Direct text edit failed: read-back verification disagreed. Use Visual fallback for this word.');
+                throw new Error('Direct text edit failed: the saved text did not read back as written.');
               }
             }
           } finally {

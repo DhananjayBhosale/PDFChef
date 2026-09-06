@@ -6,19 +6,23 @@
  */
 
 :root {
-  /* --- Paper: warm archival neutral, hue 82 --- */
-  --paper-25: #fcfaf6;
-  --paper-50: #f8f5ef;
-  --paper-100: #f1ece3;
-  --paper-200: #e4ddd1;
-  --paper-300: #d2c9ba;
-  --paper-400: #9b9184;
-  --paper-500: #7a7267;
-  --paper-600: #6b6459;
-  --paper-700: #514b43;
-  --paper-800: #37332d;
-  --paper-900: #24211d;
-  --paper-950: #16140f;
+  /* --- Paper: warm neutral carrying the Android app's reddish tint, hue 24 ---
+     50 and 100 are the Android app's own background and card values verbatim
+     (#FFF8F4 and #FFF1EB); 200 is its divider. The rest of the scale is those
+     three resolved up and down at the same hue, so light and dark sit on the
+     same ground. */
+  --paper-25: #fffcfa;
+  --paper-50: #fff8f4;
+  --paper-100: #fff1eb;
+  --paper-200: #f0e2db;
+  --paper-300: #ddc9c0;
+  --paper-400: #a2918b;
+  --paper-500: #80716c;
+  --paper-600: #70625d;
+  --paper-700: #564a46;
+  --paper-800: #3a302e;
+  --paper-900: #261f1e;
+  --paper-950: #17100f;
 
   /* --- Ink: the single accent, Android logo red, hue 24-28 --- */
   --ink-25: #fff8f7;
@@ -73,30 +77,30 @@
 
   /* --- Semantic: light ---
      Every value below is stated with the contrast ratio it holds against the
-     three surfaces it can sit on: canvas #f8f5ef, raised #fcfaf6, sunken
-     #f1ece3. Text clears 4.5:1 on all three, edges that bound a control clear
+     three surfaces it can sit on: canvas #fff8f4, raised #fffcfa, sunken
+     #fff1eb. Text clears 4.5:1 on all three, edges that bound a control clear
      3:1 on all three. Ratios are the reason a value is what it is, so they are
      written down rather than rediscovered. */
   --surface-canvas: var(--paper-50);
   --surface-raised: var(--paper-25);
   --surface-sunken: var(--paper-100);
-  --surface-chrome: rgba(252, 250, 246, 0.82);
-  --surface-scrim: rgba(36, 33, 29, 0.44);
+  --surface-chrome: rgba(255, 252, 250, 0.82);
+  --surface-scrim: rgba(38, 31, 30, 0.44);
   /* Two edges, and the difference between them is a rule, not a shade. The
      hairline separates (panel outline, row divider, scroll edge) and only has
      to be seen; the strong edge *bounds a control* and therefore clears 3:1
      against every surface it can be drawn on. The old paper-200 hairline sat at
      1.24:1 and disappeared on a bright OLED panel. */
-  --border-hairline: #b4aa9d; /* 2.10 / 2.19 / 1.94 */
-  --border-strong: #8c8276; /* 3.46 / 3.62 / 3.20 */
-  --text-primary: var(--paper-900); /* 14.73 / 15.37 / 13.62 */
+  --border-hairline: #b6a69f; /* 2.23 / 2.30 / 2.13 */
+  --border-strong: #8e7e79; /* 3.69 / 3.80 / 3.52 */
+  --text-primary: var(--paper-900); /* 15.41 / 15.85 / 14.67 */
   /* Body is the step under the heading: a paragraph, a row title, a control
      label that is not the page's subject. */
-  --text-body: #4a443c; /* 8.84 / 9.23 / 8.17 */
-  --text-secondary: #615a50; /* 6.25 / 6.53 / 5.78 */
+  --text-body: #4c423f; /* 9.26 / 9.52 / 8.82 */
+  --text-secondary: #635754; /* 6.61 / 6.80 / 6.30 */
   /* Tertiary carries readable prose, so it clears 4.5:1 on the *sunken*
      surface too, which is the darkest ground a light theme puts text on. */
-  --text-tertiary: #6e675c; /* 5.14 / 5.36 / 4.75 */
+  --text-tertiary: #70635f; /* 5.49 / 5.65 / 5.23 */
   --text-on-accent: var(--paper-25);
   --accent-rest: var(--ink-600);
   --accent-hover: var(--ink-700);
@@ -106,7 +110,7 @@
      3:1 a non-text indicator owes. As *text* it only just clears 4.5:1 on the
      canvas and misses it on the sunken surface, so accent-coloured labels and
      glyphs take one step darker instead of the fill colour. */
-  --accent-text: var(--ink-700); /* 6.32 / 6.59 / 5.84 */
+  --accent-text: var(--ink-700); /* 6.54 / 6.73 / 6.23 */
   --focus-ring: var(--ink-600);
   --status-success-text: var(--success-600);
   --status-success-quiet: var(--success-50);
@@ -118,9 +122,16 @@
   --status-danger-quiet: var(--danger-50);
 
   /* --- Typography --- */
-  --font-ui: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", sans-serif;
-  --font-numeric: "Inter Variable", -apple-system, system-ui, sans-serif;
-  --font-system: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+  /* `-apple-system` and `system-ui` are deliberately absent, and the CJK faces deliberately named.
+     On iOS those two keywords switch off per-glyph font fallback: a character the system UI font
+     has no glyph for is drawn as an empty box and nothing later in the stack is consulted, not
+     even the generic. A Chinese file name, or the message naming the characters an edit could not
+     write, came out as a row of boxes. "SF Pro Text" is the same typeface on Apple platforms and
+     does fall back, so naming it directly costs nothing and restores the rest of the list. */
+  --font-cjk: "PingFang SC", "PingFang TC", "Hiragino Sans", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", "Malgun Gothic";
+  --font-system: "SF Pro Text", BlinkMacSystemFont, "Segoe UI", Roboto, var(--font-cjk), sans-serif;
+  --font-ui: "Inter Variable", "Inter", var(--font-system);
+  --font-numeric: "Inter Variable", var(--font-system);
 
   /* The Android app's six fixed UI sizes are the size authority for the whole
      product, because the two shells ship the same typeface at the same density
@@ -211,30 +222,32 @@
 }
 
 .dark {
-  /* Ratios below are against dark canvas #16140f, raised #262320 and sunken
-     #100e0b, in that order. */
+  /* Ratios below are against dark canvas #17100f, raised #271f1e and sunken
+     #110b0b, in that order. Dark carries the same reddish tint as light rather
+     than the cool blue-black the Android app used, so the two themes are one
+     ground at two luminances. */
   --surface-canvas: var(--paper-950);
   /* A raised panel one step further from the canvas. Two dark surfaces can only
      ever be a fraction of a ratio apart before the lighter one stops reading as
      dark at all, so the separation a nested panel actually needs comes from its
      edge; this lifts the fill as far as it can honestly go and the hairline
      below does the rest. */
-  --surface-raised: #262320; /* 1.18 vs canvas, 1.23 vs sunken */
-  --surface-sunken: #100e0b;
-  --surface-chrome: rgba(38, 35, 32, 0.84);
-  --surface-scrim: rgba(10, 9, 7, 0.62);
-  --border-hairline: #5b544b; /* 2.47 / 2.09 / 2.58 */
-  --border-strong: #7b7368; /* 3.94 / 3.34 / 4.12 */
-  --text-primary: var(--paper-50); /* 16.91 / 14.36 / 17.71 */
-  --text-body: var(--paper-200); /* 13.64 / 11.58 / 14.28 */
-  --text-secondary: #c9c1b3; /* 10.31 / 8.75 / 10.79 */
-  --text-tertiary: #ada395; /* 7.41 / 6.29 / 7.75 */
+  --surface-raised: #271f1e; /* 1.16 vs canvas, 1.21 vs sunken */
+  --surface-sunken: #110b0b;
+  --surface-chrome: rgba(39, 31, 30, 0.84);
+  --surface-scrim: rgba(11, 7, 7, 0.62);
+  --border-hairline: #5d504d; /* 2.43 / 2.09 / 2.53 */
+  --border-strong: #7d6f6b; /* 3.90 / 3.35 / 4.05 */
+  --text-primary: var(--paper-50); /* 17.88 / 15.36 / 18.56 */
+  --text-body: var(--paper-200); /* 14.86 / 12.76 / 15.43 */
+  --text-secondary: #cbbcb7; /* 10.22 / 8.78 / 10.60 */
+  --text-tertiary: #b09f9a; /* 7.40 / 6.36 / 7.68 */
   --text-on-accent: var(--paper-950);
   --accent-rest: var(--ink-400);
   --accent-hover: var(--ink-300);
   --accent-quiet: var(--ink-900);
   --accent-on-quiet: var(--ink-200);
-  --accent-text: var(--ink-300); /* 9.09 / 7.72 / 9.52 */
+  --accent-text: var(--ink-300); /* 9.28 / 7.97 / 9.64 */
   --focus-ring: var(--ink-400);
   --status-success-text: var(--success-300);
   --status-success-quiet: rgba(78, 122, 70, 0.18);

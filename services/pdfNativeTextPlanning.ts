@@ -14,6 +14,17 @@ export interface PdfTextCharacterSnapshot {
   start: number;
   end: number;
   bounds: PdfSpaceRect;
+  /**
+   * True when the PDF never stored this character and the extractor inferred it from the gap
+   * between two glyphs.
+   *
+   * Documents that position every word separately — anything from TeX, and most typeset PDFs —
+   * contain no space characters at all. The extractor supplies them so the text reads correctly,
+   * and they have to be kept here or a run's characters no longer sit end to end and the run stops
+   * matching its own text object. They are not ink, though: nothing may measure them, rewrite them,
+   * or expect the same ones back after a save.
+   */
+  generated: boolean;
 }
 
 export interface NativePdfTextAppearance {
@@ -59,6 +70,17 @@ export interface PlannedPdfTextObjectChange {
   originalText: string;
   replacementText: string;
 }
+
+/**
+ * Whether a PDF engine's text object is the same run PDF.js reported.
+ *
+ * Engines synthesise a trailing space when the next object on the line starts after a gap, so a
+ * run that stands alone — a bold lead-in, a column, a table cell — reads back one character longer
+ * than it was written. Only trailing whitespace may differ: every character before it must be
+ * identical, which keeps the character offsets used for the splice aligned.
+ */
+export const sameSourceRun = (objectText: string, sourceText: string) =>
+  objectText === sourceText || objectText.replace(/\s+$/, '') === sourceText.replace(/\s+$/, '');
 
 const normalizedRect = (rect: PdfSpaceRect): PdfSpaceRect => [
   Math.min(rect[0], rect[2]),
@@ -115,7 +137,7 @@ export const resolveNativePdfTextTarget = (
 
   objects.forEach((object) => {
     const bounds = normalizedRect(object.bounds);
-    if (object.text !== sourceRun.text) return;
+    if (!sameSourceRun(object.text, sourceRun.text)) return;
     const sharedArea = overlapArea(bounds, sourceRunRect);
     if (sharedArea <= 0) return;
 
@@ -139,7 +161,11 @@ export const resolveNativePdfTextTarget = (
       start: sourceRun.start,
       end: sourceRun.end,
       score,
-      pdfRect: unionRects(selectedCharacters.map((character) => normalizedRect(character.bounds))),
+      // Generated spacing carries no box worth trusting, so the run's own rectangle is measured
+      // from the glyphs the PDF really stores.
+      pdfRect: unionRects((selectedCharacters.some((character) => !character.generated)
+        ? selectedCharacters.filter((character) => !character.generated)
+        : selectedCharacters).map((character) => normalizedRect(character.bounds))),
       objectPdfRect: bounds,
       appearance: object.appearance,
     });

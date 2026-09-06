@@ -32,7 +32,6 @@ import JSZip from 'jszip';
 import { ZoomControls } from '../UI/ZoomControls';
 import { ChefSliderField } from '../UI/ChefSlider';
 import { useZoom } from '../../hooks/useZoom';
-import { SEOHead } from '../SEO/SEOHead';
 import { StatusToast } from '../UI/StatusToast';
 import { ToolHeader, ToolShell } from '../UI/ToolLayout';
 import { tools } from './toolCatalog';
@@ -76,16 +75,13 @@ const PageImagePreview: React.FC<{
   }, [pdfDoc, scale]);
 
   return (
-    <figure className="flex max-w-full flex-col items-center gap-1.5">
+    <figure className="flex max-w-full flex-col items-center">
       <canvas
         ref={canvasRef}
         role="img"
         aria-label="Page 1 preview"
         className="block max-h-[64dvh] max-w-full select-none rounded-[2px] border border-[var(--border-strong)] bg-white object-contain shadow-[var(--elevation-panel)] md:max-h-[78vh]"
       />
-      <figcaption className="type-caption rounded-[var(--radius-pill)] bg-[var(--surface-raised)] px-2 py-0.5 text-[var(--text-secondary)]">
-        Page 1 preview
-      </figcaption>
     </figure>
   );
 };
@@ -491,10 +487,6 @@ export const PDFToImage: React.FC = () => {
   if (!file) {
     return (
       <ToolShell centered>
-        <SEOHead
-          title="PDF to JPG Converter - Export Pages to Images | PDF Chef"
-          description="Convert PDF pages to high-quality JPG or PNG images. Extract embedded images locally. Secure and fast."
-        />
         <ToolHeader title="PDF to Image" />
         <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label="Choose a PDF to convert" />
         <StatusToast status={status} />
@@ -504,10 +496,6 @@ export const PDFToImage: React.FC = () => {
 
   return (
     <div className="chef-safe-bottom flex h-[100dvh] min-h-[100dvh] w-full flex-col overflow-hidden bg-[var(--surface-canvas)]">
-      <SEOHead
-        title="PDF to JPG Converter - Export Pages to Images | PDF Chef"
-        description="Convert PDF pages to high-quality JPG or PNG images. Extract embedded images locally. Secure and fast."
-      />
 
       {/* An immersive route gets no shell chrome, so it consumes the status-bar
           inset itself rather than painting under the clock. */}
@@ -674,7 +662,7 @@ export const PDFToImage: React.FC = () => {
                       <div role="note" className="rounded-[var(--radius-field)] border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-500 dark:bg-amber-500/10 dark:text-amber-100">
                         <p className="font-bold">Large browser export</p>
                         <p className="mt-1 leading-relaxed">
-                          {exportPageCount} pages will keep many rendered images in browser memory. The current estimate is roughly {estimatedWorkingMemoryMb} MB, but complex pages can need much more. Keep this tab open and close other heavy tabs if the device is low on memory.
+                          Exporting {exportPageCount} pages needs roughly {estimatedWorkingMemoryMb} MB of browser memory, and complex pages can need much more.
                         </p>
                         <label className="mt-3 flex min-h-11 cursor-pointer items-center gap-3 font-semibold">
                           <input
@@ -690,44 +678,30 @@ export const PDFToImage: React.FC = () => {
 
                   </>
                 ) : (
-                  <>
-                    {/* Kept: the output format is not visible anywhere else. */}
-                    <p className="rounded-[var(--radius-field)] border border-emerald-200 bg-emerald-50/80 p-3 type-footnote text-emerald-900 dark:border-emerald-400 dark:bg-emerald-950/20 dark:text-emerald-200">
-                      Image objects inside the PDF are exported as lossless PNG, without rasterizing pages.
-                    </p>
-
-                    {hasDetectedEmbeddedImages ? (
-                      <>
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-                            <span>Selection</span>
-                            <span>{selectedEmbeddedImages.length} / {embeddedImages.length}</span>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedEmbeddedIds(embeddedImages.map((image) => image.id))}
-                              className="chef-target chef-pressable rounded-[var(--radius-control)] border border-[var(--border-strong)] px-3 text-sm font-medium text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]"
-                            >
-                              Select all
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedEmbeddedIds([])}
-                              className="chef-target chef-pressable rounded-[var(--radius-control)] border border-[var(--border-strong)] px-3 text-sm font-medium text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]"
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        </div>
-
-                      </>
-                    ) : (
-                      <div className="rounded-[var(--radius-field)] border border-dashed border-[var(--border-strong)] p-3 text-sm text-[var(--text-secondary)]">
-                        {isScanningImages ? 'Scanning this PDF for embedded images…' : 'No embedded raster images were detected in this PDF.'}
+                  hasDetectedEmbeddedImages && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                        <span>Selection</span>
+                        <span>{selectedEmbeddedImages.length} / {embeddedImages.length}</span>
                       </div>
-                    )}
-                  </>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedEmbeddedIds(embeddedImages.map((image) => image.id))}
+                          className="chef-target chef-pressable rounded-[var(--radius-control)] border border-[var(--border-strong)] px-3 text-sm font-medium text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]"
+                        >
+                          Select all
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedEmbeddedIds([])}
+                          className="chef-target chef-pressable rounded-[var(--radius-control)] border border-[var(--border-strong)] px-3 text-sm font-medium text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                  )
                 )}
               </div>
             </div>

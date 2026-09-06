@@ -28,5 +28,21 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  // `allowJs` with no exclude pulled the built output, the packaged native
+  // assets and the Playwright caches into the program, which ran the compiler
+  // out of heap before it reached a single source file. These are all generated
+  // or vendored trees; nothing here is authored.
+  "exclude": [
+    "node_modules",
+    "dist",
+    "output",
+    "benchmarks",
+    ".playwright-cli",
+    ".playwright-mcp",
+    ".wrangler",
+    "android/app/build",
+    "android/app/src/main/assets",
+    "ios/App/App/public"
+  ]
 }

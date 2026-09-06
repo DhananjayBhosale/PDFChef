@@ -34,15 +34,15 @@ const Group: React.FC<{
   </section>
 );
 
-const Row: React.FC<{ label: string; detail?: string; children?: React.ReactNode; stacked?: boolean }> = ({
+const Row: React.FC<{ label?: string; detail?: string; children?: React.ReactNode; stacked?: boolean }> = ({
   label,
   detail,
   children,
   stacked = false,
 }) => (
   <div className={cx('py-2.5', stacked ? 'space-y-2' : 'flex flex-wrap items-center justify-between gap-3')}>
-    <div className="min-w-0">
-      <p className="font-semibold text-[var(--text-primary)]">{label}</p>
+    <div className={cx('min-w-0', !label && !detail && 'hidden')}>
+      {label && <p className="font-semibold text-[var(--text-primary)]">{label}</p>}
       {detail && <p className="type-footnote mt-0.5 max-w-measure text-[var(--text-secondary)]">{detail}</p>}
     </div>
     {children}
@@ -96,12 +96,6 @@ export const SettingsPage: React.FC = () => {
   const storage = useStorageInformation();
   const metadata = useApplicationMetadata();
 
-  // Where a retained result actually lives, in the words of the shell running
-  // it. A packaged build keeps results in its own storage and has no browser
-  // data to clear; saying "browser" there would be inaccurate, and the browser
-  // sentence stays exactly as explicit as it was.
-  const localStoreName = platform.capabilities.durableDocuments ? 'app\u2019s storage' : 'browser\u2019s data';
-
   const [settings, setSettings] = useState<WorkspaceSettings>(() => getWorkspaceSettings());
   const [confirm, setConfirm] = useState<'history' | 'reset' | null>(null);
   const [notice, setNotice] = useState('');
@@ -120,7 +114,7 @@ export const SettingsPage: React.FC = () => {
 
   return (
     <>
-      <TabHeader title="Settings" subtitle="Settings stay on this device and do not sync." />
+      <TabHeader title="Settings" />
 
       <div className="mx-auto max-w-4xl px-4 pb-6 md:px-8">
         {(notice || problem) && (
@@ -195,15 +189,15 @@ export const SettingsPage: React.FC = () => {
         )}
 
         <Group title="Documents and history">
+          {/* The two labels name different things outright, so neither needs a
+              line under it explaining that it is not the other one. */}
           <Switch
-            label="Keep results on this device"
-            detail={`Kept in Recent until you delete them or clear this ${localStoreName}.`}
+            label="Keep results in Recent"
             checked={settings.keepLocalHistory}
             onChange={(keepLocalHistory) => save({ keepLocalHistory })}
           />
           <Switch
-            label="Save as soon as a job finishes"
-            detail="Separate from keeping the result in Recent."
+            label="Download automatically when a job finishes"
             checked={settings.autoDownload}
             onChange={(autoDownload) => save({ autoDownload })}
           />
@@ -224,7 +218,7 @@ export const SettingsPage: React.FC = () => {
           </Row>
           <Row
             label="Clear Recent"
-            detail={`${records.length} ${records.length === 1 ? 'result' : 'results'} stored by PDF Chef on this device.`}
+            detail={`${records.length} ${records.length === 1 ? 'result' : 'results'}`}
             stacked
           >
             <Button tone="destructive" disabled={records.length === 0} onClick={() => setConfirm('history')}>
@@ -263,10 +257,15 @@ export const SettingsPage: React.FC = () => {
           </Row>
         </Group>
 
-        <Group title="Privacy">
-          <Row label="Documents are processed on this device and never uploaded." />
-          <Row label="Legal" stacked>
+        <Group title="More">
+          <Row stacked>
             <div className="flex flex-wrap gap-2">
+              <Link
+                to="/help"
+                className="chef-pressable chef-target inline-flex items-center rounded-[var(--radius-control)] border border-[var(--border-strong)] px-3 font-semibold text-[var(--text-primary)]"
+              >
+                Help
+              </Link>
               <Link
                 to="/privacy"
                 className="chef-pressable chef-target inline-flex items-center rounded-[var(--radius-control)] border border-[var(--border-strong)] px-3 font-semibold text-[var(--text-primary)]"
@@ -313,8 +312,8 @@ export const SettingsPage: React.FC = () => {
         </Group>
 
         <Group title="Reset">
-          <Row label="Preferences only. Your results are untouched.">
-            <Button onClick={() => setConfirm('reset')}>Reset settings</Button>
+          <Row label="Reset settings">
+            <Button onClick={() => setConfirm('reset')}>Reset</Button>
           </Row>
         </Group>
 
@@ -330,7 +329,7 @@ export const SettingsPage: React.FC = () => {
       <ConfirmSheet
         open={confirm === 'history'}
         title="Clear Recent?"
-        description="Permanently deletes every result in Recent; copies saved elsewhere stay unchanged."
+        description="Copies saved elsewhere are not affected."
         confirmLabel="Clear Recent"
         onCancel={() => setConfirm(null)}
         onConfirm={async () => {
@@ -356,12 +355,12 @@ export const SettingsPage: React.FC = () => {
       />
 
       {/* Reset changes settings the person deliberately chose, so it asks first
-          like every other control here that cannot be undone. The scope line
-          says what it does and does not touch, and nothing else. */}
+          like every other control here that cannot be undone. The description
+          carries only what the title cannot: Recent is left alone. */}
       <ConfirmSheet
         open={confirm === 'reset'}
         title="Reset settings?"
-        description="Theme, text size, interface font and the document preferences on this screen go back to their defaults. Your results in Recent are not affected."
+        description="Your results in Recent are not affected."
         confirmLabel="Reset settings"
         onCancel={() => setConfirm(null)}
         onConfirm={() => {

@@ -3,16 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowUpDown,
+  CalendarDays,
   Check,
   Clock,
   Download,
+  ExternalLink,
+  FileText,
   FileWarning,
   FileX2,
   Folder,
+  MoreVertical,
   Pencil,
   Search,
   Share2,
-  ExternalLink,
   Trash2,
   Undo2,
 } from 'lucide-react';
@@ -136,19 +139,20 @@ type Feedback = { tone: 'success' | 'danger'; message: string } | null;
  * detail, so the wording lives here beside the control it explains.
  */
 const LIMITATION_REASON: Record<RecordLimitation, string> = {
-  'legacy-read-only': 'Files from the older Android app are read-only here. Saving, sharing and opening still work.',
-  'session-only': 'This result is kept in this browser, so it cannot be renamed and deleting it is permanent.',
-  'file-missing': 'The file is no longer on this device, so there is nothing left to rename or restore.',
+  'legacy-read-only': 'Files from the older Android app are read-only here.',
+  'session-only': 'Kept in this browser, so deleting it is permanent.',
+  'file-missing': 'The file is no longer on this device.',
 };
 
 export const limitationReason = (limitation: RecordLimitation | null): string | null =>
   limitation ? LIMITATION_REASON[limitation] : null;
 
-export const COLLECTION_REOPEN_REASON =
-  'This is a group of files, not one PDF, so it cannot be opened here. Saving and sharing still work.';
-
-export const COLLECTION_READ_ONLY_REASON =
-  'This group of files came from the older Android app. It is read-only here, and a group cannot be renamed, deleted, or opened as one PDF.';
+/**
+ * One line covers both facts a group's sheet has to explain: there is no Open,
+ * because it is not a single document, and there is no Rename or Delete,
+ * because this app does not own it.
+ */
+export const COLLECTION_READ_ONLY_REASON = 'A group of files, not one PDF. Read-only here.';
 
 /**
  * The reason for one specific row.
@@ -358,6 +362,12 @@ const sortRecentRecords = (records: readonly RecentRecord[], order: RecentSortOr
 
 /* ----------------------------------------------------------------- Row --- */
 
+/**
+ * One saved result, in the shape the Android app's Recent list used: an icon
+ * bubble, the name, a tool chip beside the size, the date under it, and every
+ * action behind one control at the end of the row. Tapping the row opens the
+ * result; holding it starts a selection.
+ */
 const RecentRow: React.FC<{
   record: RecentRecord;
   onOpenActions: (record: RecentRecord) => void;
@@ -365,149 +375,135 @@ const RecentRow: React.FC<{
   selectionMode: boolean;
   selected: boolean;
   onToggleSelected: (record: RecentRecord) => void;
-}> = ({ record, onOpenActions, onReopen, selectionMode, selected, onToggleSelected }) => {
+  onLongPress: (record: RecentRecord) => void;
+}> = ({ record, onOpenActions, onReopen, selectionMode, selected, onToggleSelected, onLongPress }) => {
   const { entry, available } = record;
-  const saved = entry.spaceSavedBytes;
   const collection = isCollectionRecord(record);
   const items = itemCountOf(record);
   const legacy = isLegacyRecord(record);
   // Nothing here can delete a legacy row, so it never joins a bulk selection.
   const selectable = selectionMode && !legacy;
-  const toggleSelection = () => onToggleSelected(record);
+  const name = displayName(entry.name);
+  const holdTimer = useRef<number | null>(null);
+  const held = useRef(false);
+
+  const cancelHold = () => {
+    if (holdTimer.current !== null) window.clearTimeout(holdTimer.current);
+    holdTimer.current = null;
+  };
+
+  const startHold = () => {
+    if (legacy) return;
+    held.current = false;
+    cancelHold();
+    holdTimer.current = window.setTimeout(() => {
+      held.current = true;
+      onLongPress(record);
+    }, 450);
+  };
+
+  const activate = () => {
+    // A hold has already done its job; the release that ends it must not also
+    // open the file the user was only trying to tick.
+    if (held.current) {
+      held.current = false;
+      return;
+    }
+    if (selectable) {
+      onToggleSelected(record);
+      return;
+    }
+    // Never a dead tap: anything that cannot be reopened offers its actions.
+    if (isReopenable(record)) onReopen(record);
+    else onOpenActions(record);
+  };
 
   return (
     <div
-      role={selectable ? 'button' : undefined}
-      tabIndex={selectable ? 0 : undefined}
-      aria-pressed={selectable ? selected : undefined}
-      aria-label={selectable ? `${selected ? 'Deselect' : 'Select'} ${displayName(entry.name)}` : undefined}
-      onClick={selectable ? toggleSelection : undefined}
-      onKeyDown={
-        selectable
-          ? (event) => {
-              if (event.key !== 'Enter' && event.key !== ' ') return;
-              event.preventDefault();
-              toggleSelection();
-            }
-          : undefined
-      }
       className={cx(
-        'flex items-start gap-3 px-3 py-2.5',
-        selectable && 'chef-pressable chef-pressable-row cursor-pointer',
+        'flex items-center gap-3 px-3 py-2.5',
         selected && 'bg-[var(--accent-quiet)]',
       )}
     >
-      <span
-        aria-hidden
-        className={cx(
-          'mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-control)]',
-          selected
-            ? 'bg-[var(--accent-rest)] text-[var(--text-on-accent)]'
-            : available
-            ? 'bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]'
-            : 'bg-[var(--surface-sunken)] text-[var(--text-tertiary)]',
-        )}
+      <button
+        type="button"
+        aria-pressed={selectable ? selected : undefined}
+        aria-label={selectable ? `${selected ? 'Deselect' : 'Select'} ${name}` : `Open ${name}`}
+        onClick={activate}
+        onPointerDown={startHold}
+        onPointerUp={cancelHold}
+        onPointerLeave={cancelHold}
+        onPointerCancel={cancelHold}
+        onContextMenu={(event) => {
+          if (legacy) return;
+          event.preventDefault();
+          onLongPress(record);
+        }}
+        className="chef-pressable-row flex min-w-0 flex-1 items-center gap-3 text-left"
       >
-        {selected ? (
-          <Check size={19} strokeWidth={2.3} />
-        ) : collection ? (
-          <Folder size={19} strokeWidth={1.9} />
-        ) : available ? (
-          <Clock size={19} strokeWidth={1.9} />
-        ) : (
-          <FileX2 size={19} strokeWidth={1.9} />
-        )}
-      </span>
-
-      <div className="min-w-0 flex-1">
-        <p className="chef-filename font-semibold text-[var(--text-primary)]">{displayName(entry.name)}</p>
-
-        <p className="type-footnote tabular mt-0.5 text-[var(--text-secondary)]">
-          <span>{toolNameFor(entry.toolId)}</span>
-          <span aria-hidden> · </span>
-          {hasTime(entry.createdAt) ? (
-            <time dateTime={new Date(entry.createdAt).toISOString()} title={formatTimestampLong(entry.createdAt)}>
-              {formatTimestamp(entry.createdAt)}
-            </time>
+        <span
+          aria-hidden
+          className={cx(
+            'grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-control)]',
+            selected
+              ? 'bg-[var(--accent-rest)] text-[var(--text-on-accent)]'
+              : available
+              ? 'bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]'
+              : 'bg-[var(--surface-sunken)] text-[var(--text-tertiary)]',
+          )}
+        >
+          {selected ? (
+            <Check size={19} strokeWidth={2.3} />
+          ) : collection ? (
+            <Folder size={19} strokeWidth={1.9} />
+          ) : available ? (
+            <FileText size={19} strokeWidth={1.9} />
           ) : (
-            <span>Time not recorded</span>
+            <FileX2 size={19} strokeWidth={1.9} />
           )}
-          {!collection && (
-            <>
-              <span aria-hidden> · </span>
-              {entry.inputSizeBytes === null
-                ? formatBytes(entry.outputSizeBytes)
-                : `${formatBytes(entry.inputSizeBytes)} in, ${formatBytes(entry.outputSizeBytes)} out`}
-              {saved !== null && (
-                <>
-                  <span aria-hidden> · </span>
-                  {saved > 0 ? (
-                    <span className="font-semibold text-[var(--status-success-text)]">{formatBytes(saved)} saved</span>
-                  ) : (
-                    <span>No size reduction</span>
-                  )}
-                </>
-              )}
-            </>
-          )}
-        </p>
+        </span>
 
-        {/* A group has no byte size to report, so it states what it is and how
-            many files it holds instead of borrowing a file's line. */}
-        {collection ? (
-          <p className="type-footnote tabular mt-0.5 text-[var(--text-tertiary)]">
-            Group of files
-            <span aria-hidden> · </span>
-            <span>{collectionItemLabel(items)}</span>
-          </p>
-        ) : null}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-semibold text-[var(--text-primary)]">{name}</span>
 
-        {legacy && (
-          <p className="type-footnote mt-1.5 font-semibold text-[var(--text-tertiary)]">
-            {collection ? 'Older Android files · read-only here' : 'Older Android file · read-only here'}
-          </p>
-        )}
-
-        {!available && (
-          <p className="type-footnote mt-1.5 inline-flex items-center gap-1.5 font-semibold text-[var(--status-caution-text)]">
-            <FileWarning aria-hidden size={14} />
-            {collection ? 'These files are no longer on this device' : 'File no longer on this device'}
-          </p>
-        )}
-
-        {selectionMode ? (
-          <p className="type-footnote mt-2 font-semibold text-[var(--accent-on-quiet)]">
-            {legacy ? 'Cannot be deleted from here' : selected ? 'Selected' : 'Tap to select'}
-          </p>
-        ) : (
-          <>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              <Button
-                tone="quiet"
-                icon={<ExternalLink aria-hidden size={16} />}
-                disabled={!isReopenable(record)}
-                onClick={() => onReopen(record)}
-                className="px-2.5"
-              >
-                Reopen
-              </Button>
-              <Button
-                tone="quiet"
-                onClick={() => onOpenActions(record)}
-                className="px-2.5"
-                aria-label={`More actions for ${displayName(entry.name)}`}
-              >
-                More
-              </Button>
-            </div>
-            {!isReopenable(record) && (collection || available) && (
-              <p className="type-footnote mt-1.5 text-[var(--text-tertiary)]">
-                {collection ? COLLECTION_REOPEN_REASON : 'Only PDF results can be reopened here. Save or share this result instead.'}
-              </p>
+          <span className="type-footnote tabular mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[var(--text-secondary)]">
+            <span className="rounded-[var(--radius-pill)] bg-[var(--accent-quiet)] px-2 py-0.5 font-semibold text-[var(--accent-on-quiet)]">
+              {toolNameFor(entry.toolId)}
+            </span>
+            <span>{collection ? collectionItemLabel(items) : formatBytes(entry.outputSizeBytes)}</span>
+            {legacy && <span className="text-[var(--text-tertiary)]">Read-only</span>}
+            {/* The one thing a row must say on its own: the record is here but
+                the file it points at is not. */}
+            {!available && (
+              <span className="inline-flex items-center gap-1 font-semibold text-[var(--status-caution-text)]">
+                <FileWarning aria-hidden size={13} />
+                Missing
+              </span>
             )}
-          </>
-        )}
-      </div>
+          </span>
+
+          <span className="type-footnote tabular mt-1 flex items-center gap-1.5 text-[var(--text-tertiary)]">
+            <CalendarDays aria-hidden size={13} className="shrink-0" />
+            {hasTime(entry.createdAt) ? (
+              <time dateTime={new Date(entry.createdAt).toISOString()} title={formatTimestampLong(entry.createdAt)}>
+                {formatTimestamp(entry.createdAt)}
+              </time>
+            ) : (
+              <span>Time not recorded</span>
+            )}
+          </span>
+        </span>
+      </button>
+
+      {selectionMode ? null : (
+        <Button
+          tone="quiet"
+          onClick={() => onOpenActions(record)}
+          className="shrink-0 px-2"
+          aria-label={`More actions for ${name}`}
+          icon={<MoreVertical aria-hidden size={18} />}
+        />
+      )}
     </div>
   );
 };
@@ -684,6 +680,16 @@ export const RecentPage: React.FC = () => {
       return next;
     });
   }, []);
+  /** Holding a row is the discoverable way into selection without a visible control. */
+  const startSelectionAt = useCallback(
+    (record: RecentRecord) => {
+      if (isLegacyRecord(record)) return;
+      haptic('commit');
+      setSelectionMode(true);
+      setSelectedIds((current) => new Set(current).add(String(record.entry.id)));
+    },
+    [haptic],
+  );
   const toggleAllVisible = useCallback(() => {
     setSelectedIds((current) => {
       if (allVisibleSelected) return new Set();
@@ -839,14 +845,22 @@ export const RecentPage: React.FC = () => {
 
   return (
     <>
+      {/* Count and Select sit beside the title, which is where a list-wide fact
+          and a list-wide action belong and where the eye already is. */}
       <TabHeader
         title="Recent"
-        subtitle="Results PDF Chef made on this device."
         trailing={
-          state.status === 'ready' && records.some((record) => !isLegacyRecord(record)) ? (
-            <Button tone="quiet" onClick={toggleSelectionMode} disabled={busy} className="shrink-0 px-2.5">
-              {selectionMode ? 'Done' : 'Select'}
-            </Button>
+          state.status === 'ready' && records.length > 0 ? (
+            <div className="flex shrink-0 items-center gap-1">
+              <span className="tabular type-footnote font-bold text-[var(--text-secondary)]">
+                {visibleRecords.length === 1 ? '1 item' : `${visibleRecords.length} items`}
+              </span>
+              {records.some((record) => !isLegacyRecord(record)) && (
+                <Button tone="quiet" onClick={toggleSelectionMode} disabled={busy} className="px-2.5">
+                  {selectionMode ? 'Done' : 'Select'}
+                </Button>
+              )}
+            </div>
           ) : undefined
         }
       />
@@ -901,8 +915,11 @@ export const RecentPage: React.FC = () => {
           )}
         </div>
 
+        {/* Sorting belongs to the list the field searches, so it sits at the end
+            of that field's row rather than claiming a second full-width row on a
+            phone. */}
         {state.status === 'ready' && records.length > 0 && (
-          <div className="mb-3 flex flex-col gap-2 sm:flex-row">
+          <div className="mb-3 flex items-stretch gap-2">
             <label className="relative min-w-0 flex-1">
               <span className="sr-only">Search recent results</span>
               <Search
@@ -914,23 +931,26 @@ export const RecentPage: React.FC = () => {
                 type="search"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search files or tools"
+                placeholder="Search files"
                 className="chef-field pl-10"
                 style={{ paddingLeft: '2.5rem' }}
               />
             </label>
-            <label className="relative shrink-0 sm:w-56">
-              <span className="sr-only">Sort recent results</span>
-              <ArrowUpDown
+            <div className="relative shrink-0">
+              <span
                 aria-hidden
-                size={17}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]"
-              />
+                className="chef-field pointer-events-none flex items-center gap-2 px-3 text-[var(--text-secondary)]"
+              >
+                <ArrowUpDown size={17} />
+                <span className="hidden whitespace-nowrap font-semibold sm:inline">
+                  {RECENT_SORT_OPTIONS.find((option) => option.value === sortOrder)?.label}
+                </span>
+              </span>
               <select
+                aria-label="Sort recent results"
                 value={sortOrder}
                 onChange={(event) => setSortOrder(event.target.value as RecentSortOrder)}
-                className="chef-field pl-10"
-                style={{ paddingLeft: '2.5rem' }}
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
               >
                 {RECENT_SORT_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -938,7 +958,7 @@ export const RecentPage: React.FC = () => {
                   </option>
                 ))}
               </select>
-            </label>
+            </div>
           </div>
         )}
 
@@ -947,15 +967,11 @@ export const RecentPage: React.FC = () => {
             <p className="font-semibold text-[var(--text-primary)]">
               {selectedIds.size === 0
                 ? 'Select results'
-                : `${selectedIds.size} selected · about ${formatBytes(selectedBytes)}`}
+                : `${selectedIds.size} selected · ${formatBytes(selectedBytes)}`}
             </p>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row">
               <Button tone="secondary" onClick={toggleAllVisible} disabled={selectableRecords.length === 0 || busy}>
-                {allVisibleSelected
-                  ? 'Clear selection'
-                  : searchQuery.trim()
-                    ? `Select all ${selectableRecords.length} results`
-                    : 'Select all'}
+                {allVisibleSelected ? 'Clear selection' : 'Select all'}
               </Button>
               <Button
                 tone="destructive"
@@ -975,29 +991,19 @@ export const RecentPage: React.FC = () => {
           </div>
         )}
 
-        {state.status === 'ready' && records.length > 0 && !selectionMode && (
-          <div className="mb-3 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] px-4 py-3">
-            <p className="tabular font-semibold text-[var(--text-primary)]">
-              {records.length} {records.length === 1 ? 'result' : 'results'}
-              {savings.known > 0 && (
-                <>
-                  <span aria-hidden> · </span>
-                  <span className="text-[var(--status-success-text)]">{formatBytes(savings.bytes)} saved</span>
-                </>
-              )}
-            </p>
-            <p className="type-footnote mt-0.5 text-[var(--text-secondary)]">
-              {savings.unknown > 0
-                ? `${savings.unknown} of these did not record an original size, so their saving is unknown.`
-                : 'Savings count only files that actually became smaller.'}
-            </p>
-          </div>
+        {/* The count moved up beside the title. What is left worth saying is the
+            one fact the list itself cannot show: how much space these results
+            saved. */}
+        {state.status === 'ready' && savings.known > 0 && savings.bytes > 0 && !selectionMode && (
+          <p className="tabular mb-3 font-semibold text-[var(--status-success-text)]">
+            {formatBytes(savings.bytes)} saved
+          </p>
         )}
 
         {!platform.capabilities.durableDocuments && state.status === 'ready' && records.length > 0 && (
           <div className="mb-3">
             <StatusLine tone="caution" icon={<AlertTriangle size={15} />}>
-              This build keeps results in browser storage rather than as durable files. Save anything you need to keep.
+              Results are kept in browser storage. Save anything you need to keep.
             </StatusLine>
           </div>
         )}
@@ -1021,8 +1027,7 @@ export const RecentPage: React.FC = () => {
           ) : records.length === 0 ? (
             <EmptyState
               icon={<Clock size={30} />}
-              title="Nothing here yet"
-              body="Finish any tool and the result lands here."
+              title="No files yet"
               action={
                 <Button tone="primary" onClick={() => navigate('/')}>
                   Browse tools
@@ -1032,8 +1037,7 @@ export const RecentPage: React.FC = () => {
           ) : visibleRecords.length === 0 ? (
             <EmptyState
               icon={<Search size={30} />}
-              title="No matching results"
-              body="Try another file name or tool, or clear the search to see everything in Recent."
+              title="No matching files"
               action={
                 <Button tone="secondary" onClick={() => setSearchQuery('')}>
                   Clear search
@@ -1051,6 +1055,7 @@ export const RecentPage: React.FC = () => {
                     selectionMode={selectionMode}
                     selected={selectedIds.has(String(record.entry.id))}
                     onToggleSelected={toggleSelected}
+                    onLongPress={selectionMode ? toggleSelected : startSelectionAt}
                   />
                 </li>
               ))}
@@ -1058,32 +1063,31 @@ export const RecentPage: React.FC = () => {
           )}
         </div>
 
+        {/* The second clear action only exists where the platform can actually
+            separate the record from the file it points at. Both sit in one
+            compact row: they are the footer of a list, and stacked at full width
+            they read as the subject of the screen instead. */}
         {state.status === 'ready' && records.length > 0 && !selectionMode && (
-          <div className="mt-4 flex flex-col gap-2 pb-4 sm:flex-row">
-            <Button tone="destructive" icon={<Trash2 aria-hidden size={16} />} onClick={() => setConfirmClear('records')}>
-              {hasLegacy ? 'Clear this app’s results' : 'Clear the list'}
-            </Button>
+          <div className="mt-4 flex flex-row flex-wrap gap-2 pb-6">
             <Button
               tone="destructive"
+              className="flex-1 px-3"
               icon={<Trash2 aria-hidden size={16} />}
-              disabled={!platform.capabilities.separateClearActions}
-              title={
-                platform.capabilities.separateClearActions
-                  ? undefined
-                  : 'This build stores the record and the file together, so clearing one clears both.'
-              }
-              onClick={() => setConfirmClear('documents')}
+              onClick={() => setConfirmClear('records')}
             >
-              Delete kept files only
+              Clear all
             </Button>
+            {platform.capabilities.separateClearActions && (
+              <Button
+                tone="destructive"
+                className="flex-1 px-3"
+                icon={<Trash2 aria-hidden size={16} />}
+                onClick={() => setConfirmClear('documents')}
+              >
+                Delete files only
+              </Button>
+            )}
           </div>
-        )}
-
-        {state.status === 'ready' && records.length > 0 && !selectionMode && !platform.capabilities.separateClearActions && (
-          <p className="type-footnote pb-6 text-[var(--text-tertiary)]">
-            Clearing the list also removes the kept files, because this build stores them together. Files you already
-            saved to your device are not affected.
-          </p>
         )}
       </div>
 
@@ -1109,15 +1113,30 @@ export const RecentPage: React.FC = () => {
           <div className="space-y-2">
             {!active.available && (
               <StatusLine tone="caution" icon={<FileWarning size={15} />}>
-                {activeIsCollection
-                  ? 'The record is still here but these files are gone. Saving and sharing need them.'
-                  : 'The record is still here but the file is gone. Saving, sharing and reopening need the file.'}
+                {activeIsCollection ? 'These files are no longer on this device.' : 'This file is no longer on this device.'}
               </StatusLine>
+            )}
+
+            {/* The row's own tap reopens, but the menu is where every action
+                the Android app listed is reachable in one place. */}
+            {isReopenable(active) && (
+              <Button
+                block
+                tone="primary"
+                icon={<ExternalLink aria-hidden size={16} />}
+                onClick={() => {
+                  const target = active;
+                  closeActions();
+                  reopen(target);
+                }}
+              >
+                Open
+              </Button>
             )}
 
             <Button
               block
-              tone="primary"
+              tone={isReopenable(active) ? undefined : 'primary'}
               icon={<Download aria-hidden size={16} />}
               busy={busy}
               disabled={!active.available}
@@ -1132,25 +1151,23 @@ export const RecentPage: React.FC = () => {
               {activeIsCollection ? collectionActionLabel('Save', activeItems) : 'Save a copy'}
             </Button>
 
-            <Button
-              block
-              icon={<Share2 aria-hidden size={16} />}
-              disabled={!platform.share || !active.available}
-              onClick={() =>
-                void run(
-                  () => platform.share!(active, displayName(active.entry.name)),
-                  'Handed to the share sheet.',
-                  'Sharing did not complete.',
-                ).then(closeActions)
-              }
-            >
-              {activeIsCollection ? collectionActionLabel('Share', activeItems) : 'Share'}
-            </Button>
-
-            {!platform.share && (
-              <p className="type-footnote text-[var(--text-tertiary)]">
-                This device has no share sheet available to PDF Chef. Save a copy instead.
-              </p>
+            {/* A device with no share sheet gets no Share button, rather than a
+                dead one and a sentence explaining it. */}
+            {platform.share && (
+              <Button
+                block
+                icon={<Share2 aria-hidden size={16} />}
+                disabled={!active.available}
+                onClick={() =>
+                  void run(
+                    () => platform.share!(active, displayName(active.entry.name)),
+                    'Handed to the share sheet.',
+                    'Sharing did not complete.',
+                  ).then(closeActions)
+                }
+              >
+                {activeIsCollection ? collectionActionLabel('Share', activeItems) : 'Share'}
+              </Button>
             )}
 
             <Button
@@ -1196,8 +1213,7 @@ export const RecentPage: React.FC = () => {
       <Sheet
         open={Boolean(renaming)}
         onClose={() => setRenaming(null)}
-        title="Rename result"
-        description="This changes the name stored with the result. Copies you already saved keep their own name."
+        title="Rename"
         footer={
           <>
             <Button tone="secondary" onClick={() => setRenaming(null)}>
@@ -1239,12 +1255,8 @@ export const RecentPage: React.FC = () => {
 
       <ConfirmSheet
         open={Boolean(confirmDelete)}
-        title="Delete this result?"
-        description={
-          confirmDelete
-            ? `"${displayName(confirmDelete.entry.name)}" is removed from this device. Copies you already saved elsewhere are not affected. This cannot be undone.`
-            : ''
-        }
+        title="Delete this file?"
+        description={confirmDelete ? 'This cannot be undone. Copies you saved elsewhere are not affected.' : ''}
         confirmLabel="Delete"
         onCancel={() => setConfirmDelete(null)}
         onConfirm={async () => {
@@ -1259,17 +1271,17 @@ export const RecentPage: React.FC = () => {
           and the description says exactly how much of it that is. */}
       <ConfirmSheet
         open={confirmDeleteSelected}
-        title={`Delete ${selectedIds.size} selected ${selectedIds.size === 1 ? 'result' : 'results'}?`}
+        title={`Delete ${selectedIds.size} ${selectedIds.size === 1 ? 'file' : 'files'}?`}
         description={
           selectedSplit.reversible.length === 0
-            ? `This removes about ${formatBytes(selectedBytes)} from PDF Chef on this device. Copies you already saved elsewhere are not affected. This cannot be undone.`
-            : `This removes about ${formatBytes(selectedBytes)} from PDF Chef on this device. ${
+            ? `Frees ${formatBytes(selectedBytes)}. This cannot be undone.`
+            : `Frees ${formatBytes(selectedBytes)}. ${
                 selectedSplit.permanent.length === 1
                   ? 'One of them cannot be undone.'
                   : `${selectedSplit.permanent.length} of them cannot be undone.`
-              } Copies you already saved elsewhere are not affected.`
+              }`
         }
-        confirmLabel="Delete selected"
+        confirmLabel="Delete"
         onCancel={() => setConfirmDeleteSelected(false)}
         onConfirm={async () => {
           await deleteSelected();
@@ -1279,22 +1291,14 @@ export const RecentPage: React.FC = () => {
 
       <ConfirmSheet
         open={Boolean(confirmClear)}
-        title={
-          confirmClear === 'documents'
-            ? 'Delete every kept file?'
-            : hasLegacy
-              ? 'Clear this app’s results?'
-              : 'Clear every result?'
-        }
-        description={
-          confirmClear === 'documents'
-            ? `Every file this app keeps on this device is deleted. The list of what you made stays. Copies you already saved elsewhere are not affected.${
-                hasLegacy ? ' Files from the older Android app are read-only here and stay where they are.' : ''
-              } This cannot be undone.`
-            : `Every result this app made on this device is removed. Copies you already saved elsewhere are not affected.${
-                hasLegacy ? ' Files from the older Android app are read-only here and stay where they are.' : ''
-              } This cannot be undone.`
-        }
+        title={confirmClear === 'documents' ? 'Delete every file?' : 'Clear all?'}
+        // Deleting the files while keeping the list is the one outcome the title
+        // cannot convey on its own, so that branch says it and the other does not.
+        description={`${
+          confirmClear === 'documents' ? 'The list of what you made stays. ' : ''
+        }This cannot be undone. Copies you saved elsewhere are not affected.${
+          hasLegacy ? ' Files from the older Android app stay where they are.' : ''
+        }`}
         confirmLabel={confirmClear === 'documents' ? 'Delete files' : 'Clear all'}
         onCancel={() => setConfirmClear(null)}
         onConfirm={async () => {

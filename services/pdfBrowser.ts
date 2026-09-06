@@ -4,8 +4,11 @@ import { PDFDocument } from 'pdf-lib';
 import { canvasToBlob, getSafeBuffer, readFileAsArrayBuffer } from './pdfShared';
 import {
   getAdaptiveConfig,
+  projectCompressedSize,
+  samplePageIndices,
   type AdaptiveConfig,
   type CompressionLevel,
+  type CompressionSizeMeasurement,
 } from './pdfCompressionConfig';
 import { positionedTextItemsToWordTargets } from './pdfTextLineGrouping';
 export type { PageSelectableTextLine } from './pdfTextLineGrouping';
@@ -24,6 +27,23 @@ const pdfjs = pdfjsLib;
 if (typeof window !== 'undefined' && pdfjs.GlobalWorkerOptions && !pdfjs.GlobalWorkerOptions.workerSrc) {
   pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
 }
+
+/**
+ * Where PDF.js finds the pieces it fetches rather than bundles.
+ *
+ * Without `wasmUrl` this build refuses to decode JPEG 2000 and JBIG2 images outright — it has no
+ * fallback — so a scanned or image-heavy PDF renders with the pictures missing. Without `cMapUrl`
+ * a CJK document with a non-Identity encoding extracts unusable text, and without
+ * `standardFontDataUrl` the standard fourteen fonts are measured from approximations. All three
+ * are vendored locally by scripts/prepare-local-assets.mjs so this keeps working with no network.
+ */
+const PDFJS_ASSET_BASE = '/vendor/pdfjs';
+const pdfjsResourceOptions = {
+  wasmUrl: `${PDFJS_ASSET_BASE}/wasm/`,
+  cMapUrl: `${PDFJS_ASSET_BASE}/cmaps/`,
+  cMapPacked: true,
+  standardFontDataUrl: `${PDFJS_ASSET_BASE}/standard_fonts/`,
+};
 
 const fileBufferCache = new WeakMap<File, Promise<ArrayBuffer>>();
 const pdfDocumentCache = new WeakMap<File, Promise<any>>();
@@ -82,7 +102,7 @@ export const loadPDFDocument = async (file: File) => {
 
   const next = (async () => {
     const arrayBuffer = await getFileBuffer(file);
-    const loadingTask = pdfjs.getDocument({ data: getSafeBuffer(arrayBuffer) });
+    const loadingTask = pdfjs.getDocument({ data: getSafeBuffer(arrayBuffer), ...pdfjsResourceOptions });
     const doc = await loadingTask.promise;
     let destroyed = false;
     Object.defineProperty(doc, 'destroy', {
@@ -105,6 +125,52 @@ export const loadPDFDocument = async (file: File) => {
   return next;
 };
 
+const editablePdfDocumentCache = new WeakMap<File, Promise<any>>();
+
+/**
+ * Open a PDF for the inline text editor.
+ *
+ * `fontExtraProperties` is what exposes each font's embedded binary through `commonObjs`, and the
+ * editor needs it to draw its overlay in the document's own typeface instead of an approximation.
+ * It is deliberately kept off the shared loader: the font programs are large, and every other tool
+ * renders pages without ever needing them.
+ */
+export const loadEditablePDFDocument = async (file: File) => {
+  const cached = editablePdfDocumentCache.get(file);
+  if (cached) return cached;
+
+  const next = (async () => {
+    const arrayBuffer = await getFileBuffer(file);
+    const loadingTask = pdfjs.getDocument({
+      data: getSafeBuffer(arrayBuffer),
+      ...pdfjsResourceOptions,
+      fontExtraProperties: true,
+      // Local system fonts would render without ever registering a FontFace, leaving the overlay
+      // unable to check whether the face it wants is actually available.
+      useSystemFonts: false,
+    });
+    const doc = await loadingTask.promise;
+    let destroyed = false;
+    Object.defineProperty(doc, 'destroy', {
+      configurable: true,
+      value: async () => {
+        if (destroyed) return;
+        destroyed = true;
+        editablePdfDocumentCache.delete(file);
+        await loadingTask.destroy();
+      },
+    });
+
+    return doc;
+  })().catch((error) => {
+    editablePdfDocumentCache.delete(file);
+    throw error;
+  });
+
+  editablePdfDocumentCache.set(file, next);
+  return next;
+};
+
 export const loadProtectedPDFDocument = async (file: File, password: string) => {
   const exactPassword = password;
   if (!exactPassword) {
@@ -114,6 +180,7 @@ export const loadProtectedPDFDocument = async (file: File, password: string) => 
   const arrayBuffer = await getFileBuffer(file);
   const loadingTask = pdfjs.getDocument({
     data: getSafeBuffer(arrayBuffer),
+    ...pdfjsResourceOptions,
     password: exactPassword,
   });
   const doc = await loadingTask.promise;
@@ -497,6 +564,20 @@ const textRenderingOperations = new Set<number>([
   pdfjs.OPS.nextLineSetSpacingShowText,
 ].filter((operation): operation is number => typeof operation === 'number'));
 
+/**
+ * Free a scratch canvas's pixels once PDF.js has finished with it.
+ *
+ * Rendering the same page twice makes PDF.js tidy up the earlier task, and that tidy-up restores
+ * the graphics state on the context it drew into. Resizing the canvas in the same turn wipes that
+ * state out from under it, which throws. Deferring the release lets the tidy-up run first.
+ */
+const releaseCanvas = (canvas: HTMLCanvasElement) => {
+  setTimeout(() => {
+    canvas.width = 0;
+    canvas.height = 0;
+  }, 0);
+};
+
 export const getPageTextBackgroundPatch = async (
   pdfDoc: any,
   pageIndex: number,
@@ -536,16 +617,14 @@ export const getPageTextBackgroundPatch = async (
   // list, so equal lengths mean the operation indexes used by this filter are still aligned.
   // Revisit this invariant whenever PDF.js changes its optimiser registrations.
   if (maximumObservedOperationIndex + 1 !== operatorList.fnArray.length) {
-    canvas.width = 0;
-    canvas.height = 0;
+    releaseCanvas(canvas);
     throw new Error(
       'Automatic text reconstruction is unavailable for this page because its drawing operations cannot be matched safely.',
     );
   }
 
   const dataUrl = canvas.toDataURL('image/png');
-  canvas.width = 0;
-  canvas.height = 0;
+  releaseCanvas(canvas);
   return dataUrl;
 };
 
@@ -952,4 +1031,69 @@ export const compressPDFAdaptive = async (
     },
     status: 'success' as const,
   };
+};
+
+/* ------------------------------------------- Measured size estimation --- */
+
+/**
+ * What the export will actually weigh, measured rather than guessed.
+ *
+ * The rasterising path writes exactly one JPEG per page, so encoding a handful
+ * of real pages through the same call the exporter uses and multiplying by the
+ * page count describes this document instead of a fitted average. A scanned
+ * page and a text page no longer get the same prediction, which is the whole
+ * reason the ratio table was wrong.
+ */
+const measurementCache = new WeakMap<File, Map<string, CompressionSizeMeasurement>>();
+
+const measurementKey = (config: AdaptiveConfig) =>
+  `${config.scale.toFixed(3)}:${config.quality.toFixed(3)}`;
+
+export const measureCompressedSize = async (
+  file: File,
+  config: AdaptiveConfig,
+  options?: { maxSamples?: number },
+): Promise<CompressionSizeMeasurement> => {
+  const key = measurementKey(config);
+  const cached = measurementCache.get(file)?.get(key);
+  if (cached) return cached;
+
+  const pdf = await loadPDFDocument(file);
+  const pageCount = Math.max(1, pdf.numPages || 1);
+  const indices = samplePageIndices(pageCount, options?.maxSamples ?? 3);
+
+  let totalBytes = 0;
+  let sampledPages = 0;
+  for (const pageIndex of indices) {
+    const page = await pdf.getPage(pageIndex + 1);
+    // The exporter's own arguments, verbatim. Anything else would measure a
+    // different encoder than the one that writes the file.
+    const { blob } = await renderPageToBlob(page, config.scale * 1.5, 'image/jpeg', config.quality);
+    totalBytes += blob.size;
+    sampledPages += 1;
+  }
+
+  const measurement: CompressionSizeMeasurement = {
+    bytesPerPage: sampledPages > 0 ? totalBytes / sampledPages : 0,
+    pageCount,
+    sampledPages,
+  };
+
+  const perFile = measurementCache.get(file) ?? new Map<string, CompressionSizeMeasurement>();
+  perFile.set(key, measurement);
+  measurementCache.set(file, perFile);
+  return measurement;
+};
+
+/** The measured projection for one config, or 0 when the document could not be sampled. */
+export const measureProjectedSize = async (
+  file: File,
+  config: AdaptiveConfig,
+  options?: { maxSamples?: number },
+): Promise<number> => {
+  try {
+    return projectCompressedSize(await measureCompressedSize(file, config, options));
+  } catch {
+    return 0;
+  }
 };

@@ -231,7 +231,7 @@ export const MakeFillable: React.FC = () => {
         {/* Kept: detection is heuristic, and an unreviewed field ships in the export. */}
         <ToolHeader
           title={<>Make Fillable <Badge tone="caution" className="align-middle">Beta</Badge></>}
-          note={<span className="font-medium text-[var(--status-caution-text)]">Suggestions can be wrong. Review every field before sharing.</span>}
+          note={<span className="font-medium text-[var(--status-caution-text)]">Suggestions can be wrong, so review every field before sharing.</span>}
         />
         <FileUpload onFilesSelected={(files) => void select(files)} accept=".pdf,application/pdf" label="Choose a PDF to make fillable" />
         <StatusToast status={status} />
@@ -254,7 +254,7 @@ export const MakeFillable: React.FC = () => {
 
       <div id="fillable-validation" aria-live="polite" className="mt-3 rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] px-3 py-2.5 text-sm text-[var(--text-secondary)]">
         <p><strong>Review first:</strong> every detected box is a suggestion until you choose Keep.</p>
-        {existingFieldCount > 0 && <p className="mt-1">This PDF already has {existingFieldCount} fillable field{existingFieldCount === 1 ? '' : 's'}. New fields will be added alongside them; use Edit PDF to fill the existing fields.</p>}
+        {existingFieldCount > 0 && <p className="mt-1">New fields are added alongside the {existingFieldCount} fillable field{existingFieldCount === 1 ? '' : 's'} this PDF already has.</p>}
         {validationMessages.length > 0
           ? <ul className="mt-2 list-disc space-y-1 pl-5 text-amber-800 dark:text-amber-200">{validationMessages.map((message) => <li key={message}>{message}</li>)}</ul>
           : <p className="mt-2 font-semibold text-emerald-700 dark:text-emerald-300">All new fields are reviewed and ready to export.</p>}

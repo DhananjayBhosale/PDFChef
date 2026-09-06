@@ -145,35 +145,50 @@ const routeMeta = {
     title: "Batch PDF Processing - Private Bulk Tools | PDF Chef",
     description: "Run compression, conversion, security, metadata, page, and repair operations across several PDFs locally.",
   },
+  // A personal, device-local list. There is nothing here for a searcher, and
+  // /history is the same screen under an older path.
   "/recent": {
+    noindex: true,
     title: "Local Output History | PDF Chef",
     description: "Re-download and manage PDF Chef outputs stored only in this browser.",
   },
   "/history": {
+    noindex: true,
+    canonical: "/recent",
     title: "Local Output History | PDF Chef",
     description: "Re-download and manage PDF Chef outputs stored only in this browser.",
   },
   "/settings": {
+    noindex: true,
     title: "Settings | PDF Chef",
     description: "Control local history, download behavior, and large-file safety preferences for PDF Chef.",
+  },
+  "/help": {
+    title: "PDF Chef Help - Frequently Asked Questions",
+    description: "Answers about PDF Chef: whether files are uploaded, how compression affects quality, offline use, merging and splitting limits, and where results are kept.",
   },
   "/privacy": {
     title: "Privacy Policy | PDF Chef",
     description: "Read the PDF Chef privacy policy for the Android app and web app.",
   },
   "/privacy-policy": {
+    canonical: "/privacy",
     title: "Privacy Policy | PDF Chef",
     description: "Read the PDF Chef privacy policy.",
   },
+  // Renders the very same PrivacyPolicy component, so it is a duplicate rather
+  // than an Android-specific document, and its title said otherwise.
   "/pdf-chef-privacy": {
-    title: "Android Privacy Policy | PDF Chef",
-    description: "Read the Android app privacy policy for PDF Chef.",
+    canonical: "/privacy",
+    title: "Privacy Policy | PDF Chef",
+    description: "Read the PDF Chef privacy policy covering the web app, Android app and iOS app.",
   },
   "/terms": {
     title: "Terms and Conditions | PDF Chef",
     description: "Read the PDF Chef terms and conditions.",
   },
   "/terms-and-conditions": {
+    canonical: "/terms",
     title: "Terms and Conditions | PDF Chef",
     description: "Read the PDF Chef terms and conditions.",
   },
@@ -207,12 +222,22 @@ const allowCloudflareWebAnalytics = (html) => html.replace(
   },
 );
 
+/** Every path the app actually renders something for; see routeMeta above. */
+const isKnownRoute = (pathname) => {
+  const normalizedPath = pathname === "/" ? "/" : pathname.replace(/\/+$/, "");
+  return Object.prototype.hasOwnProperty.call(routeMeta, normalizedPath);
+};
+
 const applyRouteMeta = (html, pathname) => {
   const normalizedPath = pathname === "/" ? "/" : pathname.replace(/\/+$/, "");
   const meta = routeMeta[normalizedPath];
   if (!meta) return html;
 
-  const canonicalUrl = `${ORIGIN}${normalizedPath === "/" ? "/" : normalizedPath}`;
+  // A duplicate route points at the URL that should rank; everything else points
+  // at itself. Without this, /privacy, /privacy-policy and /pdf-chef-privacy all
+  // claimed to be the original of the same document.
+  const canonicalPath = meta.canonical || normalizedPath;
+  const canonicalUrl = `${ORIGIN}${canonicalPath === "/" ? "/" : canonicalPath}`;
   const title = escapeText(meta.title);
   const titleAttr = escapeAttribute(meta.title);
   const descriptionAttr = escapeAttribute(meta.description);
@@ -229,6 +254,10 @@ const applyRouteMeta = (html, pathname) => {
   nextHtml = replaceTag(nextHtml, /<meta\s+property="twitter:title"\s+content="[^"]*"\s*\/?>/i, `<meta property="twitter:title" content="${titleAttr}" />`);
   nextHtml = replaceTag(nextHtml, /<meta\s+property="twitter:description"\s+content="[^"]*"\s*\/?>/i, `<meta property="twitter:description" content="${descriptionAttr}" />`);
   nextHtml = replaceTag(nextHtml, /<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>/i, `<link rel="canonical" href="${canonicalAttr}" />`);
+  // `follow` rather than `none`: these pages still link onward to the tools.
+  if (meta.noindex) {
+    nextHtml = replaceTag(nextHtml, /<meta\s+name="robots"\s+content="[^"]*"\s*\/?>/i, `<meta name="robots" content="noindex, follow" />`);
+  }
 
   return nextHtml;
 };
@@ -272,8 +301,14 @@ export async function onRequest(context) {
   const headers = new Headers(response.headers);
   headers.delete("content-length");
   headers.set("Cache-Control", "no-cache");
+  // `/*  /index.html  200` in public/_redirects means a typo, a stale backlink or
+  // a scraped junk URL is served the shell with a 200 and the default metadata:
+  // a soft 404, which Search Console flags and which lets any URL variant
+  // accumulate signals. The body still loads the app, so the client-side
+  // redirect to Home is unchanged; only the status a crawler reads differs.
+  const status = isKnownRoute(url.pathname) ? response.status : 404;
   return new Response(rewrittenHtml, {
-    status: response.status,
+    status,
     statusText: response.statusText,
     headers,
   });

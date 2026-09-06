@@ -37,7 +37,9 @@ const parseRouteMetadata = (source, sourceName) => {
     metadata.set('/', { title: defaultMatch[2], description: defaultMatch[4] });
   }
 
-  const entryPattern = /(['"])(\/[^'"]*)\1\s*:\s*\{\s*title:\s*(['"])(.*?)\3,\s*description:\s*(['"])(.*?)\5,\s*\}/gs;
+  // `canonical` and `noindex` may precede the copy, so the pattern tolerates
+  // leading keys rather than making field order load-bearing.
+  const entryPattern = /(['"])(\/[^'"]*)\1\s*:\s*\{\s*(?:(?:canonical|noindex)\s*:\s*[^,]+,\s*)*title:\s*(['"])(.*?)\3,\s*description:\s*(['"])(.*?)\5,\s*\}/gs;
   for (const match of routeBlock[1].matchAll(entryPattern)) {
     metadata.set(match[2], { title: match[4], description: match[6] });
   }
@@ -155,15 +157,24 @@ for (const entry of catalogEntries) {
   }
 }
 
+// A sitemap advertises the URL that should rank, so it lists canonical URLs
+// only. /privacy-policy, /pdf-chef-privacy and /terms-and-conditions stay live
+// and keep working — they render the same component and now canonicalise onto
+// /privacy and /terms — but listing them here as well would ask search engines
+// to index three originals of one document.
 const requiredRoutes = Array.from(new Set([
   ...catalogRoutes,
   '/',
+  '/help',
   '/privacy',
   '/terms',
-  '/privacy-policy',
-  '/pdf-chef-privacy',
-  '/terms-and-conditions',
 ])).sort();
+
+/** Live, reachable, and deliberately absent from the sitemap. */
+const canonicalisedAliases = ['/privacy-policy', '/pdf-chef-privacy', '/terms-and-conditions'];
+
+/** Device-local surfaces: reachable in the app, never a search result. */
+const noindexRoutes = ['/recent', '/history', '/settings'];
 
 for (const route of catalogRoutes) {
   if (!appRoutes.includes(route)) failures.push(`Catalog route is missing in App.tsx: ${route}`);
@@ -194,6 +205,53 @@ for (const route of middlewareMetadata.keys()) {
 
 for (const route of requiredRoutes) {
   if (!sitemapRoutes.includes(route)) failures.push(`Required route is missing from sitemap.xml: ${route}`);
+}
+
+for (const route of [...canonicalisedAliases, ...noindexRoutes]) {
+  if (sitemapRoutes.includes(route)) {
+    failures.push(`Route canonicalises elsewhere or is noindex, so it must not be in sitemap.xml: ${route}`);
+  }
+}
+
+// The alias must actually declare its canonical, or dropping it from the sitemap
+// would simply hide a duplicate rather than resolve one.
+for (const route of canonicalisedAliases) {
+  if (!new RegExp(`["']${route}["']:\\s*\\{[^}]*canonical:`).test(middleware)) {
+    failures.push(`Alias route is missing a canonical in _middleware.js: ${route}`);
+  }
+  if (!new RegExp(`["']${route}["']:\\s*\\{[^}]*canonical:`).test(seo)) {
+    failures.push(`Alias route is missing a canonical in RouteSEO.tsx: ${route}`);
+  }
+}
+
+// RouteSEO and the middleware are the only writers of title/description/
+// canonical/robots. A page component that sets its own puts a second writer on
+// the same DOM nodes, and the last effect to run wins: that is how
+// /privacy-policy came to self-canonicalise while routeMeta said otherwise.
+const componentDirs = ['components', 'App.tsx'];
+const offenders = [];
+for (const dir of componentDirs) {
+  const target = resolve(root, dir);
+  const files = statSync(target).isDirectory()
+    ? readdirSync(target, { recursive: true }).filter((name) => String(name).endsWith('.tsx'))
+        .map((name) => resolve(target, String(name)))
+    : [target];
+  for (const file of files) {
+    const body = readFileSync(file, 'utf8');
+    if (/document\.title\s*=/.test(body) || /rel="canonical"/.test(body)) {
+      const relative = file.slice(resolve(root).length + 1);
+      if (relative !== 'components/SEO/RouteSEO.tsx') offenders.push(relative);
+    }
+  }
+}
+for (const file of offenders) {
+  failures.push(`Page metadata must only be written by RouteSEO.tsx, but this file writes it too: ${file}`);
+}
+
+for (const route of noindexRoutes) {
+  if (!new RegExp(`["']${route}["']:\\s*\\{[^}]*noindex:`).test(middleware)) {
+    failures.push(`Device-local route is missing noindex in _middleware.js: ${route}`);
+  }
 }
 
 const duplicateCatalogRoutes = catalogRoutes.filter((route, index) => catalogRoutes.indexOf(route) !== index);

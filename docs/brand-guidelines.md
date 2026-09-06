@@ -35,25 +35,29 @@ decoration.
 
 | Role | Value | Where |
 |---|---|---|
-| Paper | `#f8f5ef` light, `#16140f` dark | The ground. Warm, never `#fff` or `#000`. |
+| Paper | `#fff8f4` light, `#17100f` dark | The ground. Warm, never `#fff` or `#000`. |
 | Ink | `#dc2020` light, `#ff4d52` dark | The single accent: primary actions, current tab, selection, focus. |
 | Success | `#3f6538` / `#96be8e` | Finished, saved, actually smaller. |
 | Caution | `#8c6014` / `#e0b368` | Beta, memory pressure, review-first. |
 | Danger | `#8c3526` / `#e09285` | Delete, clear, failed. |
 
-Every neutral is tinted toward hue 82 so the surface reads as paper rather than
-as grey. Chroma drops as lightness approaches either end, which is why the
-darkest and lightest steps look almost neutral and should stay that way.
+Every neutral is tinted toward hue 24 — the accent's own hue — so the surface
+reads as warm paper with a faint reddish cast rather than as grey. `paper-50`,
+`paper-100` and `paper-200` are the Android app's background, card and divider
+values verbatim; the rest of the ramp is those three resolved up and down at the
+same hue, and dark carries the same cast rather than a cool blue-black. Chroma
+drops as lightness approaches either end, which is why the darkest and lightest
+steps look almost neutral and should stay that way.
 
 Colour is never the only signal. Every status carries an icon and words.
 
 The authoritative Android logo red is `#E42121`, retained at `ink-500` as the
-brand anchor. It reaches only 4.25:1 against the light paper ground
-`#F8F5EF`, just below the WCAG AA 4.5:1 requirement for normal text and
+brand anchor. It reaches only 4.40:1 against the light paper ground
+`#FFF8F4`, just below the WCAG AA 4.5:1 requirement for normal text and
 text-sized controls. Light-theme semantic accent therefore uses `#DC2020` at
 `ink-600`, the smallest uniformly darker RGB derivative that clears AA at
-4.52:1. Dark-theme semantic accent uses Android's exact `#FF4D52`; it reaches
-5.64:1 against `#16140F`. Keep the logo artwork at its original colours.
+4.68:1. Dark-theme semantic accent uses Android's exact `#FF4D52`; it reaches
+5.76:1 against `#17100F`. Keep the logo artwork at its original colours.
 
 Brand red and danger clay are deliberately separate roles even though they are
 neighbours in hue. Brand red means act, current, selected, or focused. Danger

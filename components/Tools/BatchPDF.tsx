@@ -1,7 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import JSZip from 'jszip';
 import { AlertTriangle, Plus, ArrowDown, ArrowUp, Files, Loader2, Trash2, XCircle } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import { FileUpload } from '../UI/FileUpload';
 import { StatusToast } from '../UI/StatusToast';
 import { ToolHeader, ToolShell } from '../UI/ToolLayout';
@@ -32,20 +31,21 @@ interface BatchItemStatus {
   message?: string;
 }
 
-const actions: Array<{ value: BatchAction; label: string; detail: string }> = [
-  { value: 'compress', label: 'Compress PDF', detail: 'Recommended readability profile' },
-  { value: 'split', label: 'Split PDF', detail: 'Create parts with N pages each' },
+/** `detail` is set only where the label leaves out an output format or a consequence. */
+const actions: Array<{ value: BatchAction; label: string; detail?: string }> = [
+  { value: 'compress', label: 'Compress PDF' },
+  { value: 'split', label: 'Split PDF' },
   { value: 'pdf-to-image', label: 'PDF to Image', detail: 'JPG pages in one ZIP per PDF' },
-  { value: 'pdf-to-word', label: 'PDF to Word', detail: 'Searchable text to DOCX' },
-  { value: 'rotate', label: 'Rotate Pages', detail: 'Rotate every page' },
-  { value: 'protect', label: 'Protect PDF', detail: 'Apply one password to every PDF' },
-  { value: 'unlock', label: 'Unlock PDF', detail: 'Use the known password' },
-  { value: 'metadata', label: 'Clear Metadata', detail: 'Remove document properties' },
-  { value: 'flatten', label: 'Flatten PDF', detail: 'Bake form fields' },
-  { value: 'extract-text', label: 'Extract Text', detail: 'Embedded text to TXT' },
-  { value: 'watermark', label: 'Watermark PDF', detail: 'Stamp every page' },
-  { value: 'page-numbers', label: 'Page Numbers', detail: 'Number every page' },
-  { value: 'repair', label: 'Repair PDF', detail: 'Re-save for compatibility' },
+  { value: 'pdf-to-word', label: 'PDF to Word', detail: 'DOCX' },
+  { value: 'rotate', label: 'Rotate Pages' },
+  { value: 'protect', label: 'Protect PDF', detail: 'One password for every PDF' },
+  { value: 'unlock', label: 'Unlock PDF', detail: 'One password for every PDF' },
+  { value: 'metadata', label: 'Clear Metadata' },
+  { value: 'flatten', label: 'Flatten PDF' },
+  { value: 'extract-text', label: 'Extract Text', detail: 'TXT' },
+  { value: 'watermark', label: 'Watermark PDF' },
+  { value: 'page-numbers', label: 'Page Numbers' },
+  { value: 'repair', label: 'Repair PDF' },
 ];
 
 const baseName = (name: string) => name.replace(/\.pdf$/i, '');
@@ -306,14 +306,14 @@ export const BatchPDF: React.FC = () => {
         setStatus({
           isProcessing: false,
           progress: 0,
-          message: `Canceled after ${completedCount} of ${files.length} files. No ZIP was created.`,
+          message: `Canceled after ${completedCount} of ${files.length} files; no ZIP was created.`,
         });
         return;
       }
 
       if (failures.length) zip.file('failures.txt', failures.join('\n'));
       if (failures.length === files.length) {
-        setStatus({ ...idleStatus(), error: `All ${files.length} files failed. Review the queue for details.` });
+        setStatus({ ...idleStatus(), error: `All ${files.length} files failed; review the queue for details.` });
         return;
       }
 
@@ -324,7 +324,7 @@ export const BatchPDF: React.FC = () => {
         setStatus({
           isProcessing: false,
           progress: 0,
-          message: `Canceled after ${completedCount} of ${files.length} files. No ZIP was created.`,
+          message: `Canceled after ${completedCount} of ${files.length} files; no ZIP was created.`,
         });
         return;
       }
@@ -334,12 +334,12 @@ export const BatchPDF: React.FC = () => {
         isProcessing: false,
         progress: 100,
         message: failures.length
-          ? `Created ${outputName} with ${completedCount} outputs and ${failures.length} failure${failures.length === 1 ? '' : 's'}. See failures.txt.`
+          ? `Created ${outputName} with ${completedCount} outputs and ${failures.length} failure${failures.length === 1 ? '' : 's'} listed in failures.txt.`
           : `Created ${outputName} with ${completedCount} outputs.`,
       });
     } catch (error) {
       console.error(error);
-      setStatus({ ...idleStatus(), error: 'Unable to create the batch ZIP. Review the queue and try again.' });
+      setStatus({ ...idleStatus(), error: 'Unable to create the batch ZIP; review the queue and try again.' });
     } finally {
       setCancelPending(false);
     }
@@ -356,7 +356,7 @@ export const BatchPDF: React.FC = () => {
     <ToolShell width="wide" centered={files.length === 0}>
       {/* Kept: the ZIP is the one thing the Operation control and the Process
           button do not say. */}
-      <ToolHeader title="Batch Processing" note="One operation across every queued PDF, returned as one ZIP." />
+      <ToolHeader title="Batch Processing" note="Every result is returned in one ZIP." />
 
       <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
         <aside className="order-1 h-fit rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 sm:p-4 lg:order-1">
@@ -397,9 +397,9 @@ export const BatchPDF: React.FC = () => {
               {actions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </label>
-          {/* Kept: the operation list is a bare select, and each entry's
-              consequence is only stated here. */}
-          <p className="type-footnote mt-1.5 text-[var(--text-secondary)]">{selectedAction.detail}</p>
+          {selectedAction.detail && (
+            <p className="type-footnote mt-1.5 text-[var(--text-secondary)]">{selectedAction.detail}</p>
+          )}
 
           {action === 'split' && (
             <label className="mt-3 block text-sm font-bold text-[var(--text-body)]">Pages per part

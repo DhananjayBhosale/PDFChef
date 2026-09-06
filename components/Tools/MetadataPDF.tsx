@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2, RotateCcw, Save, Trash2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -59,7 +58,7 @@ export const MetadataPDF: React.FC = () => {
         name: selected.name,
         size: selected.size,
       });
-      setStatus({ isProcessing: false, progress: 100, message: 'Metadata loaded. Review the six editable fields.' });
+      setStatus({ isProcessing: false, progress: 100, message: 'Metadata loaded.' });
     } catch (error) {
       console.error(error);
       setStatus({
@@ -85,7 +84,7 @@ export const MetadataPDF: React.FC = () => {
     setStatus({
       isProcessing: false,
       progress: 0,
-      message: 'Original values restored in this draft. Export to create an updated copy.',
+      message: 'Original values restored in this draft.',
     });
   };
 
@@ -95,7 +94,7 @@ export const MetadataPDF: React.FC = () => {
     setStatus({
       isProcessing: false,
       progress: 0,
-      message: 'Six document properties cleared in this draft. Export to create the cleared copy.',
+      message: 'Six document properties cleared in this draft.',
     });
   };
 
@@ -120,7 +119,7 @@ export const MetadataPDF: React.FC = () => {
         progress: 100,
         message: clearAllPending
           ? 'Updated PDF created with the six editable properties cleared.'
-          : 'Updated PDF created. Open the copy to review its document properties.',
+          : 'Updated PDF created.',
       });
     } catch (error) {
       console.error(error);
@@ -197,8 +196,7 @@ export const MetadataPDF: React.FC = () => {
               {/* Kept: without it, "Clear" reads as full sanitization, which
                   it is not. */}
               <p className="mt-2 rounded-[var(--radius-field)] bg-[var(--surface-sunken)] px-3 py-2 type-footnote text-[var(--text-secondary)]">
-                Clear removes Title, Author, Subject, Keywords, Creator and Producer. XMP, attachments, annotations,
-                form values, scripts and hidden layers remain.
+                XMP, attachments, annotations, form values, scripts and hidden layers remain.
               </p>
 
               <div className="mt-3 space-y-2.5">

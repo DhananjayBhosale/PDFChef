@@ -24,7 +24,8 @@ import {
   visualPointToPdf,
   visualRectangleToPdf,
 } from './pdfEditorGeometry';
-import type { TextReplacementSource } from './pdfEditorTextReplacement';
+import type { PdfSpaceRect } from './pdfNativeTextPlanning';
+import { substituteForStandardFont } from './pdfFontResolution';
 import {
   DELETE_ALL_PAGES_MESSAGE,
   DELETE_PAGES_TOO_LARGE_MESSAGE,
@@ -919,42 +920,175 @@ export interface EditorElement {
   fontFamily?: string;
   fontWeight?: number;
   fontStyle?: 'normal' | 'italic';
-  replacementSource?: TextReplacementSource;
 }
+
+/**
+ * A paragraph edit that the original PDF text objects can express exactly. Nothing is painted
+ * over: the document's own fonts keep drawing the text, so it stays selectable and searchable.
+ */
+export interface ParagraphDirectEdit {
+  mode: 'direct';
+  pageIndex: number;
+  runEdits: Array<{
+    sourceText: string;
+    sourcePdfRect: PdfSpaceRect;
+    replacementText: string;
+  }>;
+}
+
+/**
+ * A paragraph edit that changed shape — a new line, a removed line break, or text that outgrew
+ * the space it had. The paragraph is redrawn, re-embedding the document's own font program when
+ * one is available.
+ *
+ * `runDeletions` removes the original text objects first. That is what keeps the result honest:
+ * without it the old words survive underneath the redraw, so the file still searches and copies as
+ * the text that is no longer on the page. It also lets a flat background be filled with a vector
+ * rectangle instead of a raster patch, because there is nothing left to hide.
+ */
+export interface ParagraphReflowEdit {
+  mode: 'reflow';
+  pageIndex: number;
+  /** Paragraph box as fractions of the visual page. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  runDeletions: Array<{ sourceText: string; sourcePdfRect: PdfSpaceRect }>;
+  /** Raster re-render of the area, used only when the paragraph does not sit on a flat colour. */
+  backgroundImage?: string;
+  backgroundColor: string;
+  /** True when the area is a single colour, so a vector fill reproduces it exactly. */
+  backgroundFlat: boolean;
+  /**
+   * The wrapped paragraph, one entry per line, each a list of stretches with the face they are
+   * drawn in. A paragraph that opens with a bold lead-in stays that way through the redraw.
+   */
+  lines: Array<Array<{ text: string; face: ParagraphFace }>>;
+  fontSize: number;
+  lineHeight: number;
+  align: 'left' | 'center' | 'right' | 'justify';
+  color: string;
+}
+
+/**
+ * One typeface a redrawn paragraph needs.
+ *
+ * Always one of the standard faces. The document's own program is deliberately not re-embedded:
+ * what PDF.js exposes is a transcoded copy built for the browser, not the file's original font,
+ * and drawing Unicode text through it produced wrong advances and unreachable spaces — text ran
+ * off the page and characters were lost. A metric-compatible standard face is a visible change,
+ * which the editor states, rather than a silent one.
+ */
+export interface ParagraphFace {
+  /** Stable key so the same face is embedded once per document. */
+  key: string;
+  family: 'Helvetica' | 'TimesRoman' | 'Courier';
+  bold: boolean;
+  italic: boolean;
+}
+
+export type ParagraphSaveEdit = ParagraphDirectEdit | ParagraphReflowEdit;
+
+/** Shown when a document's own permissions forbid writing it back. */
+export const PDF_EDIT_PERMISSION_MESSAGE = 'This PDF carries a password that allows reading but not changes, so the edited version cannot be written. Remove it with the Unlock PDF tool first, then edit the result.';
 
 export const savePDFWithAnnotations = async (
   file: File,
   elements: EditorElement[],
   formValues: Record<string, PdfFormFieldValue> = {},
+  paragraphEdits: ParagraphSaveEdit[] = [],
 ): Promise<Uint8Array> => {
   const arrayBuffer = await readFileAsArrayBuffer(file);
-  const directTextElements = elements.filter(
-    (element) => element.replacementSource?.saveMode === 'native'
-      && element.content !== element.replacementSource.text,
+  const directParagraphEdits = paragraphEdits.filter(
+    (edit): edit is ParagraphDirectEdit => edit.mode === 'direct',
+  );
+  const reflowParagraphEdits = paragraphEdits.filter(
+    (edit): edit is ParagraphReflowEdit => edit.mode === 'reflow',
   );
   let sourceBytes = new Uint8Array(arrayBuffer);
-  if (directTextElements.length > 0) {
-    const { applyNativePdfTextEdits, releaseNativePdfTextDocument } = await import('./pdfNativeTextEditor');
+  const nativeEdits = [
+    ...directParagraphEdits.flatMap((edit) => edit.runEdits.map((run) => ({
+      pageIndex: edit.pageIndex,
+      sourceText: run.sourceText,
+      replacementText: run.replacementText,
+      pdfRect: run.sourcePdfRect,
+      // A paragraph edit rewrites whole source runs, so the run and the target are the same span.
+      sourceRun: {
+        text: run.sourceText,
+        start: 0,
+        end: run.sourceText.length,
+        pdfRect: run.sourcePdfRect,
+      },
+    }))),
+  ];
+  // A redrawn paragraph's originals come out by area rather than by matching their text. The words
+  // are about to be painted over, so what has to leave the file is whatever the PDF drew inside
+  // those rectangles — a question geometry answers even for documents that set each glyph as its
+  // own text object, which is where asking the engine to find a matching word used to give up.
+  // One area per paragraph, not per run. A single run's rectangle is the box PDF.js reports for
+  // that run's advance, and a glyph's real ink routinely reaches past it — an ascender, a descender,
+  // an italic overhang. Measured against the whole paragraph those overshoots are interior, so the
+  // objects that belong to it are recognised while a line running on past the paragraph still is
+  // not.
+  const clearances = reflowParagraphEdits.flatMap((edit) => {
+    const rects = edit.runDeletions.map((run) => run.sourcePdfRect);
+    if (rects.length === 0) return [];
+    // A run's rectangle is measured from its baseline upwards, so every descender in the paragraph
+    // hangs below it. Without room for them a line ending in "g" or "y" reads as reaching outside
+    // the paragraph and is left in the file. One third of a line is the usual depth of a descender
+    // and stays well clear of the next paragraph's ink.
+    const lineHeight = Math.max(...rects.map((rect) => Math.abs(rect[3] - rect[1])));
+    const descender = Math.max(1, lineHeight * 0.34);
+    return [{
+      pageIndex: edit.pageIndex,
+      pdfRect: [
+        Math.min(...rects.map((rect) => Math.min(rect[0], rect[2]))),
+        Math.min(...rects.map((rect) => Math.min(rect[1], rect[3]))) - descender,
+        Math.max(...rects.map((rect) => Math.max(rect[0], rect[2]))),
+        Math.max(...rects.map((rect) => Math.max(rect[1], rect[3]))),
+      ] as PdfSpaceRect,
+    }];
+  });
+  if (nativeEdits.length > 0 || clearances.length > 0) {
+    const {
+      applyNativePdfTextEdits,
+      clearNativePdfTextInAreas,
+      releaseNativePdfTextDocument,
+    } = await import('./pdfNativeTextEditor');
     await releaseNativePdfTextDocument(file);
-    sourceBytes = await applyNativePdfTextEdits(sourceBytes, directTextElements.map((element) => {
-      const source = element.replacementSource!;
-      if (!source.pdfRect) {
-        throw new Error('Direct text edit failed: the selected word has no PDF coordinates.');
+    if (nativeEdits.length > 0) {
+      sourceBytes = await applyNativePdfTextEdits(sourceBytes, nativeEdits);
+    }
+    if (clearances.length > 0) {
+      const cleared = await clearNativePdfTextInAreas(sourceBytes, clearances);
+      sourceBytes = cleared.bytes;
+      if (cleared.uncleared > 0) {
+        // Text that reaches outside the repainted area is left where it is, so say so rather than
+        // letting the save claim the paragraph's originals are gone.
+        console.warn(`${cleared.uncleared} text object(s) crossed a redrawn paragraph's edge and were left in place.`);
       }
-      return {
-        pageIndex: element.pageIndex,
-        sourceText: source.text,
-        replacementText: element.content,
-        pdfRect: source.pdfRect,
-        sourceRun: source.nativeSourceRun,
-      };
-    }));
+    }
   }
-  const containsOnlyDirectText = directTextElements.length > 0
-    && elements.every((element) => element.replacementSource?.saveMode === 'native')
+  // A file whose only change is a set of in-place text rewrites is already finished: reloading it
+  // through pdf-lib would rewrite objects the direct edit deliberately left alone.
+  const containsOnlyDirectText = nativeEdits.length > 0
+    && reflowParagraphEdits.length === 0
+    && elements.length === 0
     && Object.keys(formValues).length === 0;
   if (containsOnlyDirectText) return sourceBytes;
-  const pdfDoc = await PDFDocument.load(sourceBytes);
+  let pdfDoc: PDFDocument;
+  try {
+    pdfDoc = await PDFDocument.load(sourceBytes);
+  } catch (error) {
+    // A PDF can carry an owner password that permits reading but forbids changes. It opens and
+    // edits perfectly well on screen and then cannot be written, so the reason has to be named
+    // here rather than reported as an unexplained failure.
+    if (/encrypted/i.test(error instanceof Error ? error.message : '')) {
+      throw new Error(PDF_EDIT_PERMISSION_MESSAGE);
+    }
+    throw error;
+  }
   const pages = pdfDoc.getPages();
   const fonts = {
     Helvetica: await pdfDoc.embedFont(StandardFonts.Helvetica),
@@ -1048,62 +1182,133 @@ export const savePDFWithAnnotations = async (
   }
 
   const visualTextRuns: Array<{ pageIndex: number; text: string; x: number; y: number }> = [];
-  for (const element of elements.filter(
-    (candidate) => candidate.replacementSource?.saveMode !== 'native' && candidate.replacementSource,
-  )) {
-    if (element.pageIndex < 0 || element.pageIndex >= pages.length) continue;
-    const page = pages[element.pageIndex];
-    const cropBox = page.getCropBox();
-    const geometry = {
-      cropX: cropBox.x,
-      cropY: cropBox.y,
-      cropWidth: cropBox.width,
-      cropHeight: cropBox.height,
-      rotation: normalizePageRotation(page.getRotation().angle),
+  if (reflowParagraphEdits.length > 0) {
+    const resolveParagraphFont = (face: ParagraphFace) => {
+      const standardKey = face.family === 'TimesRoman'
+        ? face.bold && face.italic ? 'TimesRomanBoldItalic' : face.bold ? 'TimesRomanBold' : face.italic ? 'TimesRomanItalic' : 'TimesRoman'
+        : face.family === 'Courier'
+          ? face.bold && face.italic ? 'CourierBoldOblique' : face.bold ? 'CourierBold' : face.italic ? 'CourierOblique' : 'Courier'
+          : face.bold && face.italic ? 'HelveticaBoldOblique' : face.bold ? 'HelveticaBold' : face.italic ? 'HelveticaOblique' : 'Helvetica';
+      return fonts[standardKey as keyof typeof fonts];
     };
-    const visualSize = getVisualPageSize(geometry);
-    const source = element.replacementSource!;
-    if (!source.visualEligible) {
-      throw new Error(source.visualUnavailableReason || 'Visual fallback is unavailable for this word.');
-    }
-    const sourcePreview = source.nativePreview ?? source;
-    const visualX = sourcePreview.x * visualSize.width;
-    const visualY = sourcePreview.y * visualSize.height;
-    const width = sourcePreview.width * visualSize.width;
-    const height = sourcePreview.height * visualSize.height;
 
-    if (source.backgroundMode === 'solid') {
-      const patch = visualRectangleToPdf(geometry, visualX, visualY, width, height);
-      page.drawRectangle({
-        ...patch,
-        color: hexToRgb(source.backgroundColor),
+    for (const edit of reflowParagraphEdits) {
+      if (edit.pageIndex < 0 || edit.pageIndex >= pages.length) continue;
+      const page = pages[edit.pageIndex];
+      const cropBox = page.getCropBox();
+      const geometry = {
+        cropX: cropBox.x,
+        cropY: cropBox.y,
+        cropWidth: cropBox.width,
+        cropHeight: cropBox.height,
+        rotation: normalizePageRotation(page.getRotation().angle),
+      };
+      const visualSize = getVisualPageSize(geometry);
+      const visualX = edit.x * visualSize.width;
+      const visualY = edit.y * visualSize.height;
+      const width = edit.width * visualSize.width;
+      const height = edit.height * visualSize.height;
+
+      if (edit.backgroundFlat || !edit.backgroundImage) {
+        // A uniform background reproduces exactly as a filled rectangle, so the page keeps its
+        // vectors instead of gaining a resampled image of itself.
+        const patch = visualRectangleToPdf(geometry, visualX, visualY, width, height);
+        page.drawRectangle({ ...patch, color: hexToRgb(edit.backgroundColor) });
+      } else {
+        const background = await pdfDoc.embedPng(edit.backgroundImage);
+        const center = visualPointToPdf(geometry, visualX + width / 2, visualY + height / 2);
+        const origin = rotatedBoxOrigin(center.x, center.y, width, height, geometry.rotation);
+        page.drawImage(background, {
+          x: origin.x,
+          y: origin.y,
+          width,
+          height,
+          rotate: degrees(geometry.rotation),
+        });
+      }
+
+      const color = hexToRgb(edit.color);
+      // Every face this paragraph needs, embedded once before anything is drawn.
+      const faces = new Map<string, any>();
+      for (const line of edit.lines) {
+        for (const piece of line) {
+          if (faces.has(piece.face.key)) continue;
+          faces.set(piece.face.key, resolveParagraphFont(piece.face));
+        }
+      }
+      const widthOf = (text: string, key: string) => {
+        try {
+          return faces.get(key).widthOfTextAtSize(text, edit.fontSize);
+        } catch {
+          return text.length * edit.fontSize * 0.5;
+        }
+      };
+      const lineWidthOf = (line: typeof edit.lines[number]) =>
+        line.reduce((total, piece) => total + widthOf(piece.text, piece.face.key), 0);
+
+      edit.lines.forEach((line, index) => {
+        const text = line.map((piece) => piece.text).join('');
+        if (!text.trim()) return;
+        const baselineY = visualY + edit.fontSize + index * edit.lineHeight;
+        const isLastLine = index === edit.lines.length - 1;
+
+        const drawPiece = (rawSegment: string, key: string, offsetX: number) => {
+          // Typography the standard faces have no code for is written as its plain equivalent
+          // rather than dropped: a non-breaking hyphen becomes a hyphen, an fi ligature becomes fi.
+          const segment = substituteForStandardFont(rawSegment).text;
+          if (!segment) return;
+          const point = visualPointToPdf(geometry, visualX + offsetX, baselineY);
+          // The saved run is checked back out of the file, but only when the originals were
+          // removed. Drawing over text that is still there produces two objects on one baseline,
+          // and PDF engines report the duplicate as empty rather than as the text that was drawn.
+          if (edit.runDeletions.length > 0 && segment.trim()) {
+            visualTextRuns.push({ pageIndex: edit.pageIndex, text: segment, x: point.x, y: point.y });
+          }
+          page.drawText(segment, {
+            x: point.x,
+            y: point.y,
+            size: edit.fontSize,
+            font: faces.get(key),
+            color,
+            rotate: degrees(geometry.rotation),
+          });
+        };
+
+        // Justified paragraphs pin both margins, so the gaps have to be widened by hand; every
+        // other alignment is a single offset applied to the whole line.
+        if (edit.align === 'justify' && !isLastLine) {
+          const words: Array<{ text: string; key: string }> = [];
+          line.forEach((piece) => piece.text.split(/(\s+)/).filter(Boolean).forEach((part) => {
+            if (/^\s+$/.test(part)) return;
+            words.push({ text: part, key: piece.face.key });
+          }));
+          if (words.length > 1) {
+            const spacing = (width - words.reduce((total, word) => total + widthOf(word.text, word.key), 0))
+              / (words.length - 1);
+            let offset = 0;
+            words.forEach((word) => {
+              drawPiece(word.text, word.key, offset);
+              offset += widthOf(word.text, word.key) + Math.max(0, spacing);
+            });
+            return;
+          }
+        }
+
+        const lineWidth = lineWidthOf(line);
+        let offset = edit.align === 'right'
+          ? Math.max(0, width - lineWidth)
+          : edit.align === 'center'
+            ? Math.max(0, (width - lineWidth) / 2)
+            : 0;
+        line.forEach((piece) => {
+          drawPiece(piece.text, piece.face.key, offset);
+          offset += widthOf(piece.text, piece.face.key);
+        });
       });
-      continue;
     }
-
-    if (!sourcePreview.backgroundImage) {
-      throw new Error('Visual fallback cannot save this word without a safe background reconstruction.');
-    }
-    const background = await pdfDoc.embedPng(sourcePreview.backgroundImage);
-    const center = visualPointToPdf(geometry, visualX + width / 2, visualY + height / 2);
-    const origin = rotatedBoxOrigin(
-      center.x,
-      center.y,
-      width,
-      height,
-      geometry.rotation,
-    );
-    page.drawImage(background, {
-      x: origin.x,
-      y: origin.y,
-      width,
-      height,
-      rotate: degrees(geometry.rotation),
-    });
   }
 
   for (const element of elements) {
-    if (element.replacementSource?.saveMode === 'native') continue;
     if (element.pageIndex < 0 || element.pageIndex >= pages.length) continue;
     const page = pages[element.pageIndex];
     const cropBox = page.getCropBox();
@@ -1244,10 +1449,7 @@ export const savePDFWithAnnotations = async (
         : isBold && isItalic ? 'HelveticaBoldOblique' : isBold ? 'HelveticaBold' : isItalic ? 'HelveticaOblique' : 'Helvetica';
     const font = fonts[fontKey];
     const size = element.fontSize || 12;
-    const textContent = element.replacementSource?.saveMode === 'visual'
-      ? element.content + (element.replacementSource.nativePreview?.suffix ?? '')
-      : element.content;
-    const lines = textContent.split('\n');
+    const lines = element.content.split('\n');
     const lineHeight = size * 1.2;
     const width = (element.width || 0.24) * visualSize.width;
     const height = (element.height || 0.07) * visualSize.height;
@@ -1270,9 +1472,6 @@ export const savePDFWithAnnotations = async (
         center.y,
         rotation,
       );
-      if (element.replacementSource?.saveMode === 'visual' && line.trim()) {
-        visualTextRuns.push({ pageIndex: element.pageIndex, text: line, x: origin.x, y: origin.y });
-      }
       page.drawText(line, {
         x: origin.x,
         y: origin.y,

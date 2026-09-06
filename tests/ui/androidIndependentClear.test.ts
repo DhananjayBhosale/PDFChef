@@ -40,10 +40,10 @@ test('session payload clearing is one read-write cursor transaction', () => {
 });
 
 test('the frozen Recent surface keeps the two destructive choices distinct and non-undoable', () => {
-  assert.match(recent, /Delete kept files only/);
+  assert.match(recent, /Delete files only/);
   assert.match(recent, /mode === 'documents' \? platform\.records\.clearDocuments\(\) : platform\.records\.clearRecords\(\)/);
   assert.match(recent, /setPendingUndo\(null\)/);
   assert.match(recent, /The list of what you made stays/);
-  assert.match(recent, /Files from the older Android app are read-only here and stay where they are/);
+  assert.match(recent, /Files from the older Android app stay where they are/);
   assert.match(recent, /This cannot be undone\./);
 });

@@ -186,18 +186,8 @@
     <changefreq>monthly</changefreq>
   </url>
   <url>
-    <loc>https://pdfchef.dhananjaytech.app/privacy-policy</loc>
-    <priority>0.5</priority>
-    <changefreq>yearly</changefreq>
-  </url>
-  <url>
-    <loc>https://pdfchef.dhananjaytech.app/pdf-chef-privacy</loc>
-    <priority>0.5</priority>
-    <changefreq>yearly</changefreq>
-  </url>
-  <url>
-    <loc>https://pdfchef.dhananjaytech.app/terms-and-conditions</loc>
-    <priority>0.5</priority>
-    <changefreq>yearly</changefreq>
+    <loc>https://pdfchef.dhananjaytech.app/help</loc>
+    <priority>0.6</priority>
+    <changefreq>monthly</changefreq>
   </url>
 </urlset>

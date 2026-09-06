@@ -12,7 +12,6 @@ import { ZoomControls } from '../UI/ZoomControls';
 import { useZoom } from '../../hooks/useZoom';
 import { useDragReorder } from '../../hooks/useDragReorder';
 import { createPortal } from 'react-dom';
-import { SEOHead } from '../SEO/SEOHead';
 import { tools } from './toolCatalog';
 import { ToolIdentity } from './ToolIdentity';
 import { StatusToast } from '../UI/StatusToast';
@@ -224,16 +223,15 @@ const DraggableResizableImage: React.FC<{
   );
 };
 
-const CanvasPage: React.FC<{ 
-  page: PageData, 
-  index: number,
+const CanvasPage: React.FC<{
+  page: PageData,
   zoom: number,
   updateElement: (pageId: string, elementId: string, updates: Partial<ImageElement>) => void,
   removeElement: (pageId: string, elementId: string) => void,
   rotateElement: (pageId: string, element: ImageElement) => void,
   onImageDragStart: (e: React.PointerEvent, pageId: string, element: ImageElement, containerRef: React.RefObject<HTMLDivElement>) => void,
   activeImageDragId: string | null
-}> = ({ page, index, zoom, updateElement, removeElement, rotateElement, onImageDragStart, activeImageDragId }) => {
+}> = ({ page, zoom, updateElement, removeElement, rotateElement, onImageDragStart, activeImageDragId }) => {
   const pageRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -243,7 +241,6 @@ const CanvasPage: React.FC<{
       ref={pageRef}
       data-page-id={page.id}
     >
-      <div className="type-footnote pointer-events-none absolute left-2 top-2 select-none font-mono text-paper-500">Page {index + 1}</div>
       {page.elements.map(el => (
          <DraggableResizableImage 
             key={el.id} 
@@ -540,10 +537,6 @@ export const ImageToPDF: React.FC = () => {
   if (pages.length === 0) {
     return (
       <ToolShell centered>
-        <SEOHead
-          title="JPG to PDF Converter - Create PDFs from Images | PDF Chef"
-          description="Convert JPG, PNG, and WebP images to PDF documents in your browser with a drag and drop layout builder."
-        />
         <ToolHeader title="Image to PDF" />
         <FileUpload onFilesSelected={handleFilesSelected} accept="image/*" multiple label="Choose images for your PDF" />
         {status.error && (
@@ -557,10 +550,6 @@ export const ImageToPDF: React.FC = () => {
 
   return (
     <div className="chef-safe-bottom flex h-[100dvh] min-h-[100dvh] w-full flex-col overflow-hidden bg-[var(--surface-canvas)]">
-       <SEOHead 
-        title="JPG to PDF Converter - Create PDFs from Images | PDF Chef"
-        description="Convert JPG, PNG, and WebP images to PDF documents in your browser with a drag and drop layout builder."
-       />
 
        {/* Header. An immersive route gets no shell chrome, so it consumes the
            status-bar inset itself rather than painting under the clock. */}
@@ -697,9 +686,8 @@ export const ImageToPDF: React.FC = () => {
                            </button>
                         </div>
 
-                         <CanvasPage 
-                            page={page} 
-                            index={i} 
+                         <CanvasPage
+                            page={page}
                             zoom={zoom}
                             updateElement={updateElement}
                             removeElement={removeElement}

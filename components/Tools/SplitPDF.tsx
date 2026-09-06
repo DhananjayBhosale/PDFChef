@@ -18,24 +18,7 @@ import { PageThumbnail } from '../UI/PageThumbnail';
 import { StatusToast } from '../UI/StatusToast';
 import { SegmentedControl } from '../UI/Primitives';
 import { ToolHeader, ToolPanel, ToolSelectionBar, ToolShell } from '../UI/ToolLayout';
-import { SEOHead } from '../SEO/SEOHead';
-import { FAQ, FAQItem } from '../UI/FAQ';
 import { formatBytes } from '../UI/format';
-
-const faqItems: FAQItem[] = [
-  {
-    question: 'Can I extract specific pages?',
-    answer: 'Yes, select the pages you want and use the extract action to keep them together in one PDF.',
-  },
-  {
-    question: 'Is there a page limit?',
-    answer: 'PDF Chef can handle large documents. For very large files, performance depends on your device memory because processing stays local.',
-  },
-  {
-    question: 'Does it work on Mac and Windows?',
-    answer: 'Yes, PDF Chef works in modern browsers on desktop and mobile devices.',
-  },
-];
 
 type SplitMode = 'pageCount' | 'maximumSize';
 type ActiveJob = 'split' | 'extract' | null;
@@ -355,22 +338,14 @@ export const SplitPDF: React.FC = () => {
     setStatus(idleStatus());
   };
 
-  const footerSummary = splitMode === 'pageCount'
-    ? estimatedPartCount === 1
-      ? 'Creates one PDF from the included pages.'
-      : estimatedPartCount > 1
-        ? `Creates ${estimatedPartCount} PDFs, delivered together in one ZIP.`
-        : 'Choose a valid number of pages per file.'
-    : maximumSizeError
-      ? maximumSizeError
-      : `Each output PDF will be no larger than ${parsedMaximumSizeMb} MB.`;
+  // Only the non-obvious consequence survives: more than one part arrives as a
+  // single ZIP, not as several PDFs. Everything else the controls already say.
+  const footerSummary = splitMode === 'pageCount' && estimatedPartCount > 1
+    ? `${estimatedPartCount} PDFs download together in one ZIP.`
+    : '';
 
   return (
     <ToolShell width="full" centered={!file}>
-      <SEOHead
-        title="Split PDF Pages - Extract & Separate Online | PDF Chef"
-        description="Split PDF files or extract specific pages securely in your browser. No server uploads. Free offline PDF splitter."
-      />
 
       <ToolHeader title="Split PDF" />
 
@@ -500,7 +475,7 @@ export const SplitPDF: React.FC = () => {
               </div>
             ) : (
               <div className="flex flex-col gap-1.5">
-                <p className="type-footnote text-[var(--text-secondary)]">{footerSummary}</p>
+                {footerSummary && <p className="type-footnote text-[var(--text-secondary)]">{footerSummary}</p>}
                 <button
                   type="button"
                   onClick={handleExport}
@@ -513,12 +488,8 @@ export const SplitPDF: React.FC = () => {
               </div>
             )}
             <section aria-labelledby="split-pages-heading" className="flex flex-col gap-2">
-              <div className="flex items-center justify-between gap-3">
-                <h2 id="split-pages-heading" className="text-sm font-semibold text-[var(--text-primary)]">Pages to include</h2>
-                <span className="type-footnote shrink-0 text-[var(--text-secondary)]">
-                  {effectiveSelectedPages.length} selected
-                </span>
-              </div>
+              {/* The selection bar above already states the count. */}
+              <h2 id="split-pages-heading" className="text-sm font-semibold text-[var(--text-primary)]">Pages to include</h2>
 
               {loadingPreviews ? (
                 <div role="status" className="flex flex-col items-center justify-center gap-2 py-6 text-[var(--text-tertiary)]">
@@ -529,7 +500,7 @@ export const SplitPDF: React.FC = () => {
                 <div role="status" className="flex flex-col items-center justify-center px-4 py-6 text-center">
                   <p className="font-semibold text-[var(--text-primary)]">Page previews are unavailable</p>
                   <p className="mt-1 max-w-measure text-sm text-[var(--text-secondary)]">
-                    You can still split all pages, or retry preview generation. {previewError}
+                    You can still split all pages. {previewError}
                   </p>
                   <button
                     type="button"
@@ -571,7 +542,6 @@ export const SplitPDF: React.FC = () => {
         )}
       </AnimatePresence>
 
-      <FAQ items={faqItems} />
       <StatusToast status={status} />
     </ToolShell>
   );

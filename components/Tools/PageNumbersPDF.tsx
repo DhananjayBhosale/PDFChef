@@ -299,11 +299,9 @@ export const PageNumbersPDF: React.FC = () => {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
             <ToolPanel className="space-y-2.5">
               <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-semibold text-[var(--text-primary)]">Live Preview</div>
-                  <div className="text-xs text-[var(--text-tertiary)]">
-                    Page {previewPageIndex + 1} of {totalPages}{previewLoading ? ' · Rendering…' : ''}
-                  </div>
+                {/* The rendered page is the preview; only its position needs saying. */}
+                <div className="text-sm font-semibold text-[var(--text-primary)]">
+                  Page {previewPageIndex + 1} of {totalPages}{previewLoading ? ' · Rendering…' : ''}
                 </div>
                 <div className="flex items-center gap-1">
                   <button
@@ -438,11 +436,13 @@ export const PageNumbersPDF: React.FC = () => {
                 </div>
               </div>
 
-              <div role="status" aria-live="polite" className={`rounded-[var(--radius-field)] px-3 py-2 text-xs ${validationMessage ? 'bg-[var(--status-danger-quiet)] text-[var(--status-danger-text)]' : 'bg-[var(--surface-sunken)] text-[var(--text-secondary)]'}`}>
-                {validationMessage ?? (resolvedStartPage === 1 && resolvedEndPage === totalPages
-                  ? `Numbering applies to all ${totalPages} pages.`
-                  : `Numbering applies to pages ${resolvedStartPage} to ${resolvedEndPage}.`)}
-              </div>
+              {/* The healthy state only restated the two fields above it, so the
+                  box now appears solely when the range is invalid. */}
+              {validationMessage && (
+                <div role="alert" className="rounded-[var(--radius-field)] bg-[var(--status-danger-quiet)] px-3 py-2 text-xs text-[var(--status-danger-text)]">
+                  {validationMessage}
+                </div>
+              )}
 
               <Button
                 tone="primary"

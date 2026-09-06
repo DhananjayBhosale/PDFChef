@@ -50,6 +50,7 @@ const PdfChefPrivacy = React.lazy(() => import('./components/Pages/PdfChefPrivac
 const TermsConditions = React.lazy(() => import('./components/Pages/TermsConditions').then((module) => ({ default: module.TermsConditions })));
 const RecentPage = React.lazy(() => import('./components/Pages/RecentPage').then((module) => ({ default: module.RecentPage })));
 const SettingsPage = React.lazy(() => import('./components/Pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
+const HelpPage = React.lazy(() => import('./components/Pages/HelpPage').then((module) => ({ default: module.HelpPage })));
 
 const PageLoader = () => (
   <div role="status" aria-live="polite" aria-busy="true" className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8">
@@ -109,6 +110,7 @@ const AppRoutes = () => {
                 still lands on the same screen. */}
             <Route path="/history" element={<RecentPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/help" element={<HelpPage />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<TermsConditions />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />

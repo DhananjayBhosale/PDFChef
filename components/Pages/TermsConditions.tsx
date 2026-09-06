@@ -1,7 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { FileText } from 'lucide-react';
-import { SEOHead } from '../SEO/SEOHead';
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <section className="space-y-3">
@@ -13,10 +12,6 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 export const TermsConditions: React.FC = () => {
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-10">
-      <SEOHead
-        title="Terms and Conditions - PDF Chef"
-        description="Terms and Conditions for using the PDF Chef Android app, iOS app, and web app."
-      />
 
 
       <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">

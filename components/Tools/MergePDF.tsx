@@ -6,33 +6,11 @@ import { androidExportFileName } from '../../services/androidParity';
 import { Plus, ArrowDown, ArrowUp, Download, GripVertical, Loader2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
-import { Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useDragReorder } from '../../hooks/useDragReorder';
-import { SEOHead } from '../SEO/SEOHead';
-import { FAQ, FAQItem } from '../UI/FAQ';
 import { StatusToast } from '../UI/StatusToast';
 import { ToolHeader, ToolShell } from '../UI/ToolLayout';
 import { formatBytes } from '../UI/format';
-
-const faqItems: FAQItem[] = [
-  {
-    question: 'Is it safe to merge PDF files here?',
-    answer: 'Yes, absolutely. PDF Chef processes all your files locally in your browser. Your files never leave your device and are never uploaded to any server.',
-  },
-  {
-    question: 'Can I merge PDF files offline?',
-    answer: 'Yes! Since the app works entirely on your device, you can turn off your internet connection and still merge your PDF documents without any issues.',
-  },
-  {
-    question: 'How many PDFs can I combine at once?',
-    answer: "There is no strict limit set by the app. Performance depends on your device's memory and processor. Merging 20-30 typical files works smoothly on most devices.",
-  },
-  {
-    question: 'Is this tool free?',
-    answer: 'Yes, PDF Chef is completely free to use. There are no hidden costs, watermarks, or subscription fees.',
-  },
-];
 
 const idleStatus = (): ProcessingStatus => ({ isProcessing: false, progress: 0, message: '' });
 
@@ -197,10 +175,6 @@ export const MergePDF: React.FC = () => {
 
   return (
     <ToolShell width="list" centered={files.length === 0} className="select-none">
-      <SEOHead
-        title="Merge PDF Files Online - Free & Private | PDF Chef"
-        description="Combine multiple PDFs into one document instantly. 100% local processing, no file uploads. Secure and free PDF merger."
-      />
 
       {/* The queue header and the action row both state the merge order; the
           title does not need to be the third place that says it. */}
@@ -364,7 +338,6 @@ export const MergePDF: React.FC = () => {
         )}
       </AnimatePresence>
 
-      <FAQ items={faqItems} />
 
       {activeId && activeItem && createPortal(
         <div

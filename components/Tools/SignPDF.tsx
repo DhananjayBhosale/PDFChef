@@ -1021,9 +1021,6 @@ export const SignPDF: React.FC = () => {
                     className="h-5 w-5 rounded border-[var(--border-strong)]"
                   />
                 </label>
-                <div className="text-xs text-[var(--text-tertiary)]">
-                  Best for signature photos on white paper.
-                </div>
                 {uploadedSignature && (
                   <div
                     className="flex items-center justify-center rounded-[var(--radius-field)] border border-[var(--border-hairline)] p-3"

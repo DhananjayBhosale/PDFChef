@@ -56,6 +56,17 @@ body {
   overscroll-behavior-y: none;
 }
 
+/* `pre`, `code` and friends carry a monospace family from the user agent, so
+   they were the one place the chosen interface font did not reach. Numbers that
+   need to line up use `.tabular`, which is a numeral feature rather than a
+   different typeface. */
+pre,
+code,
+kbd,
+samp {
+  font-family: inherit;
+}
+
 html[data-interface-font='inter'] body,
 html[data-interface-font='inter'] input,
 html[data-interface-font='inter'] select,
@@ -454,6 +465,25 @@ select {
   min-height: var(--size-touch-target);
 }
 
+/* A PDF form's own fields are drawn at whatever size the form's author chose, and on a tax form
+   that is a checkbox about eight pixels across. The box has to keep that size to stay aligned with
+   the printed page, so the region that answers a finger is extended instead — centred, invisible,
+   and sized by the caller, which caps it at half the distance to the next field so no control ever
+   takes a tap meant for its neighbour. */
+.chef-field-hit {
+  position: relative;
+}
+
+.chef-field-hit::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: var(--chef-field-hit-w, 100%);
+  height: var(--chef-field-hit-h, 100%);
+}
+
 /* WebKit draws its own clear affordance inside type="search". The product ships
    one labelled clear control, so the duplicate native glyph is removed. */
 input[type='search']::-webkit-search-cancel-button,
@@ -675,12 +705,18 @@ html[data-text-scale='larger'] .chef-clamp-2 {
    Two entrance transitions only, both critically damped. Motion states what
    changed; nothing here loops, drifts, or decorates. */
 
+/* `backwards`, not `both`: a filled-forwards transform stays applied once the animation ends, and
+   an element with an applied transform — even the identity these keyframes settle on — becomes the
+   containing block for every `position: fixed` descendant. That silently re-anchors the editor's
+   bottom bar to this element's box instead of the viewport, so on a phone with the keyboard up the
+   paragraph controls and Save sit below the fold. Both animations end on the element's own resting
+   style anyway, so dropping the forwards fill changes nothing that is visible. */
 .chef-enter {
-  animation: chef-enter var(--duration-transition) var(--ease-enter) both;
+  animation: chef-enter var(--duration-transition) var(--ease-enter) backwards;
 }
 
 .chef-enter-sheet {
-  animation: chef-enter-sheet var(--duration-sheet) var(--ease-enter) both;
+  animation: chef-enter-sheet var(--duration-sheet) var(--ease-enter) backwards;
 }
 
 @keyframes chef-enter {
@@ -918,5 +954,30 @@ html[data-text-scale='larger'] .chef-clamp-2 {
   .chef-chrome,
   nav[aria-label='Primary'] {
     display: none;
+  }
+}
+
+/* Every match of a find, painted straight onto the page.
+
+   The editor's paragraphs are transparent text laid over the rendered page, so a background on
+   the matched range lands exactly on the words the reader can see. Registered through the
+   browser's highlight registry, which leaves the paragraph's own child nodes alone — they belong
+   to the browser while someone is typing into them. */
+::highlight(pdfchef-find) {
+  background-color: color-mix(in srgb, var(--accent-rest) 30%, transparent);
+}
+
+/* An editable paragraph is invisible by design: the page underneath is what the reader sees.
+   On a device with a pointer, a hint under the cursor is what tells them the text is theirs to
+   change. Touch has no hover, and gets the same answer by tapping. */
+@media (hover: hover) and (pointer: fine) {
+  .chef-pdf-paragraph:hover {
+    background-color: color-mix(in srgb, var(--accent-rest) 8%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chef-pdf-paragraph {
+    transition: background-color 90ms ease-out;
   }
 }

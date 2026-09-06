@@ -293,15 +293,15 @@ test('a failed restore is put back on the offer instead of being dropped', () =>
 test('the mixed-selection confirmation states the scope without claiming browser storage', () => {
   const confirm = source.slice(
     source.indexOf('open={confirmDeleteSelected}'),
-    source.indexOf('confirmLabel="Delete selected"'),
+    source.indexOf('onCancel={() => setConfirmDeleteSelected(false)}'),
   );
   assert.match(confirm, /'One of them cannot be undone\.'/);
   assert.match(confirm, /of them cannot be undone\./);
   // A permanent row can be a durable one whose file is gone, so no wording may
   // say where every one of them is kept.
   assert.doesNotMatch(confirm, /kept in this browser/);
-  assert.match(confirm, /Copies you already saved elsewhere are not affected\./);
-  assert.match(confirm, /This removes about \$\{formatBytes\(selectedBytes\)\}/);
+  assert.match(confirm, /This cannot be undone\./);
+  assert.match(confirm, /Frees \$\{formatBytes\(selectedBytes\)\}/);
 });
 
 test('deletion is routed by per-row ability, and only the reversible path skips the confirmation', () => {
@@ -395,12 +395,9 @@ test('a collection is described in items, never in bytes and never as a PDF', ()
   assert.equal(page.collectionItemLabel(1), '1 item');
   // Nothing invents a count the older app did not record.
   assert.equal(page.collectionItemLabel(0), 'Item count not recorded');
-  const start = source.indexOf('{collection ? (');
-  const row = source.slice(start, source.indexOf(') : (', start));
-  assert.match(row, /Group of files/);
-  assert.match(row, /collectionItemLabel\(items\)/);
-  // The group's own line carries no byte size at all, invented or borrowed.
-  assert.doesNotMatch(row, /formatBytes|Saving unknown|No size reduction/);
+  // The row's own meta line asks for an item count where a file would show a
+  // size, so a group can never borrow or invent one.
+  assert.match(source, /\{collection \? collectionItemLabel\(items\) : formatBytes\(entry\.outputSizeBytes\)\}/);
   // The sheet describes it the same way, in place of a size it does not have.
   assert.match(
     source,
@@ -417,10 +414,10 @@ test('reopen is refused for a collection and says why in plain language', () => 
     false,
   );
   assert.equal(page.isReopenable(recordFor('browser')), true);
-  assert.match(page.COLLECTION_REOPEN_REASON, /group of files, not one PDF/);
-  // Visible text beside the disabled control, never a hover-only title.
-  assert.match(source, /disabled=\{!isReopenable\(record\)\}/);
-  assert.match(source, /\{collection \? COLLECTION_REOPEN_REASON :/);
+  // A group is never offered an Open it cannot honour, and its sheet says in
+  // visible text why — never a hover-only title.
+  assert.match(page.COLLECTION_READ_ONLY_REASON, /not one PDF/);
+  assert.match(source, /\{isReopenable\(active\) && \(/);
   // The platform is never asked to open one, even if a press got through.
   const reopen = source.slice(source.indexOf('const reopen = useCallback'), source.indexOf('const closeActions'));
   const guard = reopen.indexOf('if (isCollectionRecord(record)) return;');
@@ -446,7 +443,6 @@ test('the actions a collection genuinely has are named by how many files they ac
     page.collectionActionLabel('Save', 4),
     page.collectionActionLabel('Share', 4),
     page.collectionItemLabel(4),
-    page.COLLECTION_REOPEN_REASON,
     page.COLLECTION_READ_ONLY_REASON,
   ]) {
     assert.doesNotMatch(copy, /\bZIP\b|\barchive\b|\bcombine\b|\bconvert\b|\bmerged?\b/i);
@@ -455,7 +451,9 @@ test('the actions a collection genuinely has are named by how many files they ac
   // them, exactly as they were for every other row.
   const actions = source.slice(source.indexOf('{active && ('), source.indexOf('{/* Rename */}'));
   assert.match(actions, /disabled=\{!active\.available\}/);
-  assert.match(actions, /disabled=\{!platform\.share \|\| !active\.available\}/);
+  // Share exists only where the platform has a share sheet at all, so there is
+  // no dead control and no sentence explaining one.
+  assert.match(actions, /\{platform\.share && \(/);
   assert.match(actions, /activeIsCollection \? collectionActionLabel\('Save', activeItems\) : 'Save a copy'/);
   assert.match(actions, /activeIsCollection \? collectionActionLabel\('Share', activeItems\) : 'Share'/);
 });

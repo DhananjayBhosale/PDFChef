@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import JSZip from 'jszip';
 import { v4 as uuidv4 } from 'uuid';
@@ -230,7 +229,6 @@ const SimpleTransformTool: React.FC<SimpleTransformToolProps> = ({
 export const RemoveMetadataPDF: React.FC = () => (
   <SimpleTransformTool
     title="Remove Metadata"
-    description="Author, title, dates, and viewer preferences are dropped from the exported copy."
     uploadLabel="Choose a PDF to remove metadata"
     actionLabel="Remove metadata"
     outputPrefix="metadata-cleaned"
@@ -241,7 +239,7 @@ export const RemoveMetadataPDF: React.FC = () => (
 export const RemoveAnnotationsPDF: React.FC = () => (
   <SimpleTransformTool
     title="Remove Annotations"
-    description="Comments, markup, and page actions are dropped from the exported copy."
+    description="Comments, markup and page actions are dropped."
     uploadLabel="Choose a PDF to remove annotations"
     actionLabel="Remove annotations"
     outputPrefix="annotations-removed"
@@ -252,7 +250,7 @@ export const RemoveAnnotationsPDF: React.FC = () => (
 export const SanitizePDF: React.FC = () => (
   <SimpleTransformTool
     title="Sanitize PDF"
-    description="Drops metadata and annotations in one pass."
+    description="Metadata and annotations are dropped."
     uploadLabel="Choose a PDF to sanitize"
     actionLabel="Sanitize PDF"
     outputPrefix="sanitized"
@@ -306,7 +304,7 @@ export const CropPDF: React.FC = () => {
       actionLabel="Crop PDF"
       onAction={handleCrop}
       actionDisabled={Object.values(margins).every((value) => value === 0)}
-      actionHint="Increase at least one margin to crop the document."
+      actionHint="Increase at least one margin."
     >
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {(['top', 'right', 'bottom', 'left'] as const).map((key) => (
@@ -482,7 +480,7 @@ export const RemoveBlankPagesPDF: React.FC = () => {
   return (
     <ToolShell
       title="Remove Blank Pages"
-      description="Detection is by ink coverage, so a nearly empty page counts as blank."
+      description="Nearly empty pages count as blank."
       uploadLabel="Choose a PDF to remove blank pages"
       file={file}
       status={status}

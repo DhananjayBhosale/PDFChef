@@ -4,6 +4,10 @@ import { useLocation } from 'react-router-dom';
 interface RouteMeta {
   title: string;
   description: string;
+  /** The URL that should rank when several paths render the same page. */
+  canonical?: string;
+  /** A device-local surface with nothing for a searcher to land on. */
+  noindex?: boolean;
 }
 
 const defaultMeta: RouteMeta = {
@@ -150,18 +154,27 @@ const routeMeta: Record<string, RouteMeta> = {
     description: 'Run compression, conversion, security, metadata, page, and repair operations across several PDFs locally.',
   },
   '/recent': {
+    noindex: true,
     title: 'Local Output History | PDF Chef',
     description: 'Re-download and manage PDF Chef outputs stored only in this browser.',
   },
   '/history': {
+    noindex: true,
+    canonical: '/recent',
     title: 'Local Output History | PDF Chef',
     description: 'Re-download and manage PDF Chef outputs stored only in this browser.',
   },
   '/settings': {
+    noindex: true,
     title: 'Settings | PDF Chef',
     description: 'Control local history, download behavior, and large-file safety preferences for PDF Chef.',
   },
+  '/help': {
+    title: 'PDF Chef Help - Frequently Asked Questions',
+    description: 'Answers about PDF Chef: whether files are uploaded, how compression affects quality, offline use, merging and splitting limits, and where results are kept.',
+  },
   '/privacy-policy': {
+    canonical: '/privacy',
     title: 'Privacy Policy | PDF Chef',
     description: 'Read the PDF Chef privacy policy.',
   },
@@ -170,14 +183,16 @@ const routeMeta: Record<string, RouteMeta> = {
     description: 'Read the PDF Chef privacy policy for the Android app and web app.',
   },
   '/pdf-chef-privacy': {
-    title: 'Android Privacy Policy | PDF Chef',
-    description: 'Read the Android app privacy policy for PDF Chef.',
+    canonical: '/privacy',
+    title: 'Privacy Policy | PDF Chef',
+    description: 'Read the PDF Chef privacy policy covering the web app, Android app and iOS app.',
   },
   '/terms': {
     title: 'Terms and Conditions | PDF Chef',
     description: 'Read the PDF Chef terms and conditions.',
   },
   '/terms-and-conditions': {
+    canonical: '/terms',
     title: 'Terms and Conditions | PDF Chef',
     description: 'Read the PDF Chef terms and conditions.',
   },
@@ -213,7 +228,7 @@ export const RouteSEO: React.FC = () => {
     const origin = typeof window !== 'undefined'
       ? window.location.origin
       : 'https://pdfchef.dhananjaytech.app';
-    const canonicalPath = normalizedPath === '/' ? '/' : normalizedPath;
+    const canonicalPath = meta.canonical ?? (normalizedPath === '/' ? '/' : normalizedPath);
     const canonicalUrl = `${origin}${canonicalPath}`;
 
     document.title = meta.title;
@@ -233,6 +248,7 @@ export const RouteSEO: React.FC = () => {
       document.head.appendChild(linkCanonical);
     }
     linkCanonical.setAttribute('href', canonicalUrl);
+    upsertMetaTag('robots', meta.noindex ? 'noindex, follow' : 'index, follow');
   }, [normalizedPath, meta]);
 
   return null;

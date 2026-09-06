@@ -71,6 +71,30 @@ const homeTools: ToolCardData[] = [
   ...tools.filter((tool) => tool.path !== '/make-pdf' && tool.path !== '/view'),
 ];
 
+/**
+ * Android's proportional segment weights, so the strip keeps the same shape:
+ * the longest label gets the most room instead of every option getting a fifth
+ * of the width. They are grow factors over natural width, so a label is never
+ * squeezed — if the five no longer fit on one line they wrap onto a second.
+ */
+const CATEGORY_WEIGHT: Record<CategoryFilter, number> = {
+  All: 4,
+  Edit: 4,
+  Optimize: 8,
+  Convert: 7,
+  Secure: 6,
+};
+
+/**
+ * Android's home row, to the dp: 72px minimum, 14x10 padding, a 48px bubble
+ * carrying 32px of generated artwork, 14px to the text, a 14/20 SemiBold name
+ * and a 22px chevron. The bubble, its radius and the paddings stay in px so the
+ * icon column, and therefore the divider, holds its position while the type
+ * scales; the row's own height is a minimum, so it grows.
+ *
+ * The row is a name and a mark. The subtitle under each one restated what the
+ * name already said, thirty-four times down a phone screen.
+ */
 /** Exact `PdfTool.subtitle` copy from Android's current home catalog. */
 const ANDROID_HOME_SUBTITLES: Record<string, string> = {
   MAKE_PDF: 'Scan paper with the camera',
@@ -100,31 +124,9 @@ const ANDROID_HOME_SUBTITLES: Record<string, string> = {
   COMPARE_PDF: 'A quick overview, not a page-by-page check',
 };
 
-/**
- * Android's proportional segment weights, so the strip keeps the same shape:
- * the longest label gets the most room instead of every option getting a fifth
- * of the width. They are grow factors over natural width, so a label is never
- * squeezed — if the five no longer fit on one line they wrap onto a second.
- */
-const CATEGORY_WEIGHT: Record<CategoryFilter, number> = {
-  All: 4,
-  Edit: 4,
-  Optimize: 8,
-  Convert: 7,
-  Secure: 6,
-};
-
 const subtitleFor = (tool: ToolCardData) =>
   tool.androidTool ? ANDROID_HOME_SUBTITLES[tool.androidTool] ?? tool.description : tool.description;
 
-/**
- * Android's home row, to the dp: 72px minimum, 14x10 padding, a 48px bubble
- * carrying 32px of generated artwork, 14px to the text, a 14/20 SemiBold title
- * over a 12/16 Medium subtitle, and a 22px chevron. The bubble, its radius and
- * the paddings stay in px so the icon column, and therefore the divider, holds
- * its position while the type scales; the row's own height is a minimum, so it
- * grows.
- */
 const ToolRow: React.FC<{ tool: ToolCardData; eager?: boolean }> = ({ tool, eager = false }) => {
   const haptic = useHaptics();
   const displayName = tool.path === '/view' ? 'Read PDF' : tool.name;
@@ -166,7 +168,10 @@ const ToolRow: React.FC<{ tool: ToolCardData; eager?: boolean }> = ({ tool, eage
             </Badge>
           )}
         </span>
-        <span className="chef-clamp-2 mt-0.5 block text-[0.75rem] font-medium leading-[1.3333] text-[var(--text-secondary)]">
+        {/* One quiet line under the name, as on the Android home screen. Regular
+            weight rather than medium: thirty-four of these stacked at 12px were
+            competing with the titles they sit under. */}
+        <span className="chef-clamp-2 mt-0.5 block text-[0.75rem] font-normal leading-[1.3333] text-[var(--text-secondary)]">
           {subtitle}
         </span>
       </span>
@@ -414,7 +419,6 @@ export const Dashboard: React.FC = () => {
             <EmptyState
               icon={<Search size={30} />}
               title="No tool matches that"
-              body="Try another word or category."
               action={
                 <Button tone="secondary" onClick={reset}>
                   Clear search and filter

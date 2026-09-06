@@ -528,8 +528,8 @@ export const OCRPDF: React.FC = () => {
               {/* Kept: each mode fails in a way the label does not show. */}
               <p className="type-footnote mt-2 text-[var(--text-secondary)]">
                 {mode === 'text-layer'
-                  ? 'Reads embedded text only. A scanned PDF returns nothing.'
-                  : 'English only, and recognition can be wrong. Check the text before relying on it.'}
+                  ? 'Reads embedded text only, so a scanned PDF returns nothing.'
+                  : 'English only, and recognition can be wrong, so check the text.'}
               </p>
 
               {mode === 'ocr' && (
@@ -543,7 +543,6 @@ export const OCRPDF: React.FC = () => {
                     min={1}
                     className="chef-field w-28"
                   />
-                  <p className="type-caption mt-1 font-normal normal-case tracking-normal text-[var(--text-tertiary)]">Starts at page 1.</p>
                 </div>
               )}
             </div>
@@ -594,9 +593,6 @@ export const OCRPDF: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                <p className="type-caption mt-2 text-blue-800 dark:text-blue-200">
-                  Cancel stops before the next page; the page already being read may finish first.
-                </p>
                 <button
                   type="button"
                   onClick={cancelExtraction}
@@ -738,7 +734,7 @@ export const OCRPDF: React.FC = () => {
                           )}
                         </div>
 
-                        <pre className="chef-scroller max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-[var(--radius-field)] bg-[var(--surface-sunken)] p-3 font-mono text-sm text-[var(--text-body)]">
+                        <pre className="chef-scroller max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-[var(--radius-field)] bg-[var(--surface-sunken)] p-3 text-sm text-[var(--text-body)]">
                           {page.text}
                         </pre>
                       </div>

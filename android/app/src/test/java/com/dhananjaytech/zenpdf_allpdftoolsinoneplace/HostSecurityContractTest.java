@@ -37,7 +37,8 @@ public final class HostSecurityContractTest {
         assertTrue(appBuild.contains("namespace = \"com.dhananjaytech.zenpdf_allpdftoolsinoneplace\""));
         assertTrue(appBuild.contains("applicationId \"com.dhananjaytech.pdfchef\""));
         assertTrue(appBuild.contains("applicationIdSuffix \".debug\""));
-        assertTrue(appBuild.contains("minifyEnabled false"));
+        assertTrue(appBuild.contains("minifyEnabled true"));
+        assertTrue(appBuild.contains("shrinkResources true"));
         assertTrue(appBuild.contains("JavaVersion.VERSION_21"));
         assertTrue(appBuild.contains("androidx.datastore:datastore-preferences-proto:1.2.1"));
         assertTrue(appBuild.contains("com.google.code.gson:gson:2.13.2"));

@@ -198,9 +198,6 @@ const SideRail: React.FC = () => {
       })}
     </ul>
 
-    <p className="type-footnote mt-auto px-3 text-[var(--text-tertiary)]">
-      Documents are opened, processed and kept on this device.
-    </p>
   </nav>
   );
 };
@@ -305,6 +302,7 @@ const ROUTE_TITLE_OVERRIDES: Record<string, string> = {
 
 const ROUTE_TITLES: Record<string, string> = {
   '/batch': 'Batch',
+  '/help': 'Help',
   '/privacy': 'Privacy',
   '/privacy-policy': 'Privacy',
   '/pdf-chef-privacy': 'Privacy',

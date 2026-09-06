@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Eye, EyeOff, Unlock, UnlockKeyhole } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { androidExportFileName, UNLOCK_FAILED_MESSAGE } from '../../services/androidParity';
 import { unlockPDF } from '../../services/pdfDocument';
@@ -90,17 +89,13 @@ export const UnlockPDF: React.FC = () => {
               </span>
               <div className="min-w-0">
                 <h2 className="chef-filename text-sm font-semibold text-[var(--text-primary)]">{file.name}</h2>
-                {/* Kept: this tool needs the password; it does not break one. */}
-                <p className="type-footnote mt-0.5 text-[var(--text-secondary)]">
-                  PDF Chef cannot guess, bypass, or recover an unknown password.
-                </p>
               </div>
             </ToolPanel>
 
             {/* Kept: the export loses permission restrictions too, which the
                 button label does not say. */}
             <StatusLine tone="info">
-              The exported copy loses its password and its permission restrictions. The original is unchanged.
+              The exported copy loses its password and permission restrictions; your original is unchanged.
             </StatusLine>
 
             <div>
@@ -135,7 +130,7 @@ export const UnlockPDF: React.FC = () => {
                 </button>
               </div>
               <p id="unlock-password-help" className="type-caption mt-1 font-normal normal-case tracking-normal text-[var(--text-tertiary)]">
-                Enter it exactly. Leading, trailing, and whitespace-only passwords are preserved.
+                Leading, trailing, and whitespace-only passwords are preserved exactly.
               </p>
             </div>
 

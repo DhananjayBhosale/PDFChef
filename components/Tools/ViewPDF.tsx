@@ -385,7 +385,6 @@ export const ViewPDF: React.FC = () => {
                       <div className="sticky top-0 z-10 flex items-start gap-2 border-b border-[var(--border-hairline)] bg-[var(--surface-raised)] px-4 py-2.5">
                         <div className="min-w-0 flex-1">
                           <p className="font-bold text-[var(--text-primary)]">Use a PDF tool</p>
-                          <p className="type-footnote mt-0.5 text-[var(--text-secondary)]">Your open PDF is selected automatically.</p>
                         </div>
                         <button
                           type="button"
@@ -491,7 +490,7 @@ export const ViewPDF: React.FC = () => {
             <LockKeyhole aria-hidden className="mx-auto h-8 w-8 text-[var(--status-caution-text)]" />
             <h2 className="mt-2 text-xl font-bold">Password required</h2>
             {/* Kept: whitespace in a PDF password is significant. */}
-            <p className="type-footnote mt-1 text-[var(--text-secondary)]">Enter the current password exactly. Spaces are preserved.</p>
+            <p className="type-footnote mt-1 text-[var(--text-secondary)]">Spaces are preserved exactly.</p>
             <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void openWithPassword(); }} autoFocus className="chef-field mt-3 w-full px-3.5" />
             <button type="button" onClick={() => void openWithPassword()} disabled={password === '' || status.isProcessing} className="chef-target chef-pressable mt-3 w-full rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] disabled:opacity-55">Open PDF</button>
             <button type="button" onClick={clearOpenedPdf} className="chef-target chef-pressable mt-2 w-full rounded-[var(--radius-control)] px-4 font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)]">Close</button>

@@ -1,21 +1,13 @@
-
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { FileUpload } from '../UI/FileUpload';
 import { PDFFile, ProcessingStatus } from '../../types';
-import {
-  calculateTargetSize,
-  type CompressionLevel,
-  getAdaptiveConfig,
-  type AdaptiveConfig,
-} from '../../services/pdfCompressionConfig';
+import { getInterpolatedConfig, type AdaptiveConfig } from '../../services/pdfCompressionConfig';
 import { downloadBlob } from '../../services/pdfShared';
-import { Layers, ArrowRight, Loader2, CheckCircle2, TrendingDown, AlertTriangle, ShieldAlert, Zap, Eye, X } from 'lucide-react';
+import { Layers, ArrowRight, Loader2, CheckCircle2, AlertTriangle, ShieldAlert, Eye, Trash2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
-import { Link } from 'react-router-dom';
-import { SEOHead } from '../SEO/SEOHead';
-import { FAQ, FAQItem } from '../UI/FAQ';
 import { StatusToast } from '../UI/StatusToast';
+import { ChefSlider } from '../UI/ChefSlider';
 import { Switch } from '../UI/Primitives';
 import { recordSavings } from '../../services/workspace';
 
@@ -23,72 +15,82 @@ const ReadabilityPreview = React.lazy(() => import('./ReadabilityPreview').then(
   default: module.ReadabilityPreview,
 })));
 
-const faqItems: FAQItem[] = [
-  {
-    question: "Does compressing reduce quality?",
-    answer: "The default keeps pages and selectable text intact. If you explicitly turn pages into images, preview Low, Medium, or High quality before saving."
-  },
-  {
-    question: "Are my files uploaded to a server?",
-    answer: "No. PDF Chef is a client-side tool. Compression happens entirely in your browser. Your files are not uploaded to a server for processing."
-  },
-  {
-    question: "Why is the reduction 0%?",
-    answer: "If your PDF is already highly optimized, further compression might degrade quality without saving space. In this case, we keep the original file."
-  },
-  {
-    question: "Can I compress text-heavy PDFs?",
-    answer: "Text-heavy PDFs usually shrink less. Stronger page-image compression is available as an explicit option, but searchable text, links, forms, and accessibility can be lost."
-  }
-];
+/** The slider stop that lands on a given DPI, for the three preset chips. */
+const sliderForDPI = (dpi: number, isTextHeavy: boolean): number => {
+  const minDPI = isTextHeavy ? 96 : 72;
+  return Math.max(0, Math.min(100, ((dpi - minDPI) / (300 - minDPI)) * 100));
+};
+
+const PRESET_DPI = { Low: 72, Medium: 144, High: 200 } as const;
+type PresetName = keyof typeof PRESET_DPI;
+
+const qualityLabel = (dpi: number): PresetName => (dpi < 110 ? 'Low' : dpi < 175 ? 'Medium' : 'High');
+
+const formatSize = (bytes: number) => {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+};
+
+/** One finished-but-unsaved result, held in memory until it is kept or dropped. */
+interface TrialResult {
+  id: string;
+  name: string;
+  originalSize: number;
+  blob: Blob;
+  /** The compressed copy was not smaller, so the original is what would be kept. */
+  skipped: boolean;
+}
 
 export const CompressPDF: React.FC = () => {
   const [files, setFiles] = useState<PDFFile[]>([]);
-  const [level, setLevel] = useState<CompressionLevel>('recommended');
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const [uploadWarning, setUploadWarning] = useState<string | null>(null);
-  
-  // Results
-  const [results, setResults] = useState<Array<{
-    id: string;
-    name: string;
-    originalSize: number;
-    size: number;
-    reduction: number;
-    dpi: number;
-    strategy: string;
-    rasterized: boolean;
-    skipped: boolean;
-    warningType?: 'soft' | 'hard';
-  }>>([]);
 
-  // Preview / Safety State
+  /**
+   * The compressed copies, made but not written anywhere yet. Holding them here
+   * is what lets the screen report the size the export actually produced instead
+   * of a prediction, and lets someone walk away without a file they did not want
+   * landing in their downloads.
+   */
+  const [trial, setTrial] = useState<TrialResult[] | null>(null);
+
   const [showPreview, setShowPreview] = useState(false);
   const [previewConfig, setPreviewConfig] = useState<AdaptiveConfig | null>(null);
 
-  // Analysis State
   const [analysis, setAnalysis] = useState<{
     byId: Record<string, boolean>;
     pageCountById: Record<string, number>;
     isTextHeavy: boolean;
     done: boolean;
   }>({ byId: {}, pageCountById: {}, isTextHeavy: false, done: false });
-  const [targetEstimate, setTargetEstimate] = useState<number>(0);
-  const [flatten, setFlatten] = useState<boolean>(false);
-  const [showRasterizeConfirm, setShowRasterizeConfirm] = useState(false);
+
+  /** 0–100, the same axis the preview's own slider uses. Medium to start. */
+  const [quality, setQuality] = useState(32);
+  /** Off by default: the point of this tool is a smaller file, and the preview
+      shows exactly what that costs before anything is written. */
+  const [keepText, setKeepText] = useState(false);
+
+  /** Sizes measured by encoding real pages, per preset and for the live slider. */
+  const [presetSizes, setPresetSizes] = useState<Partial<Record<PresetName, number>>>({});
+  const [measuredEstimate, setMeasuredEstimate] = useState<number | null>(null);
+  const [measuring, setMeasuring] = useState(false);
+  const measureToken = useRef(0);
+
   const previewFiles = useMemo(
     () => files.map((selectedFile) => ({ file: selectedFile.file, name: selectedFile.name })),
     [files],
   );
 
-  // 1. Analyze files when selected
   useEffect(() => {
     let cancelled = false;
 
     if (files.length > 0) {
-      setResults([]);
+      setTrial(null);
       setShowPreview(false);
       setAnalysis({ byId: {}, pageCountById: {}, isTextHeavy: false, done: false });
+      setPresetSizes({});
+      setMeasuredEstimate(null);
 
       void import('../../services/pdfBrowser')
         .then(({ analyzePDF }) => Promise.all(files.map(async (selectedFile) => {
@@ -98,11 +100,9 @@ export const CompressPDF: React.FC = () => {
         .then((entries) => {
           if (cancelled) return;
 
-          const byId = Object.fromEntries(entries.map(([id, result]) => [id, result.isTextHeavy]));
-          const pageCountById = Object.fromEntries(entries.map(([id, result]) => [id, result.pageCount]));
           setAnalysis({
-            byId,
-            pageCountById,
+            byId: Object.fromEntries(entries.map(([id, result]) => [id, result.isTextHeavy])),
+            pageCountById: Object.fromEntries(entries.map(([id, result]) => [id, result.pageCount])),
             isTextHeavy: entries.some(([, result]) => result.isTextHeavy),
             done: true,
           });
@@ -113,6 +113,8 @@ export const CompressPDF: React.FC = () => {
         });
     } else {
       setAnalysis({ byId: {}, pageCountById: {}, isTextHeavy: false, done: false });
+      setPresetSizes({});
+      setMeasuredEstimate(null);
     }
 
     return () => {
@@ -120,316 +122,318 @@ export const CompressPDF: React.FC = () => {
     };
   }, [files]);
 
-  // 2. Update Target Estimate
-  useEffect(() => {
-    if (flatten && files.length > 0 && analysis.done && files.every((file) => (analysis.pageCountById[file.id] || 0) > 0)) {
-      const target = files.reduce((total, selectedFile) => {
-        return total + calculateTargetSize(selectedFile.size, level, analysis.byId[selectedFile.id] ?? analysis.isTextHeavy);
-      }, 0);
-      setTargetEstimate(target);
-    } else {
-      setTargetEstimate(0);
-    }
-  }, [files, level, analysis, flatten]);
-
-  const handleFilesSelected = async (files: File[]) => {
-    const pdfFiles = files.filter((f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
-    const skippedCount = files.length - pdfFiles.length;
+  const handleFilesSelected = async (selected: File[]) => {
+    const pdfFiles = selected.filter((f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+    const skippedCount = selected.length - pdfFiles.length;
 
     if (pdfFiles.length === 0) {
-      setUploadWarning(files.length === 1
-        ? 'Only PDF files are supported. Choose a .pdf file.'
-        : `${files.length} files were skipped because only PDF files are supported.`
-      );
+      setUploadWarning('Only PDF files are supported.');
       return;
     }
 
     setUploadWarning(skippedCount > 0
-      ? `${skippedCount} ${skippedCount === 1 ? 'file was' : 'files were'} skipped because only PDF files are supported.`
+      ? `${skippedCount} ${skippedCount === 1 ? 'file was' : 'files were'} skipped. Only PDF files are supported.`
       : null
     );
 
     setStatus({ isProcessing: false, progress: 0, message: '' });
-    setFlatten(false);
-    setShowRasterizeConfirm(false);
+    setKeepText(false);
 
     setFiles(pdfFiles.map((f) => ({
       id: uuidv4(),
       file: f,
       name: f.name,
       size: f.size,
-      pageCount: 0 
+      pageCount: 0,
     })));
   };
 
-  const getCurrentConfig = () => getAdaptiveConfig(level, analysis.isTextHeavy);
+  const config = useMemo(
+    () => getInterpolatedConfig(quality, analysis.isTextHeavy),
+    [quality, analysis.isTextHeavy],
+  );
 
-  const triggerPreview = () => {
-    if (files.length === 0) return;
-    setPreviewConfig(getCurrentConfig());
-    setShowPreview(true);
-  };
+  const totalOriginalSize = files.reduce((total, selectedFile) => total + selectedFile.size, 0);
 
-  const initiateCompression = () => {
-    const config = getCurrentConfig();
-    // DPI only changes when pages are rasterized. A structure-preserving run does not need a
-    // simulated visual preview because its text and page rendering remain intact.
-    if (flatten && (config.projectedDPI < 100 || level === 'extreme')) {
-      setPreviewConfig(config);
-      setShowPreview(true);
-    } else {
-      executeCompression(false);
+  /** Encode a sample of real pages for every file and add the results up. */
+  const measureAll = useCallback(
+    async (candidate: AdaptiveConfig, maxSamples: number): Promise<number> => {
+      const { measureProjectedSize } = await import('../../services/pdfBrowser');
+      const sizes = await Promise.all(
+        files.map((selectedFile) => measureProjectedSize(selectedFile.file, candidate, { maxSamples })),
+      );
+      // A file that could not be sampled contributes nothing rather than a guess,
+      // which would leave the total somewhere between measured and invented.
+      return sizes.some((size) => size <= 0) ? 0 : sizes.reduce((total, size) => total + size, 0);
+    },
+    [files],
+  );
+
+  // The three presets, measured once per document. Two pages each is enough to
+  // tell a scan from a text page and keeps a long document responsive.
+  useEffect(() => {
+    if (files.length === 0 || !analysis.done || keepText) return;
+    let cancelled = false;
+
+    void (async () => {
+      for (const name of Object.keys(PRESET_DPI) as PresetName[]) {
+        const stop = sliderForDPI(PRESET_DPI[name], analysis.isTextHeavy);
+        const size = await measureAll(getInterpolatedConfig(stop, analysis.isTextHeavy), 2);
+        if (cancelled) return;
+        if (size > 0) setPresetSizes((current) => ({ ...current, [name]: size }));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [files, analysis.done, analysis.isTextHeavy, keepText, measureAll]);
+
+  // The live estimate follows the slider, debounced so a drag does not queue a
+  // page render per pixel.
+  useEffect(() => {
+    if (files.length === 0 || !analysis.done || keepText) {
+      setMeasuredEstimate(null);
+      return;
     }
-  };
+
+    const token = measureToken.current + 1;
+    measureToken.current = token;
+    setMeasuring(true);
+
+    const timer = window.setTimeout(() => {
+      void measureAll(config, 2).then((size) => {
+        if (measureToken.current !== token) return;
+        setMeasuredEstimate(size > 0 ? size : null);
+        setMeasuring(false);
+      });
+    }, 220);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [config, files.length, analysis.done, keepText, measureAll]);
+
+  const estimatedReduction = totalOriginalSize > 0 && measuredEstimate
+    ? Math.max(0, Math.round(((totalOriginalSize - measuredEstimate) / totalOriginalSize) * 100))
+    : 0;
+
+  const presets = (Object.keys(PRESET_DPI) as PresetName[]).map((name) => {
+    const stop = sliderForDPI(PRESET_DPI[name], analysis.isTextHeavy);
+    return { name, stop, size: presetSizes[name], selected: Math.abs(quality - stop) <= 4 };
+  });
 
   const executeCompression = async (overrideSafety = false, customConfig?: AdaptiveConfig) => {
     if (files.length === 0) return;
-    
-    setStatus({ isProcessing: true, progress: 5, message: 'Analyzing structure...' });
-    
+
+    const effectiveConfig = customConfig ?? config;
+    setStatus({ isProcessing: true, progress: 5, message: 'Compressing…' });
+
     try {
       const { compressPDFAdaptive } = await import('../../services/pdfBrowser');
-      const compressedResults = [];
+      const results: TrialResult[] = [];
 
       for (let index = 0; index < files.length; index += 1) {
         const selectedFile = files[index];
-        const fileLabel = files.length > 1 ? `${index + 1}/${files.length}: ${selectedFile.name}` : selectedFile.name;
         const resultObj = await compressPDFAdaptive(
           selectedFile.file,
-          level,
+          'recommended',
           (p) => {
             const batchProgress = ((index + p / 100) / files.length) * 100;
-            setStatus(prev => ({
-              ...prev,
-              progress: Math.max(5, Math.round(batchProgress)),
-              message: p < 50 ? `Compressing ${fileLabel}…` : `Optimizing ${fileLabel}…`,
-            }));
+            setStatus((prev) => ({ ...prev, progress: Math.max(5, Math.round(batchProgress)) }));
           },
           overrideSafety,
-          customConfig,
-          flatten,
+          effectiveConfig,
+          !keepText,
           analysis.byId[selectedFile.id] ?? analysis.isTextHeavy,
         );
 
-        // If blocked by service (double safety), shouldn't happen if we handled it in preview, but fallback.
         if (resultObj.status === 'blocked') {
           setStatus({ isProcessing: false, progress: 0, message: '' });
-          triggerPreview();
+          setPreviewConfig(effectiveConfig);
+          setShowPreview(true);
           return;
         }
 
         const finalSize = resultObj.meta.compressedSize;
-        const isUnchanged = finalSize >= selectedFile.size;
-        const effectiveDPI = resultObj.meta.projectedDPI;
+        const skipped = finalSize >= selectedFile.size || resultObj.data.length === 0;
 
-        let warningType: 'soft' | 'hard' | undefined = undefined;
-        if (effectiveDPI < 90) warningType = 'hard';
-        else if (effectiveDPI < 100) warningType = 'soft';
-
-        compressedResults.push({
+        // Held, not written. Nothing reaches the downloads folder or Recent
+        // until the size below has been seen and accepted.
+        results.push({
           id: selectedFile.id,
           name: selectedFile.name,
           originalSize: selectedFile.size,
-          size: isUnchanged ? selectedFile.size : finalSize,
-          reduction: isUnchanged ? 0 : Math.round(((selectedFile.size - finalSize) / selectedFile.size) * 100),
-          dpi: effectiveDPI,
-          strategy: resultObj.meta.strategyUsed,
-          rasterized: flatten,
-          skipped: isUnchanged,
-          warningType,
+          blob: new Blob([resultObj.data], { type: 'application/pdf' }),
+          skipped,
         });
-
-        if (!isUnchanged && resultObj.data.length > 0) {
-          recordSavings(selectedFile.size, resultObj.data.length);
-          downloadBlob(new Blob([resultObj.data], { type: 'application/pdf' }), `compressed-${level}-${selectedFile.name}`);
-        }
       }
 
-      setStatus({ isProcessing: true, progress: 100, message: 'Finalizing...' });
-      setResults(compressedResults);
-      
-      setStatus({ isProcessing: false, progress: 100, message: 'Done!' });
+      setTrial(results);
+      setStatus({ isProcessing: false, progress: 100, message: '' });
     } catch (error) {
       console.error(error);
       const detail = error instanceof Error ? error.message : '';
       const message = /password|encrypted/i.test(detail)
-        ? 'This PDF is encrypted. Unlock it before compressing.'
-        : 'Compression failed. Your originals were not changed. Try a different PDF or quality setting.';
+        ? 'This PDF is encrypted. Unlock it first.'
+        : 'Compression failed. Your original was not changed.';
       setStatus({ isProcessing: false, progress: 0, message: '', error: message });
     }
   };
 
-  const formatSize = (bytes: number) => {
-    if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
-    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${bytes} B`;
+  /** Keep it: the only point at which anything is written. */
+  const keepTrial = () => {
+    if (!trial) return;
+    for (const result of trial) {
+      if (result.skipped) continue;
+      recordSavings(result.originalSize, result.blob.size);
+      downloadBlob(result.blob, `compressed-${result.name}`);
+    }
+    setTrial(null);
+    setFiles([]);
+    setStatus({ isProcessing: false, progress: 0, message: 'Saved' });
   };
-  const totalOriginalSize = files.reduce((total, selectedFile) => total + selectedFile.size, 0);
-  const totalCompressedSize = results.reduce((total, result) => total + result.size, 0);
-  const totalReduction = totalOriginalSize > 0 && totalCompressedSize < totalOriginalSize
-    ? Math.round(((totalOriginalSize - totalCompressedSize) / totalOriginalSize) * 100)
+
+  /** Drop it. Nothing was ever written, so there is nothing to clean up. */
+  const discardTrial = () => {
+    setTrial(null);
+    setStatus({ isProcessing: false, progress: 0, message: '' });
+  };
+
+  const trialOriginalTotal = trial?.reduce((total, result) => total + result.originalSize, 0) ?? 0;
+  const trialCompressedTotal = trial?.reduce(
+    (total, result) => total + (result.skipped ? result.originalSize : result.blob.size),
+    0,
+  ) ?? 0;
+  const totalReduction = trialOriginalTotal > 0 && trialCompressedTotal < trialOriginalTotal
+    ? Math.round(((trialOriginalTotal - trialCompressedTotal) / trialOriginalTotal) * 100)
     : 0;
-  const hasResults = results.length > 0;
-  const isSkipped = hasResults && totalCompressedSize >= totalOriginalSize;
-  const skippedResultCount = results.filter((result) => result.skipped).length;
-  const analysisFailureCount = analysis.done
-    ? files.filter((file) => (analysis.pageCountById[file.id] || 0) <= 0).length
-    : 0;
-  const currentDPI = analysis.done ? getAdaptiveConfig(level, analysis.isTextHeavy).projectedDPI : 0;
-  const isLowDPI = currentDPI < 100;
+  const hasResults = Boolean(trial);
+  const isSkipped = Boolean(trial && trial.every((result) => result.skipped));
   const fileCountLabel = files.length === 1 ? '1 PDF' : `${files.length} PDFs`;
-  const estimateProgress = totalOriginalSize > 0
-    ? Math.max(0, Math.min(100, (targetEstimate / totalOriginalSize) * 100))
-    : 0;
   const processingProgress = Number.isFinite(status.progress)
     ? Math.max(0, Math.min(100, status.progress))
     : 0;
 
+  const reset = () => {
+    setFiles([]);
+    setTrial(null);
+    setUploadWarning(null);
+    setKeepText(false);
+    setAnalysis({ byId: {}, pageCountById: {}, isTextHeavy: false, done: false });
+  };
+
   return (
     <div className={`relative mx-auto w-full max-w-3xl px-4 py-4 sm:py-10 ${files.length === 0 ? 'chef-tool-landing-centered' : ''}`}>
-      <SEOHead 
-        title="Compress PDF - Reduce File Size Online | PDF Chef"
-        description="Reduce PDF file size in your browser. Preserve document structure by default or preview an optional page-image copy."
-      />
       <StatusToast status={status} />
 
-      {/* The "Turn pages into images" switch states the trade-off where the
-          decision is made; repeating it under the title said it twice. */}
       <div className="mb-3 sm:mb-6">
-         <h1 className="text-3xl font-bold text-[var(--text-primary)]">Compress PDF</h1>
+        <h1 className="text-3xl font-bold text-[var(--text-primary)]">Compress PDF</h1>
       </div>
 
       <AnimatePresence mode="wait">
         {files.length === 0 ? (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-             <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf,application/pdf" multiple label="Choose PDFs to compress" />
-             {uploadWarning && (
-               <div className="mt-3 flex items-start gap-2 rounded-[var(--radius-field)] border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-800 dark:border-amber-500 dark:bg-amber-900/20 dark:text-amber-200">
-                 <AlertTriangle aria-hidden size={18} className="mt-0.5 shrink-0" />
-                 <span>{uploadWarning}</span>
-               </div>
-             )}
+            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf,application/pdf" multiple label="Choose PDFs to compress" />
+            {uploadWarning && (
+              <div className="mt-3 flex items-start gap-2 rounded-[var(--radius-field)] border border-[var(--status-caution-text)] bg-[var(--status-caution-quiet)] px-3 py-2.5 text-sm font-medium text-[var(--status-caution-text)]">
+                <AlertTriangle aria-hidden size={18} className="mt-0.5 shrink-0" />
+                <span>{uploadWarning}</span>
+              </div>
+            )}
           </motion.div>
         ) : (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             className="rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 sm:p-4"
           >
-            {/* Result View */}
             {hasResults && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0 }} 
-                animate={{ opacity: 1, height: 'auto' }}
+              <div
                 className={`mb-3 rounded-[var(--radius-field)] border p-3 ${
-                  isSkipped 
-                    ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-500'
-                    : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                  isSkipped
+                    ? 'border-[var(--status-caution-text)] bg-[var(--status-caution-quiet)]'
+                    : 'border-[var(--status-success-text)] bg-[var(--status-success-quiet)]'
                 }`}
               >
-                <div className={`mb-2 flex items-center gap-2 text-base font-bold ${isSkipped ? 'text-amber-700 dark:text-amber-400' : 'text-green-700 dark:text-green-400'}`}>
-                  {isSkipped ? <ShieldAlert /> : <CheckCircle2 />} 
-                  {isSkipped ? 'No smaller copy produced' : 'Compression complete'}
+                <div className={`mb-2 flex items-center gap-2 font-bold ${isSkipped ? 'text-[var(--status-caution-text)]' : 'text-[var(--status-success-text)]'}`}>
+                  {isSkipped ? <ShieldAlert size={18} /> : <CheckCircle2 size={18} />}
+                  {isSkipped ? 'No smaller copy produced' : 'Ready to save'}
                 </div>
-                
+
                 {isSkipped ? (
-                  <p className="text-sm text-amber-800 dark:text-amber-200 mb-2">
-                    Compression did not make these PDFs smaller, so your originals were kept.
-                  </p>
+                  <p className="text-sm text-[var(--text-body)]">Your originals are unchanged.</p>
                 ) : (
-                  <div className="space-y-2.5">
-                    {skippedResultCount > 0 && (
-                      <p className="text-sm text-[var(--text-secondary)]">
-                        {skippedResultCount} {skippedResultCount === 1 ? 'original was' : 'originals were'} kept because the compressed copy was not smaller.
-                      </p>
-                    )}
-                    <div className="flex items-center justify-between text-sm">
-                      <div>
-                        <div className="mb-1 text-xs font-bold uppercase tracking-wider text-[var(--text-tertiary)]">Original</div>
-                        <div className="font-mono text-[var(--text-body)] line-through">{formatSize(totalOriginalSize)}</div>
-                      </div>
-                      <div className="flex flex-col items-center px-4">
-                        <ArrowRight aria-hidden className="text-[var(--text-tertiary)]" />
-                        <span className="mt-1 rounded-full bg-[var(--status-success-quiet)] px-2 py-0.5 text-xs font-bold text-[var(--status-success-text)]">
-                          -{totalReduction}%
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-green-600 dark:text-green-400 uppercase text-xs font-bold tracking-wider mb-1">Compressed</div>
-                        <div className="font-mono text-xl font-bold text-green-700 dark:text-green-400">{formatSize(totalCompressedSize)}</div>
-                      </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <div>
+                      <div className="type-caption text-[var(--text-tertiary)]">Original</div>
+                      <div className="tabular text-[var(--text-body)] line-through">{formatSize(trialOriginalTotal)}</div>
                     </div>
-                    
-                    <div className="space-y-2">
-                      {results.map((result) => (
-                        <div key={result.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/50 p-2 text-xs dark:bg-black/20">
-                          <span className="min-w-0 flex-1 truncate font-semibold text-[var(--text-body)]">{result.name}</span>
-                          <span className="font-mono text-[var(--text-tertiary)]">
-                            {formatSize(result.originalSize)} → {formatSize(result.size)}
-                          </span>
-                          <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-                            <Zap size={12} className="text-amber-500" />
-                            <span>{result.skipped
-                              ? <strong>Original kept</strong>
-                              : result.rasterized
-                                ? <><strong>{result.dpi} DPI</strong> ({result.strategy})</>
-                                : <><strong>Text preserved</strong> ({result.strategy})</>}
-                            </span>
-                          </div>
-                          {result.warningType === 'soft' && (
-                            <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
-                              <AlertTriangle size={12} />
-                              <span>Soft text</span>
-                            </div>
-                          )}
-                          {result.warningType === 'hard' && (
-                            <div className="flex items-center gap-2 font-semibold text-rose-700 dark:text-rose-300">
-                              <AlertTriangle size={12} />
-                              <span>Low readability risk</span>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                    <div className="flex flex-col items-center px-4">
+                      <ArrowRight aria-hidden size={18} className="text-[var(--text-tertiary)]" />
+                      <span className="mt-1 rounded-[var(--radius-pill)] bg-[var(--status-success-quiet)] px-2 py-0.5 text-xs font-bold text-[var(--status-success-text)]">
+                        -{totalReduction}%
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <div className="type-caption text-[var(--status-success-text)]">Compressed</div>
+                      <div className="tabular text-xl font-bold text-[var(--status-success-text)]">{formatSize(trialCompressedTotal)}</div>
                     </div>
                   </div>
                 )}
-              </motion.div>
+
+                {/* The file exists but is still only in memory. This is where it
+                    is either written or dropped. */}
+                <div className="mt-3 flex flex-row gap-2">
+                  {!isSkipped && (
+                    <button
+                      type="button"
+                      onClick={keepTrial}
+                      className="chef-target chef-pressable flex flex-1 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 text-sm font-bold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)]"
+                    >
+                      <CheckCircle2 aria-hidden size={18} /> Save
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={discardTrial}
+                    className="chef-target chef-pressable flex flex-1 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-4 text-sm font-bold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]"
+                  >
+                    <Trash2 aria-hidden size={18} /> Discard
+                  </button>
+                </div>
+              </div>
             )}
 
-            {/* File Info */}
             {!hasResults && (
-              <div className="mb-3 border-b border-[var(--border-hairline)] pb-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                   <div className="flex min-w-0 grow basis-[12rem] items-center gap-2.5">
-                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius-control)] bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]">
-                        <Layers aria-hidden size={18} />
+              <>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-hairline)] pb-3">
+                  <div className="flex min-w-0 grow basis-[12rem] items-center gap-2.5">
+                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius-control)] bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]">
+                      <Layers aria-hidden size={18} />
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="text-sm font-semibold text-[var(--text-primary)]">{fileCountLabel}</h2>
+                      <div className="type-caption tabular text-[var(--text-tertiary)]">
+                        {analysis.done ? formatSize(totalOriginalSize) : <span className="animate-pulse">Analysing…</span>}
                       </div>
-                      <div className="min-w-0">
-                        <h3 className="text-sm font-semibold text-[var(--text-primary)]">{fileCountLabel} selected</h3>
-                        <div className="type-caption flex items-center gap-2 text-[var(--text-tertiary)]">
-                          {analysis.done ? (
-                             <span>{analysis.isTextHeavy ? 'Includes text-heavy PDFs' : 'Image-rich PDFs'} • {formatSize(totalOriginalSize)}</span>
-                          ) : (
-                             <span className="animate-pulse">Analyzing...</span>
-                          )}
-                        </div>
-                      </div>
-                   </div>
-                   <button
+                    </div>
+                  </div>
+                  <button
                     type="button"
-                    onClick={() => { setFiles([]); setResults([]); setUploadWarning(null); }}
+                    onClick={reset}
                     className="chef-target ml-auto shrink-0 rounded-[var(--radius-control)] border border-[var(--status-danger-text)] px-3 text-sm font-semibold text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)]"
                   >
                     Clear
                   </button>
                 </div>
+
                 {files.length > 1 && (
-                  <div className="chef-scroller mt-3 max-h-48 space-y-1 overflow-y-auto rounded-[var(--radius-field)] bg-[var(--surface-sunken)] p-2">
-                    {files.map((selectedFile, index) => (
+                  <div className="chef-scroller mb-3 max-h-40 space-y-1 overflow-y-auto rounded-[var(--radius-field)] bg-[var(--surface-sunken)] p-2">
+                    {files.map((selectedFile) => (
                       <div key={selectedFile.id} className="flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm">
-                        <span className="w-5 shrink-0 text-center text-xs font-bold text-[var(--text-tertiary)]">{index + 1}</span>
                         <span className="min-w-0 flex-1 truncate font-medium text-[var(--text-body)]">{selectedFile.name}</span>
-                        <span className="shrink-0 text-xs text-[var(--text-tertiary)]">{formatSize(selectedFile.size)}</span>
+                        <span className="tabular shrink-0 text-xs text-[var(--text-tertiary)]">{formatSize(selectedFile.size)}</span>
                         <button
                           type="button"
                           onClick={() => setFiles((current) => current.filter((file) => file.id !== selectedFile.id))}
@@ -442,195 +446,146 @@ export const CompressPDF: React.FC = () => {
                     ))}
                   </div>
                 )}
+
                 {uploadWarning && (
-                  <div className="mt-3 flex items-start gap-2 rounded-[var(--radius-field)] border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-800 dark:border-amber-500 dark:bg-amber-900/20 dark:text-amber-200">
+                  <div className="mb-3 flex items-start gap-2 rounded-[var(--radius-field)] border border-[var(--status-caution-text)] bg-[var(--status-caution-quiet)] px-3 py-2.5 text-sm font-medium text-[var(--status-caution-text)]">
                     <AlertTriangle aria-hidden size={18} className="mt-0.5 shrink-0" />
                     <span>{uploadWarning}</span>
                   </div>
                 )}
-                {analysisFailureCount > 0 && (
-                  <div role="status" className="mt-3 flex items-start gap-2 rounded-[var(--radius-field)] border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-800 dark:border-amber-500 dark:bg-amber-900/20 dark:text-amber-200">
-                    <AlertTriangle aria-hidden size={18} className="mt-0.5 shrink-0" />
-                    <span>{analysisFailureCount === 1 ? 'One PDF' : `${analysisFailureCount} PDFs`} could not be inspected. It may be encrypted or unsupported, so no size estimate is shown. You can still try compression.</span>
-                  </div>
-                )}
-              </div>
-            )}
 
-            {/* Target Estimation */}
-            {!hasResults && (
-              <div className="mb-3">
-                <div className="mb-1 flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
-                  <span className="text-sm font-bold text-[var(--text-body)]">Estimated batch size</span>
-                  <div className="flex min-w-0 items-center gap-2">
-                     <TrendingDown aria-hidden size={18} className="text-[var(--accent-text)]" />
-                     <span className="min-w-0 break-words text-xl font-bold text-[var(--text-primary)]">{!analysis.done ? 'Analyzing…' : !flatten ? 'Not predicted' : analysisFailureCount > 0 ? 'Unavailable' : `~${formatSize(targetEstimate)}`}</span>
-                  </div>
-                </div>
-                <p className="type-caption mb-1.5 font-normal normal-case tracking-normal text-[var(--text-secondary)]">
-                  {flatten
-                    ? 'Estimate only. Preview visual quality before compressing.'
-                    : 'Structure-preserving optimization has no reliable size estimate. Your original is kept if the result is not smaller.'}
-                </p>
-                {flatten && analysis.done && analysisFailureCount === 0 && <div className="relative flex h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-sunken)]">
-                   <div
-                    aria-hidden="true"
-                    className="h-full bg-[var(--accent-rest)] transition-[width] duration-200 ease-out motion-reduce:transition-none"
-                    style={{ width: `${estimateProgress}%` }}
-                   />
-                </div>}
-              </div>
-            )}
+                {/* Quality only exists while pages are being re-rendered. Keeping
+                    the text means nothing here applies, so none of it is shown. */}
+                {!keepText && (
+                  <div className="mb-3">
+                    <div className="mb-2 flex items-baseline justify-between gap-2">
+                      <h2 className="text-sm font-bold text-[var(--text-body)]">Quality</h2>
+                      {/* The label alone. DPI is the one number that predicts
+                          readability, and it is shown in the preview, where its
+                          effect is actually visible. */}
+                      <span className="type-caption text-[var(--text-secondary)]">
+                        {qualityLabel(config.projectedDPI)}
+                      </span>
+                    </div>
 
-            {/* Compression Levels */}
-            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-              <span className="text-sm font-bold text-[var(--text-body)]">Quality</span>
-              {!flatten && <span className="text-xs text-[var(--text-secondary)]">Used only when pages are turned into images</span>}
-            </div>
-            {/* A three-way choice reads as a strip. Each box used to carry a
-                second line that only restated its own label. */}
-            <div className="mb-3 grid grid-cols-3 gap-2">
-              {[
-                { id: 'extreme', label: 'Low' },
-                { id: 'recommended', label: 'Medium' },
-                { id: 'less', label: 'High' },
-              ].map((opt) => (
-                <button
-                  type="button"
-                  key={opt.id}
-                  onClick={() => setLevel(opt.id as CompressionLevel)}
-                  disabled={status.isProcessing || hasResults}
-                  aria-pressed={level === opt.id}
-                  className={`chef-pressable chef-hit-y h-10 rounded-[var(--radius-control)] border text-sm font-semibold transition-colors disabled:opacity-55 ${
-                    level === opt.id
-                      ? 'border-[var(--accent-rest)] bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]'
-                      : 'border-[var(--border-strong)] text-[var(--text-primary)] hover:border-[var(--accent-rest)]'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+                    <div className="rounded-[var(--radius-field)] border border-[var(--border-hairline)] p-3">
+                      <div className="mb-3 flex items-end justify-between gap-3">
+                        <div>
+                          <div className="type-caption text-[var(--text-tertiary)]">Actual</div>
+                          <div className="tabular font-semibold text-[var(--text-body)]">{formatSize(totalOriginalSize)}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-right">
+                            <div className="type-caption text-[var(--text-tertiary)]">Estimated</div>
+                            <div className={`tabular text-xl font-bold text-[var(--text-primary)] ${measuring ? 'opacity-60' : ''}`}>
+                              {measuredEstimate ? `~${formatSize(measuredEstimate)}` : '—'}
+                            </div>
+                          </div>
+                          {measuredEstimate ? (
+                            <span className="rounded-[var(--radius-pill)] bg-[var(--accent-quiet)] px-2 py-0.5 text-xs font-bold text-[var(--accent-on-quiet)]">
+                              -{estimatedReduction}%
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
 
-            {!hasResults && (
-              <div className="mb-3 space-y-2.5 border-t border-[var(--border-hairline)] pt-1">
-                {/* Kept in full: rasterizing is the one lossy path in this tool. */}
-                <Switch
-                  label="Turn pages into images"
-                  detail="May shrink text or vector PDFs, but selectable text, links, forms, signatures, and accessibility can be lost."
-                  checked={flatten}
-                  disabled={status.isProcessing}
-                  onChange={(next) => {
-                    if (next) setShowRasterizeConfirm(true);
-                    else setFlatten(false);
-                  }}
-                />
-                {showRasterizeConfirm && !flatten && (
-                  <div role="alert" className="rounded-[var(--radius-field)] border border-amber-300 bg-amber-50 p-3 text-amber-900 dark:border-amber-500 dark:bg-amber-900/20 dark:text-amber-100">
-                    <p className="font-bold">Turn every page into an image?</p>
-                    <p className="mt-1 text-sm">This is lossy. Searchable and copyable text, links, bookmarks, form fields, signatures, and accessibility can be lost. Your original files are not changed.</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" onClick={() => setShowRasterizeConfirm(false)} className="chef-hit-y chef-pressable min-h-11 rounded-[var(--radius-control)] border border-amber-300 px-4 text-sm font-semibold hover:bg-amber-100 dark:border-amber-500 dark:hover:bg-amber-900/40">Cancel</button>
-                      <button type="button" onClick={() => { setFlatten(true); setShowRasterizeConfirm(false); }} className="chef-hit-y chef-pressable min-h-11 rounded-[var(--radius-control)] bg-amber-700 px-4 text-sm font-bold text-white hover:bg-amber-800">Turn pages into images</button>
+                      <ChefSlider
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={quality}
+                        onChange={setQuality}
+                        ariaLabel="Compression quality"
+                      />
+
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        {presets.map((preset) => (
+                          <button
+                            type="button"
+                            key={preset.name}
+                            onClick={() => setQuality(preset.stop)}
+                            disabled={status.isProcessing}
+                            aria-pressed={preset.selected}
+                            className={`chef-pressable rounded-[var(--radius-control)] border px-2 py-2 text-left transition-colors disabled:opacity-55 ${
+                              preset.selected
+                                ? 'border-[var(--accent-rest)] bg-[var(--accent-quiet)]'
+                                : 'border-[var(--border-strong)] hover:border-[var(--accent-rest)]'
+                            }`}
+                          >
+                            <span className={`block text-sm font-semibold ${preset.selected ? 'text-[var(--accent-on-quiet)]' : 'text-[var(--text-primary)]'}`}>
+                              {preset.name}
+                            </span>
+                            <span className="tabular type-caption block text-[var(--text-secondary)]">
+                              {preset.size ? `~${formatSize(preset.size)}` : '…'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
-              </div>
+
+                {/* The one lossy consequence in this tool, as one label. What it
+                    actually looks like is a tap away in the preview. */}
+                <div className="mb-3">
+                  <Switch
+                    label="Keep text selectable"
+                    checked={keepText}
+                    disabled={status.isProcessing}
+                    onChange={setKeepText}
+                  />
+                </div>
+              </>
             )}
 
-            {/* Actions */}
-            <div className="flex flex-col gap-2">
-               {status.isProcessing && (
-                 <div className="mb-2 h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-sunken)]">
-                   <div
-                     aria-hidden="true"
-                     className="h-full bg-[var(--accent-rest)] transition-[width] duration-200 ease-linear motion-reduce:transition-none"
-                     style={{ width: `${processingProgress}%` }}
-                   />
-                 </div>
-               )}
-               
-               {!hasResults ? (
-                 <div className="flex flex-col gap-2">
-                   {/* Preview & Tune Button - HIGHLIGHTED */}
-                   {analysis.done && flatten && !status.isProcessing && (
-                      <button
-                        onClick={triggerPreview}
-                        className={`
-                          group relative flex w-full items-center justify-between overflow-hidden rounded-[var(--radius-control)] border px-3 py-2 text-left transition-all duration-200
-                          ${isLowDPI
-                            ? 'bg-amber-50/50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-400 hover:border-amber-400 dark:hover:border-amber-500'
-                            : 'border-[var(--border-strong)] bg-[var(--surface-raised)] hover:border-[var(--accent-rest)]'
-                          }
-                        `}
-                      >
-                         <div className="relative z-10 flex items-center gap-2.5">
-                            <div className={`
-                               grid h-9 w-9 place-items-center rounded-[var(--radius-control)] transition-colors
-                               ${isLowDPI
-                                 ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
-                                 : 'bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]'
-                               }
-                            `}>
-                               <Eye aria-hidden size={18} className={isLowDPI ? "animate-pulse" : ""} />
-                            </div>
-                            <div>
-                               <div className={`text-sm font-bold ${isLowDPI ? 'text-amber-800 dark:text-amber-200' : 'text-[var(--text-primary)]'}`}>
-                                  Preview quality
-                                </div>
-                               {/* Kept only in the state that warns: at a low DPI
-                                   the output can be unreadable. */}
-                               {isLowDPI && (
-                                 <div className="type-caption font-medium text-amber-700 dark:text-amber-300">
-                                    Quality looks low. Check before saving.
-                                 </div>
-                               )}
-                            </div>
-                         </div>
+            <div className={`flex flex-col gap-2 ${hasResults ? 'hidden' : ''}`}>
+              {status.isProcessing && (
+                <div className="mb-1 h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-sunken)]">
+                  <div
+                    aria-hidden="true"
+                    className="h-full bg-[var(--accent-rest)] transition-[width] duration-200 ease-linear motion-reduce:transition-none"
+                    style={{ width: `${processingProgress}%` }}
+                  />
+                </div>
+              )}
 
-                         <div className="flex items-center gap-2">
-                           <div className={`
-                              rounded-md border px-2 py-1 font-mono text-xs font-bold
-                              ${isLowDPI
-                                 ? 'bg-amber-100 dark:bg-amber-900/30 border-amber-200 dark:border-amber-500 text-amber-700 dark:text-amber-300'
-                                 : 'border-[var(--border-hairline)] bg-[var(--surface-sunken)] text-[var(--text-secondary)]'
-                              }
-                           `}>
-                              {currentDPI} DPI
-                           </div>
-                           <ArrowRight aria-hidden size={18} className={`opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 ${isLowDPI ? 'text-amber-500' : 'text-[var(--accent-text)]'}`} />
-                         </div>
-                      </button>
-                   )}
+              {!hasResults ? (
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  {/* Always reachable while pages are being re-rendered, which is
+                      the only time there is anything to look at. */}
+                  {!keepText && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPreviewConfig(config);
+                        setShowPreview(true);
+                      }}
+                      disabled={!analysis.done || status.isProcessing}
+                      className="chef-target chef-pressable flex items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-4 text-sm font-bold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)] disabled:opacity-55 sm:w-40"
+                    >
+                      <Eye aria-hidden size={18} /> Preview
+                    </button>
+                  )}
 
-                   {/* Main Compress Button */}
-                   <button
-                    onClick={initiateCompression}
+                  <button
+                    type="button"
+                    onClick={() => void executeCompression(false)}
                     disabled={status.isProcessing || !analysis.done}
-                    className="chef-target chef-pressable group flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 text-sm font-bold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-55"
+                    className="chef-target chef-pressable flex flex-1 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 text-sm font-bold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-55"
                   >
-                    {status.isProcessing ? (
-                      <><Loader2 className="animate-spin" /> <span>{status.message}</span></>
-                    ) : !analysis.done ? (
-                      <><Loader2 className="animate-spin" /> <span>Analyzing PDFs…</span></>
+                    {status.isProcessing || !analysis.done ? (
+                      <Loader2 aria-hidden className="animate-spin" size={18} />
                     ) : (
-                      <><Layers aria-hidden size={18} className="transition-transform group-hover:scale-110" /> <span>Compress {fileCountLabel}</span></>
+                      <Layers aria-hidden size={18} />
                     )}
+                    <span>Compress</span>
                   </button>
-                 </div>
-               ) : (
-                 <button 
-                   onClick={() => { setFiles([]); setResults([]); setUploadWarning(null); setFlatten(false); setShowRasterizeConfirm(false); setAnalysis({byId: {}, pageCountById: {}, done:false, isTextHeavy:false}); }}
-                   className="chef-target chef-pressable w-full rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-4 text-sm font-bold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]"
-                 >
-                   Compress more files
-                 </button>
-               )}
+                </div>
+              ) : null}
             </div>
           </motion.div>
         )}
 
-        {/* Readability Preview Modal */}
         {showPreview && files[0] && previewConfig && (
           <React.Suspense fallback={null}>
             <ReadabilityPreview
@@ -639,13 +594,14 @@ export const CompressPDF: React.FC = () => {
               config={previewConfig}
               isTextHeavy={analysis.byId[files[0].id] ?? analysis.isTextHeavy}
               onClose={() => setShowPreview(false)}
-              onConfirm={(finalConfig) => { setShowPreview(false); executeCompression(true, finalConfig); }}
+              onConfirm={(finalConfig) => {
+                setShowPreview(false);
+                void executeCompression(true, finalConfig);
+              }}
             />
           </React.Suspense>
         )}
       </AnimatePresence>
-
-      <FAQ items={faqItems} />
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, FileText, Info, X } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { FileUpload } from '../UI/FileUpload';
 import { Badge, Button } from '../UI/Primitives';
@@ -111,13 +111,11 @@ export const WordToPDF: React.FC = () => {
               </div>
             </div>
 
-            {/* Kept: what survives, what does not, and the .doc constraint. All
-                three change whether a user should run this at all. */}
-            <div className="mt-2.5 space-y-1.5 border-t border-[var(--border-hairline)] pt-2.5 type-footnote text-[var(--text-secondary)]">
-              <p className="flex items-start gap-2"><Check aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />Paragraphs, line breaks, tabs, table-cell text, and page breaks are kept.</p>
-              <p className="flex items-start gap-2"><X aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />Fonts, styling, images, headers, and table grids are not reproduced; output is US Letter in one bundled font.</p>
-              <p className="flex items-start gap-2"><Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />Older .doc files must be saved as .docx first. Review the PDF before sharing.</p>
-            </div>
+            {/* Kept: a user who expects the styled document back would only find
+                out after opening the PDF. */}
+            <p className="mt-2.5 border-t border-[var(--border-hairline)] pt-2.5 type-footnote text-[var(--text-secondary)]">
+              Text and page breaks are kept; fonts, styling, and images are not.
+            </p>
 
             {status.isProcessing && (
               <div role="status" aria-live="polite" className="mt-3 rounded-[var(--radius-field)] border border-blue-200 bg-blue-50 p-3 dark:border-blue-400 dark:bg-blue-500/10">
@@ -135,9 +133,6 @@ export const WordToPDF: React.FC = () => {
                 >
                   <div className="h-full rounded-full bg-blue-600 transition-[width]" style={{ width: `${status.progress}%` }} />
                 </div>
-                <p className="type-caption mt-2 text-blue-800 dark:text-blue-200">
-                  Cancel discards the result; a step already underway may finish first.
-                </p>
               </div>
             )}
 

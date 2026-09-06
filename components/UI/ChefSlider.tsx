@@ -286,7 +286,7 @@ export const ChefSliderField: React.FC<ChefSliderFieldProps> = ({
                 event.currentTarget.blur();
               }
             }}
-            className="tabular w-14 appearance-none bg-transparent text-right font-mono text-xs outline-none disabled:opacity-55"
+            className="tabular w-14 appearance-none bg-transparent text-right text-xs outline-none disabled:opacity-55"
           />
           {suffix ? <span aria-hidden className="ml-0.5 text-xs">{suffix}</span> : null}
         </label>

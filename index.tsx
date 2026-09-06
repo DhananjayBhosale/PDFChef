@@ -1,3 +1,4 @@
+import { installReadableStreamAsyncIteration } from './services/readableStreamAsyncIteration';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { Capacitor } from '@capacitor/core';
@@ -17,6 +18,10 @@ import '@fontsource/noto-sans/400.css';
 import '@fontsource/noto-sans/700.css';
 import './assets/design-tokens.css';
 import './index.css';
+
+// Before anything can reach for PDF.js: on iOS its text extraction depends on a stream feature
+// that engine does not have, and without this the editor finds no paragraphs in any document.
+installReadableStreamAsyncIteration();
 
 // #region packaged-shell-boundary
 /* Deliberately plain JavaScript with every dependency passed in: the security tests

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FileText, FolderOpen, Upload } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { useOpenedPdf, type OpenedPdfRouteState } from '../../hooks/useOpenedPdf';
@@ -17,24 +17,6 @@ interface FileUploadProps {
    */
   allowOpenedPdf?: boolean;
 }
-
-const getAcceptLabel = (accept: string) => {
-  const normalized = accept.toLowerCase();
-  if (normalized.includes('image/*')) return 'Images';
-  if (normalized.includes('application/pdf') || normalized.includes('.pdf')) return 'PDF';
-  if (normalized.includes('wordprocessingml') || normalized.includes('.docx')) return 'DOCX';
-  if (normalized.includes('presentationml') || normalized.includes('.pptx')) return 'PPTX';
-  if (normalized.includes('spreadsheetml') || normalized.includes('.xlsx')) return 'XLSX';
-
-  const parts = normalized
-    .split(',')
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => (part.includes('/') ? part.split('/').pop() ?? part : part).replace(/^\./, '').replace('*', 'any').slice(0, 5).toUpperCase());
-
-  return parts.length ? parts.join(' or ') : 'Files';
-};
 
 /**
  * The one way a document enters the app. It is a button first and a drop target
@@ -55,7 +37,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   const { openedPdf } = useOpenedPdf();
   const haptic = useHaptics();
 
-  const acceptLabel = useMemo(() => getAcceptLabel(accept), [accept]);
   const acceptsPdf = accept.toLowerCase().includes('.pdf') || accept.toLowerCase().includes('application/pdf');
   const routeState = location.state as OpenedPdfRouteState | null;
   const canUseOpenedPdf = Boolean(allowOpenedPdf && openedPdf && acceptsPdf);
@@ -133,11 +114,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       </span>
 
       <h2 className="type-title3 font-semibold text-[var(--text-primary)]">{label}</h2>
-      {multiple ? (
-        <p className="type-footnote mx-auto mt-1 max-w-measure text-[var(--text-secondary)]">
-          {acceptLabel} · several at once
-        </p>
-      ) : null}
 
       <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
         <Button tone="primary" icon={<FolderOpen aria-hidden size={16} />} onClick={openPicker}>
@@ -150,9 +126,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         )}
       </div>
 
-      <p className="type-footnote mt-2.5 hidden text-[var(--text-tertiary)] sm:block">
-        You can also drop a file anywhere in this box.
-      </p>
     </div>
   );
 };

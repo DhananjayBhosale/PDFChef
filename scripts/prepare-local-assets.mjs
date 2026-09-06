@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
@@ -14,6 +14,29 @@ const assets = [
   ['node_modules/tesseract.js-core/tesseract-core-relaxedsimd-lstm.wasm.js', 'core/tesseract-core-relaxedsimd-lstm.wasm.js'],
   ['node_modules/tesseract.js-core/tesseract-core-relaxedsimd-lstm.wasm', 'core/tesseract-core-relaxedsimd-lstm.wasm'],
 ];
+
+/**
+ * PDF.js loads these from a URL, never from the bundle, and refuses outright when the URL is not
+ * configured — there is no fallback in this build. Without them a JPEG 2000 page renders with no
+ * images at all, a CJK document with a non-Identity encoding extracts nothing usable, and the
+ * standard fourteen fonts get measured from guesses. They are vendored for the same reason the OCR
+ * assets are: this app has to work with no network.
+ */
+const pdfjsAssetDirectories = ['wasm', 'cmaps', 'standard_fonts'];
+
+export const preparePdfjsAssets = async (targetRoot = resolve(root, 'public/vendor/pdfjs')) => {
+  let copied = 0;
+  for (const directory of pdfjsAssetDirectories) {
+    const source = resolve(root, 'node_modules/pdfjs-dist', directory);
+    const target = resolve(targetRoot, directory);
+    await mkdir(target, { recursive: true });
+    for (const entry of await readdir(source)) {
+      await copyFile(resolve(source, entry), resolve(target, entry));
+      copied += 1;
+    }
+  }
+  return copied;
+};
 
 export const prepareLocalAssets = async (targetRoot = resolve(root, 'public/vendor/tesseract')) => {
   for (const [source, destination] of assets) {
@@ -32,5 +55,6 @@ export const prepareLocalAssets = async (targetRoot = resolve(root, 'public/vend
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   await prepareLocalAssets();
-  console.log(`Prepared ${assets.length + 1} local OCR assets.`);
+  const pdfjsFiles = await preparePdfjsAssets();
+  console.log(`Prepared ${assets.length + 1} local OCR assets and ${pdfjsFiles} local PDF.js assets.`);
 }

@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- PDF Chef light: warm paper neutrals and the one accent red. -->
+<!-- PDF Chef light: the reddish-tinted paper neutrals and the one accent red. -->
 <resources>
-    <color name="pdf_reader_surface">#FAF7F1</color>
-    <color name="pdf_reader_chrome">#F6F2EA</color>
-    <color name="pdf_reader_raised">#FFFDF9</color>
-    <color name="pdf_reader_hairline">#E6DFD3</color>
-    <color name="pdf_reader_text_primary">#1F1B15</color>
-    <color name="pdf_reader_text_secondary">#6E6558</color>
+    <color name="pdf_reader_surface">#FFF8F4</color>
+    <color name="pdf_reader_chrome">#FFF1EB</color>
+    <color name="pdf_reader_raised">#FFFCFA</color>
+    <color name="pdf_reader_hairline">#F0E2DB</color>
+    <color name="pdf_reader_text_primary">#261F1E</color>
+    <color name="pdf_reader_text_secondary">#635754</color>
     <color name="pdf_reader_accent">#DC2020</color>
-    <color name="pdf_reader_on_accent">#FFFFFF</color>
-    <color name="pdf_reader_drag_cue">#D8D0C2</color>
+    <color name="pdf_reader_on_accent">#FFFCFA</color>
+    <color name="pdf_reader_drag_cue">#DDC9C0</color>
 </resources>

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, FileType2, Info, X } from 'lucide-react';
+import { FileType2 } from 'lucide-react';
 import { FileUpload } from '../UI/FileUpload';
 import { Badge, Button } from '../UI/Primitives';
 import { ToolHeader, ToolShell } from '../UI/ToolLayout';
@@ -120,14 +120,10 @@ export const PDFToWord: React.FC = () => {
             </div>
 
             {/* Kept: this is a beta text export, and a user who expects the page
-                design back would only find out after opening the .docx. The
-                per-page detail that used to sit here said nothing about whether
-                to run it. */}
-            <div className="mt-2.5 space-y-1.5 border-t border-[var(--border-hairline)] pt-2.5 type-footnote text-[var(--text-secondary)]">
-              <p className="flex items-start gap-2"><Check aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-cyan-600" />Embedded text stays editable in Word or Docs.</p>
-              <p className="flex items-start gap-2"><X aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />Fonts, colours, images, tables, and layout are not reconstructed.</p>
-              <p className="flex items-start gap-2"><Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />Scans have no text layer. Use Extract Text&apos;s OCR mode for an English scan.</p>
-            </div>
+                design back would only find out after opening the .docx. */}
+            <p className="mt-2.5 border-t border-[var(--border-hairline)] pt-2.5 type-footnote text-[var(--text-secondary)]">
+              Text is exported; fonts, images, tables, and layout are not.
+            </p>
 
             {status.isProcessing && (
               <div role="status" aria-live="polite" className="mt-3 rounded-[var(--radius-field)] border border-cyan-200 bg-cyan-50 p-3 dark:border-cyan-400 dark:bg-cyan-500/10">
@@ -145,9 +141,6 @@ export const PDFToWord: React.FC = () => {
                 >
                   <div className="h-full rounded-full bg-cyan-600 transition-[width]" style={{ width: `${status.progress}%` }} />
                 </div>
-                <p className="type-caption mt-2 text-cyan-800 dark:text-cyan-200">
-                  Cancel discards the result; a page already being read may finish first.
-                </p>
               </div>
             )}
 

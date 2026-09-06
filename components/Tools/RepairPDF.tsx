@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, CheckCircle2, FileText, Loader2, Wrench } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -78,7 +77,7 @@ export const RepairPDF: React.FC = () => {
     } catch (error) {
       console.error(error);
       if (selectionVersion === selectionVersionRef.current) {
-        setPreviewError('First-page preview is unavailable. You can still try to re-save this PDF.');
+        setPreviewError('First-page preview is unavailable, but you can still re-save this PDF.');
       }
     } finally {
       try {
@@ -111,7 +110,7 @@ export const RepairPDF: React.FC = () => {
       setStatus({
         isProcessing: false,
         progress: 100,
-        message: 'Re-saved copy created. Open it to confirm whether the original issue is fixed.',
+        message: 'Re-saved copy created.',
       });
     } catch (error) {
       console.error(error);
@@ -176,8 +175,7 @@ export const RepairPDF: React.FC = () => {
               <div className="mt-3 flex items-start gap-2 rounded-[var(--radius-field)] bg-[var(--status-caution-quiet)] px-3 py-2 text-[var(--status-caution-text)]">
                 <Wrench aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
                 <p className="type-footnote">
-                  <span className="font-semibold">Minor compatibility issues only.</span>{' '}
-                  This re-saves a PDF the browser can already read; it cannot recover missing content or badly damaged files.
+                  Re-saving fixes minor compatibility issues; it cannot recover missing content or badly damaged files.
                 </p>
               </div>
 

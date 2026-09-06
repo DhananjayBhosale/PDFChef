@@ -232,7 +232,7 @@ export const DeletePages: React.FC = () => {
                           </div>
                         )}
                      </div>
-                     <div className="mt-1 text-center text-xs font-mono text-[var(--text-tertiary)]">Page {index + 1}</div>
+                     <div className="tabular mt-1 text-center text-xs text-[var(--text-tertiary)]">Page {index + 1}</div>
                   </button>
                 ))}
               </div>

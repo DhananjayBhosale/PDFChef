@@ -85,7 +85,9 @@ try {
   } finally {
     await page.keyboard.up('Control');
   }
-  await page.waitForFunction(() => Number(document.querySelector('[data-testid="pdf-zoom-viewport"]')?.getAttribute('data-pdf-zoom')) === 2);
+  // The editor zooms further than the viewers do, because editing body text on a small screen
+  // needs it. A single hard pinch-in reaches that ceiling.
+  await page.waitForFunction(() => Number(document.querySelector('[data-testid="pdf-zoom-viewport"]')?.getAttribute('data-pdf-zoom')) === 4);
   const scrollMetrics = await zoomViewport.evaluate(element => ({
     clientHeight: element.clientHeight,
     scrollHeight: element.scrollHeight,
@@ -115,135 +117,24 @@ try {
   await page.getByRole('button', { name: 'Reset zoom to 100%' }).click();
   await page.waitForFunction(() => Number(document.querySelector('[data-testid="pdf-zoom-viewport"]')?.getAttribute('data-pdf-zoom')) === 1);
 
-  const sourceTargets = page.locator('[data-testid="existing-pdf-text-target"]');
-  const sourceTextTarget = page.locator('[data-testid="existing-pdf-text-target"][aria-label="Edit existing PDF word: PDF"]').first();
-  await sourceTextTarget.waitFor({ timeout: 60_000 });
-  const sourceTargetCount = await sourceTargets.count();
-  const sourceBaseline = await sourceTextTarget.evaluate(element => {
-    const pageSurface = element.parentElement;
-    const bounds = element.getBoundingClientRect();
-    const pageBounds = pageSurface.getBoundingClientRect();
-    const scale = pageSurface.offsetWidth > 0 ? pageBounds.width / pageSurface.offsetWidth : 1;
-    return (bounds.bottom - pageBounds.top) / scale;
-  });
-  const sourceRunId = await sourceTextTarget.getAttribute('data-source-run-id');
-  assert.ok(sourceRunId, 'source word did not expose a PDF run identity');
-  const sourceRunTargetCount = await sourceTargets.evaluateAll(
-    (targets, runId) => targets.filter(target => target.getAttribute('data-source-run-id') === runId).length,
-    sourceRunId,
+  // Paragraph editing replaced the word-at-a-time targets. The end-to-end guarantees of that
+  // surface live in verify-edit-pdf-paragraphs.mjs; what matters here is that the desktop editor
+  // exposes them and that they do not fight the annotation tools below.
+  const paragraphs = page.locator('[data-testid="pdf-text-block"]');
+  await paragraphs.first().waitFor({ timeout: 60_000 });
+  assert.ok(await paragraphs.count() > 0, 'no editable paragraphs were reconstructed');
+  await paragraphs.first().click();
+  await page.getByTestId('pdf-paragraph-inspector').waitFor({ timeout: 10_000 });
+  assert.match(
+    await page.getByTestId('pdf-paragraph-provenance').innerText(),
+    /Drawn with|Substituted/,
+    'the paragraph inspector did not say which typeface it is drawing with',
   );
-  assert.ok(sourceRunTargetCount > 1, 'fixture did not expose multiple words from one PDF source run');
-  const sourceWordLabel = await sourceTextTarget.getAttribute('aria-label');
-  assert.match(sourceWordLabel || '', /^Edit existing PDF word: \S+$/);
-  await sourceTextTarget.click();
-  const replacementEditor = page.getByRole('textbox', { name: 'Edit text on page 1' });
-  await replacementEditor.waitFor();
-  assert.doesNotMatch(await replacementEditor.inputValue(), /\s/);
-  assert.equal(await replacementEditor.evaluate(element => document.activeElement === element), true);
-  const sourceReplacement = page.getByTestId('existing-pdf-word-replacement');
-  const selectionUnderline = page.getByTestId('existing-pdf-selection-underline');
-  const replacementTextBounds = await replacementEditor.boundingBox();
-  const underlineBounds = await selectionUnderline.boundingBox();
-  assert.ok(replacementTextBounds && underlineBounds, 'source replacement underline did not expose bounds');
-  const replacementGlyphBottom = await replacementEditor.evaluate(element => {
-    const bounds = element.getBoundingClientRect();
-    const style = getComputedStyle(element);
-    const lineHeight = Number.parseFloat(style.lineHeight);
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-    const metrics = context.measureText('Hg');
-    const baseline = metrics.fontBoundingBoxAscent
-      + (lineHeight - metrics.fontBoundingBoxAscent - metrics.fontBoundingBoxDescent) / 2;
-    const scale = element.offsetHeight > 0 ? bounds.height / element.offsetHeight : 1;
-    return bounds.y + (baseline + metrics.fontBoundingBoxDescent) * scale;
-  });
-  assert.ok(
-    underlineBounds.y >= replacementGlyphBottom - 1,
-    `source replacement underline ${underlineBounds.y} crossed glyph bottom ${replacementGlyphBottom}`,
-  );
-  const previewBaseline = await replacementEditor.evaluate(element => {
-    const bounds = element.getBoundingClientRect();
-    const pageSurface = element.parentElement.parentElement;
-    const pageBounds = pageSurface.getBoundingClientRect();
-    const scale = pageSurface.offsetWidth > 0 ? pageBounds.width / pageSurface.offsetWidth : 1;
-    const style = getComputedStyle(element);
-    const fontSize = Number.parseFloat(style.fontSize);
-    const lineHeight = Number.parseFloat(style.lineHeight);
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-    const metrics = context.measureText('Hg');
-    const cssBaseline = metrics.fontBoundingBoxAscent
-      + (lineHeight - metrics.fontBoundingBoxAscent - metrics.fontBoundingBoxDescent) / 2;
-    return (bounds.y - pageBounds.y) / scale + cssBaseline;
-  });
-  assert.ok(
-    Math.abs(previewBaseline - sourceBaseline) <= 0.35,
-    `middle-word preview baseline ${previewBaseline} did not align with source baseline ${sourceBaseline}`,
-  );
-  const lockedPosition = await sourceReplacement.getAttribute('style');
-  assert.equal(await sourceReplacement.getByRole('button', { name: 'Resize selected element with arrow keys' }).count(), 0);
-  await sourceReplacement.press('ArrowRight');
-  assert.equal(await sourceReplacement.getAttribute('style'), lockedPosition, 'source word moved with an arrow key');
-  await replacementEditor.selectText();
-  await replacementEditor.pressSequentially('Edited selectable text');
-  assert.equal(
-    await replacementEditor.evaluate(element => element.scrollWidth <= element.clientWidth + 1),
-    true,
-    'replacement box did not expand to show the complete edited line',
-  );
-  assert.equal(
-    await replacementEditor.evaluate(element => element.scrollHeight <= element.clientHeight + 1),
-    true,
-    'replacement text is vertically clipped',
-  );
-  await replacementEditor.press('Enter');
-  assert.equal(await replacementEditor.evaluate(element => document.activeElement === element), false);
-  assert.equal((await replacementEditor.inputValue()).includes('\n'), false);
-  const selectedTextProperties = page.getByRole('region', { name: 'Selected text properties' });
-  const saveMode = selectedTextProperties.getByLabel('Existing text save mode');
-  await saveMode.waitFor();
-  await saveMode.selectOption('visual');
-  await page.getByText(/Visual fallback is active/).waitFor();
-  assert.equal(await page.getByText(/Direct text edit ready/).count(), 0, 'save-mode status stayed on Direct text');
-  assert.equal(
-    await page.getByText(/Direct rewriting is not safe for this PDF structure/).count(),
-    0,
-    'voluntarily choosing Visual fallback falsely reported that Direct mode was unsafe',
-  );
-  const solidBackground = selectedTextProperties.getByRole('checkbox', { name: 'Solid background' });
-  await solidBackground.waitFor();
-  assert.equal(await solidBackground.isChecked(), false);
-  assert.ok(
-    (await page.getByTestId('replacement-preview-suffix').textContent() || '').length > 0,
-    'Visual fallback did not retain the unedited source suffix',
-  );
-  const suffixBounds = await page.getByTestId('replacement-preview-suffix').boundingBox();
-  const replacementMeasureBounds = await page.getByTestId('replacement-preview-content-measure').boundingBox();
-  assert.ok(suffixBounds && replacementMeasureBounds, 'selected replacement suffix did not expose measurable bounds');
-  assert.ok(
-    Math.abs(suffixBounds.x - (replacementMeasureBounds.x + replacementMeasureBounds.width)) <= 1,
-    'selected replacement suffix included artificial editor width or padding',
-  );
-  assert.ok(
-    Math.abs(suffixBounds.y - replacementMeasureBounds.y) <= 0.5,
-    'selected replacement suffix did not share the replacement baseline',
-  );
-  const editedUnderlineBounds = await selectionUnderline.boundingBox();
-  assert.ok(editedUnderlineBounds, 'edited replacement underline did not expose bounds');
-  assert.ok(
-    Math.abs(editedUnderlineBounds.width - replacementMeasureBounds.width) <= 1,
-    'selection underline did not follow the measured replacement text width',
-  );
-  assert.equal(await sourceTargets.count(), sourceTargetCount - sourceRunTargetCount);
+  await page.getByRole('button', { name: 'Done' }).click();
   await page.screenshot({ path: replacementScreenshotPath, fullPage: true });
-  await page.getByRole('region', { name: 'Selected text properties' }).getByRole('button', { name: 'Delete' }).click();
-  assert.equal(await sourceTargets.count(), sourceTargetCount, 'deleting a replacement did not restore its source target');
+
   const undo = page.getByRole('button', { name: 'Undo added element change' });
   const redo = page.getByRole('button', { name: 'Redo added element change' });
-  await undo.click();
-  assert.equal(await sourceTargets.count(), sourceTargetCount - sourceRunTargetCount, 'Undo did not restore the deleted replacement');
 
   await page.getByRole('button', { name: 'Text', exact: true }).click();
   const selectedText = page.locator('[role="group"][aria-label^="Selected text on page "]').first();
@@ -258,7 +149,6 @@ try {
   );
   await inlineTextEditor.pressSequentially('Desktop');
   assert.equal(await inlineTextEditor.inputValue(), 'Desktop');
-  assert.equal(await page.getByText(/Visual fallback is active/).count(), 0, 'replacement status remained after selecting added text');
   await inlineTextEditor.press('Escape');
 
   const inspector = page.getByRole('region', { name: 'Selected text properties' });
@@ -293,13 +183,7 @@ try {
       'Mac trackpad pinch-in and pinch-out inside the PDF viewport',
       'ordinary vertical scrolling stays inside the zoomed PDF box',
       'ordinary trackpad scrolling crosses zoomed page boundaries in both directions',
-      'selectable source-text activation and direct replacement typing',
-      'middle-word preview baseline alignment with its untouched prefix',
-      'word-level source targets and position-locked replacements',
-      'long replacement text remains visible on canvas',
-      'Enter commits a single-line replacement',
-      'automatic replacement backdrop, exact suffix placement, optional solid background, and source-run duplicate suppression',
-      'replacement delete restores the source target and Undo restores the replacement',
+      'paragraph editing surface with a stated typeface provenance',
       'direct on-canvas text focus and typing',
       'one-snapshot inspector typing Undo and Redo',
       'desktop selected-text inspector',

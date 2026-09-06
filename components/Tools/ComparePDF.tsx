@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertTriangle,
@@ -119,7 +118,7 @@ export const ComparePDF: React.FC = () => {
       } catch (error) {
         console.error(error);
         if (active) {
-          setPreviewError('Unable to render this page in one or both PDFs. You can retry the preview or still export the text summary.');
+          setPreviewError('Unable to render this page in one or both PDFs; you can still export the text summary.');
         }
       } finally {
         if (active) setPreviewLoading(false);
@@ -158,7 +157,7 @@ export const ComparePDF: React.FC = () => {
         isProcessing: false,
         progress: 100,
         message: slot === 'left' && !file2 || slot === 'right' && !file1
-          ? `${label} ready. Choose the other PDF.`
+          ? `${label} ready.`
           : 'Both PDFs are ready to compare.',
       });
     } catch (error) {
@@ -315,7 +314,7 @@ export const ComparePDF: React.FC = () => {
       setStatus({
         isProcessing: false,
         progress: 100,
-        message: 'Comparison summary created. Review the result and saved text report.',
+        message: 'Comparison summary created.',
       });
     } catch (error) {
       console.error(error);

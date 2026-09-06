@@ -14,18 +14,18 @@
  */
 
 const paper = {
-  25: '#fcfaf6',
-  50: '#f8f5ef',
-  100: '#f1ece3',
-  200: '#e4ddd1',
-  300: '#d2c9ba',
-  400: '#9b9184',
-  500: '#7a7267',
-  600: '#6b6459',
-  700: '#514b43',
-  800: '#37332d',
-  900: '#24211d',
-  950: '#16140f',
+  25: '#fffcfa',
+  50: '#fff8f4',
+  100: '#fff1eb',
+  200: '#f0e2db',
+  300: '#ddc9c0',
+  400: '#a2918b',
+  500: '#80716c',
+  600: '#70625d',
+  700: '#564a46',
+  800: '#3a302e',
+  900: '#261f1e',
+  950: '#17100f',
 };
 
 const ink = {
@@ -203,7 +203,7 @@ module.exports = {
 
         // Legacy family names re-pointed at the brand ramps. `red` and `rose`
         // remain the clay danger ramp; action red is `ink`, `accent`, or `primary`.
-        white: '#fcfaf6',
+        white: '#fffcfa',
         slate: paper,
         gray: paper,
         zinc: paper,

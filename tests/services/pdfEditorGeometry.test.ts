@@ -68,21 +68,40 @@ test('the annotation exporter uses centre-corrected origins without changing ell
   assert.match(exporter, /rotate: degrees\(geometry\.rotation \+ rotation\)/);
 });
 
-test('the annotation exporter limits backdrops to visual fallback and skips direct text overlays', () => {
+test('a redrawn paragraph is repainted before it is redrawn, and before any annotation', () => {
   const source = readFileSync(resolve(root, 'services/pdfDocument.ts'), 'utf8');
   const exporter = source.slice(source.indexOf('export const savePDFWithAnnotations'), source.indexOf('export interface SignaturePlacement'));
-  const patchLoop = exporter.indexOf("candidate.replacementSource?.saveMode !== 'native'");
+  const reflowLoop = exporter.indexOf('for (const edit of reflowParagraphEdits)');
   const annotationLoop = exporter.indexOf('for (const element of elements)');
 
-  assert.ok(patchLoop >= 0, 'replacement backdrop loop is missing');
-  assert.ok(annotationLoop > patchLoop, 'replacement backdrops must be painted before annotations');
-  assert.match(exporter, /const source = element\.replacementSource!/);
-  assert.match(exporter, /source\.backgroundMode === 'solid'/);
-  assert.match(exporter, /if \(element\.replacementSource\?\.saveMode === 'native'\) continue/);
-  assert.match(exporter, /color: hexToRgb\(source\.backgroundColor\)/);
-  assert.match(exporter, /pdfDoc\.embedPng\(sourcePreview\.backgroundImage\)/);
-  assert.match(exporter, /source\.nativePreview \?\? source/);
-  assert.match(exporter, /element\.content \+ \(element\.replacementSource\.nativePreview\?\.suffix \?\? ''\)/);
-  assert.match(exporter, /visualRectangleToPdf/);
-  assert.match(exporter, /rotate: degrees\(geometry\.rotation \+ rotation\)/);
+  assert.ok(reflowLoop >= 0, 'paragraph reflow loop is missing');
+  assert.ok(annotationLoop > reflowLoop, 'paragraphs must be redrawn before annotations are placed on top');
+
+  const reflow = exporter.slice(reflowLoop, annotationLoop);
+  const patch = reflow.indexOf('pdfDoc.embedPng(edit.backgroundImage)');
+  const redraw = reflow.indexOf('page.drawText(segment');
+  assert.ok(patch >= 0 && redraw > patch, 'the paragraph area must be painted out before new text lands on it');
+  // Each stretch is drawn in the face it carries, so a bold lead-in survives a redraw.
+  assert.match(reflow, /font: faces\.get\(key\)/);
+
+  // A page whose drawing operations cannot be reconstructed falls back to the sampled paper
+  // colour rather than an assumed white rectangle.
+  assert.match(reflow, /page\.drawRectangle\(\{ \.\.\.patch, color: hexToRgb\(edit\.backgroundColor\) \}\)/);
+  assert.match(reflow, /visualRectangleToPdf/);
+  assert.match(reflow, /rotate: degrees\(geometry\.rotation\)/);
+  // The document's own program is deliberately NOT re-embedded: what PDF.js exposes is a copy
+  // transcoded for the browser, and drawing Unicode through it lost characters off the page.
+  assert.doesNotMatch(exporter, /embedFont\(face\.data/);
+  assert.match(exporter, /const resolveParagraphFont = \(face: ParagraphFace\)/);
+});
+
+test('direct paragraph edits rewrite text objects and never reach the pdf-lib redraw', () => {
+  const source = readFileSync(resolve(root, 'services/pdfDocument.ts'), 'utf8');
+  const exporter = source.slice(source.indexOf('export const savePDFWithAnnotations'), source.indexOf('export interface SignaturePlacement'));
+
+  assert.match(exporter, /applyNativePdfTextEdits/);
+  assert.match(exporter, /directParagraphEdits\.flatMap\(\(edit\) => edit\.runEdits\.map/);
+  // A run edit replaces a whole source run, so the target span is the run itself.
+  assert.match(exporter, /start: 0,\s*end: run\.sourceText\.length,/);
+  assert.match(exporter, /if \(containsOnlyDirectText\) return sourceBytes/);
 });

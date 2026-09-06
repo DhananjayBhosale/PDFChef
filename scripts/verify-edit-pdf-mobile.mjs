@@ -9,7 +9,6 @@ const fixture = path.join(root, 'qa-sample.pdf');
 const outputDir = path.join(root, 'output', 'edit-pdf-mobile-verification');
 const screenshotPath = path.join(outputDir, 'edit-pdf-selected-mobile.png');
 const inlineTextScreenshotPath = path.join(outputDir, 'edit-pdf-inline-text-mobile.png');
-const replacementScreenshotPath = path.join(outputDir, 'edit-existing-pdf-text-mobile.png');
 
 await fs.access(fixture);
 await fs.mkdir(outputDir, { recursive: true });
@@ -156,111 +155,60 @@ try {
   assert.ok(touchZoomedOut < touchZoomedIn, 'touchscreen pinch-out did not decrease PDF zoom');
 
   const currentPage = page.getByLabel('Current editor page');
-  await page.locator('[data-testid="existing-pdf-text-target"]').first().waitFor({ timeout: 60_000 });
-  const firstPageTargetLabels = await page.locator('[data-testid="existing-pdf-text-target"]').evaluateAll(
-    targets => targets.map(target => target.getAttribute('aria-label')),
+  const paragraphs = page.locator('[data-testid="pdf-text-block"]');
+  await paragraphs.first().waitFor({ timeout: 60_000 });
+  // The bottom bar has to stay on screen when the keyboard is up, which is the one moment it
+  // matters. A phone raises the keyboard by shrinking the WebView, so shrinking the viewport
+  // reproduces it exactly — and catches the real cause, which is never the bar's own CSS: any
+  // ancestor left holding a transform becomes the containing block for `position: fixed`, and the
+  // bar silently re-anchors to that ancestor's taller box instead of the viewport.
+  await paragraphs.first().tap();
+  await page.waitForFunction(() => document.activeElement?.dataset?.testid === 'pdf-text-block');
+  await page.setViewportSize({ width: 390, height: 530 });
+  await page.waitForTimeout(400);
+  const keyboardChrome = await page.evaluate(() => {
+    const bar = document.querySelector('[data-testid="pdf-paragraph-inspector"]')?.closest('.chef-chrome');
+    const transformed = [];
+    for (let node = bar?.parentElement; node; node = node.parentElement) {
+      if (getComputedStyle(node).transform !== 'none') transformed.push(node.className || node.tagName);
+    }
+    return {
+      bottom: bar ? Math.round(bar.getBoundingClientRect().bottom) : null,
+      innerHeight: window.innerHeight,
+      transformed,
+    };
+  });
+  assert.deepEqual(
+    keyboardChrome.transformed,
+    [],
+    `an ancestor of the editor's fixed bottom bar holds a transform: ${keyboardChrome.transformed.join(', ')}`,
   );
+  assert.ok(
+    keyboardChrome.bottom !== null && keyboardChrome.bottom <= keyboardChrome.innerHeight + 1,
+    `editor bottom bar ends at ${keyboardChrome.bottom} with only ${keyboardChrome.innerHeight} visible`,
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.waitForTimeout(200);
+
+  const firstPageParagraphs = await paragraphs.evaluateAll(blocks => blocks.map(block => block.innerText));
   await page.getByRole('button', { name: 'Next page' }).click();
   await page.waitForFunction(() => document.querySelector('[aria-label="Current editor page"]')?.value === '1');
   await page.getByRole('group', { name: /Page 2 of/ }).waitFor({ state: 'visible' });
   assert.equal(await currentPage.inputValue(), '1');
-  const secondPageTargetLabels = await page.locator('[data-testid="existing-pdf-text-target"]').evaluateAll(
-    targets => targets.map(target => target.getAttribute('aria-label')),
-  );
-  assert.notDeepEqual(secondPageTargetLabels, firstPageTargetLabels, 'Next page did not render a different PDF page');
+  const secondPageParagraphs = await paragraphs.evaluateAll(blocks => blocks.map(block => block.innerText));
+  assert.notDeepEqual(secondPageParagraphs, firstPageParagraphs, 'Next page did not render a different PDF page');
   await page.getByRole('button', { name: 'Previous page' }).click();
   await page.waitForFunction(() => document.querySelector('[aria-label="Current editor page"]')?.value === '0');
   await page.getByRole('group', { name: /Page 1 of/ }).waitFor({ state: 'visible' });
   assert.equal(await currentPage.inputValue(), '0');
 
-  const sourceTextTarget = page.locator('[data-testid="existing-pdf-text-target"][aria-label="Edit existing PDF word: PDF"]').first();
-  await sourceTextTarget.waitFor({ timeout: 60_000 });
-  const sourceTargets = page.locator('[data-testid="existing-pdf-text-target"]');
-  const sourceTargetCount = await sourceTargets.count();
-  const sourceRunId = await sourceTextTarget.getAttribute('data-source-run-id');
-  assert.ok(sourceRunId, 'source word did not expose a PDF run identity');
-  const sourceRunTargetCount = await sourceTargets.evaluateAll(
-    (targets, runId) => targets.filter(target => target.getAttribute('data-source-run-id') === runId).length,
-    sourceRunId,
-  );
-  assert.ok(sourceRunTargetCount > 1, 'fixture did not expose multiple words from one PDF source run');
+  // An armed insert must not steal taps meant for the page, so the paragraphs go inert.
   await page.getByRole('button', { name: 'Text', exact: true }).click();
-  assert.equal(await sourceTextTarget.evaluate(element => getComputedStyle(element).pointerEvents), 'none');
-  assert.equal(await sourceTextTarget.evaluate(element => element.tabIndex), -1);
+  assert.equal(await paragraphs.first().evaluate(element => getComputedStyle(element).pointerEvents), 'none');
+  assert.equal(await paragraphs.first().evaluate(element => element.tabIndex), -1);
   await page.getByRole('button', { name: 'Text', exact: true }).click();
-  const sourceWordLabel = await sourceTextTarget.getAttribute('aria-label');
-  assert.match(sourceWordLabel || '', /^Edit existing PDF word: \S+$/);
-  await sourceTextTarget.click();
-  const replacementEditor = page.getByRole('textbox', { name: 'Edit text on page 1' });
-  await replacementEditor.waitFor();
-  assert.doesNotMatch(await replacementEditor.inputValue(), /\s/);
-  assert.equal(await replacementEditor.evaluate(element => document.activeElement === element), true);
-  const sourceReplacement = page.getByTestId('existing-pdf-word-replacement');
-  const selectionUnderline = page.getByTestId('existing-pdf-selection-underline');
-  const replacementTextBounds = await replacementEditor.boundingBox();
-  const underlineBounds = await selectionUnderline.boundingBox();
-  assert.ok(replacementTextBounds && underlineBounds, 'source replacement underline did not expose bounds');
-  const replacementGlyphBottom = await replacementEditor.evaluate(element => {
-    const bounds = element.getBoundingClientRect();
-    const style = getComputedStyle(element);
-    const lineHeight = Number.parseFloat(style.lineHeight);
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-    const metrics = context.measureText('Hg');
-    const baseline = metrics.fontBoundingBoxAscent
-      + (lineHeight - metrics.fontBoundingBoxAscent - metrics.fontBoundingBoxDescent) / 2;
-    const scale = element.offsetHeight > 0 ? bounds.height / element.offsetHeight : 1;
-    return bounds.y + (baseline + metrics.fontBoundingBoxDescent) * scale;
-  });
-  assert.ok(
-    underlineBounds.y >= replacementGlyphBottom - 1,
-    `source replacement underline ${underlineBounds.y} crossed glyph bottom ${replacementGlyphBottom}`,
-  );
-  const lockedPosition = await sourceReplacement.getAttribute('style');
-  assert.equal(await sourceReplacement.getByRole('button', { name: 'Resize selected element with arrow keys' }).count(), 0);
-  await sourceReplacement.press('ArrowRight');
-  assert.equal(await sourceReplacement.getAttribute('style'), lockedPosition, 'source word moved with an arrow key');
-  await replacementEditor.selectText();
-  await replacementEditor.pressSequentially('Edited selectable text');
-  assert.equal(
-    await replacementEditor.evaluate(element => element.scrollWidth <= element.clientWidth + 1),
-    true,
-    'replacement box did not expand to show the complete edited line',
-  );
-  assert.equal(
-    await replacementEditor.evaluate(element => element.scrollHeight <= element.clientHeight + 1),
-    true,
-    'replacement text is vertically clipped',
-  );
-  await replacementEditor.press('Enter');
-  assert.equal(await replacementEditor.evaluate(element => document.activeElement === element), false);
-  assert.equal((await replacementEditor.inputValue()).includes('\n'), false);
-  const suffix = page.getByTestId('replacement-preview-suffix');
-  assert.equal(await suffix.count(), 1, 'Direct-text replacement did not preserve its source suffix');
-  const suffixBounds = await suffix.boundingBox();
-  const replacementMeasureBounds = await page.getByTestId('replacement-preview-content-measure').boundingBox();
-  assert.ok(suffixBounds && replacementMeasureBounds, 'selected replacement suffix did not expose measurable bounds');
-  assert.ok(
-    Math.abs(suffixBounds.x - (replacementMeasureBounds.x + replacementMeasureBounds.width)) <= 1,
-    'selected replacement suffix included artificial editor width or padding',
-  );
-  assert.ok(
-    Math.abs(suffixBounds.y - replacementMeasureBounds.y) <= 0.5,
-    'selected replacement suffix did not share the replacement baseline',
-  );
-  const editedUnderlineBounds = await selectionUnderline.boundingBox();
-  assert.ok(editedUnderlineBounds, 'edited replacement underline did not expose bounds');
-  assert.ok(
-    Math.abs(editedUnderlineBounds.width - replacementMeasureBounds.width) <= 1,
-    'selection underline did not follow the measured replacement text width',
-  );
-  await page.screenshot({ path: replacementScreenshotPath, fullPage: true });
-  assert.equal(
-    await sourceTargets.count(),
-    sourceTargetCount - sourceRunTargetCount,
-    'edited PDF source run remained an active duplicate target',
-  );
+  assert.equal(await paragraphs.first().evaluate(element => element.tabIndex), 0);
 
   await place('text');
   const undo = page.getByRole('button', { name: 'Undo added element change' });
@@ -289,13 +237,6 @@ try {
   assert.equal(await inlineTextEditor.inputValue(), 'Dhananajay', 'Redo did not restore inline text');
 
   await place('shape');
-  const replacementPreview = page.getByTestId('replacement-text-preview');
-  assert.equal(await replacementPreview.evaluate(element => getComputedStyle(element).whiteSpace), 'pre');
-  assert.equal(
-    await replacementPreview.evaluate(element => element.scrollHeight <= element.clientHeight + 1),
-    true,
-    'deselected replacement wrapped onto another line',
-  );
   await page.screenshot({ path: screenshotPath, fullPage: true });
 
   await undo.click();
@@ -380,17 +321,12 @@ try {
   console.log(JSON.stringify({
     status: 'PASS',
     viewport: '390x844',
-    screenshots: [replacementScreenshotPath, inlineTextScreenshotPath, screenshotPath],
+    screenshots: [inlineTextScreenshotPath, screenshotPath],
     checked: [
       'touchscreen pinch-in and pinch-out inside the PDF viewport',
       'one-finger vertical scrolling stays inside the zoomed PDF box',
       'visible Next and Previous page controls render different PDF pages',
-      'selectable source-text activation and direct replacement typing',
-      'word-level source targets and position-locked replacements',
-      'insert mode bypasses selectable source-text targets',
-      'long replacement text remains visible on canvas',
-      'Enter commits a single-line replacement',
-      'edited source-run duplicate suppression',
+      'reconstructed paragraphs go inert while an insert is armed',
       'text and shape placement',
       'direct inline text focus, typing, Escape, Undo, and Redo',
       'selection preserves Redo',

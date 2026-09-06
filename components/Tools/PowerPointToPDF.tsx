@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Download, FileSliders, Info, X } from 'lucide-react';
+import { Download, FileSliders } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { FileUpload } from '../UI/FileUpload';
 import { Badge, Button } from '../UI/Primitives';
@@ -143,17 +143,9 @@ export const PowerPointToPDF: React.FC = () => {
               </div>
             </fieldset>
 
-            <details className="mt-2.5 border-t border-[var(--border-hairline)] pt-2.5 type-footnote text-[var(--text-secondary)]">
-              <summary className="chef-target flex cursor-pointer items-center gap-2 font-semibold text-[var(--text-primary)]">
-                <Info aria-hidden className="h-4 w-4 shrink-0" />
-                Slides become page images. Review every page before sharing.
-              </summary>
-              <div className="mt-2 space-y-1.5">
-                <p>Text is not selectable and speaker notes are not exported.</p>
-                <p>Fonts may be substituted, and legacy WMF/EMF graphics may not render correctly.</p>
-                <p>Animations, video, and audio are skipped.</p>
-              </div>
-            </details>
+            <p className="mt-2.5 border-t border-[var(--border-hairline)] pt-2.5 type-footnote text-[var(--text-secondary)]">
+              Slides become page images, so text is not selectable.
+            </p>
 
             {status.isProcessing && (
               <div role="status" aria-live="polite" className="mt-3 rounded-[var(--radius-field)] border border-orange-200 bg-orange-50 p-3 dark:border-orange-400 dark:bg-orange-500/10">
@@ -171,9 +163,6 @@ export const PowerPointToPDF: React.FC = () => {
                 >
                   <div className="h-full rounded-full bg-orange-500 transition-[width]" style={{ width: `${status.progress}%` }} />
                 </div>
-                <p className="type-caption mt-2 font-normal normal-case tracking-normal text-orange-800 dark:text-orange-200">
-                  Cancel stops before the next slide. The slide already being rendered may finish first.
-                </p>
               </div>
             )}
 

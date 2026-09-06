@@ -106,7 +106,6 @@ export const MakePDF: React.FC = () => {
   // whole section is missing rather than disabled: a dead primary action is
   // worse than no primary action.
   const scanner = platform.documentScanner;
-  const localSurface = scanner ? 'this app' : 'this browser';
   const [scanning, setScanning] = useState(false);
   const [scanNotice, setScanNotice] = useState<string | null>(null);
   const [scanned, setScanned] = useState<ScanOutcome | null>(null);
@@ -229,7 +228,7 @@ export const MakePDF: React.FC = () => {
     const valid = checked.filter((item): item is { file: File; previewUrl: string } => item !== null);
     const skippedCount = picked.length - valid.length;
     setSelectionNotice(skippedCount > 0
-      ? `${skippedCount} ${skippedCount === 1 ? 'photo was' : 'photos were'} skipped. Create PDF supports readable JPEG and PNG images in ${localSurface}.`
+      ? `${skippedCount} ${skippedCount === 1 ? 'photo was' : 'photos were'} skipped: only readable JPEG and PNG images are supported.`
       : null);
     const next = valid.map(({ file, previewUrl }) => {
       previewUrlsRef.current.add(previewUrl);
@@ -358,22 +357,17 @@ export const MakePDF: React.FC = () => {
               </div>
             </div>
           ) : (
-            <>
-              <Button
-                block
-                tone="primary"
-                busy={scanning}
-                icon={<ScanLine aria-hidden size={18} />}
-                onClick={() => void runScan()}
-                disabled={status.isProcessing}
-                className="min-h-12"
-              >
-                Scan document
-              </Button>
-              <p className="type-footnote mt-2 text-[var(--text-secondary)]">
-                Finds page edges automatically.
-              </p>
-            </>
+            <Button
+              block
+              tone="primary"
+              busy={scanning}
+              icon={<ScanLine aria-hidden size={18} />}
+              onClick={() => void runScan()}
+              disabled={status.isProcessing}
+              className="min-h-12"
+            >
+              Scan document
+            </Button>
           )}
 
           {scanNotice && (
@@ -508,7 +502,7 @@ export const MakePDF: React.FC = () => {
       <ConfirmSheet
         open={confirmClear}
         title="Remove every page?"
-        description={`All ${images.length} ${images.length === 1 ? 'page waiting here is' : 'pages waiting here are'} removed from ${localSurface}. Photos on your device and any PDF you already exported are not affected. This cannot be undone.`}
+        description="Photos on your device and any PDF you already exported are not affected."
         confirmLabel="Remove all"
         onCancel={() => setConfirmClear(false)}
         onConfirm={() => {

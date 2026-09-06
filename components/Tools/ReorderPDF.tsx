@@ -492,7 +492,6 @@ export const ReorderPDF: React.FC = () => {
              </div>
              <div className="min-w-0">
                 <div className="text-sm font-semibold text-[var(--text-primary)]">Page {activeItem.originalIndex + 1}</div>
-                <div className="type-caption font-semibold text-[var(--accent-text)]">Moving...</div>
              </div>
           </div>
         </div>,

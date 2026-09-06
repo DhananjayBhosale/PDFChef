@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Eye, EyeOff, Lock, ShieldCheck } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { PDFFile, ProcessingStatus } from '../../types';
 import { androidExportFileName } from '../../services/androidParity';
@@ -126,7 +125,7 @@ export const SecurityPDF: React.FC = () => {
                 <h2 className="chef-filename text-sm font-semibold text-[var(--text-primary)]">{file.name}</h2>
                 {/* Kept: there is no recovery path for a lost PDF password. */}
                 <p className="type-footnote mt-0.5 text-[var(--text-secondary)]">
-                  Passwords cannot be recovered. Keep yours somewhere safe.
+                  Passwords cannot be recovered, so keep yours somewhere safe.
                 </p>
               </div>
             </ToolPanel>
@@ -168,7 +167,7 @@ export const SecurityPDF: React.FC = () => {
                   </button>
                 </div>
                 <p id="protect-password-help" className="type-caption mt-1 font-normal normal-case tracking-normal text-[var(--text-tertiary)]">
-                  At least 4 characters. Spaces are preserved exactly.
+                  At least 4 characters, with spaces preserved exactly.
                 </p>
               </div>
 
