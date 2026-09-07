@@ -329,6 +329,7 @@ export const CompressPDF: React.FC = () => {
 
       <div className="mb-3 sm:mb-6">
         <h1 className="text-3xl font-bold text-[var(--text-primary)]">Compress PDF</h1>
+        <p className="mt-1 text-[var(--text-secondary)]">Make the file smaller, and see how it will look first.</p>
       </div>
 
       <AnimatePresence mode="wait">
@@ -358,11 +359,11 @@ export const CompressPDF: React.FC = () => {
               >
                 <div className={`mb-2 flex items-center gap-2 font-bold ${isSkipped ? 'text-[var(--status-caution-text)]' : 'text-[var(--status-success-text)]'}`}>
                   {isSkipped ? <ShieldAlert size={18} /> : <CheckCircle2 size={18} />}
-                  {isSkipped ? 'No smaller copy produced' : 'Ready to save'}
+                  {isSkipped ? 'Already as small as it gets' : 'Ready to save'}
                 </div>
 
                 {isSkipped ? (
-                  <p className="text-sm text-[var(--text-body)]">Your originals are unchanged.</p>
+                  <p className="text-sm text-[var(--text-body)]">Compressing this file would have made it bigger, so it was left alone. Your original is unchanged.</p>
                 ) : (
                   <div className="flex items-center justify-between text-sm">
                     <div>
@@ -534,6 +535,7 @@ export const CompressPDF: React.FC = () => {
                     disabled={status.isProcessing}
                     onChange={setKeepText}
                   />
+                  {keepText && <p className="type-caption mt-2 text-[var(--text-secondary)]">Optimizes the PDF structure while keeping text and pictures intact. Files that are already optimized may not get smaller.</p>}
                 </div>
               </>
             )}

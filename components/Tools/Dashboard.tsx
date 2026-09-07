@@ -79,6 +79,7 @@ const homeTools: ToolCardData[] = [
  */
 const CATEGORY_WEIGHT: Record<CategoryFilter, number> = {
   All: 4,
+  Create: 6,
   Edit: 4,
   Optimize: 8,
   Convert: 7,
@@ -95,15 +96,20 @@ const CATEGORY_WEIGHT: Record<CategoryFilter, number> = {
  * The row is a name and a mark. The subtitle under each one restated what the
  * name already said, thirty-four times down a phone screen.
  */
-/** Exact `PdfTool.subtitle` copy from Android's current home catalog. */
+/**
+ * The subtitle under each row in the tool list. It started as an exact copy of
+ * Android's home catalogue, and a few of those lines named parts of the file
+ * format ('fillable fields', 'bakes form fields') rather than the job. This is
+ * the list everyone browses, so it reads as the job.
+ */
 const ANDROID_HOME_SUBTITLES: Record<string, string> = {
   MAKE_PDF: 'Scan paper with the camera',
   COMPRESS: 'Same pages, smaller file',
   MERGE: 'Several files in, one out',
-  SPLIT: 'Chops one file into several',
+  SPLIT: 'One file in, several files out',
   EDIT_PDF: 'Retype text, add shapes and images',
-  MAKE_FILLABLE: 'Detects and adds fillable fields',
-  SIGN_PDF: 'Handwritten, not a certificate',
+  MAKE_FILLABLE: 'Adds boxes people can type into',
+  SIGN_PDF: 'Your handwriting, not a legal seal',
   WATERMARK: 'Stamps your mark on every page',
   PROTECT: 'Adds a password to open it',
   UNLOCK: 'Needs the current password',
@@ -111,13 +117,13 @@ const ANDROID_HOME_SUBTITLES: Record<string, string> = {
   PAGE_NUMBERS: 'Numbers every page for you',
   REORDER_PAGES: 'Drag pages into a better order',
   ROTATE_PAGES: 'For pages that came out sideways',
-  FLATTEN_PDF: 'Bakes form fields into the page',
+  FLATTEN_PDF: 'Locks filled answers for good',
   EXTRACT_PAGES: 'Keeps only the pages you pick',
   JPG_TO_PDF: 'Photos in, one tidy PDF out',
   PDF_TO_JPG: 'Every page becomes a picture',
-  PDF_TO_DOC: 'A Word file; needs real text, not scans',
+  PDF_TO_DOC: 'A Word file; needs real words, not a scan',
   DOC_TO_PDF: 'Text only, and .docx files only',
-  PPTX_TO_PDF: '.pptx slides only; review font substitutions',
+  PPTX_TO_PDF: '.pptx slides only; some fonts may change',
   OCR_TEXT: 'Lifts the words out as plain text',
   METADATA: 'Title, author and other quiet details',
   REPAIR_PDF: 'Fixes minor issues only',
@@ -158,12 +164,12 @@ const ToolRow: React.FC<{ tool: ToolCardData; eager?: boolean }> = ({ tool, eage
             {displayName}
           </span>
           {tool.beta && (
-            <Badge tone="caution" className="!px-1.5 !text-[0.6875rem] !tracking-[0.06em]">
+            <Badge tone="caution" className="!px-1.5 !text-[0.75rem] !tracking-[0.06em]">
               Beta
             </Badge>
           )}
           {tool.availability === 'android-only' && (
-            <Badge tone="neutral" className="!px-1.5 !text-[0.6875rem] !tracking-[0.06em]">
+            <Badge tone="neutral" className="!px-1.5 !text-[0.75rem] !tracking-[0.06em]">
               Not available
             </Badge>
           )}
@@ -189,7 +195,7 @@ export const Dashboard: React.FC = () => {
   const searchRef = useRef<HTMLInputElement>(null);
 
   const categoryCounts = useMemo(() => {
-    const counts: Record<CategoryFilter, number> = { All: tools.length, Edit: 0, Convert: 0, Secure: 0, Optimize: 0 };
+    const counts: Record<CategoryFilter, number> = { All: tools.length, Create: 0, Edit: 0, Convert: 0, Secure: 0, Optimize: 0 };
     for (const tool of tools) counts[tool.category] += 1;
     return counts;
   }, []);
@@ -419,6 +425,7 @@ export const Dashboard: React.FC = () => {
             <EmptyState
               icon={<Search size={30} />}
               title="No tool matches that"
+              body="Try a plainer word for what you want to do — like smaller, sign, password, or photo."
               action={
                 <Button tone="secondary" onClick={reset}>
                   Clear search and filter

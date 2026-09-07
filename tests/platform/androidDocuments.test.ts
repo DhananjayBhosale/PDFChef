@@ -482,7 +482,7 @@ test('native export and share use exact opaque metadata and strict terminal stat
   }
   await assert.rejects(client.shareItem(ownedRef, 'bad/name', 'application/pdf'), TypeError);
   await assert.rejects(
-    client.exportItem(ownedRef, 'Scan.pdf', 'text/plain' as never),
+    client.exportItem(ownedRef, 'Scan.pdf', 'application/javascript' as never),
     TypeError,
   );
   for (const invalid of [
@@ -519,4 +519,33 @@ test('T928: logical collection delivery accepts an opaque legacy ref and deliber
     assert.equal('path' in options, false);
     assert.equal('uri' in options, false);
   }
+});
+
+
+test('generated output delivery accepts owned ZIP, text and WebP without widening ingress or legacy reads', async () => {
+  const client = new AndroidDocumentsClient(nativeStub());
+  for (const mime of ['application/zip', 'text/plain', 'image/webp'] as const) {
+    await client.exportItem(ownedRef, 'Output', mime);
+    await client.shareItem(ownedRef, 'Output', mime);
+    await assert.rejects(client.exportItem('a1_1', 'Output', mime), TypeError);
+    await assert.rejects(client.pickDocuments([mime as never], 1), TypeError);
+  }
+});
+
+
+test('external PDF events are separate from picker events and accept only opaque owned refs', async () => {
+  const native = nativeStub();
+  let incoming: ((event: unknown) => void) | undefined;
+  const received: string[] = [];
+  native.addListener = async (name, listener) => {
+    assert.equal(name, 'incomingPdfReady'); incoming = listener;
+    return { remove: async () => undefined };
+  };
+  await new AndroidDocumentsClient(native).addIncomingPdfListener(ref => received.push(ref));
+  incoming!({ ref: ownedRef });
+  incoming!({ ref: 'a1_1' });
+  incoming!({ ref: 'content://private/document' });
+  incoming!({ ref: ownedRef, toolPath: '/edit' });
+  incoming!({ batchRef: 'b1_' + 'A'.repeat(22), itemCount: 1 });
+  assert.deepEqual(received, [ownedRef]);
 });

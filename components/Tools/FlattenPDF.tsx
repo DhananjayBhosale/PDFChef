@@ -37,10 +37,10 @@ export const FlattenPDF: React.FC = () => {
 
   const handleFlatten = async () => {
     if (!file) return;
-    setStatus({ isProcessing: true, progress: 10, message: 'Flattening forms...' });
+    setStatus({ isProcessing: true, progress: 10, message: 'Locking the filled answers…' });
     try {
       const pdfBytes = await flattenPDF(file.file);
-      setStatus({ isProcessing: true, progress: 90, message: 'Preparing flattened PDF...' });
+      setStatus({ isProcessing: true, progress: 90, message: 'Getting your PDF ready…' });
       downloadBlob(
         new Blob([pdfBytes], { type: 'application/pdf' }),
         flattenedOutputName(file.name),
@@ -53,7 +53,7 @@ export const FlattenPDF: React.FC = () => {
         isProcessing: false,
         progress: 0,
         message: '',
-        error: 'This PDF could not be flattened. Its form fields may be unsupported or damaged.',
+        error: 'This PDF\u2019s answers could not be locked. Try Repair PDF on it first, or use Print to PDF in your browser instead.',
       });
     }
   };
@@ -83,7 +83,7 @@ export const FlattenPDF: React.FC = () => {
                 one-way for the exported copy, and this is the line beside the
                 button that does it. */}
             <StatusLine tone="caution">
-              Form fields and annotations become page content and can no longer be edited.
+              Filled form fields become page content. Keep the original to fill them in again. Comments and highlights are unchanged, and PDF editors can still change page content.
             </StatusLine>
 
             <div className="flex flex-col gap-2">
@@ -94,7 +94,7 @@ export const FlattenPDF: React.FC = () => {
                 icon={<Maximize aria-hidden size={18} />}
                 onClick={() => void handleFlatten()}
               >
-                Export flattened PDF
+                Lock the answers and save
               </Button>
               <Button tone="secondary" block disabled={status.isProcessing} icon={<Eye aria-hidden size={18} />} onClick={() => setShowPreview(true)}>
                 Preview PDF

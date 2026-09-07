@@ -32,6 +32,31 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!--
+                Tapping a PDF in Chrome, Gmail or Files offers this app. Without
+                these the app could only ever open documents the reader went
+                looking for from inside it, never one handed to it from outside.
+                Declared narrowly: PDFs only, and only the two actions another
+                app uses to pass one on.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <!--
+                    Content URIs only. A file:// path is not something a modern
+                    Android app may hand over, and the intake rejects one, so
+                    advertising it would put this app in a chooser it cannot
+                    honour.
+                -->
+                <data android:scheme="content" android:mimeType="application/pdf" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+
         </activity>
 
         <provider

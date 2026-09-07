@@ -75,6 +75,16 @@
                 app:tint="@color/pdf_reader_text_primary" />
 
             <ImageButton
+                android:id="@+id/pdf_reader_save"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/pdf_reader_save"
+                android:scaleType="centerInside"
+                android:src="@drawable/pdf_reader_ic_save"
+                app:tint="@color/pdf_reader_text_primary" />
+
+            <ImageButton
                 android:id="@+id/pdf_reader_share"
                 android:layout_width="48dp"
                 android:layout_height="48dp"

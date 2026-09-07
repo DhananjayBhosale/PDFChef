@@ -62,30 +62,42 @@ const isKeyboardEditable = (element: Element | null) =>
 
 /**
  * Some mobile WebViews overlay the keyboard instead of resizing the layout
- * viewport. Mirror only that covered portion into CSS, without React state or
- * rerenders. When the layout already resizes, the measured inset is zero.
+ * viewport, and iOS additionally scrolls the *visual* viewport to reveal a
+ * focused editable. Mirror both into CSS, without React state or rerenders:
+ * the covered portion at the bottom, and how far the visible region has been
+ * pushed down from the layout viewport's top. When the layout already resizes
+ * and nothing is focused, both measure zero.
  */
-const useVisualViewportKeyboardInset = () => {
+const useVisualViewportInsets = () => {
   useEffect(() => {
     const viewport = window.visualViewport;
     if (!viewport) return;
 
     const rootStyle = document.documentElement.style;
     const previousInset = rootStyle.getPropertyValue('--chef-keyboard-inset');
+    const previousOffsetTop = rootStyle.getPropertyValue('--chef-viewport-offset-top');
     let frame = 0;
     let currentInset = -1;
+    let currentOffsetTop = -1;
 
     const update = () => {
       frame = 0;
       const layoutHeight = Math.max(document.documentElement.clientHeight, window.innerHeight);
       const coveredHeight = Math.max(0, layoutHeight - viewport.height - viewport.offsetTop);
-      const keyboardVisible =
-        isKeyboardEditable(document.activeElement) && Math.abs(viewport.scale - 1) <= 0.05 && coveredHeight >= 80;
+      const unzoomed = Math.abs(viewport.scale - 1) <= 0.05;
+      const keyboardVisible = isKeyboardEditable(document.activeElement) && unzoomed && coveredHeight >= 80;
       const nextInset = keyboardVisible ? Math.round(coveredHeight) : 0;
+      // While the reader is pinch-zoomed the offset is theirs to pan, so leave the chrome alone
+      // and only follow the viewport when the page is at its natural scale.
+      const nextOffsetTop = unzoomed ? Math.max(0, Math.round(viewport.offsetTop)) : 0;
 
       if (nextInset !== currentInset) {
         currentInset = nextInset;
         rootStyle.setProperty('--chef-keyboard-inset', `${nextInset}px`);
+      }
+      if (nextOffsetTop !== currentOffsetTop) {
+        currentOffsetTop = nextOffsetTop;
+        rootStyle.setProperty('--chef-viewport-offset-top', `${nextOffsetTop}px`);
       }
     };
 
@@ -109,6 +121,8 @@ const useVisualViewportKeyboardInset = () => {
       document.removeEventListener('focusout', scheduleUpdate);
       if (previousInset) rootStyle.setProperty('--chef-keyboard-inset', previousInset);
       else rootStyle.removeProperty('--chef-keyboard-inset');
+      if (previousOffsetTop) rootStyle.setProperty('--chef-viewport-offset-top', previousOffsetTop);
+      else rootStyle.removeProperty('--chef-viewport-offset-top');
     };
   }, []);
 };
@@ -315,7 +329,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const path = location.pathname;
   const mainRef = useRef<HTMLElement>(null);
 
-  useVisualViewportKeyboardInset();
+  useVisualViewportInsets();
 
   const routeTool = useMemo(() => tools.find((item) => item.path === path), [path]);
   const title = ROUTE_TITLE_OVERRIDES[path] ?? routeTool?.name ?? ROUTE_TITLES[path] ?? '';

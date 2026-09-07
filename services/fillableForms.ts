@@ -1,5 +1,7 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { PDFDocument, StandardFonts, degrees, rgb } from 'pdf-lib';
 import { readFileAsArrayBuffer } from './pdfShared';
+import { getPdfPageVisualGeometry } from './pdfPageGeometry';
+import { getVisualPageSize, visualPointToPdf } from './pdfEditorGeometry';
 
 export type FillableFieldKind = 'text' | 'multiline' | 'checkbox' | 'radio' | 'dropdown';
 
@@ -29,7 +31,7 @@ const loadImage = (source: string) => new Promise<HTMLImageElement>((resolve, re
   const image = new Image();
   image.decoding = 'async';
   image.onload = () => resolve(image);
-  image.onerror = () => reject(new Error('Unable to inspect the rendered form page.'));
+  image.onerror = () => reject(new Error('This page could not be checked for boxes to type into. Try another page, or draw the boxes yourself.'));
   image.src = source;
 });
 
@@ -155,17 +157,20 @@ export const createFillablePdf = async (file: File, placements: FillableFieldPla
   placements.forEach((placement, index) => {
     const page = pages[placement.pageIndex];
     if (!page) return;
-    const size = page.getSize();
+    const geometry = getPdfPageVisualGeometry(page);
+    const size = getVisualPageSize(geometry);
     const name = fieldName(placement.name, index, used);
-    const x = Math.max(0, Math.min(1, placement.x)) * size.width;
-    const width = Math.max(0.02, Math.min(1 - placement.x, placement.width)) * size.width;
-    const height = Math.max(0.015, Math.min(1 - placement.y, placement.height)) * size.height;
-    const y = size.height - Math.max(0, Math.min(1, placement.y)) * size.height - height;
+    const left = Math.max(0, Math.min(0.98, placement.x));
+    const top = Math.max(0, Math.min(0.985, placement.y));
+    const width = Math.min(1 - left, Math.max(0.02, placement.width)) * size.width;
+    const height = Math.min(1 - top, Math.max(0.015, placement.height)) * size.height;
+    const origin = visualPointToPdf(geometry, left * size.width, top * size.height + height);
     const appearance = {
-      x,
-      y,
+      x: origin.x,
+      y: origin.y,
       width,
       height,
+      rotate: degrees(geometry.rotation),
       borderWidth: 1,
       borderColor: rgb(0.25, 0.45, 0.8),
       backgroundColor: rgb(0.97, 0.98, 1),

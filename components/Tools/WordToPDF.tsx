@@ -84,7 +84,7 @@ export const WordToPDF: React.FC = () => {
     setStatus(idleStatus());
   };
 
-  const refusal = Boolean(status.error && /no readable text|does not contain a word document|not a readable \.docx/i.test(status.error));
+  const refusal = Boolean(status.error && /no readable text|does not contain a word document|not a readable word file/i.test(status.error));
 
   return (
     <ToolShell centered={!file}>
@@ -138,7 +138,7 @@ export const WordToPDF: React.FC = () => {
 
             {status.error && (
               <div role="alert" className="mt-3 rounded-[var(--radius-field)] border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-400 dark:bg-rose-500/10 dark:text-rose-200">
-                <p className="font-bold">{refusal ? 'Nothing to convert' : 'Conversion failed'}</p>
+                <p className="font-bold">{refusal ? 'There is nothing to convert' : 'That did not work'}</p>
                 <p className="mt-1 leading-relaxed">{status.error}</p>
               </div>
             )}
@@ -161,7 +161,7 @@ export const WordToPDF: React.FC = () => {
                     icon={<FileText aria-hidden size={18} />}
                     onClick={() => void convert()}
                   >
-                    {status.error ? 'Try again' : 'Export PDF'}
+                    {status.error ? 'Try again' : 'Save PDF'}
                   </Button>
                 )
               )}

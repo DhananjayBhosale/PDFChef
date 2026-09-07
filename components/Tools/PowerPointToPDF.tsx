@@ -191,7 +191,7 @@ export const PowerPointToPDF: React.FC = () => {
                     icon={<Download aria-hidden size={18} />}
                     onClick={() => void convert()}
                   >
-                    {status.error ? 'Try again' : 'Export PDF'}
+                    {status.error ? 'Try again' : 'Save PDF'}
                   </Button>
                 )
               )}

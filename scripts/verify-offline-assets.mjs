@@ -58,11 +58,14 @@ const sourceRoots = ['assets', 'components', 'hooks', 'lib', 'services', 'public
   .map(value => resolve(root, value));
 const sourceFiles = [
   resolve(root, 'index.html'),
+  resolve(root, 'index.css'),
   resolve(root, 'index.tsx'),
   resolve(root, 'App.tsx'),
   resolve(root, 'package.json'),
   resolve(root, 'package-lock.json'),
   resolve(root, 'vite.config.ts'),
+  resolve(root, 'tailwind.config.cjs'),
+  resolve(root, 'postcss.config.cjs'),
   resolve(root, 'tsconfig.json'),
   resolve(root, 'scripts/prepare-local-assets.mjs'),
   resolve(root, 'scripts/inject-service-worker-manifest.mjs'),

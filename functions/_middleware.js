@@ -145,6 +145,18 @@ const routeMeta = {
     title: "Batch PDF Processing - Private Bulk Tools | PDF Chef",
     description: "Run compression, conversion, security, metadata, page, and repair operations across several PDFs locally.",
   },
+  "/invoice": {
+    title: "Free Invoice Maker - Create an Invoice PDF | PDF Chef",
+    description: "Make a professional invoice PDF in your browser. Add your logo, colour and tax, and nothing is uploaded.",
+  },
+  "/receipt": {
+    title: "Free Receipt Maker - Create a Receipt PDF | PDF Chef",
+    description: "Make a receipt PDF that proves a payment was made. Add your logo and colour, entirely on your device.",
+  },
+  "/quote": {
+    title: "Free Quote Maker - Create a Quote or Estimate PDF | PDF Chef",
+    description: "Make a quote or estimate PDF for a job. Add your logo, colour and tax, with nothing uploaded anywhere.",
+  },
   // A personal, device-local list. There is nothing here for a searcher, and
   // /history is the same screen under an older path.
   "/recent": {

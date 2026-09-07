@@ -121,10 +121,12 @@ public final class PdfReaderActivity extends AppCompatActivity {
     private TextView messageView;
     private ImageButton searchButton;
     private ImageButton shareButton;
+    private ImageButton saveButton;
     private ImageButton toolsButton;
 
     private Dialog toolsDialog;
     private boolean sharePending;
+    private boolean savePending;
     private boolean resultSent;
     private boolean preparing;
     /** A prepare or a load already failed, so a rotation must not silently re-copy. */
@@ -239,6 +241,7 @@ public final class PdfReaderActivity extends AppCompatActivity {
         messageView = findViewById(R.id.pdf_reader_message);
         searchButton = findViewById(R.id.pdf_reader_search);
         shareButton = findViewById(R.id.pdf_reader_share);
+        saveButton = findViewById(R.id.pdf_reader_save);
         toolsButton = findViewById(R.id.pdf_reader_tools);
 
         titleView.setText(displayName);
@@ -251,6 +254,7 @@ public final class PdfReaderActivity extends AppCompatActivity {
         });
         searchButton.setOnClickListener(view -> setSearchActive(!isSearchActive()));
         shareButton.setOnClickListener(view -> share());
+        saveButton.setOnClickListener(view -> save());
         toolsButton.setOnClickListener(view -> showTools());
         findViewById(R.id.pdf_reader_retry).setOnClickListener(view -> retry());
         findViewById(R.id.pdf_reader_close).setOnClickListener(view -> finishClosed());
@@ -494,13 +498,16 @@ public final class PdfReaderActivity extends AppCompatActivity {
     }
 
     private void setActionsEnabled(boolean enabled) {
+        boolean idle = enabled && !sharePending && !savePending;
         searchButton.setEnabled(enabled);
         toolsButton.setEnabled(enabled);
-        shareButton.setEnabled(enabled && !sharePending);
+        shareButton.setEnabled(idle);
+        saveButton.setEnabled(idle);
         float alpha = enabled ? 1f : 0.4f;
         searchButton.setAlpha(alpha);
         toolsButton.setAlpha(alpha);
-        shareButton.setAlpha(enabled && !sharePending ? 1f : 0.4f);
+        shareButton.setAlpha(idle ? 1f : 0.4f);
+        saveButton.setAlpha(idle ? 1f : 0.4f);
     }
 
     private void hideMessageBanner() {
@@ -575,6 +582,27 @@ public final class PdfReaderActivity extends AppCompatActivity {
             setActionsEnabled(errorView.getVisibility() != View.VISIBLE);
             // A share that did not happen leaves the document exactly where it was.
             if (result == null || !result.completed()) showMessage(R.string.pdf_reader_share_failed);
+        });
+    }
+
+    /**
+     * Keep a copy of the PDF the reader is looking at.
+     *
+     * Someone who arrived here from a browser or a mail attachment has the
+     * document on screen but nothing of their own yet; sharing passes it on,
+     * which is not the same as keeping it.
+     */
+    private void save() {
+        if (savePending || sharePending || session == null || ref == null) return;
+        savePending = true;
+        setActionsEnabled(errorView.getVisibility() != View.VISIBLE);
+        actions.save(ref, displayName, result -> {
+            savePending = false;
+            setActionsEnabled(errorView.getVisibility() != View.VISIBLE);
+            // A save that did not happen leaves the document exactly where it was.
+            showMessage(result != null && result.completed()
+                    ? R.string.pdf_reader_saved
+                    : R.string.pdf_reader_save_failed);
         });
     }
 

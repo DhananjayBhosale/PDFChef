@@ -72,7 +72,7 @@ try {
     mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     buffer: await docxFixture(),
   });
-  await page.getByRole('button', { name: 'Export PDF' }).click();
+  await page.getByRole('button', { name: 'Save PDF' }).click();
   const wordPath = await saveCurrentOutput(page, 'word');
   const wordPdf = await inspectPdf(wordPath, 2);
   results.push({ tool: 'Word to PDF', status: 'PASS', pages: wordPdf.getPageCount(), file: path.basename(wordPath) });
@@ -80,7 +80,7 @@ try {
   await page.goto(`${baseUrl}/powerpoint-to-pdf`);
   await page.getByRole('heading', { name: 'PowerPoint to PDF' }).waitFor();
   await page.locator('input[type=file]').setInputFiles(androidPptxPath);
-  await page.getByRole('button', { name: 'Export PDF' }).click();
+  await page.getByRole('button', { name: 'Save PDF' }).click();
   const pptPath = await saveCurrentOutput(page, 'powerpoint');
   const pptPdf = await inspectPdf(pptPath);
   const pptPage = pptPdf.getPage(0).getSize();
@@ -145,7 +145,7 @@ try {
   await page.locator('input[type=file]').setInputFiles(qaPdfPath);
   await page.getByLabel('Set Password').fill(exactPassword);
   await page.getByLabel('Confirm Password').fill(exactPassword);
-  await page.getByRole('button', { name: 'Encrypt PDF' }).click();
+  await page.getByRole('button', { name: 'Protect with password' }).click();
   const protectedPath = await saveCurrentOutput(page, 'protect');
   const protectedBytes = await fs.readFile(protectedPath);
   assert.equal(protectedBytes.subarray(0, 4).toString(), '%PDF', 'protected output is not a PDF');

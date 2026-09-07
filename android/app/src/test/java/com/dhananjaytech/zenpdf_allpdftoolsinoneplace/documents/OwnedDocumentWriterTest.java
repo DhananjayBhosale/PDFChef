@@ -53,6 +53,73 @@ public final class OwnedDocumentWriterTest {
         assertEquals(first, writer.loadOwned(first.ref));
     }
 
+    @Test public void transientOutputCanBeDeliveredButNeverListedAndIsRemovedOnRestart() throws Exception {
+        Path files = Files.createTempDirectory("owned-transient");
+        OwnedDocumentWriter writer = writer(files, tokens("abcdefghijklmnopqrstuv",
+                "zyxwvutsrqponmlkjihgfe"), ignored -> {});
+        String session = writer.begin("output.pdf", "application/pdf").sessionId;
+        writer.append(session, PDF, () -> false);
+        OwnedDocumentWriter.OwnedDocument output = writer.finish(session, true, () -> false);
+        assertTrue(writer.listOwned().isEmpty());
+        try (OwnedDocumentWriter.DocumentSource source = writer.source(output.ref)) {
+            byte[] bytes = new byte[PDF.length];
+            assertEquals(PDF.length, source.read(0, bytes));
+            assertArrayEquals(PDF, bytes);
+        }
+        assertEquals(output, writer.finish(session, true, () -> false));
+        assertFailure("DOCUMENT_INVALID_ARGUMENT", () -> writer.finish(session, false, () -> false));
+        OwnedDocumentWriter restarted = writer(files, tokens(), ignored -> {});
+        assertTrue(restarted.listOwned().isEmpty());
+        assertFailure("DOCUMENT_NOT_FOUND", () -> restarted.loadOwned(output.ref));
+        assertFalse(Files.exists(files.resolve("pdfchef_documents/owned/zyxwvutsrqponmlkjihgfe.bin")));
+        assertFalse(Files.exists(files.resolve("pdfchef_documents/operations/" + session + ".transient")));
+    }
+
+    @Test public void transientProcessDeathAtEachPublicationBoundaryCannotCreateRecentHistory() throws Exception {
+        for (OwnedDocumentWriter.Checkpoint boundary : List.of(
+                OwnedDocumentWriter.Checkpoint.AFTER_TRANSIENT_MARKER,
+                OwnedDocumentWriter.Checkpoint.AFTER_FINISH_INTENT,
+                OwnedDocumentWriter.Checkpoint.AFTER_FINISH_DATA_MOVE,
+                OwnedDocumentWriter.Checkpoint.AFTER_OWNED_RECORD_PUBLISH)) {
+            Path files = Files.createTempDirectory("owned-transient-interrupted");
+            OwnedDocumentWriter ordinary = writer(files, tokens("abcdefghijklmnopqrstuv",
+                    "zyxwvutsrqponmlkjihgfe"), ignored -> {});
+            String keptSession = ordinary.begin("application/pdf").sessionId;
+            ordinary.append(keptSession, PDF, () -> false);
+            OwnedDocumentWriter.OwnedDocument kept = ordinary.finish(keptSession, () -> false);
+            OwnedDocumentWriter crashing = writer(files, tokens("mnopqrstuvabcdefghijkl",
+                    "ponmlkjihgfezyxwvutsrq"), checkpoint -> {
+                if (checkpoint == boundary) throw new AssertionError("process death");
+            });
+            String session = crashing.begin("application/pdf").sessionId;
+            crashing.append(session, PDF, () -> false);
+            try {
+                crashing.finish(session, true, () -> false);
+                fail("Expected interruption at " + boundary);
+            } catch (AssertionError expected) {
+                assertEquals("process death", expected.getMessage());
+            }
+            OwnedDocumentWriter restarted = writer(files, tokens(), ignored -> {});
+            assertEquals(List.of(kept), restarted.listOwned());
+            assertFalse(Files.exists(files.resolve("pdfchef_documents/owned/ponmlkjihgfezyxwvutsrq.bin")));
+            assertFalse(Files.exists(files.resolve("pdfchef_documents/sessions/" + session + ".part")));
+            assertFalse(Files.exists(files.resolve("pdfchef_documents/operations/" + session + ".finish")));
+            assertFalse(Files.exists(files.resolve("pdfchef_documents/operations/" + session + ".transient")));
+        }
+    }
+
+    @Test public void explicitTransientCleanupRemovesRecoveryMarkerImmediately() throws Exception {
+        Path files = Files.createTempDirectory("owned-transient-delete");
+        OwnedDocumentWriter writer = writer(files, tokens("abcdefghijklmnopqrstuv",
+                "zyxwvutsrqponmlkjihgfe"), ignored -> {});
+        String session = writer.begin("application/pdf").sessionId;
+        writer.append(session, PDF, () -> false);
+        String ref = writer.finish(session, true, () -> false).ref;
+        assertTrue(writer.deleteOwned(ref));
+        assertTrue(writer.listOwned().isEmpty());
+        assertFalse(Files.exists(files.resolve("pdfchef_documents/operations/" + session + ".transient")));
+    }
+
     @Test public void sourceUsesOneIntegrityPassAndOnePinnedChannelAcrossSequentialReads()
             throws Exception {
         Path files = Files.createTempDirectory("owned-source-session");

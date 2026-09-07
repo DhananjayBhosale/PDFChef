@@ -204,7 +204,7 @@ const SimpleTransformTool: React.FC<SimpleTransformToolProps> = ({
       setStatus({ isProcessing: false, progress: 100, message: `Created ${outputName}.` });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Unable to process this PDF.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: 'This PDF could not be changed. If it is password-protected, use Unlock PDF first. Otherwise, try Repair PDF or choose another file.' });
     }
   };
 
@@ -228,20 +228,21 @@ const SimpleTransformTool: React.FC<SimpleTransformToolProps> = ({
 
 export const RemoveMetadataPDF: React.FC = () => (
   <SimpleTransformTool
-    title="Remove Metadata"
-    uploadLabel="Choose a PDF to remove metadata"
-    actionLabel="Remove metadata"
-    outputPrefix="metadata-cleaned"
+    title="Remove hidden info"
+    description="Clears the author, the dates and the app that made the file. The pages stay exactly as they are."
+    uploadLabel="Choose a PDF to clean"
+    actionLabel="Remove hidden info"
+    outputPrefix="hidden-info-removed"
     transform={removePDFMetadata}
   />
 );
 
 export const RemoveAnnotationsPDF: React.FC = () => (
   <SimpleTransformTool
-    title="Remove Annotations"
-    description="Comments, markup and page actions are dropped."
-    uploadLabel="Choose a PDF to remove annotations"
-    actionLabel="Remove annotations"
+    title="Remove comments"
+    description="Removes comments, notes, highlights and links. Form fields and their values are kept."
+    uploadLabel="Choose a PDF to clean"
+    actionLabel="Remove comments"
     outputPrefix="annotations-removed"
     transform={removePDFAnnotations}
   />
@@ -249,11 +250,11 @@ export const RemoveAnnotationsPDF: React.FC = () => (
 
 export const SanitizePDF: React.FC = () => (
   <SimpleTransformTool
-    title="Sanitize PDF"
-    description="Metadata and annotations are dropped."
-    uploadLabel="Choose a PDF to sanitize"
-    actionLabel="Sanitize PDF"
-    outputPrefix="sanitized"
+    title="Clean Up PDF"
+    description="Removes hidden info and comments in one go: author, dates, the app that made the file, and any notes or highlights."
+    uploadLabel="Choose a PDF to clean"
+    actionLabel="Clean up PDF"
+    outputPrefix="cleaned"
     transform={sanitizePDF}
   />
 );
@@ -270,7 +271,7 @@ export const CropPDF: React.FC = () => {
 
   const handleCrop = async () => {
     if (!file) return;
-    setStatus({ isProcessing: true, progress: 20, message: 'Applying crop box...' });
+    setStatus({ isProcessing: true, progress: 20, message: 'Trimming the edges…' });
     try {
       const bytes = await cropPDFMargins(file.file, margins);
       const outputName = `cropped-${file.name}`;
@@ -278,13 +279,14 @@ export const CropPDF: React.FC = () => {
       setStatus({ isProcessing: false, progress: 100, message: `Created ${outputName}.` });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Unable to crop this PDF.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: 'This PDF could not be cropped. Try another file, or run Repair PDF on it first.' });
     }
   };
 
   return (
     <ToolShell
       title="Crop PDF"
+      description="Trims the white space around the edges of every page. The words and pictures are not resized."
       uploadLabel="Choose a PDF to crop"
       file={file}
       status={status}
@@ -355,13 +357,14 @@ export const HeaderFooterPDF: React.FC = () => {
       setStatus({ isProcessing: false, progress: 100, message: `Created ${outputName}.` });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Unable to add header or footer.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: 'The header and footer could not be added. Try another file, or run Repair PDF on it first.' });
     }
   };
 
   return (
     <ToolShell
       title="Header & Footer"
+      description="Puts the same line of text at the top or bottom of every page."
       uploadLabel="Choose a PDF for header and footer"
       file={file}
       status={status}
@@ -473,7 +476,7 @@ export const RemoveBlankPagesPDF: React.FC = () => {
       });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Unable to remove blank pages.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: 'The blank pages could not be removed. Try another file, or run Repair PDF on it first.' });
     }
   };
 
@@ -522,7 +525,7 @@ export const ExtractImagesPDF: React.FC = () => {
   }, [images]);
 
   const scanImages = async (selected: PDFFile) => {
-    setStatus({ isProcessing: true, progress: 10, message: 'Scanning embedded images...' });
+    setStatus({ isProcessing: true, progress: 10, message: 'Looking for pictures inside the PDF…' });
     try {
       const pdfDoc = await loadPDFDocument(selected.file);
       const extracted = await extractEmbeddedImagesFromPDF(pdfDoc, {
@@ -536,11 +539,11 @@ export const ExtractImagesPDF: React.FC = () => {
         progress: 100,
         message: extracted.length > 0
           ? `Found ${extracted.length} embedded image${extracted.length === 1 ? '' : 's'}.`
-          : 'No embedded images were found in this PDF.',
+          : 'This PDF has no pictures stored in it. If you want the pages themselves as pictures, use PDF to Image.',
       });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Unable to extract images from this PDF.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: 'The pictures could not be saved. Try another file, or use PDF to Image to save whole pages instead.' });
     }
   };
 
@@ -581,7 +584,7 @@ export const ExtractImagesPDF: React.FC = () => {
       });
     } catch (error) {
       console.error(error);
-      setStatus({ ...idleStatus(), error: 'Unable to package the extracted images.' });
+      setStatus({ ...idleStatus(), error: 'The pictures could not be put into a zip file. Try again, or pick a PDF with fewer pictures.' });
     }
   };
 

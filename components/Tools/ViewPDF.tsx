@@ -263,7 +263,7 @@ export const ViewPDF: React.FC = () => {
       await navigator.share({ files: [openedPdf.file], title: openedPdf.name });
     } catch (error: any) {
       if (error?.name !== 'AbortError') {
-        setStatus({ isProcessing: false, progress: 0, message: '', error: 'Unable to share this PDF.' });
+        setStatus({ isProcessing: false, progress: 0, message: '', error: 'This PDF could not be shared. Save it to your device first, then share it from there.' });
       }
     }
   };
@@ -302,7 +302,7 @@ export const ViewPDF: React.FC = () => {
       setSearchResults(matches);
       setSearchIndex(0);
       if (matches[0]) document.getElementById(`viewer-page-${matches[0]}`)?.scrollIntoView({ behavior: 'smooth' });
-      setStatus({ isProcessing: false, progress: 100, message: matches.length ? `${matches.length} matching page${matches.length === 1 ? '' : 's'}.` : 'No matches found.' });
+      setStatus({ isProcessing: false, progress: 100, message: matches.length ? `${matches.length} matching page${matches.length === 1 ? '' : 's'}.` : 'No pages contain that. Check the spelling, or try a shorter word.' });
     } catch {
       setStatus({ isProcessing: false, progress: 0, message: '', error: 'Search is unavailable for this PDF, but you can keep reading it.' });
     }
@@ -465,7 +465,7 @@ export const ViewPDF: React.FC = () => {
           {searchOpen && pdfDoc && (
             <form onSubmit={(event) => { event.preventDefault(); void searchDocument(); }} className="flex w-full items-center gap-1 rounded-[var(--radius-field)] border border-[var(--border-strong)] bg-[var(--surface-raised)] p-1.5">
               <Search aria-hidden size={18} className="ml-2 shrink-0 text-[var(--text-tertiary)]" />
-              <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search in PDF" aria-label="Search in PDF" className="h-10 min-w-0 flex-1 bg-transparent px-1 text-sm outline-none" autoFocus />
+              <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search in PDF" aria-label="Search in PDF" className="h-10 min-w-0 flex-1 bg-transparent px-1 text-base outline-none" autoFocus />
               {searchQuery.trim() && <span aria-live="polite" className="hidden whitespace-nowrap text-xs text-[var(--text-secondary)] sm:block">{searchResults.length ? `${searchIndex + 1} / ${searchResults.length} pages` : '0 pages'}</span>}
               {searchResults.length > 0 && (
                 <>

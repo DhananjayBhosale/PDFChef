@@ -13,6 +13,7 @@ const nativeTextEditor = read('services/pdfNativeTextEditor.ts');
 const blockLayer = read('components/Tools/PdfTextBlockLayer.tsx');
 const paragraphInspector = read('components/Tools/PdfParagraphInspector.tsx');
 const findReplace = read('components/Tools/PdfFindReplace.tsx');
+const shell = read('components/Layout/AppShell.tsx');
 
 test('Edit PDF runs inside the data router required by the navigation blocker', () => {
   assert.match(app, /createBrowserRouter/);
@@ -33,7 +34,7 @@ test('dirty edits block routes and unload, while load and save establish clean b
   assert.match(editor, /setSavedSnapshot\(serializeEditorState\(\[\], \{\}\)\)/);
   // The page appears before its form fields are looked for, which on a long report is seconds.
   assert.match(editor, /void getPdfFormFields\(doc\)\.then\(/);
-  assert.match(editor, /setSavedSnapshot\(serializeEditorState\(elementsRef\.current, formValues, savedBlockEdits\)\)/);
+  assert.match(editor, /setSavedSnapshot\(serializeEditorState\(savingElements, savingFormValues, savedBlockEdits\)\)/);
   assert.match(editor, /navigationBlocker\.proceed\(\)/);
   assert.match(editor, /navigationBlocker\.reset\(\)/);
   const save = editor.slice(editor.indexOf('const handleSave'), editor.indexOf('if (isImmersiveEditor)'));
@@ -134,7 +135,7 @@ test('a rewrite that the document cannot express falls back to a clean redraw fi
   // A rewrite in place uses the document's own font, so only new characters can be a problem
   // there; a redraw is checked run by run, against the face that will actually draw each one.
   assert.match(editor, /const unencodable = plan\.mode === 'reflow'/);
-  assert.match(editor, /unencodableCharacters\(run\.text, face\.resolved, face\.descriptor\)/);
+  assert.match(editor, /unencodableCharacters\(edit\.text, FALLBACK_RESOLVED_FONT\)/);
   assert.match(editor, /unencodableCharacters\(introduced, font \?\? FALLBACK_RESOLVED_FONT, descriptor\)/);
   // The redraw is aimed at the paragraphs that actually refused, not at every edited one.
   assert.match(editor, /buildParagraphSaveEdits\(\{ forceReflow: stubborn, plans: \[\.\.\.redrawable\] \}\)/);
@@ -356,6 +357,20 @@ test('immersive content reserves the measured bottom bar height', () => {
   assert.doesNotMatch(editor, /pb-\[calc\(6rem\+env\(safe-area-inset-bottom/);
 });
 
+test('the editor chrome stays against the top of what the reader can see', () => {
+  // iOS scrolls the visual viewport to reveal a focused paragraph. A `sticky top-0` bar pins to
+  // the layout viewport instead, so it slid up under the status bar and clipped Save. The bar has
+  // to sit on the measured offset, and the content has to reserve its height.
+  assert.match(shell, /const nextOffsetTop = unzoomed \? Math\.max\(0, Math\.round\(viewport\.offsetTop\)\) : 0/);
+  assert.match(shell, /rootStyle\.setProperty\('--chef-viewport-offset-top', `\$\{nextOffsetTop\}px`\)/);
+  assert.match(editor, /const immersiveHeaderRef = useRef<HTMLElement>\(null\)/);
+  assert.match(editor, /ref=\{immersiveHeaderRef\}/);
+  assert.match(editor, /style=\{\{ top: 'var\(--chef-viewport-offset-top, 0px\)' \}\}/);
+  assert.match(editor, /paddingTop: `\$\{immersiveHeaderHeight\}px`/);
+  // A bar that sticks to the layout viewport is exactly what put Save under the clock.
+  assert.doesNotMatch(editor, /<header[^>]*sticky top-0/);
+});
+
 test('what the editor tells a reader is said in their words, not ours', () => {
   // Someone correcting a name on a form should not have to know how a PDF is built. These are the
   // sentences everyone meets — the plan shown while typing, and the result shown after saving.
@@ -386,11 +401,12 @@ test('an in-place rewrite is only used when the PDF\'s own font has the glyphs',
   // replacement needs one that is missing — it writes the character code anyway. The file then
   // reads back correctly through the engines that wrote it while rendering as an empty box in
   // Preview, Acrobat and print, which no downstream check catches. So the font is asked here.
-  assert.match(editor, /const missingFromOwnFont = planned\.mode === 'direct' && descriptor && introduced/);
-  assert.match(editor, /\? checkGlyphCoverage\(descriptor, introduced\)/);
-  // Missing glyphs downgrade the plan to a redraw, which uses a face that can draw them — they
-  // must not block the edit outright, and must not be left to the in-place path.
-  assert.match(editor, /missingFromOwnFont\?\.checked && !missingFromOwnFont\.covered\s*\?\s*\{\s*mode: 'reflow'/);
+  assert.match(editor, /canDraw: \(text, fontKey\) =>/);
+  assert.match(editor, /const face = pageText\?\.fonts\.get\(fontKey\)/);
+  assert.match(editor, /checkGlyphCoverage\(face, text\)/);
+  const save = editor.slice(editor.indexOf('const handleSave'), editor.indexOf('const activeBlock ='));
+  assert.doesNotMatch(save, /filter\(\(entry\) => entry\.plan\.mode === 'reflow' \|\| entry\.plan\.mode === 'blocked'\)/);
+
 });
 
 test('a refusal is one short sentence that ends with what to do instead', () => {
@@ -408,4 +424,30 @@ test('a refusal is one short sentence that ends with what to do instead', () => 
   });
   // The reason the planner recorded is no longer pasted into what the reader sees.
   assert.doesNotMatch(paragraphInspector, /cannot be saved, because \$\{plan\.reason\}/);
+});
+
+
+test('save marks only its captured edits clean and prevents concurrent exports', () => {
+  const save = editor.slice(editor.indexOf('const handleSave'), editor.indexOf('const activeBlock ='));
+  const firstAwait = save.indexOf('await ');
+  for (const capture of ['const savingElements = elementsRef.current', 'const savingFormValues = formValues', 'const savingBlockEdits = blockEditsRef.current']) {
+    assert.ok(save.indexOf(capture) >= 0 && save.indexOf(capture) < firstAwait);
+  }
+  assert.match(save, /if \(!file \|\| saveInProgress\.current\) return/);
+  assert.match(save, /finally \{\s*saveInProgress\.current = false/);
+  assert.match(save, /Object\.entries\(savingBlockEdits\)/);
+  assert.doesNotMatch(save.slice(firstAwait), /elementsRef\.current|blockEditsRef\.current/);
+});
+
+test('clearance failure cannot claim the original wording was removed', () => {
+  const service = read('services/pdfDocument.ts');
+  assert.match(service, /if \(cleared\.uncleared > 0\) \{[\s\S]*?throw new Error\('Direct text edit failed:/);
+});
+
+test('document form controls retain paper colours when the app uses dark appearance', () => {
+  const controls = editor.slice(editor.indexOf('const PDFFormFieldControl'), editor.indexOf('// Re-implementing'));
+  assert.match(controls, /colorScheme: 'light'/);
+  assert.match(controls, /backgroundColor: 'rgba\(255, 255, 255, 0\.92\)'/);
+  assert.match(controls, /color: '#111827'/);
+  assert.doesNotMatch(controls, /bg-white\/92|text-paper-900/);
 });

@@ -437,7 +437,7 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
                       dpi < 100 ? 'bg-danger-600' : 'bg-black/65'
                     }`}
                   >
-                    {dpi} DPI
+                    {dpi < 100 ? 'Low detail' : dpi < 175 ? 'Medium detail' : 'High detail'}
                   </div>
                 </div>
                 <img
@@ -478,6 +478,12 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
             <span className="text-xs font-medium text-paper-400">High</span>
           </div>
 
+          {dpi < 100 && (
+            <p role="status" className="w-full text-sm font-medium text-caution-300">
+              At this setting small print may be hard to read. Drag the slider towards High for more detail.
+            </p>
+          )}
+
           <div className="flex w-full flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-end">
             {sizeEstimate && (
               <div className={`text-right ${loading ? 'opacity-60' : 'opacity-100'}`}>
@@ -488,7 +494,7 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
                       sizeEstimate.ratio >= 1 ? 'bg-caution-900 text-caution-300' : 'bg-success-900 text-success-300'
                     }`}
                   >
-                    {sizeEstimate.ratio >= 1 ? 'No reduction' : `-${Math.round((1 - sizeEstimate.ratio) * 100)}%`}
+                    {sizeEstimate.ratio >= 1 ? 'Not smaller' : `${Math.round((1 - sizeEstimate.ratio) * 100)}% smaller`}
                   </span>
                 </div>
               </div>

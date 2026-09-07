@@ -4,6 +4,7 @@
     <string name="pdf_reader_back">Close the reader</string>
     <string name="pdf_reader_search">Search this PDF</string>
     <string name="pdf_reader_share">Share this PDF</string>
+    <string name="pdf_reader_save">Save a copy of this PDF</string>
     <string name="pdf_reader_tools">Use a PDF tool</string>
     <string name="pdf_reader_loading">Opening…</string>
     <string name="pdf_reader_page_unknown">Reading</string>
@@ -13,6 +14,8 @@
     <string name="pdf_reader_retry">Try again</string>
     <string name="pdf_reader_close">Close</string>
     <string name="pdf_reader_share_failed">Sharing did not finish. The PDF is still open.</string>
+    <string name="pdf_reader_save_failed">The PDF could not be saved. Check you have space on the device, then try again.</string>
+    <string name="pdf_reader_saved">Saved to your Downloads.</string>
     <string name="pdf_reader_search_unavailable">Search is unavailable for this PDF.</string>
     <string name="pdf_reader_tools_title">Use a PDF tool</string>
     <string name="pdf_reader_tools_body">This PDF is selected automatically.</string>

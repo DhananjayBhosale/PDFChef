@@ -11,6 +11,7 @@ import {
   type ImageExportConfig,
 } from '../../services/pdfBrowser';
 import { downloadBlob, isPdfFile, revokeObjectUrls } from '../../services/pdfShared';
+import { parseBoundedPageRange } from '../../services/pageRange';
 import {
   DEFAULT_IMAGE_EXPORT_QUALITY,
   DEFAULT_IMAGE_EXPORT_SCALE,
@@ -95,31 +96,6 @@ const formatBytes = (bytes: number) => {
 const getBaseName = (filename: string) => filename.replace(/\.pdf$/i, '');
 
 /** Comma and range syntax, as in the app's `pages=1,3-5` option token. */
-const parsePageRangeInput = (raw: string, totalPages: number): number[] => {
-  const trimmed = raw.trim();
-  if (!trimmed) return [];
-
-  const selected = new Set<number>();
-  for (const token of trimmed.split(',')) {
-    const part = token.trim();
-    if (!part) continue;
-    if (part.includes('-')) {
-      const [startRaw, endRaw] = part.split('-', 2);
-      const start = Number(startRaw.trim());
-      const end = Number(endRaw.trim());
-      if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < 1 || start > end) {
-        throw new Error(`Invalid page range: ${part}`);
-      }
-      for (let page = start; page <= end; page += 1) selected.add(page);
-    } else {
-      const page = Number(part);
-      if (!Number.isInteger(page) || page < 1) throw new Error(`Invalid page number: ${part}`);
-      selected.add(page);
-    }
-  }
-
-  return [...selected].sort((left, right) => left - right).map((page) => page - 1);
-};
 
 export const PDFToImage: React.FC = () => {
   const [file, setFile] = useState<PDFFile | null>(null);
@@ -217,7 +193,7 @@ export const PDFToImage: React.FC = () => {
       void scanEmbeddedImages(doc);
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Failed to load PDF' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: 'This PDF could not be opened. Choose another file, or run Repair PDF on it first.' });
     }
   };
 
@@ -288,7 +264,7 @@ export const PDFToImage: React.FC = () => {
     if (!pdfDoc) return [];
     try {
       return resolveOptionalPageSelection(
-        parsePageRangeInput(pageSelection, pdfDoc.numPages).map((index) => index + 1),
+        (pageSelection.trim() ? parseBoundedPageRange(pageSelection, pdfDoc.numPages) : []).map((index) => index + 1),
         pdfDoc.numPages,
         'Pages to convert',
       );
@@ -374,7 +350,7 @@ export const PDFToImage: React.FC = () => {
         zip.file(imageExportPageFileName(pageIndex, extension, highestPageIndex), blob);
       }
 
-      setStatus({ isProcessing: true, progress: 100, message: 'Zipping...' });
+      setStatus({ isProcessing: true, progress: 100, message: 'Putting the pictures into one zip file…' });
       const content = await zip.generateAsync({ type: 'blob' });
       downloadBlob(content, `${androidExportDirectoryName(file.name, 'images')}.zip`);
       setStatus({ isProcessing: false, progress: 100, message: 'Done!' });
@@ -383,7 +359,7 @@ export const PDFToImage: React.FC = () => {
         isProcessing: false,
         progress: 0,
         message: '',
-        error: error instanceof Error ? error.message : 'Export failed',
+        error: error instanceof Error ? error.message : 'Saving did not work',
       });
     }
   };
@@ -404,7 +380,7 @@ export const PDFToImage: React.FC = () => {
       return;
     }
 
-    setStatus({ isProcessing: true, progress: 10, message: 'Preparing embedded images...' });
+    setStatus({ isProcessing: true, progress: 10, message: 'Getting the pictures ready…' });
 
     try {
       const zip = new JSZip();
@@ -555,7 +531,7 @@ export const PDFToImage: React.FC = () => {
             <div className="custom-scrollbar flex max-h-[46dvh] w-full flex-shrink-0 flex-col gap-3 overflow-y-auto md:h-full md:max-h-none md:w-80 md:max-w-80">
               <div className="space-y-2 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3">
                 <div className="flex items-center gap-2 border-b border-[var(--border-hairline)] pb-2 text-sm font-bold text-[var(--text-primary)]">
-                  <Settings2 aria-hidden size={18} className="text-[var(--accent-text)]" /> Export settings
+                  <Settings2 aria-hidden size={18} className="text-[var(--accent-text)]" /> Picture settings
                 </div>
 
                 {hasImageModeOption && (
@@ -756,7 +732,7 @@ export const PDFToImage: React.FC = () => {
                   ) : embeddedImages.length === 0 ? (
                     <div className="flex h-full flex-col items-center justify-center text-[var(--text-secondary)]">
                       <ImageIcon size={40} className="mb-3 opacity-50" />
-                      <p>No embedded raster images were detected.</p>
+                      <p>This PDF has no pictures stored inside it. To save the pages themselves as pictures, switch to Pages above.</p>
                     </div>
                   ) : (
                     <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">

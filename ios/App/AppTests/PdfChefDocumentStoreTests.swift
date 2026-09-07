@@ -68,6 +68,23 @@ final class PdfChefDocumentStoreTests: XCTestCase {
         XCTAssertThrowsError(try store.readChunk(ref: valid.ref, offset: 0, length: PdfChefDocumentStore.maximumChunkBytes + 1))
     }
 
+    func testRelaunchRemovesTransientOutputsWithoutRecoveringThemAsSavedResults() throws {
+        let permanent = try retain(Data("keep".utf8), name: "saved.pdf")
+        let session = try store.beginWrite(name: "temporary.pdf", mimeType: "application/pdf", transient: true)
+        try store.append(sessionID: session, data: Data("temporary".utf8))
+        let temporary = try store.finishWrite(sessionID: session)
+        XCTAssertTrue(store.exists(ref: temporary.ref), "The presenter can access its active copy")
+        XCTAssertEqual(try store.listDocuments().map(\.document.ref), [permanent.ref],
+                       "A WebView reload must not reconcile transient bytes into Recent")
+
+        store = nil
+        store = try PdfChefDocumentStore(rootURL: rootURL)
+        XCTAssertFalse(store.exists(ref: temporary.ref))
+        XCTAssertTrue(store.exists(ref: permanent.ref))
+        XCTAssertEqual(try store.storageInformation().retainedBytes, 4)
+        XCTAssertEqual(try store.listDocuments().map(\.document.ref), [permanent.ref])
+    }
+
     func testRenameDeleteClearAndStorageAccounting() throws {
         let first = try retain(Data(repeating: 1, count: 10), name: "first.pdf")
         let second = try retain(Data(repeating: 2, count: 7), name: "second.pdf")

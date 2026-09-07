@@ -488,7 +488,7 @@ export const ImageToPDF: React.FC = () => {
       });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Unable to rotate this image.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: 'This picture could not be turned. Try removing it and adding it again.' });
     }
   }, [updateElement]);
 
@@ -581,7 +581,7 @@ export const ImageToPDF: React.FC = () => {
                className="chef-target chef-pressable flex flex-1 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 font-bold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-55 sm:flex-none sm:px-6"
             >
                {status.isProcessing ? <Loader2 className="animate-spin" size={18}/> : <ArrowDown size={18}/>} 
-               <span>Export PDF</span>
+               <span>Save PDF</span>
             </button>
          </div>
          )}

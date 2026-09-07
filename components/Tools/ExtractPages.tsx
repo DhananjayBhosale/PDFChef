@@ -50,7 +50,7 @@ export const ExtractPages: React.FC = () => {
         .catch((error) => {
           if (cancelled) return;
           console.error(error);
-          setPreviewError('This PDF could not be opened for page selection.');
+          setPreviewError('The pages could not be shown. Choose another file, or run Repair PDF on it first.');
           setLoadingPreviews(false);
         });
     } else {
@@ -191,7 +191,7 @@ export const ExtractPages: React.FC = () => {
                 {previewError}
               </div>
             ) : totalPages === 0 ? (
-              <p className="px-4 py-4 text-center text-sm text-[var(--text-secondary)]">This PDF has no pages to extract.</p>
+              <p className="px-4 py-4 text-center text-sm text-[var(--text-secondary)]">This PDF has no pages in it. Choose another file.</p>
             ) : (
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
                 {Array.from({ length: totalPages }, (_, index) => (

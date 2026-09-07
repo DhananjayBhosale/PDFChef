@@ -7,7 +7,7 @@ import type {
   StoredDocument,
 } from '../../services/domain/workspaceModels.ts';
 import type { ImportedDocument, StorageInformation } from '../../services/platform/contracts.ts';
-import { deliverBlob, downloadBlob } from '../../services/pdfShared.ts';
+import { deliverBlob, downloadBlob, type OutputReadyRecord } from '../../services/pdfShared.ts';
 import {
   createIOSWorkspacePlatform,
   type IOSDocumentBridge,
@@ -61,7 +61,7 @@ class FakeBridge implements IOSDocumentBridge {
   exportWait: Promise<void> | null = null;
   retainCalls: Array<{
     bytes: Uint8Array;
-    metadata: Pick<StoredDocument, 'name' | 'mimeType'>;
+    metadata: Pick<StoredDocument, 'name' | 'mimeType'> & { transient?: boolean };
   }> = [];
 
   async retain(
@@ -146,6 +146,7 @@ const waitFor = async (condition: () => boolean): Promise<void> => {
 const withOutputSettings = async (
   settings: { keepLocalHistory: boolean; autoDownload: boolean },
   run: () => Promise<void>,
+  onOutput?: (output: OutputReadyRecord) => void,
 ): Promise<void> => {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const workspaceSettings = JSON.stringify(settings);
@@ -156,7 +157,10 @@ const withOutputSettings = async (
       localStorage: {
         getItem: (key: string) => key === 'pdfchef.workspace.settings.v1' ? workspaceSettings : null,
       },
-      dispatchEvent: () => true,
+      dispatchEvent: (event: CustomEvent<OutputReadyRecord>) => {
+        onOutput?.(event.detail);
+        return true;
+      },
     },
   });
   try {
@@ -272,6 +276,7 @@ test('fresh export and share failures still delete transient retained documents'
     blob: new Blob(['save']), name: 'save.pdf', mimeType: 'application/pdf',
   }), /cancelled/);
   assert.deepEqual(first.bridge.deleted, [first.bridge.retained.ref]);
+  assert.equal(first.bridge.retainCalls[0].metadata.transient, true);
 
   const second = harness();
   second.bridge.shareError = new Error('cancelled');
@@ -279,6 +284,7 @@ test('fresh export and share failures still delete transient retained documents'
     blob: new Blob(['share']), name: 'share.pdf', mimeType: 'application/pdf',
   }), /cancelled/);
   assert.deepEqual(second.bridge.deleted, [second.bridge.retained.ref]);
+  assert.equal(second.bridge.retainCalls[0].metadata.transient, true);
 });
 
 test('fresh presentation staging is never reconciled into phantom Recent history', async () => {
@@ -366,6 +372,7 @@ test('installed output delivery covers the four settings states without double-r
       assert.deepEqual(bridge.retainCalls[0].metadata, {
         name: 'exact result.pdf',
         mimeType: 'application/x-pdf-chef-test',
+        ...(!expected.keepLocalHistory ? { transient: true } : {}),
       });
     }
     if (expected.records) {
@@ -407,18 +414,43 @@ test('transient automatic exports reject after cleaning retained bytes on failur
   }
 });
 
-test('retained output remains a successful delivery when automatic export fails', async () => {
-  const { bridge, recent, platform } = harness();
-  bridge.exportError = new Error('presentation unavailable');
-  await platform.ready;
-  await withOutputSettings({ keepLocalHistory: true, autoDownload: true }, async () => {
-    await deliverBlob(new Blob(['retained']), 'retained.pdf', 'application/pdf');
-  });
+test('retained output stays saved and offers retry when automatic export fails or is cancelled', async () => {
+  for (const [failure, issue] of [
+    [new Error('presentation unavailable'), 'failed'],
+    [new DOMException('cancelled', 'AbortError'), 'cancelled'],
+  ] as const) {
+    const { bridge, recent, platform } = harness();
+    const outputs: OutputReadyRecord[] = [];
+    bridge.exportError = failure;
+    await platform.ready;
+    await withOutputSettings({ keepLocalHistory: true, autoDownload: true }, async () => {
+      await deliverBlob(new Blob(['retained']), 'retained.pdf', 'application/pdf');
+    }, output => outputs.push(output));
 
-  assert.equal((await recent.list()).length, 1);
-  assert.deepEqual(bridge.exports, [{ ref: bridge.retained.ref, name: 'retained.pdf' }]);
-  assert.deepEqual(bridge.deleted, []);
+    assert.equal((await recent.list()).length, 1);
+    assert.deepEqual(bridge.exports, [{ ref: bridge.retained.ref, name: 'retained.pdf' }]);
+    assert.deepEqual(bridge.deleted, []);
+    assert.equal(bridge.documents.has(bridge.retained.ref), true);
+    assert.equal(outputs.length, 1);
+    assert.equal(outputs[0].historyRetained, true);
+    assert.equal(outputs[0].deliveryIssue, issue);
+    assert.equal(await outputs[0].blob?.text(), 'retained');
+    await platform.dispose();
+  }
+});
+
+test('metadata persistence failure still rejects when optional export is cancelled', async () => {
+  const { bridge, recent, platform } = harness();
+  await platform.ready;
+  const failure = new Error('metadata unavailable');
+  recent.save = async () => { throw failure; };
+  bridge.exportError = new DOMException('cancelled', 'AbortError');
+  await withOutputSettings({ keepLocalHistory: true, autoDownload: true }, async () => {
+    await assert.rejects(deliverBlob(new Blob(['retained']), 'retained.pdf', 'application/pdf'),
+      (error: unknown) => error === failure);
+  });
   assert.equal(bridge.documents.has(bridge.retained.ref), true);
+  assert.deepEqual(bridge.deleted, []);
   await platform.dispose();
 });
 

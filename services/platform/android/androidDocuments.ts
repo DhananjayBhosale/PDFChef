@@ -10,7 +10,7 @@ export interface AndroidDocumentsNativePlugin {
   }): Promise<unknown>;
   beginWrite(options: { readonly mimeType: SupportedOwnedMime; readonly displayName?: string }): Promise<unknown>;
   appendWrite(options: { readonly sessionRef: string; readonly data: string }): Promise<unknown>;
-  finishWrite(options: { readonly sessionRef: string }): Promise<unknown>;
+  finishWrite(options: { readonly sessionRef: string; readonly transient?: boolean }): Promise<unknown>;
   abortWrite(options: { readonly sessionRef: string }): Promise<unknown>;
   listOwned(options: Readonly<Record<string, never>>): Promise<unknown>;
   deleteOwned(options: { readonly ref: string }): Promise<unknown>;
@@ -31,16 +31,16 @@ export interface AndroidDocumentsNativePlugin {
   exportItem(options: {
     readonly ref: string;
     readonly displayName?: string;
-    readonly mimeType?: SupportedPickerMime;
+    readonly mimeType?: SupportedOwnedMime;
   }): Promise<unknown>;
   shareItem(options: {
     readonly ref: string;
     readonly displayName?: string;
-    readonly mimeType?: SupportedPickerMime;
+    readonly mimeType?: SupportedOwnedMime;
   }): Promise<unknown>;
   openReader(options: { readonly ref: string; readonly displayName: string }): Promise<unknown>;
   addListener(
-    eventName: 'pendingImportReady',
+    eventName: 'pendingImportReady' | 'incomingPdfReady',
     listener: (event: unknown) => void,
   ): Promise<PluginListenerHandle>;
 }
@@ -215,8 +215,9 @@ export class AndroidDocumentsClient {
     if (result.acceptedBytes !== bytes.length) throw invalidResponse(); return result.acceptedBytes;
   }
 
-  async finishWrite(sessionRef: string): Promise<AndroidOwnedDocument> {
-    if (!isSessionRef(sessionRef)) throw invalidRequest(); const result = exactObject(await this.native.finishWrite({ sessionRef }), ['item']);
+  async finishWrite(sessionRef: string, transient = false): Promise<AndroidOwnedDocument> {
+    if (!isSessionRef(sessionRef) || typeof transient !== 'boolean') throw invalidRequest();
+    const result = exactObject(await this.native.finishWrite(transient ? { sessionRef, transient: true } : { sessionRef }), ['item']);
     return parseOwnedItem(result.item);
   }
 
@@ -359,10 +360,22 @@ export class AndroidDocumentsClient {
     return async () => handle.remove();
   }
 
+  async addIncomingPdfListener(listener: (ref: string) => void): Promise<() => Promise<void>> {
+    const handle = await this.native.addListener('incomingPdfReady', raw => {
+      try {
+        const event = exactObject(raw, ['ref']);
+        if (typeof event.ref === 'string' && OWNED_REF.test(event.ref)) listener(event.ref);
+      } catch {
+        // External activity hints never expose a path, URL or unvalidated route.
+      }
+    });
+    return async () => handle.remove();
+  }
+
   async exportItem(
     ref: string,
     displayName?: string,
-    mimeType?: SupportedPickerMime,
+    mimeType?: SupportedOwnedMime,
   ): Promise<AndroidDeliveryResult> {
     return this.deliver('exportItem', ref, displayName, mimeType);
   }
@@ -370,7 +383,7 @@ export class AndroidDocumentsClient {
   async shareItem(
     ref: string,
     displayName?: string,
-    mimeType?: SupportedPickerMime,
+    mimeType?: SupportedOwnedMime,
   ): Promise<AndroidDeliveryResult> {
     return this.deliver('shareItem', ref, displayName, mimeType);
   }
@@ -379,17 +392,17 @@ export class AndroidDocumentsClient {
     method: 'exportItem' | 'shareItem',
     ref: string,
     displayName?: string,
-    mimeType?: SupportedPickerMime,
+    mimeType?: SupportedOwnedMime,
   ): Promise<AndroidDeliveryResult> {
     if (!isExactReference(ref)
         || (displayName !== undefined && !isDisplayName(displayName))
-        || (mimeType !== undefined && !PICKER_MIMES.has(mimeType))) {
+        || (mimeType !== undefined && !(OWNED_REF.test(ref) ? OWNED_MIMES.has(mimeType) : PICKER_MIMES.has(mimeType as SupportedPickerMime)))) {
       throw invalidRequest();
     }
     const options: {
       ref: string;
       displayName?: string;
-      mimeType?: SupportedPickerMime;
+      mimeType?: SupportedOwnedMime;
     } = { ref };
     if (displayName !== undefined) options.displayName = displayName;
     if (mimeType !== undefined) options.mimeType = mimeType;

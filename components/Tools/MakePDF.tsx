@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { ProcessingStatus } from '../../types';
 import { createPDFFromImages } from '../../services/pdfDocument';
+import { preparePdfImageAsset } from '../../services/imageBrowser';
 import { downloadBlob } from '../../services/pdfShared';
 import { StatusToast } from '../UI/StatusToast';
 import { ToolHeader, ToolShell } from '../UI/ToolLayout';
@@ -214,15 +215,13 @@ export const MakePDF: React.FC = () => {
     });
 
     const checked = await Promise.all(supported.map(async (file) => {
-      const previewUrl = URL.createObjectURL(file);
-      const readable = await new Promise<boolean>((resolve) => {
-        const preview = new Image();
-        preview.onload = () => resolve(preview.naturalWidth > 0 && preview.naturalHeight > 0);
-        preview.onerror = () => resolve(false);
-        preview.src = previewUrl;
-      });
-      if (!readable) URL.revokeObjectURL(previewUrl);
-      return readable ? { file, previewUrl } : null;
+      try {
+        // Use the same orientation-normalized pixels for the preview and export.
+        const asset = await preparePdfImageAsset(file);
+        return { file: asset.file, previewUrl: asset.previewUrl };
+      } catch {
+        return null;
+      }
     }));
 
     const valid = checked.filter((item): item is { file: File; previewUrl: string } => item !== null);
@@ -282,7 +281,7 @@ export const MakePDF: React.FC = () => {
       setStatus({ isProcessing: false, progress: 100, message: `Scanned PDF ready with ${images.length} page${images.length === 1 ? '' : 's'}.` });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Failed to build PDF' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: 'The PDF could not be made. Try again, or remove the last photo you added.' });
     } finally {
       operationRef.current = false;
     }

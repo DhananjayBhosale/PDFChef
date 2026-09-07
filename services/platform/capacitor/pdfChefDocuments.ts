@@ -15,7 +15,7 @@ export const PDF_CHEF_MAXIMUM_CHUNK_BYTES = 512 * 1024;
 type JsonObject = Record<string, unknown>;
 
 export interface PdfChefDocumentsNativePlugin {
-  beginWrite(options: { name?: string; mimeType?: string }): Promise<unknown>;
+  beginWrite(options: { name?: string; mimeType?: string; transient?: boolean }): Promise<unknown>;
   appendWrite(options: { sessionId: string; data: string }): Promise<unknown>;
   finishWrite(options: { sessionId: string }): Promise<unknown>;
   abortWrite(options: { sessionId: string }): Promise<unknown>;
@@ -162,7 +162,7 @@ export class PdfChefDocumentsBridge {
 
   async retain(
     input: ReadableStream<Uint8Array>,
-    metadata: Pick<StoredDocument, 'name' | 'mimeType'>,
+    metadata: Pick<StoredDocument, 'name' | 'mimeType'> & { transient?: boolean },
   ): Promise<StoredDocument> {
     const name = nullableString(metadata.name, 'metadata.name');
     const mimeType = nullableString(metadata.mimeType, 'metadata.mimeType');
@@ -170,6 +170,7 @@ export class PdfChefDocumentsBridge {
       await this.native.beginWrite({
         name: optionalNativeString(name),
         mimeType: optionalNativeString(mimeType),
+        ...(metadata.transient ? { transient: true } : {}),
       }),
       'beginWrite result',
     );

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FileText, FolderOpen, Upload } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useOpenedPdf, type OpenedPdfRouteState } from '../../hooks/useOpenedPdf';
 import { Button, cx } from './Primitives';
 import { useHaptics } from '../../hooks/useWorkspaceRuntime';
@@ -31,9 +31,10 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   allowOpenedPdf = true,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
-  const [usedOpenedPdf, setUsedOpenedPdf] = useState(false);
+  const usedOpenedPdf = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const location = useLocation();
+  const navigate = useNavigate();
   const { openedPdf } = useOpenedPdf();
   const haptic = useHaptics();
 
@@ -46,12 +47,24 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       !canUseOpenedPdf
       || !routeState?.useOpenedPdf
       || routeState.openedPdfId !== openedPdf?.id
-      || usedOpenedPdf
+      || usedOpenedPdf.current
       || !openedPdf
     ) return;
-    setUsedOpenedPdf(true);
-    onFilesSelected([openedPdf.file]);
-  }, [canUseOpenedPdf, onFilesSelected, openedPdf, routeState?.openedPdfId, routeState?.useOpenedPdf, usedOpenedPdf]);
+    let cancelled = false;
+    // Wait until mount effects finish. StrictMode's initial cleanup must not invalidate a
+    // document load started by the first effect pass or start that same cached load twice.
+    queueMicrotask(() => {
+      if (cancelled || usedOpenedPdf.current) return;
+      usedOpenedPdf.current = true;
+      // Consume history too: this upload surface remounts when the reader closes a document.
+      navigate({ pathname: location.pathname, search: location.search, hash: location.hash }, {
+        replace: true,
+        state: { ...routeState, useOpenedPdf: false },
+      });
+      onFilesSelected([openedPdf.file]);
+    });
+    return () => { cancelled = true; };
+  }, [canUseOpenedPdf, location.pathname, location.search, location.hash, navigate, onFilesSelected, openedPdf, routeState]);
 
   const openPicker = useCallback(() => {
     haptic('selection');

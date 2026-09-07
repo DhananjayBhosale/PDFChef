@@ -21,6 +21,7 @@ import { getPageTextSignatures, loadPDFDocument, renderPageAsImage } from '../..
 import { downloadBlob } from '../../services/pdfShared';
 import { androidExportFileName } from '../../services/androidParity';
 import { ProcessingStatus } from '../../types';
+import { compareExtractedPageText } from '../../services/pdfToolResults';
 
 interface PreviewState {
   left: string;
@@ -32,9 +33,10 @@ interface ComparisonResult {
   pagesCompared: number;
   identicalPageCount: number;
   differentPages: number[];
-  matchRatio: number;
+  matchRatio: number | null;
+  unavailablePages: number[];
   pageCountEqual: boolean;
-  firstPageTextEqual: boolean;
+  firstPageTextEqual: boolean | null;
   limitedToFirstFifty: boolean;
 }
 
@@ -118,7 +120,7 @@ export const ComparePDF: React.FC = () => {
       } catch (error) {
         console.error(error);
         if (active) {
-          setPreviewError('Unable to render this page in one or both PDFs; you can still export the text summary.');
+          setPreviewError('This page could not be shown for one of the files. You can still save the written summary below.');
         }
       } finally {
         if (active) setPreviewLoading(false);
@@ -220,29 +222,35 @@ export const ComparePDF: React.FC = () => {
     if (!file1 || !file2 || !pdf1 || !pdf2) return;
     setReportLoading(true);
     setResult(null);
-    setStatus({ isProcessing: true, progress: 10, message: 'Comparing extracted text on this device…' });
+    setStatus({ isProcessing: true, progress: 10, message: 'Comparing the wording on your device…' });
     try {
       const commonPages = Math.min(pdf1.numPages, pdf2.numPages);
       const maxPagesCompared = Math.min(commonPages, 50);
 
       const [leftSignatures, rightSignatures] = await Promise.all([
-        getPageTextSignatures(file1, { maxPages: maxPagesCompared, maxCharsPerPage: 600 }),
-        getPageTextSignatures(file2, { maxPages: maxPagesCompared, maxCharsPerPage: 600 }),
+        getPageTextSignatures(file1, { maxPages: maxPagesCompared, maxCharsPerPage: Infinity }),
+        getPageTextSignatures(file2, { maxPages: maxPagesCompared, maxCharsPerPage: Infinity }),
       ]);
 
       const differentPages: number[] = [];
       const identicalPages: number[] = [];
+      const unavailablePages: number[] = [];
 
       for (let index = 0; index < maxPagesCompared; index += 1) {
         const left = (leftSignatures[index] || '').trim();
         const right = (rightSignatures[index] || '').trim();
-        if (left === right) identicalPages.push(index + 1);
+        const comparison = compareExtractedPageText(left, right);
+        if (comparison === 'unavailable') unavailablePages.push(index + 1);
+        else if (comparison === 'matches') identicalPages.push(index + 1);
         else differentPages.push(index + 1);
       }
 
-      const matchRatio = maxPagesCompared > 0
-        ? Math.round((identicalPages.length / maxPagesCompared) * 100)
-        : 0;
+      const comparablePages = maxPagesCompared - unavailablePages.length;
+      const matchRatio = comparablePages > 0
+        ? Math.round((identicalPages.length / comparablePages) * 100)
+        : null;
+      const firstPageComparison = compareExtractedPageText(leftSignatures[0] || '', rightSignatures[0] || '');
+      const firstPageTextEqual = firstPageComparison === 'unavailable' ? null : firstPageComparison === 'matches';
 
       const mismatchDetails = differentPages.slice(0, 20).map((pageNumber) => {
         const left = leftSignatures[pageNumber - 1] || '<empty>';
@@ -257,11 +265,7 @@ export const ComparePDF: React.FC = () => {
       const firstPageSignatureA = (leftSignatures[0] || '').replace(/\s+/g, ' ').trim().slice(0, 500);
       const firstPageSignatureB = (rightSignatures[0] || '').replace(/\s+/g, ' ').trim().slice(0, 500);
 
-      /**
-       * The first block is `ComparePdfToolProcessor`'s report verbatim: same title, local timestamp,
-       * two summary lines and 500-character first-page signatures. The clearly labelled browser
-       * section adds per-page extracted-text checks without implying a visual PDF diff.
-       */
+      // Text excerpts keep the report readable; equality uses the complete extracted text.
       const report = [
         'PDF Chef Compare Summary',
         `Generated: ${formatGeneratedAt(new Date())}`,
@@ -276,7 +280,7 @@ export const ComparePDF: React.FC = () => {
         '',
         'Summary',
         `- Page count equal: ${pdf1.numPages === pdf2.numPages}`,
-        `- Approx text signature equal: ${firstPageSignatureA === firstPageSignatureB}`,
+        `- First-page extracted text equal: ${firstPageTextEqual === null ? 'unavailable' : firstPageTextEqual}`,
         '',
         'First-page text signature A:',
         firstPageSignatureA || '<empty>',
@@ -284,12 +288,14 @@ export const ComparePDF: React.FC = () => {
         'First-page text signature B:',
         firstPageSignatureB || '<empty>',
         '',
-        'Per-page extracted-text detail (browser build)',
-        '- Method: normalized extracted text only; layout, images, fonts and annotations are not compared',
+        'Page-by-page wording detail',
+        '- What was compared: the wording only. Layout, pictures, fonts and comments were not compared.',
         `- Pages compared: ${maxPagesCompared}`,
-        `- Matching text signatures: ${identicalPages.length}`,
-        `- Different text signatures: ${differentPages.length}`,
-        `- Text-signature match ratio: ${matchRatio}%`,
+        `- Pages where the wording matches: ${identicalPages.length}`,
+        `- Pages where the wording differs: ${differentPages.length}`,
+        `- Pages without extractable text in one or both files: ${unavailablePages.length}`,
+        `- Share of pages with extractable text where wording matches: ${matchRatio === null ? 'unavailable' : `${matchRatio}%`}`,
+        '- Pages without extractable text cannot establish a match. Compare scans and pictures visually.',
         ...(maxPagesCompared < commonPages ? [`- Note: compared first ${maxPagesCompared} common pages only`] : []),
         '',
         'Pages with different extracted text:',
@@ -307,8 +313,9 @@ export const ComparePDF: React.FC = () => {
         identicalPageCount: identicalPages.length,
         differentPages,
         matchRatio,
+        unavailablePages,
         pageCountEqual: pdf1.numPages === pdf2.numPages,
-        firstPageTextEqual: firstPageSignatureA === firstPageSignatureB,
+        firstPageTextEqual,
         limitedToFirstFifty: maxPagesCompared < commonPages,
       });
       setStatus({
@@ -412,7 +419,7 @@ export const ComparePDF: React.FC = () => {
                 onClick={handleExportReport}
                 className="w-full sm:w-auto"
               >
-                Export comparison report
+                Save the summary
               </Button>
               <Button icon={<Undo2 aria-hidden size={18} />} onClick={reset} disabled={reportLoading} className="w-full sm:w-auto">
                 Choose different PDFs
@@ -438,22 +445,25 @@ export const ComparePDF: React.FC = () => {
                   </div>
                   <div>
                     <dt className="text-xs font-medium">First-page text</dt>
-                    <dd className="mt-0.5 font-semibold">{result.firstPageTextEqual ? 'Matches' : 'Differs'}</dd>
+                    <dd className="mt-0.5 font-semibold">{result.firstPageTextEqual === null ? 'Unavailable' : result.firstPageTextEqual ? 'Matches' : 'Differs'}</dd>
                   </div>
                   <div>
                     <dt className="text-xs font-medium">Pages checked</dt>
                     <dd className="mt-0.5 font-semibold">{result.pagesCompared}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs font-medium">Text signatures</dt>
-                    <dd className="mt-0.5 font-semibold">{result.matchRatio}% match</dd>
+                    <dt className="text-xs font-medium">Wording that matches</dt>
+                    <dd className="mt-0.5 font-semibold">{result.matchRatio === null ? 'Unavailable' : `${result.matchRatio}% match`}</dd>
                   </div>
                 </dl>
                 <p className="type-footnote mt-2">
                   {result.differentPages.length === 0
-                    ? 'No extracted-text differences were found in the checked common pages.'
-                    : `Different extracted text on page${result.differentPages.length === 1 ? '' : 's'} ${result.differentPages.join(', ')}.`}
+                    ? result.identicalPageCount > 0
+                      ? 'Wording matches on the checked pages with extractable text. Pictures, layout and fonts are not compared.'
+                      : 'These pages need visual comparison. Inspect the previews for differences in pictures, layout and wording.'
+                    : `The wording differs on page${result.differentPages.length === 1 ? '' : 's'} ${result.differentPages.join(', ')}. Pictures, layout and fonts are not compared.`}
                   {result.limitedToFirstFifty ? ' Only the first 50 common pages were checked.' : ''}
+                  {result.unavailablePages.length > 0 ? ` Text could not be compared on pages ${result.unavailablePages.join(', ')}. These pages are excluded from the match percentage; inspect them visually.` : ''}
                 </p>
               </section>
             )}

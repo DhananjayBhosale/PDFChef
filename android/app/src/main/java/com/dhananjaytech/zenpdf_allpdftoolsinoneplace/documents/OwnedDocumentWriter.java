@@ -58,6 +58,7 @@ final class OwnedDocumentWriter {
     private final Clock clock;
     private final TokenSource tokens;
     private final FaultInjector faults;
+    private final java.util.Map<String, String> transientSessions = new java.util.HashMap<>();
 
     OwnedDocumentWriter(Path filesDir) {
         this(filesDir, ignored -> filesDir.toFile().getUsableSpace(), System::currentTimeMillis,
@@ -155,10 +156,17 @@ final class OwnedDocumentWriter {
 
     OwnedDocument finish(String sessionId,
             OwnedPendingImportStore.CancellationSignal cancellation) throws Failure {
+        return finish(sessionId, false, cancellation);
+    }
+
+    OwnedDocument finish(String sessionId, boolean transientOutput,
+            OwnedPendingImportStore.CancellationSignal cancellation) throws Failure {
         if (!isSessionRef(sessionId) || cancellation == null) throw invalid();
         checkCancelled(cancellation);
         Layout layout = prepareAndRecover();
+        if (transientSessions.containsKey(sessionId) && !transientOutput) throw invalid();
         FinishRecord prior = loadFinishIfPresent(layout, sessionId);
+        if (prior != null && transientOutput != transientSessions.containsKey(sessionId)) throw invalid();
         if (prior != null && prior.committed) return loadOwned(layout, prior.ref);
         SessionRecord session = loadSession(layout, sessionId);
         if (session.state != State.OPEN) throw interrupted();
@@ -168,8 +176,18 @@ final class OwnedDocumentWriter {
             requireRegular(part, session.committedBytes);
             FileDigest digest = digest(part, session.committedBytes, cancellation, session.mimeType);
             validateMagic(session.mimeType, digest.prefix);
-            String ref = prior == null ? nextRef("d1_") : prior.ref;
+            String ref = prior == null
+                    ? transientSessions.getOrDefault(sessionId, null) : prior.ref;
+            if (ref == null) ref = nextRef("d1_");
             requireNewOwnedCapacity(layout, ref);
+            if (transientOutput && !transientSessions.containsKey(sessionId)) {
+                // Persist before any finish intent can publish this ref as owned.
+                publishReplace(layout.transientMarker(sessionId),
+                        ref.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                fsyncDirectory(layout.operations);
+                transientSessions.put(sessionId, ref);
+                faults.checkpoint(Checkpoint.AFTER_TRANSIENT_MARKER);
+            }
             FinishRecord intent = prior == null
                     ? new FinishRecord(sessionId, ref, session.displayName, session.mimeType, digest.size,
                             digest.hash, now(), false)
@@ -284,6 +302,13 @@ final class OwnedDocumentWriter {
     boolean abort(String sessionId) throws Failure {
         if (!isSessionRef(sessionId)) throw invalid();
         Layout layout = prepareAndRecover();
+        String transientRef = transientSessions.get(sessionId);
+        if (transientRef != null) {
+            try {
+                completeTransientDelete(layout, sessionId, transientRef, layout.transientMarker(sessionId));
+                return true;
+            } catch (IOException failure) { throw unsafe(); }
+        }
         FinishRecord finish = loadFinishIfPresent(layout, sessionId);
         if (finish != null && finish.committed) return false;
         try {
@@ -371,7 +396,7 @@ final class OwnedDocumentWriter {
                 } else if (Files.exists(data, LinkOption.NOFOLLOW_LINKS)) {
                     throw unsafe();
                 }
-                result.add(document);
+                if (!transientSessions.containsValue(document.ref)) result.add(document);
             }
             result.sort(Comparator.comparingLong((OwnedDocument value) -> value.createdAtMillis)
                     .reversed().thenComparing(value -> value.ref));
@@ -840,6 +865,14 @@ final class OwnedDocumentWriter {
         if (!PendingImportRecord.isValidRef(ref)) throw invalid();
         Layout layout = prepareAndRecover();
         try {
+            String transientSession = null;
+            for (var entry : transientSessions.entrySet()) {
+                if (entry.getValue().equals(ref)) { transientSession = entry.getKey(); break; }
+            }
+            if (transientSession != null) {
+                completeTransientDelete(layout, transientSession, ref, layout.transientMarker(transientSession));
+                return true;
+            }
             recoverRestoringUndoForRef(layout, ref);
             Path data = layout.ownedData(ref);
             Path record = layout.ownedRecord(ref);
@@ -922,6 +955,7 @@ final class OwnedDocumentWriter {
     private Layout prepareAndRecover() throws Failure {
         try {
             Layout layout = Layout.prepare(filesDir);
+            recoverTransientOutputs(layout);
             recoverNonRestoringUndos(layout);
             recoverPayloadClears(layout);
             recoverDeletes(layout);
@@ -933,6 +967,32 @@ final class OwnedDocumentWriter {
         } catch (IOException | RuntimeException failure) {
             throw unsafe();
         }
+    }
+
+    private void recoverTransientOutputs(Layout layout) throws IOException, Failure {
+        for (Path marker : listBounded(layout.operations, ".transient", MAXIMUM_OWNED_DOCUMENTS)) {
+            String filename = marker.getFileName().toString();
+            String sessionId = filename.substring(0, filename.length() - ".transient".length());
+            requireRegular(marker, -1);
+            String ref = new String(readRecord(marker), java.nio.charset.StandardCharsets.US_ASCII);
+            if (!isSessionRef(sessionId) || !PendingImportRecord.isValidRef(ref)
+                    || !marker.equals(layout.transientMarker(sessionId))) throw unsafe();
+            if (ref.equals(transientSessions.get(sessionId))) continue;
+            completeTransientDelete(layout, sessionId, ref, marker);
+        }
+    }
+
+    private void completeTransientDelete(Layout layout, String sessionId, String ref, Path marker)
+            throws IOException, Failure {
+        // Remove replay instructions first. A restart during cleanup must never
+        // recreate the private document from a finish intent or session payload.
+        deleteVerified(layout.finishRecord(sessionId));
+        fsyncDirectory(layout.operations);
+        deleteVerified(layout.sessionPart(sessionId));
+        deleteVerified(layout.sessionRecord(sessionId));
+        fsyncDirectory(layout.sessions);
+        completeDelete(layout, ref, marker);
+        transientSessions.remove(sessionId);
     }
 
     private void recoverPayloadClears(Layout layout) throws IOException, Failure {
@@ -1866,7 +1926,7 @@ final class OwnedDocumentWriter {
     @FunctionalInterface interface Clock { long nowMillis(); }
     @FunctionalInterface interface TokenSource { String next(); }
     @FunctionalInterface interface FaultInjector { void checkpoint(Checkpoint checkpoint) throws IOException; }
-    enum Checkpoint { AFTER_APPEND_DATA_FORCE, AFTER_APPEND_JOURNAL_PUBLISH,
+    enum Checkpoint { AFTER_TRANSIENT_MARKER, AFTER_APPEND_DATA_FORCE, AFTER_APPEND_JOURNAL_PUBLISH,
         AFTER_FINISH_INTENT, AFTER_FINISH_DATA_MOVE, AFTER_RETAIN_DATA_MOVE,
         AFTER_OWNED_TARGET_DIGEST, AFTER_OWNED_RECORD_PUBLISH, AFTER_OWNED_SOURCE_OPEN,
         AFTER_OWNED_READER_SOURCE_READ, AFTER_RENAME_RECORD_FORCE,
@@ -1946,6 +2006,7 @@ final class OwnedDocumentWriter {
         }
         Path sessionPart(String id) throws IOException { return direct(sessions, id + ".part"); }
         Path sessionRecord(String id) throws IOException { return direct(sessions, id + ".session"); }
+        Path transientMarker(String id) throws IOException { return direct(operations, id + ".transient"); }
         Path finishRecord(String id) throws IOException { return direct(operations, id + ".finish"); }
         Path retainRecord(String ref) throws IOException { return direct(operations, "retain_" + ref + ".finish"); }
         Path deleteMarker(String ref) throws IOException {

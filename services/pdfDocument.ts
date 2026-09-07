@@ -1,5 +1,6 @@
 import {
   PDFCheckBox,
+  PDFDict,
   PDFDocument,
   PDFDropdown,
   PDFName,
@@ -15,6 +16,7 @@ import type { PDFMetadata } from '../types';
 import type { PdfFormFieldValue } from './pdfBrowser';
 import { loadPDFDocument } from './pdfBrowser';
 import { readFileAsArrayBuffer } from './pdfShared';
+import { getPdfPageVisualGeometry } from './pdfPageGeometry';
 import { decryptPdf, encryptPdfWithAes128 } from './qpdfBrowser';
 import {
   getVisualPageSize,
@@ -111,13 +113,9 @@ export const createPDFFromImages = async (
     const arrayBuffer = await readFileAsArrayBuffer(file);
     let image;
 
-    try {
-      if (file.type === 'image/jpeg') image = await pdfDoc.embedJpg(arrayBuffer);
-      else if (file.type === 'image/png') image = await pdfDoc.embedPng(arrayBuffer);
-      else continue;
-    } catch {
-      continue;
-    }
+    if (file.type === 'image/jpeg') image = await pdfDoc.embedJpg(arrayBuffer);
+    else if (file.type === 'image/png') image = await pdfDoc.embedPng(arrayBuffer);
+    else throw new Error('This image format cannot be included in the PDF.');
 
     const pageWidth = 595.28;
     const pageHeight = 841.89;
@@ -181,22 +179,18 @@ export const createPDFFromLayout = async (pages: PDFPageLayout[]): Promise<Uint8
     const { width: pageWidth, height: pageHeight } = page.getSize();
 
     for (const element of layout.elements) {
-      try {
-        const image = await loadEmbeddedImage(element.file);
-        const pdfX = element.x * pageWidth;
-        const pdfY = pageHeight - element.y * pageHeight;
-        const pdfW = element.width * pageWidth;
-        const pdfH = element.height * pageHeight;
+      const image = await loadEmbeddedImage(element.file);
+      const pdfX = element.x * pageWidth;
+      const pdfY = pageHeight - element.y * pageHeight;
+      const pdfW = element.width * pageWidth;
+      const pdfH = element.height * pageHeight;
 
-        page.drawImage(image, {
-          x: pdfX,
-          y: pdfY - pdfH,
-          width: pdfW,
-          height: pdfH,
-        });
-      } catch (error) {
-        console.error('Failed to embed image', error);
-      }
+      page.drawImage(image, {
+        x: pdfX,
+        y: pdfY - pdfH,
+        width: pdfW,
+        height: pdfH,
+      });
     }
   }
 
@@ -571,7 +565,7 @@ export const protectPDF = async (file: File, password: string): Promise<Uint8Arr
 
 export const getPDFMetadata = async (file: File): Promise<PDFMetadata> => {
   const arrayBuffer = await readFileAsArrayBuffer(file);
-  const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+  const pdfDoc = await PDFDocument.load(arrayBuffer, { updateMetadata: false });
   return {
     title: pdfDoc.getTitle(),
     author: pdfDoc.getAuthor(),
@@ -587,10 +581,8 @@ export const getPDFMetadata = async (file: File): Promise<PDFMetadata> => {
 /**
  * `MetadataPdfToolProcessor` plus `parseMetadataUpdateOptions`/`MetadataUpdateOptions.asMap`.
  *
- * The app collapses whitespace in every value, writes only the fields that carry text, and treats
- * `__clearAll` as "write null to all six". Blank-but-defined fields therefore leave the existing
- * value alone unless `clearAll` is set, which is what stops an untouched form from wiping the
- * document's own title.
+ * Undefined fields are unchanged; explicitly empty fields are cleared. Clearing all six can
+ * be followed by new values, so editing one box after Clear does not restore old properties.
  */
 export const setPDFMetadata = async (
   file: File,
@@ -598,7 +590,7 @@ export const setPDFMetadata = async (
   options?: { clearAll?: boolean },
 ): Promise<Uint8Array> => {
   const arrayBuffer = await readFileAsArrayBuffer(file);
-  const pdfDoc = await PDFDocument.load(arrayBuffer);
+  const pdfDoc = await PDFDocument.load(arrayBuffer, { updateMetadata: false });
 
   if (options?.clearAll) {
     pdfDoc.setTitle('');
@@ -607,13 +599,12 @@ export const setPDFMetadata = async (
     pdfDoc.setKeywords([]);
     pdfDoc.setCreator('');
     pdfDoc.setProducer('');
-    return pdfDoc.save();
   }
 
   const write = (value: string | undefined, apply: (sanitized: string) => void) => {
     if (value === undefined) return;
     const sanitized = sanitizePdfText(value);
-    if (sanitized) apply(sanitized);
+    apply(sanitized);
   };
 
   write(metadata.title, (value) => pdfDoc.setTitle(value));
@@ -671,7 +662,8 @@ export const flattenPDF = async (file: File): Promise<Uint8Array> => {
 
 export const repairPDF = async (file: File): Promise<Uint8Array> => {
   const arrayBuffer = await readFileAsArrayBuffer(file);
-  const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true } as any);
+  const pdfDoc = await PDFDocument.load(arrayBuffer);
+  if (pdfDoc.getPageCount() === 0) throw new Error(NO_PAGES_MESSAGE);
   return pdfDoc.save({ useObjectStreams: false });
 };
 
@@ -696,7 +688,7 @@ const clearPDFMetadataAndCatalogActions = (pdfDoc: PDFDocument) => {
 
 export const removePDFMetadata = async (file: File): Promise<Uint8Array> => {
   const arrayBuffer = await readFileAsArrayBuffer(file);
-  const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true } as any);
+  const pdfDoc = await PDFDocument.load(arrayBuffer);
 
   clearPDFMetadataAndCatalogActions(pdfDoc);
 
@@ -705,10 +697,16 @@ export const removePDFMetadata = async (file: File): Promise<Uint8Array> => {
 
 export const removePDFAnnotations = async (file: File): Promise<Uint8Array> => {
   const arrayBuffer = await readFileAsArrayBuffer(file);
-  const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true } as any);
+  const pdfDoc = await PDFDocument.load(arrayBuffer);
 
   for (const page of pdfDoc.getPages()) {
-    page.node.delete(PDFName.of('Annots'));
+    const annotations = page.node.Annots();
+    if (annotations) {
+      for (let index = annotations.size() - 1; index >= 0; index -= 1) {
+        const annotation = annotations.lookup(index, PDFDict);
+        if (annotation.get(PDFName.of('Subtype')) !== PDFName.of('Widget')) annotations.remove(index);
+      }
+    }
     page.node.delete(PDFName.of('AA'));
   }
 
@@ -718,7 +716,6 @@ export const removePDFAnnotations = async (file: File): Promise<Uint8Array> => {
 export const sanitizePDF = async (file: File): Promise<Uint8Array> => {
   const arrayBuffer = await readFileAsArrayBuffer(file);
   const pdfDoc = await PDFDocument.load(arrayBuffer, {
-    ignoreEncryption: true,
     updateMetadata: false,
   });
 
@@ -754,15 +751,22 @@ export const cropPDFMargins = async (file: File, options: CropBoxOptions): Promi
   };
 
   for (const page of pdfDoc.getPages()) {
-    const { width, height } = page.getSize();
-    const left = width * (margins.left / 100);
-    const bottom = height * (margins.bottom / 100);
-    const right = width * (margins.right / 100);
-    const top = height * (margins.top / 100);
-    const cropWidth = Math.max(36, width - left - right);
-    const cropHeight = Math.max(36, height - top - bottom);
+    // Trim what is currently visible, not the sheet it was cut from.
+    //
+    // getSize() reports the MediaBox and drops its origin, so cropping twice
+    // used to throw the first crop away — a 20% trim followed by a 5% nudge
+    // came back BIGGER than the 20% — and any page whose MediaBox does not
+    // start at 0,0 (common from imposition and scanner software) was trimmed
+    // against the wrong corner.
+    const box = page.getCropBox();
+    const left = box.width * (margins.left / 100);
+    const bottom = box.height * (margins.bottom / 100);
+    const right = box.width * (margins.right / 100);
+    const top = box.height * (margins.top / 100);
+    const cropWidth = Math.max(36, box.width - left - right);
+    const cropHeight = Math.max(36, box.height - top - bottom);
 
-    page.setCropBox(left, bottom, cropWidth, cropHeight);
+    page.setCropBox(box.x + left, box.y + bottom, cropWidth, cropHeight);
   }
 
   return pdfDoc.save();
@@ -788,7 +792,8 @@ export const addHeaderFooterToPDF = async (file: File, options: HeaderFooterOpti
 
   pages.forEach((page, index) => {
     const pageNumber = index + 1;
-    const { width, height } = page.getSize();
+    const geometry = getPdfPageVisualGeometry(page);
+    const { width, height } = getVisualPageSize(geometry);
     const header = interpolateHeaderFooterText(options.headerText.trim(), pageNumber, totalPages);
     const footerBase = options.footerText.trim();
     const footer = interpolateHeaderFooterText(
@@ -799,9 +804,11 @@ export const addHeaderFooterToPDF = async (file: File, options: HeaderFooterOpti
 
     if (header) {
       const headerWidth = font.widthOfTextAtSize(header, fontSize);
+      const origin = visualPointToPdf(geometry, Math.max(24, (width - headerWidth) / 2), fontSize + 18);
       page.drawText(header, {
-        x: Math.max(24, (width - headerWidth) / 2),
-        y: height - fontSize - 18,
+        x: origin.x,
+        y: origin.y,
+        rotate: degrees(geometry.rotation),
         size: fontSize,
         font,
         color: rgb(0.25, 0.25, 0.25),
@@ -810,9 +817,11 @@ export const addHeaderFooterToPDF = async (file: File, options: HeaderFooterOpti
 
     if (footer) {
       const footerWidth = font.widthOfTextAtSize(footer, fontSize);
+      const origin = visualPointToPdf(geometry, Math.max(24, (width - footerWidth) / 2), height - 18);
       page.drawText(footer, {
-        x: Math.max(24, (width - footerWidth) / 2),
-        y: 18,
+        x: origin.x,
+        y: origin.y,
+        rotate: degrees(geometry.rotation),
         size: fontSize,
         font,
         color: rgb(0.25, 0.25, 0.25),
@@ -1066,7 +1075,7 @@ export const savePDFWithAnnotations = async (
       if (cleared.uncleared > 0) {
         // Text that reaches outside the repainted area is left where it is, so say so rather than
         // letting the save claim the paragraph's originals are gone.
-        console.warn(`${cleared.uncleared} text object(s) crossed a redrawn paragraph's edge and were left in place.`);
+        throw new Error('Direct text edit failed: some original text crossed the paragraph edge and could not be removed.');
       }
     }
   }
@@ -1512,13 +1521,16 @@ export const applySignaturesToPDF = async (file: File, signatures: SignaturePlac
       : await pdfDoc.embedJpg(signature.dataUrl);
 
     const page = pdfDoc.getPage(signature.pageIndex);
-    const { width, height } = page.getSize();
+    const geometry = getPdfPageVisualGeometry(page);
+    const { width, height } = getVisualPageSize(geometry);
     const targetW = width * signature.width;
     const targetH = targetW / signature.aspectRatio;
 
+    const origin = visualPointToPdf(geometry, width * signature.x, height * signature.y + targetH);
     page.drawImage(image, {
-      x: width * signature.x,
-      y: height - height * signature.y - targetH,
+      x: origin.x,
+      y: origin.y,
+      rotate: degrees(geometry.rotation),
       width: targetW,
       height: targetH,
     });
@@ -1583,7 +1595,8 @@ export const addWatermarkToPDF = async (file: File, options: WatermarkOptions): 
   const measureTextWidth = (text: string, fontSize: number) => font.widthOfTextAtSize(text, fontSize);
 
   for (const page of pages) {
-    const { width, height } = page.getSize();
+    const geometry = getPdfPageVisualGeometry(page);
+    const { width, height } = getVisualPageSize(geometry);
     const layout = watermarkLayout({
       pageWidth: width,
       pageHeight: height,
@@ -1598,7 +1611,8 @@ export const addWatermarkToPDF = async (file: File, options: WatermarkOptions): 
     });
     if (!layout) continue;
 
-    const origin = rotatedTextOrigin(layout);
+    const visualOrigin = rotatedTextOrigin(layout);
+    const origin = visualPointToPdf(geometry, visualOrigin.x, height - visualOrigin.y);
     page.drawText(layout.text, {
       x: origin.x,
       y: origin.y,
@@ -1606,7 +1620,7 @@ export const addWatermarkToPDF = async (file: File, options: WatermarkOptions): 
       font,
       color,
       opacity,
-      rotate: degrees(layout.rotationDegrees),
+      rotate: degrees(geometry.rotation + layout.rotationDegrees),
     });
   }
 
@@ -1657,7 +1671,8 @@ export const addPageNumbersToPDF = async (file: File, options: PageNumberOptions
     const pageNumber = index + 1;
     if (pageNumber < startPage || pageNumber > endPage) return;
 
-    const { width, height } = page.getSize();
+    const geometry = getPdfPageVisualGeometry(page);
+    const { width, height } = getVisualPageSize(geometry);
     const layout = pageNumberLayout({
       pageWidth: width,
       pageHeight: height,
@@ -1668,9 +1683,11 @@ export const addPageNumbersToPDF = async (file: File, options: PageNumberOptions
     });
     if (!layout) return;
 
+    const origin = visualPointToPdf(geometry, layout.baselineX, height - layout.baselineY);
     page.drawText(layout.text, {
-      x: layout.baselineX,
-      y: layout.baselineY,
+      x: origin.x,
+      y: origin.y,
+      rotate: degrees(geometry.rotation),
       size: layout.fontSize,
       font,
       color: rgb(0.3, 0.3, 0.3),

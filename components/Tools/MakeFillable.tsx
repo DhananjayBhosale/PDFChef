@@ -87,7 +87,7 @@ export const MakeFillable: React.FC = () => {
       revokeObjectUrls(previews);
       pdf = await loadPDFDocument(selected);
       if (pdf?.isPureXfa) {
-        throw new Error('XFA forms are not supported. Export a standard PDF copy first.');
+        throw new Error('This form was built with a special Adobe format this app cannot read. Open it in Adobe Reader and save a normal PDF copy, then try again.');
       }
       const existingFields = await getPdfFormFields(pdf);
       const nextPreviews = await getPdfPagePreviews(selected, { scale: 0.8 });
@@ -99,7 +99,7 @@ export const MakeFillable: React.FC = () => {
       setTouchDrawMode(false);
       setExistingFieldCount(new Set(existingFields.map((field) => field.fieldName)).size);
       setPageIndex(0);
-      setStatus({ isProcessing: false, progress: 100, message: 'Ready. Draw fields manually or ask for local suggestions.' });
+      setStatus({ isProcessing: false, progress: 100, message: 'Ready. Draw the boxes yourself, or let the app suggest where they go.' });
     } catch (error) {
       setFile(null);
       setExistingFieldCount(0);
@@ -142,7 +142,7 @@ export const MakeFillable: React.FC = () => {
 
   const suggestFields = async () => {
     if (!file) return;
-    setStatus({ isProcessing: true, progress: 5, message: 'Looking for likely field labels…' });
+    setStatus({ isProcessing: true, progress: 5, message: 'Looking for places a box should go…' });
     let pdf: any = null;
     try {
       pdf = await loadPDFDocument(file);
@@ -201,7 +201,7 @@ export const MakeFillable: React.FC = () => {
       });
       setSelectedFieldId(suggestions[0]?.id ?? null);
       if (suggestions[0]) setPageIndex(suggestions[0].pageIndex);
-      setStatus({ isProcessing: false, progress: 100, message: suggestions.length ? `Added ${suggestions.length} suggestions. Keep or remove every suggestion before export.` : 'No likely labels or field shapes were found. Add fields manually.' });
+      setStatus({ isProcessing: false, progress: 100, message: suggestions.length ? `Suggested ${suggestions.length} ${suggestions.length === 1 ? 'box' : 'boxes'}. Check each one and keep or remove it before you save.` : 'No likely places for a box were found. Draw them yourself with Draw field on page.' });
     } catch (error) {
       setStatus({ isProcessing: false, progress: 0, message: '', error: error instanceof Error ? error.message : 'Field suggestions failed.' });
     } finally {
@@ -215,7 +215,7 @@ export const MakeFillable: React.FC = () => {
       setStatus({ isProcessing: false, progress: 0, message: '', error: validationMessages[0] });
       return;
     }
-    setStatus({ isProcessing: true, progress: 20, message: 'Writing form fields…' });
+    setStatus({ isProcessing: true, progress: 20, message: 'Adding the boxes to the PDF…' });
     try {
       const bytes = await createFillablePdf(file, fields);
       downloadBytes(bytes, `${file.name.replace(/\.pdf$/i, '')}-fillable.pdf`, 'application/pdf');
@@ -269,7 +269,7 @@ export const MakeFillable: React.FC = () => {
           <label className="mt-3 flex min-h-11 items-center gap-2 text-sm font-semibold text-[var(--text-secondary)]"><input type="checkbox" checked={required} onChange={(event) => setRequired(event.target.checked)} className="h-5 w-5 accent-blue-600" /> Required</label>
           {/* Kept: drawing a box is not visible anywhere on the page, and on
               touch the page scrolls instead unless draw mode is armed first. */}
-          <p className="type-caption mt-2.5 font-normal normal-case tracking-normal text-[var(--text-secondary)]">Drag on the page to place it. On a phone, arm Draw field on page first.</p>
+          <p className="type-caption mt-2.5 font-normal normal-case tracking-normal text-[var(--text-secondary)]">Drag on the page to place it. On a phone, tap Draw field on page first.</p>
           <button type="button" aria-pressed={touchDrawMode} onClick={() => setTouchDrawMode((current) => !current)} className={`chef-target chef-pressable mt-2.5 w-full rounded-[var(--radius-control)] px-4 text-sm font-bold ${touchDrawMode ? 'bg-[var(--accent-rest)] text-[var(--text-on-accent)]' : 'border border-[var(--border-strong)] bg-[var(--surface-raised)] text-[var(--text-primary)]'}`}>{touchDrawMode ? 'Cancel drawing' : 'Draw field on page'}</button>
           <button type="button" onClick={() => { revokeObjectUrls(previews); setFile(null); setPreviews([]); setFields([]); setPendingReviewIds(new Set()); setSelectedFieldId(null); setTouchDrawMode(false); setExistingFieldCount(0); }} className="chef-target chef-pressable mt-2.5 w-full rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-3 text-sm font-bold text-[var(--text-primary)] hover:border-[var(--accent-rest)]">Choose another PDF</button>
         </aside>
@@ -324,7 +324,7 @@ export const MakeFillable: React.FC = () => {
 
         <aside className="chef-scroller order-3 h-fit max-h-[78vh] overflow-auto rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 lg:order-none">
           <h2 className="font-bold text-[var(--text-primary)]">Fields on page {pageIndex + 1}</h2>
-          {fieldsOnPage.length === 0 ? <p className="mt-2 text-sm text-[var(--text-secondary)]">No fields on this page.</p> : (
+          {fieldsOnPage.length === 0 ? <p className="mt-2 text-sm text-[var(--text-secondary)]">No boxes to type into on this page. Try another page, or draw one yourself with Draw field on page.</p> : (
             <ul className="mt-2 space-y-2">
               {fieldsOnPage.map((field) => {
                 const needsReview = pendingReviewIds.has(field.id);

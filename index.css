@@ -15,6 +15,7 @@
   --chef-muted: var(--text-secondary);
   --chef-selection: rgba(220, 32, 32, 0.2);
   --chef-keyboard-inset: 0px;
+  --chef-viewport-offset-top: 0px;
 }
 
 .dark {
@@ -531,6 +532,19 @@ input[type='search']::-webkit-search-decoration {
   border-radius: var(--radius-panel);
 }
 
+/* A phone zooms the whole page in when you tap a field whose text is under
+   16px, and then leaves you there — scrolled sideways, hunting for the button
+   you were about to press. Small type is fine for a label; a box someone types
+   into is not the place for it. Coarse pointers only, so desktop density is
+   untouched. */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='color']),
+  select,
+  textarea {
+    font-size: max(16px, 1rem);
+  }
+}
+
 /* A field is a control, so its edge is the one that clears 3:1 rather than the
    one that only separates. The old hairline edge on a canvas fill left the box
    readable but not *findable*: on a bright phone panel the field and the page
@@ -544,7 +558,10 @@ input[type='search']::-webkit-search-decoration {
   background: var(--surface-canvas);
   color: var(--text-primary);
   font: inherit;
-  font-size: var(--type-body-size);
+  /* A box someone types into never drops below 16px. Under that a phone zooms
+     the whole page in on focus and leaves them there, and the text is hard
+     going for anyone reading without their glasses. */
+  font-size: max(16px, var(--type-body-size));
   transition: border-color var(--duration-tap) var(--ease-settle),
     box-shadow var(--duration-tap) var(--ease-settle);
 }

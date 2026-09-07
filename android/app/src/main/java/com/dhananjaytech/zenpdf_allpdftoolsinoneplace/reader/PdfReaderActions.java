@@ -73,6 +73,53 @@ public final class PdfReaderActions implements AutoCloseable {
         }
     }
 
+    /**
+     * Write a copy where the reader can find it again.
+     *
+     * Sharing hands the file to another app; someone who opened a PDF from a
+     * browser wants to keep it. Same off-main discipline as {@link #share}: a
+     * save that fails leaves the open document exactly as it was.
+     */
+    public void save(String ref, String displayName, Callback callback) {
+        Objects.requireNonNull(callback);
+        long operation;
+        synchronized (stateLock) {
+            if (closed) return;
+            if (busy) {
+                completeIfOpen(callback, Result.failed("DOCUMENT_BUSY"));
+                return;
+            }
+            if (!PdfReaderLaunchContract.isCanonicalRef(ref)) {
+                completeIfOpen(callback, Result.failed("DOCUMENT_INVALID_ARGUMENT"));
+                return;
+            }
+            if (displayName != null && !PdfReaderLaunchContract.isSafeDisplayName(displayName)) {
+                completeIfOpen(callback, Result.failed("DOCUMENT_INVALID_ARGUMENT"));
+                return;
+            }
+            busy = true;
+            operation = ++generation;
+        }
+        try {
+            executor.execute(() -> {
+                synchronized (stateLock) {
+                    if (closed || generation != operation) return;
+                }
+                Result result;
+                try {
+                    result = backend.export(ref, displayName)
+                            ? Result.success()
+                            : Result.failed("DOCUMENT_UNAVAILABLE");
+                } catch (Exception failure) {
+                    result = Result.failed("DOCUMENT_UNAVAILABLE");
+                }
+                finish(operation, callback, result);
+            });
+        } catch (RejectedExecutionException failure) {
+            finish(operation, callback, Result.failed("DOCUMENT_UNAVAILABLE"));
+        }
+    }
+
     private void prepare(long operation, String ref, String displayName, Callback callback) {
         Object handle = null;
         try {
@@ -195,6 +242,7 @@ public final class PdfReaderActions implements AutoCloseable {
 
     interface Backend {
         Object prepare(String ref) throws Exception;
+        boolean export(String ref, String displayName) throws Exception;
         default Object prepare(String ref, String displayName) throws Exception {
             return prepare(ref);
         }
@@ -226,6 +274,13 @@ public final class PdfReaderActions implements AutoCloseable {
             }
             Intent send = coordinator.createShareIntent(handle, contentUri);
             return new Prepared(handle, send);
+        }
+        @Override public boolean export(String ref, String displayName) throws Exception {
+            return coordinator.exportDocument(
+                    ref,
+                    displayName,
+                    MIME_PDF,
+                    Thread.currentThread()::isInterrupted);
         }
         @Override public void launch(Object value) {
             Prepared prepared = requirePrepared(value);

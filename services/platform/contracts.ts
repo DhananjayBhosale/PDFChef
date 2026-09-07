@@ -189,7 +189,12 @@ export interface OutputDeliveryRequest {
   readonly autoDownload: boolean;
 }
 
-export type OutputDeliveryHandler = (request: OutputDeliveryRequest) => Promise<void>;
+/** A retained result is saved even when its optional external export needs retry. */
+export interface OutputDeliveryResult {
+  readonly exportIssue: 'cancelled' | 'failed';
+}
+
+export type OutputDeliveryHandler = (request: OutputDeliveryRequest) => Promise<void | OutputDeliveryResult>;
 
 /**
  * Platform aggregate implemented by iOS and structurally compatible with the

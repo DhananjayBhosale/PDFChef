@@ -181,6 +181,18 @@ public final class AndroidDocumentsPluginContractTest {
                 "a1_1", true, 7, false, null));
     }
 
+    @Test public void generatedOutputDeliveryDoesNotWidenLegacyOrPickerMimeTypes() {
+        for (String mime : List.of("application/zip", "text/plain", "image/webp")) {
+            assertNotNull(AndroidDocumentsPlugin.deliveryRequestValues(
+                    "d1_abcdefghijklmnopqrstuv", true, "Output", true, mime));
+            assertNull(AndroidDocumentsPlugin.deliveryRequestValues(
+                    "a1_1", true, "Output", true, mime));
+            assertFalse(AndroidDocumentIngressPolicy.isSupportedMimeType(mime));
+        }
+        assertNull(AndroidDocumentsPlugin.deliveryRequestValues(
+                "d1_abcdefghijklmnopqrstuv", true, "Output", true, "application/javascript"));
+    }
+
     @Test public void renameRequestIsOwnedOnlyExactAndNonleaking() {
         AndroidDocumentsPlugin.RenameRequest parsed =
                 AndroidDocumentsPlugin.renameRequestValues(

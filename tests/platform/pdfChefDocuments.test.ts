@@ -82,6 +82,20 @@ test('retain aborts a usable native session when chunk-limit negotiation fails',
   assert.deepEqual(aborted, ['SESSION-MISMATCH']);
 });
 
+test('transient retention marks native staging before committing output bytes', async () => {
+  const writes: unknown[] = [];
+  const bridge = new PdfChefDocumentsBridge(nativeStub({
+    beginWrite: async options => {
+      writes.push(options);
+      return { sessionId: 'TRANSIENT', maximumChunkBytes: PDF_CHEF_MAXIMUM_CHUNK_BYTES };
+    },
+  }));
+  await bridge.retain(new Blob(['abc']).stream(), {
+    name: 'temporary.pdf', mimeType: 'application/pdf', transient: true,
+  });
+  assert.deepEqual(writes, [{ name: 'temporary.pdf', mimeType: 'application/pdf', transient: true }]);
+});
+
 test('open validates native offsets, completion state and address-free payloads', async () => {
   const invalidOffset = new PdfChefDocumentsBridge(nativeStub({
     readChunk: async () => ({ data: 'YQ==', nextOffset: 99, done: true }),

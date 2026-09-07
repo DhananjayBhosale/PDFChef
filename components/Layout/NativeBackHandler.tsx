@@ -18,7 +18,7 @@ export const NativeBackHandler = () => {
   }, [location.pathname]);
 
   useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return undefined;
+    if (Capacitor.getPlatform() !== 'android') return undefined;
 
     const registration = CapacitorApp.addListener('backButton', () => {
       const escape = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });

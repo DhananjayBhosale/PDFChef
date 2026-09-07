@@ -89,7 +89,7 @@ export const ReorderPDF: React.FC = () => {
         .catch((error) => {
           if (cancelled) return;
           console.error(error);
-          setPreviewError(error instanceof Error ? error.message : 'Unable to load page previews.');
+          setPreviewError(error instanceof Error ? error.message : 'The pages could not be shown. Choose another file, or run Repair PDF on it first.');
           setLoadingPreviews(false);
         });
     } else {
@@ -333,7 +333,7 @@ export const ReorderPDF: React.FC = () => {
         isProcessing: false,
         progress: 0,
         message: '',
-        error: error instanceof Error ? error.message : 'Unable to export the reordered PDF.',
+        error: error instanceof Error ? error.message : 'The reordered PDF could not be saved. Try again, or run Repair PDF on this file first.',
       });
     }
   };
@@ -387,7 +387,7 @@ export const ReorderPDF: React.FC = () => {
               icon={<Save aria-hidden size={18} />}
               onClick={() => void handleSave()}
             >
-              Export reordered PDF
+              Save reordered PDF
             </Button>
 
             {/* List Container - Vertical Stack */}
@@ -403,7 +403,7 @@ export const ReorderPDF: React.FC = () => {
                  </div>
                ) : previewError ? (
                  <div className="flex flex-col items-center gap-2 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] px-4 py-4 text-center">
-                   <p className="font-semibold text-[var(--status-danger-text)]">Unable to load page previews.</p>
+                   <p className="font-semibold text-[var(--status-danger-text)]">The pages could not be shown. Choose another file, or run Repair PDF on it first.</p>
                    <p className="max-w-measure text-sm text-[var(--text-secondary)]">{previewError}</p>
                    <Button tone="secondary" onClick={() => setFile(null)}>Choose another PDF</Button>
                  </div>

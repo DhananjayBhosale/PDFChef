@@ -1,7 +1,10 @@
 import JSZip from 'jszip';
 import { PDFDocument, rgb, type PDFFont } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
-import notoSansUrl from '@fontsource/noto-sans/files/noto-sans-latin-ext-400-normal.woff?url';
+// The `latin` subset, not `latin-ext`. The extended subset carries only the
+// accented additions — it has no A-Z, a-z or digits at all, so every ordinary
+// English word embedded from it comes out as .notdef boxes.
+import notoSansUrl from '@fontsource/noto-sans/files/noto-sans-latin-400-normal.woff?url';
 import type {
   PresentationData,
   PptxFiles,
@@ -169,7 +172,7 @@ export const extractDocxBlocks = async (file: File): Promise<DocxBlock[]> => {
   try {
     zip = await JSZip.loadAsync(await file.arrayBuffer());
   } catch {
-    throw new Error('This is not a readable .docx package.');
+    throw new Error('This is not a readable Word file. Make sure it ends in .docx, then try again.');
   }
   if (Object.keys(zip.files).length > MAX_DOCX_ENTRIES) {
     throw new Error('This Word document contains too many files to convert safely.');
@@ -182,7 +185,7 @@ export const extractDocxBlocks = async (file: File): Promise<DocxBlock[]> => {
   const xml = new TextDecoder().decode(documentXmlBytes);
 
   const documentXml = new DOMParser().parseFromString(xml, 'application/xml');
-  if (documentXml.querySelector('parsererror')) throw new Error('The Word document XML is malformed.');
+  if (documentXml.querySelector('parsererror')) throw new Error('This Word file is damaged, so its text could not be read. Try re-saving it from Word and converting again.');
 
   const paragraphs = Array.from(documentXml.getElementsByTagNameNS(WORD_NAMESPACE, 'p'))
     .filter((paragraph) => {
@@ -196,7 +199,7 @@ export const extractDocxBlocks = async (file: File): Promise<DocxBlock[]> => {
 
   const blocks = paragraphs.flatMap(readParagraph);
   if (!blocks.some((block) => block.text.trim())) {
-    throw new Error('No readable text was found in this Word document.');
+    throw new Error('There is no readable text in this Word file. If the pages are pictures or shapes, they cannot be converted here.');
   }
   return blocks;
 };
@@ -232,27 +235,36 @@ const wrapLine = (line: string, font: PDFFont, size: number, width: number): str
     if (current) lines.push(current);
     const chunks = splitLongWord(word, font, size, width);
     lines.push(...chunks.slice(0, -1));
-    current = chunks.at(-1) || '';
+    current = chunks[chunks.length - 1] || '';
   });
   if (current) lines.push(current);
   return lines.length ? lines : [''];
 };
 
-const unsupportedCharacters = (font: PDFFont, blocks: DocxBlock[]) => {
+/**
+ * Which characters this font has no glyph for.
+ *
+ * This used to ask pdf-lib to measure each character and treat a throw as
+ * "missing". It never throws: a codepoint the font does not cover maps to glyph
+ * 0 and measures at the .notdef advance, so the check passed for text that was
+ * about to be drawn as a row of boxes. Ask the font itself instead.
+ */
+const unsupportedCharacters = (coverage: FontCoverage, blocks: DocxBlock[]) => {
   const unsupported = new Set<string>();
   for (const block of blocks) {
     for (const character of Array.from(block.text)) {
       if (/\s/.test(character)) continue;
-      try {
-        font.widthOfTextAtSize(character, 11);
-      } catch {
-        unsupported.add(character);
-      }
+      const codePoint = character.codePointAt(0);
+      if (codePoint !== undefined && !coverage.has(codePoint)) unsupported.add(character);
       if (unsupported.size >= 6) return [...unsupported];
     }
   }
   return [...unsupported];
 };
+
+interface FontCoverage {
+  has(codePoint: number): boolean;
+}
 
 export const convertDocxToPdf = async (
   file: File,
@@ -262,11 +274,17 @@ export const convertDocxToPdf = async (
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   const fontBytes = await fetch(notoSansUrl).then((response) => {
-    if (!response.ok) throw new Error('Unable to load the local document font.');
+    if (!response.ok) throw new Error('The font needed for the PDF could not be loaded. Check you are online for a moment, then try again.');
     return response.arrayBuffer();
   });
   const font = await pdf.embedFont(fontBytes, { subset: true });
-  const unsupported = unsupportedCharacters(font, blocks);
+  const coverage = fontkit.create(new Uint8Array(fontBytes)) as unknown as {
+    hasGlyphForCodePoint(codePoint: number): boolean;
+  };
+  const unsupported = unsupportedCharacters(
+    { has: (codePoint) => coverage.hasGlyphForCodePoint(codePoint) },
+    blocks,
+  );
   if (unsupported.length) {
     throw new Error(`PDF text cannot be exported exactly. Unsupported characters: ${unsupported.join(' ')}.`);
   }
@@ -324,7 +342,7 @@ const renderPresentation = async (
   const presentation = buildPresentation(files);
   if (!presentation.slides.length) throw new Error('This presentation does not contain any slides.');
   if (presentation.slides.length > MAX_PPTX_SLIDES) throw new Error('This presentation has too many slides to convert safely.');
-  if (!(presentation.width > 0) || !(presentation.height > 0)) throw new Error('This presentation has invalid slide dimensions.');
+  if (!(presentation.width > 0) || !(presentation.height > 0)) throw new Error('This presentation does not say how big its slides are, so it cannot be converted. Try re-saving it from PowerPoint.');
   return presentation;
 };
 
@@ -412,7 +430,7 @@ export const convertPptxToPdf = async (
           rotatedCanvas.width = canvas.height;
           rotatedCanvas.height = canvas.width;
           const context = rotatedCanvas.getContext('2d');
-          if (!context) throw new Error('Unable to rotate the rendered slide.');
+          if (!context) throw new Error('A slide could not be turned the right way up. Try re-saving the file from PowerPoint.');
           context.translate(rotatedCanvas.width, 0);
           context.rotate(Math.PI / 2);
           context.drawImage(canvas, 0, 0);

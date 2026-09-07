@@ -37,11 +37,16 @@
     "test:browser:edit-pdf:paragraphs": "node scripts/verify-edit-pdf-paragraphs.mjs",
     "test:browser:edit-pdf:overflow": "node scripts/verify-native-text-overflow.mjs",
     "test:browser:pdf-pinch": "node scripts/verify-pdf-pinch-zoom.mjs",
-    "test:browser:edit-pdf": "npm run test:browser:edit-pdf:paragraphs && npm run test:browser:edit-pdf:mobile && npm run test:browser:edit-pdf:desktop && npm run test:browser:edit-pdf:overflow",
+    "test:browser:edit-pdf": "npm run test:browser:edit-pdf:paragraphs && npm run test:browser:edit-pdf:mobile && npm run test:browser:edit-pdf:desktop && npm run test:browser:edit-pdf:overflow && npm run test:browser:edit-pdf:shared-forms && npm run test:browser:edit-pdf:handoff",
     "bench:fixtures": "node scripts/generate-bench-fixtures.mjs",
     "bench:browser": "node scripts/run-browser-benchmarks.mjs",
     "bench:build": "node scripts/collect-build-metrics.mjs",
-    "bench:report": "node scripts/write-benchmark-report.mjs"
+    "bench:report": "node scripts/write-benchmark-report.mjs",
+    "test:unit": "node --experimental-strip-types --test tests/**/*.test.ts",
+    "test:browser:edit-pdf:shared-forms": "node scripts/verify-native-text-shared-forms.mjs",
+    "test:browser:geometry": "node scripts/verify-pdf-placement-geometry.mjs",
+    "test:browser:tools": "node scripts/verify-pdf-tool-correctness.mjs && node tests/browser/imagePdfIntegrity.mjs",
+    "test:browser:edit-pdf:handoff": "node scripts/verify-edit-pdf-handoff.mjs"
   },
   "dependencies": {
     "@aiden0z/pptx-renderer": "^1.2.4",

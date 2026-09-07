@@ -71,7 +71,7 @@ final class AndroidDocumentSharer {
             OwnedPendingImportStore.CancellationSignal cancellation) throws Failure {
         if (source == null || cancellation == null || source.sizeBytes() <= 0
                 || source.sizeBytes() > OwnedDocumentWriter.MAXIMUM_FILE_BYTES
-                || !AndroidDocumentIngressPolicy.isSupportedMimeType(source.mimeType())) throw invalid();
+                || !OwnedDocumentWritePolicy.isSupportedMimeType(source.mimeType())) throw invalid();
         checkCancelled(cancellation);
         Layout layout = prepareAndRecover();
         List<StageRecord> records;
@@ -451,7 +451,7 @@ final class AndroidDocumentSharer {
                     version != LEGACY_VERSION && input.readBoolean());
             if (input.read() != -1 || result.size <= 0
                     || result.size > OwnedDocumentWriter.MAXIMUM_FILE_BYTES || result.createdAt < 0
-                    || !(AndroidDocumentIngressPolicy.isSupportedMimeType(result.mimeType)
+                    || !(OwnedDocumentWritePolicy.isSupportedMimeType(result.mimeType)
                         || (result.collection && "image/*".equals(result.mimeType)))
                     || result.itemCount < 1
                     || result.itemCount > LegacyDocumentOpenResolver.MAXIMUM_COLLECTION_ITEMS

@@ -69,7 +69,12 @@ public final class DocumentLifecycleCoordinator {
 
     public synchronized DocumentRecord finishWrite(String sessionId,
             OwnedPendingImportStore.CancellationSignal cancellation) throws Failure {
-        try { return record(graph().writer.finish(sessionId, cancellation)); }
+        return finishWrite(sessionId, false, cancellation);
+    }
+
+    public synchronized DocumentRecord finishWrite(String sessionId, boolean transientOutput,
+            OwnedPendingImportStore.CancellationSignal cancellation) throws Failure {
+        try { return record(graph().writer.finish(sessionId, transientOutput, cancellation)); }
         catch (OwnedDocumentWriter.Failure failure) { throw wrap(failure); }
     }
 

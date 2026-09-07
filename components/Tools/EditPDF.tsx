@@ -545,6 +545,9 @@ const PDFFormFieldControl: React.FC<{
     : { className: '', style: {} as React.CSSProperties };
   const baseStyle: React.CSSProperties = {
     position: 'absolute',
+    colorScheme: 'light',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    color: '#111827',
     left: field.x,
     top: field.y,
     width: unit(field.width),
@@ -573,7 +576,7 @@ const PDFFormFieldControl: React.FC<{
     return (
       <div
         style={baseStyle}
-        className="absolute flex items-center justify-center rounded border border-paper-500 bg-white/85 shadow-sm"
+        className="absolute flex items-center justify-center rounded border border-paper-500 shadow-sm"
         onPointerDown={(event) => {
           event.stopPropagation();
           onActivate();
@@ -596,7 +599,7 @@ const PDFFormFieldControl: React.FC<{
     return (
       <label
         style={baseStyle}
-        className="absolute flex items-center justify-center rounded border border-paper-500 bg-white/85 shadow-sm"
+        className="absolute flex items-center justify-center rounded border border-paper-500 shadow-sm"
         onPointerDown={(event) => {
           event.stopPropagation();
           onActivate();
@@ -643,7 +646,7 @@ const PDFFormFieldControl: React.FC<{
           fontSize,
           padding: `${unit(2)}px ${unit(6)}px`,
         }}
-        className={`absolute rounded border border-paper-500 bg-white/92 text-paper-900 shadow-sm outline-none focus:border-[var(--accent-rest)] focus:ring-2 focus:ring-[var(--focus-ring)] ${hit.className}`}
+        className={`absolute rounded border border-paper-500 shadow-sm outline-none focus:border-[var(--accent-rest)] focus:ring-2 focus:ring-[var(--focus-ring)] ${hit.className}`}
       >
         {field.kind === 'select' && <option value="">Select...</option>}
         {field.options?.map((option) => (
@@ -668,7 +671,7 @@ const PDFFormFieldControl: React.FC<{
           padding: `${unit(4)}px ${unit(6)}px`,
           resize: 'none',
         }}
-        className={`absolute rounded border border-paper-500 bg-white/92 text-paper-900 shadow-sm outline-none focus:border-[var(--accent-rest)] focus:ring-2 focus:ring-[var(--focus-ring)] ${hit.className}`}
+        className={`absolute rounded border border-paper-500 shadow-sm outline-none focus:border-[var(--accent-rest)] focus:ring-2 focus:ring-[var(--focus-ring)] ${hit.className}`}
       />
     );
   }
@@ -685,7 +688,7 @@ const PDFFormFieldControl: React.FC<{
         fontSize,
         padding: `${unit(2)}px ${unit(6)}px`,
       }}
-      className={`absolute rounded border border-paper-500 bg-white/92 text-paper-900 shadow-sm outline-none focus:border-[var(--accent-rest)] focus:ring-2 focus:ring-[var(--focus-ring)] ${hit.className}`}
+      className={`absolute rounded border border-paper-500 shadow-sm outline-none focus:border-[var(--accent-rest)] focus:ring-2 focus:ring-[var(--focus-ring)] ${hit.className}`}
     />
   );
 };
@@ -939,6 +942,7 @@ export const EditPDF: React.FC = () => {
   const [elements, setElements] = useState<EditorElement[]>([]);
   const elementsRef = useRef<EditorElement[]>([]);
   const documentGeneration = useRef(0);
+  const saveInProgress = useRef(false);
   const replaceElements = useCallback((next: EditorElement[]) => {
     elementsRef.current = next;
     setElements(next);
@@ -970,11 +974,13 @@ export const EditPDF: React.FC = () => {
   const [insertMode, setInsertMode] = useState<'text' | 'shape' | null>(null);
   const [savedSnapshot, setSavedSnapshot] = useState(() => serializeEditorState([], {}));
   const [immersiveBottomBarHeight, setImmersiveBottomBarHeight] = useState(96);
+  const [immersiveHeaderHeight, setImmersiveHeaderHeight] = useState(112);
   const [, setHistoryVersion] = useState(0);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const imageInputRef = useRef<HTMLInputElement>(null);
   const pdfZoomViewportRef = useRef<HTMLDivElement | null>(null);
   const immersiveBottomBarRef = useRef<HTMLDivElement>(null);
+  const immersiveHeaderRef = useRef<HTMLElement>(null);
   const undoStack = useRef<EditorSnapshot[]>([]);
   const redoStack = useRef<EditorSnapshot[]>([]);
   const inspectorTextChanged = useRef(false);
@@ -1053,6 +1059,19 @@ export const EditPDF: React.FC = () => {
     updateHeight();
     const observer = new ResizeObserver(updateHeight);
     observer.observe(bottomBar);
+    return () => observer.disconnect();
+  }, [isImmersiveEditor]);
+
+  useEffect(() => {
+    if (!isImmersiveEditor || !immersiveHeaderRef.current) return undefined;
+    const header = immersiveHeaderRef.current;
+    const updateHeight = () => {
+      const nextHeight = Math.ceil(header.getBoundingClientRect().height);
+      if (nextHeight > 0) setImmersiveHeaderHeight(nextHeight);
+    };
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(header);
     return () => observer.disconnect();
   }, [isImmersiveEditor]);
 
@@ -1237,7 +1256,7 @@ export const EditPDF: React.FC = () => {
   };
 
   const undo = () => {
-    const previous = undoStack.current.at(-1);
+    const previous = undoStack.current[undoStack.current.length - 1];
     if (!previous) return;
     redoStack.current = [...redoStack.current, captureSnapshot()];
     undoStack.current = undoStack.current.slice(0, -1);
@@ -1247,7 +1266,7 @@ export const EditPDF: React.FC = () => {
   };
 
   const redo = () => {
-    const next = redoStack.current.at(-1);
+    const next = redoStack.current[redoStack.current.length - 1];
     if (!next) return;
     undoStack.current = [...undoStack.current, captureSnapshot()];
     redoStack.current = redoStack.current.slice(0, -1);
@@ -1622,11 +1641,11 @@ export const EditPDF: React.FC = () => {
       const content = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
-        reader.onerror = () => reject(new Error('Unable to read this image.'));
+        reader.onerror = () => reject(new Error('This picture could not be read. Try a JPG or PNG instead.'));
         reader.readAsDataURL(normalizedFile);
       });
       if (generation !== documentGeneration.current) return;
-      if (!content) throw new Error('Unable to read this image.');
+      if (!content) throw new Error('This picture could not be read. Try a JPG or PNG instead.');
       const newEl: EditorElement = {
         id: uuidv4(), type: 'image', pageIndex: targetPageIndex,
         x: 0.1, y: 0.1, width: 0.28, height: 0.2, content,
@@ -1635,7 +1654,7 @@ export const EditPDF: React.FC = () => {
       setSelectedId(newEl.id);
     } catch (error) {
       if (generation !== documentGeneration.current) return;
-      setStatus({ isProcessing: false, progress: 0, message: '', error: error instanceof Error ? error.message : 'Unable to read this image.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: error instanceof Error ? error.message : 'This picture could not be read. Try a JPG or PNG instead.' });
     }
   };
 
@@ -1818,36 +1837,20 @@ export const EditPDF: React.FC = () => {
           measure: (text: string, fontSize: number, fontKey: string) =>
             measureTextWidth(text, runFont(fontKey).resolved, fontSize),
           maxU: pageText?.pageWidth,
+          canDraw: (text, fontKey) => {
+            const face = pageText?.fonts.get(fontKey);
+            const coverage = face ? checkGlyphCoverage(face, text) : null;
+            return !coverage?.checked || coverage.covered;
+          },
         });
 
       const original = new Set(block.text);
       const introduced = [...new Set(edit.text)].filter((character) => !original.has(character)).join('');
-      /**
-       * Whether the PDF's own font can draw what the edit introduces.
-       *
-       * Rewriting a text object in place keeps the document's font, and most PDFs embed only the
-       * glyphs they already used — a heading set in a display face may carry no "b" and no "0" at
-       * all. The PDF engine does not refuse when one is missing: it writes the character code
-       * anyway, and the file then reads back correctly through the very engines that wrote it while
-       * rendering as an empty box in Preview, Acrobat and print. Nothing downstream catches that,
-       * so the font is asked here, and a paragraph it cannot draw is redrawn with one that can.
-       */
-      const missingFromOwnFont = planned.mode === 'direct' && descriptor && introduced
-        ? checkGlyphCoverage(descriptor, introduced)
-        : null;
-      const plan: BlockEditPlan = missingFromOwnFont?.checked && !missingFromOwnFont.covered
-        ? {
-          mode: 'reflow',
-          reason: `this PDF's own font has no ${describeCharacters(missingFromOwnFont.missing)} in it`,
-        }
-        : planned;
-      // A redraw writes each stretch in its own face, so a character only counts as unwritable when
-      // the face that will actually draw it has no glyph for it.
+      const plan = planned;
+      // Redraw export uses standard PDF fonts, even when the overlay can use an embedded face.
+      // Check the edited result, including newly typed characters and excluding removed ones.
       const unencodable = plan.mode === 'reflow'
-        ? ([...new Set(block.lines.flatMap((line) => line.runs.flatMap((run) => {
-          const face = runFont(run.fontKey);
-          return unencodableCharacters(run.text, face.resolved, face.descriptor);
-        })))] as string[]).slice(0, 6)
+        ? unencodableCharacters(edit.text, FALLBACK_RESOLVED_FONT)
         : unencodableCharacters(introduced, font ?? FALLBACK_RESOLVED_FONT, descriptor);
       if (unencodable.length > 0) {
         // A character the reader typed is their choice to change. One that was already in the
@@ -1879,7 +1882,7 @@ export const EditPDF: React.FC = () => {
       const faceFor = (fontKey: string) => (restyled || !fontKey
         ? { descriptor, resolved }
         : runFont(fontKey));
-      const segments = edit.segments ?? [block.text.split('\n').map((line) => ({ text: line, fontKey: block.fontKey }))];
+      const segments = edit.segments ?? edit.text.split('\n').map((line) => [{ text: line, fontKey: block.fontKey }]);
       const lines = wrapStyledText(
         segments,
         (text, fontKey) => measureTextWidth(text, faceFor(fontKey).resolved, fontSize),
@@ -2035,7 +2038,7 @@ export const EditPDF: React.FC = () => {
       const lineHeight = reflow?.lineHeight ?? Math.max(fontSize, block.leading);
       const faceFor = reflow?.faceFor ?? (() => ({ descriptor, resolved }));
       const wrapped = reflow?.lines ?? wrapStyledText(
-        edit.segments ?? [edit.text.split('\n').map((line) => ({ text: line, fontKey: block.fontKey }))],
+        edit.segments ?? edit.text.split('\n').map((line) => [{ text: line, fontKey: block.fontKey }]),
         (text, fontKey) => measureTextWidth(text, faceFor(fontKey).resolved, fontSize),
         block.measure,
       );
@@ -2051,8 +2054,8 @@ export const EditPDF: React.FC = () => {
           // Read from the document's own record of the face, not from the CSS the overlay uses:
           // when the real bold face is available the overlay draws with it directly and asks for
           // no extra weight, so the CSS weight is 'normal' on text that is plainly bold.
-          bold: face.descriptor?.bold ?? face.resolved.cssWeight === '700',
-          italic: face.descriptor?.italic ?? face.resolved.cssStyle === 'italic',
+          bold: edit.fontOverride?.bold ?? face.descriptor?.bold ?? face.resolved.cssWeight === '700',
+          italic: edit.fontOverride?.italic ?? face.descriptor?.italic ?? face.resolved.cssStyle === 'italic',
         };
       };
       const lines = wrapped.map((line) => line.map((segment) => ({ text: segment.text, face: toFace(segment.fontKey) })));
@@ -2076,7 +2079,7 @@ export const EditPDF: React.FC = () => {
               : []
           )))
           : [],
-        backgroundImage: edit.patch,
+        backgroundImage: edit.patch ?? blockEditsRef.current[edit.blockId]?.patch,
         backgroundColor: edit.patchColor ?? '#ffffff',
         backgroundFlat: deleteOriginalRuns && (edit.patchFlat ?? false),
         lines,
@@ -2089,8 +2092,12 @@ export const EditPDF: React.FC = () => {
   ), [paragraphPlans]);
 
   const handleSave = async () => {
-    if (!file) return;
+    if (!file || saveInProgress.current) return;
+    saveInProgress.current = true;
     const generation = documentGeneration.current;
+    const savingElements = elementsRef.current;
+    const savingFormValues = formValues;
+    const savingBlockEdits = blockEditsRef.current;
     setStatus({ isProcessing: true, progress: 20, message: 'Saving PDF edits locally…' });
     try {
       let bytes: Uint8Array;
@@ -2101,19 +2108,17 @@ export const EditPDF: React.FC = () => {
       // Planned from the live edits rather than the settled ones: a save can arrive inside the
       // window where the last keystroke has not been planned yet.
       if (patchQueueRef.current.length > 0 || patchDrainingRef.current) {
-        setStatus({ isProcessing: true, progress: 15, message: 'Preparing paragraph backgrounds…' });
+        setStatus({ isProcessing: true, progress: 15, message: 'Getting the page ready…' });
         while (patchQueueRef.current.length > 0 || patchDrainingRef.current) {
           await new Promise((resolve) => window.setTimeout(resolve, 60));
           if (generation !== documentGeneration.current) return;
         }
       }
-      let plans = buildParagraphPlans(blockEditsRef.current);
+      let plans = buildParagraphPlans(savingBlockEdits);
 
-      // A paragraph that is about to be redrawn, or about to be refused, is one whose answer
-      // depends on the document's own fonts — and those are unread on any page the reader never
-      // opened, which is every page a replace-all touched. Read them, then decide again.
+      // In-place edits also need the actual font's glyph coverage. Replace-all can touch pages
+      // nobody opened, so read every edited page's pending fonts before deciding what to save.
       const pagesNeedingFonts = [...new Set(plans
-        .filter((entry) => entry.plan.mode === 'reflow' || entry.plan.mode === 'blocked')
         .map((entry) => entry.block.pageIndex as number))]
         .filter((pageIndex) => [...(pageTextRef.current.get(pageIndex)?.fonts.values() ?? [])]
           .some((descriptor) => descriptor.resolution === 'pending'));
@@ -2133,7 +2138,7 @@ export const EditPDF: React.FC = () => {
         }
         if (upgraded) {
           resetFontResolutionCaches();
-          plans = buildParagraphPlans(blockEditsRef.current);
+          plans = buildParagraphPlans(savingBlockEdits);
         }
       }
       const blockedPlans = plans.filter((entry) => entry.plan.mode === 'blocked');
@@ -2144,7 +2149,7 @@ export const EditPDF: React.FC = () => {
         throw refusal(describeBlockedParagraphs(blockedPlans));
       }
       try {
-        bytes = await savePDFWithAnnotations(file.file, elements, formValues, buildParagraphSaveEdits({ plans: savablePlans }));
+        bytes = await savePDFWithAnnotations(file.file, savingElements, savingFormValues, buildParagraphSaveEdits({ plans: savablePlans }));
       } catch (directEditError) {
         // Rewriting a PDF's own text objects needs PDF.js and the PDF engine to agree on what the
         // text says, and ligatures and custom encodings sometimes make them disagree. That only
@@ -2195,16 +2200,18 @@ export const EditPDF: React.FC = () => {
         willRedraw.forEach((entry) => {
           const characters = unencodableCharacters(
             entry.edit.text,
-            entry.font ?? FALLBACK_RESOLVED_FONT,
-            entry.descriptor,
+            FALLBACK_RESOLVED_FONT,
           );
-          if (characters.length === 0) return;
+          const rotated = Math.abs(entry.block.angle) > 0.02;
+          if (characters.length === 0 && !rotated) return;
           redrawable.delete(entry);
           blockedPlans.push({
             ...entry,
             plan: {
               mode: 'blocked',
-              reason: `it contains ${describeCharacters(characters)}, which only this PDF's own font can draw`,
+              reason: rotated
+                ? 'rotated or skewed text cannot be redrawn'
+                : `it contains ${describeCharacters(characters)}, which only this PDF's own font can draw`,
             },
           });
         });
@@ -2218,8 +2225,8 @@ export const EditPDF: React.FC = () => {
           // keep it: only the ones that refused are redrawn.
           bytes = await savePDFWithAnnotations(
             file.file,
-            elements,
-            formValues,
+            savingElements,
+            savingFormValues,
             buildParagraphSaveEdits({ forceReflow: stubborn, plans: [...redrawable] }),
           );
         } catch (deletionError) {
@@ -2231,8 +2238,8 @@ export const EditPDF: React.FC = () => {
           console.warn('Original text could not be removed before redrawing:', redrawReason);
           bytes = await savePDFWithAnnotations(
             file.file,
-            elements,
-            formValues,
+            savingElements,
+            savingFormValues,
             buildParagraphSaveEdits({ forceReflow: stubborn, deleteOriginalRuns: false, plans: [...redrawable] }),
           );
         }
@@ -2244,15 +2251,15 @@ export const EditPDF: React.FC = () => {
       // notice still points at it. Marking the whole document clean would quietly discard it.
       const skipped = new Set(blockedPlans.map((entry) => entry.edit.blockId));
       const savedBlockEdits = Object.fromEntries(
-        (Object.entries(blockEditsRef.current) as Array<[string, BlockEditState]>)
+        (Object.entries(savingBlockEdits) as Array<[string, BlockEditState]>)
           .filter(([blockId]) => !skipped.has(blockId)),
       );
-      setSavedSnapshot(serializeEditorState(elementsRef.current, formValues, savedBlockEdits));
+      setSavedSnapshot(serializeEditorState(savingElements, savingFormValues, savedBlockEdits));
       setStatus({
         isProcessing: false,
         progress: 100,
         message: blockedPlans.length > 0
-          ? `Edited PDF ready, with ${(plans.length - blockedPlans.length).toLocaleString()} of ${plans.length.toLocaleString()} edited paragraphs written. ${describeBlockedParagraphs(blockedPlans)} Your edits to ${blockedPlans.length === 1 ? 'it' : 'them'} are still here.`
+          ? `Edited PDF ready, with ${(plans.length - blockedPlans.length).toLocaleString()} of ${plans.length.toLocaleString()} edited paragraphs written. ${describeBlockedParagraphs(blockedPlans)} Your edits to ${blockedPlans.length === 1 ? 'it' : 'them'} are still here.${redrawReason ? ' Old wording remains underneath the redrawn paragraphs and can still be found by search. Check before sharing anything private.' : ''}`
           : redrawReason
           // The internal reason is left out of both of these. It names the part of the PDF that
           // would not cooperate, which tells the reader nothing they can act on; what they need is
@@ -2287,6 +2294,8 @@ export const EditPDF: React.FC = () => {
           ? `${message} Your edits are still here.`
           : 'Unable to save the edited PDF. Your edits are still here so you can try again.',
       });
+    } finally {
+      saveInProgress.current = false;
     }
   };
 
@@ -2322,8 +2331,8 @@ export const EditPDF: React.FC = () => {
     <div role="status" className={compactViewport ? 'mx-auto mb-2 max-w-md' : 'mb-2'}>
       <StatusLine tone="caution">
         Page {targetPageIndex + 1} is a picture, so its words cannot be edited. Add a text box over
-        it instead, or run <Link to="/ocr" className="font-bold underline">OCR</Link> first to make
-        the text editable.
+        it instead, or use <Link to="/ocr" className="font-bold underline">Extract Text</Link> first
+        to read the words off it.
       </StatusLine>
     </div>
   ) : null;
@@ -2399,7 +2408,7 @@ export const EditPDF: React.FC = () => {
           {(selectedElement.type === 'rectangle' || selectedElement.type === 'ellipse') && selectedElement.fillColor !== 'transparent' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">Fill<input type="color" value={selectedElement.fillColor || '#93c5fd'} onChange={(event) => commitElementUpdate(selectedElement.id, { fillColor: event.target.value })} className="mt-1 block h-10 w-12 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-transparent p-1" /></label>}
           {selectedElement.type !== 'text' && selectedElement.type !== 'image' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">Stroke<input type="number" min={1} max={16} value={selectedElement.strokeWidth || 2} onChange={(event) => commitElementUpdate(selectedElement.id, { strokeWidth: Math.max(1, Math.min(16, Number(event.target.value) || 2)) })} className="mt-1 block h-10 w-16 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]" /></label>}
           {selectedElement.type !== 'line' && selectedElement.type !== 'arrow' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">Rotate<input type="number" min={-180} max={180} value={selectedElement.rotation || 0} onChange={(event) => commitElementUpdate(selectedElement.id, { rotation: Math.max(-180, Math.min(180, Number(event.target.value) || 0)) })} className="mt-1 block h-10 w-16 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]" /></label>}
-            : <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">Page<select value={selectedElement.pageIndex} onChange={(event) => { const nextPage = Number(event.target.value); commitElementUpdate(selectedElement.id, { pageIndex: nextPage }); goToPage(nextPage); }} className="mt-1 block h-10 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]">{Array.from({ length: pageCount }, (_, index) => <option key={index} value={index}>{index + 1}</option>)}</select></label>
+            <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">Page<select value={selectedElement.pageIndex} onChange={(event) => { const nextPage = Number(event.target.value); commitElementUpdate(selectedElement.id, { pageIndex: nextPage }); goToPage(nextPage); }} className="mt-1 block h-10 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]">{Array.from({ length: pageCount }, (_, index) => <option key={index} value={index}>{index + 1}</option>)}</select></label>
         </div>
       </section>
     ) : null;
@@ -2407,9 +2416,20 @@ export const EditPDF: React.FC = () => {
     return (
       <div
         className="min-h-[100dvh] bg-[var(--surface-canvas)]"
-        style={{ paddingBottom: `calc(${immersiveBottomBarHeight}px + var(--chef-keyboard-inset, 0px))` }}
+        style={{
+          paddingTop: `${immersiveHeaderHeight}px`,
+          paddingBottom: `calc(${immersiveBottomBarHeight}px + var(--chef-keyboard-inset, 0px))`,
+        }}
       >
-        <header className="chef-chrome chef-safe-top chef-safe-x sticky top-0 z-40 border-b border-[var(--border-hairline)]">
+        {/* A sticky bar pins to the layout viewport, but iOS scrolls the *visual* viewport to
+            reveal a focused paragraph — which slid this bar up under the status bar and clipped
+            the Save button. Sitting on the measured offset, like the bottom bar does, keeps the
+            title and Save against the top of what the reader can actually see. */}
+        <header
+          ref={immersiveHeaderRef}
+          style={{ top: 'var(--chef-viewport-offset-top, 0px)' }}
+          className="chef-chrome chef-safe-top chef-safe-x fixed inset-x-0 z-40 border-b border-[var(--border-hairline)]"
+        >
           <div className="mx-auto flex min-h-14 max-w-4xl items-center gap-0.5 px-1.5 py-1.5">
             <button
               type="button"
@@ -2605,7 +2625,7 @@ export const EditPDF: React.FC = () => {
                 {(selectedElement.type === 'rectangle' || selectedElement.type === 'ellipse') && selectedElement.fillColor !== 'transparent' && <label className="text-xs font-semibold text-[var(--text-secondary)]">Fill colour<input type="color" value={selectedElement.fillColor || '#93c5fd'} onChange={(event) => commitElementUpdate(selectedElement.id, { fillColor: event.target.value })} className="mt-1 block h-11 w-12 rounded border border-[var(--border-strong)] bg-transparent p-1" /></label>}
                 {selectedElement.type !== 'text' && selectedElement.type !== 'image' && <label className="text-xs font-semibold text-[var(--text-secondary)]">Stroke<input type="number" min={1} max={16} value={selectedElement.strokeWidth || 2} onChange={(event) => commitElementUpdate(selectedElement.id, { strokeWidth: Math.max(1, Math.min(16, Number(event.target.value) || 2)) })} className="mt-1 block h-11 w-20 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]" /></label>}
                 {selectedElement.type !== 'line' && selectedElement.type !== 'arrow' && <label className="text-xs font-semibold text-[var(--text-secondary)]">Rotate<input type="number" min={-180} max={180} value={selectedElement.rotation || 0} onChange={(event) => commitElementUpdate(selectedElement.id, { rotation: Math.max(-180, Math.min(180, Number(event.target.value) || 0)) })} className="mt-1 block h-11 w-20 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]" /></label>}
-                  : <label className="text-xs font-semibold text-[var(--text-secondary)]">Page<select value={selectedElement.pageIndex} onChange={(event) => { const nextPage = Number(event.target.value); commitElementUpdate(selectedElement.id, { pageIndex: nextPage }); goToPage(nextPage); }} className="mt-1 block h-11 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]">{Array.from({ length: pageCount }, (_, index) => <option key={index} value={index}>{index + 1}</option>)}</select></label>
+                  <label className="text-xs font-semibold text-[var(--text-secondary)]">Page<select value={selectedElement.pageIndex} onChange={(event) => { const nextPage = Number(event.target.value); commitElementUpdate(selectedElement.id, { pageIndex: nextPage }); goToPage(nextPage); }} className="mt-1 block h-11 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]">{Array.from({ length: pageCount }, (_, index) => <option key={index} value={index}>{index + 1}</option>)}</select></label>
                 <button type="button" onClick={() => deleteElement(selectedElement.id)} className="chef-hit-y chef-pressable inline-flex min-h-11 items-center gap-1 rounded-[var(--radius-control)] border border-[var(--status-danger-text)] px-3 text-sm font-bold text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)]"><Trash2 size={16}/> Delete</button>
               </div>
             </div>

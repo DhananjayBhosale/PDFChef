@@ -84,7 +84,7 @@ export const SplitPDF: React.FC = () => {
       .catch((error) => {
         if (cancelled) return;
         console.error('Failed to load previews', error);
-        setPreviewError(error instanceof Error && error.message ? error.message : 'Unable to generate page previews.');
+        setPreviewError(error instanceof Error && error.message ? error.message : 'The pages could not be shown. You can still split by page numbers, or choose another file.');
         setLoadingPreviews(false);
       });
 
@@ -483,7 +483,7 @@ export const SplitPDF: React.FC = () => {
                   className="chef-pressable chef-target flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 text-sm font-semibold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-55"
                 >
                   <Scissors aria-hidden size={18} />
-                  <span>Export split PDFs</span>
+                  <span>Save the split files</span>
                 </button>
               </div>
             )}
@@ -523,7 +523,7 @@ export const SplitPDF: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <p className="py-4 text-center text-sm text-[var(--text-secondary)]">No page previews are available.</p>
+                <p className="py-4 text-center text-sm text-[var(--text-secondary)]">The pages could not be shown here. You can still split by page numbers above.</p>
               )}
             </section>
 

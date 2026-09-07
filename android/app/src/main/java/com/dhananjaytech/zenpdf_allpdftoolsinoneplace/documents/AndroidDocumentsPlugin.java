@@ -92,8 +92,11 @@ public final class AndroidDocumentsPlugin extends Plugin {
 
     @PluginMethod public void finishWrite(PluginCall call) {
         try {
-            JSObject data = call.getData(); if (data == null || data.length() != 1 || !data.has("sessionRef") || !(data.get("sessionRef") instanceof String)) { rejectInvalid(call); return; }
-            DocumentLifecycleCoordinator.DocumentRecord record = application().getDocumentLifecycleCoordinator().finishWrite((String) data.get("sessionRef"), () -> false);
+            JSObject data = call.getData(); if (data == null || (data.length() != 1 && data.length() != 2)
+                    || !data.has("sessionRef") || !(data.get("sessionRef") instanceof String)
+                    || (data.length() == 2 && (!data.has("transient") || !(data.get("transient") instanceof Boolean)))) { rejectInvalid(call); return; }
+            DocumentLifecycleCoordinator.DocumentRecord record = application().getDocumentLifecycleCoordinator().finishWrite(
+                    (String) data.get("sessionRef"), data.optBoolean("transient", false), () -> false);
             JSObject output = new JSObject(); output.put("item", publicItem(record)); call.resolve(output);
         } catch (DocumentLifecycleCoordinator.Failure failure) { reject(call, failure); } catch (Exception ignored) { unavailable(call); }
     }
@@ -624,7 +627,9 @@ public final class AndroidDocumentsPlugin extends Plugin {
         if (!PdfReaderLaunchContract.isCanonicalRef(ref)
                 || (mimeType == null && !ref.matches("a1_[1-9][0-9]{0,15}"))
                 || (mimeType != null
-                    && !AndroidDocumentIngressPolicy.isSupportedMimeType(mimeType))
+                    && !(PendingImportRecord.isValidRef(ref)
+                        ? OwnedDocumentWritePolicy.isSupportedMimeType(mimeType)
+                        : AndroidDocumentIngressPolicy.isSupportedMimeType(mimeType)))
                 || !OwnedDocumentWritePolicy.isValidDisplayName(displayName)
                 || displayName == null) return null;
         return new DeliveryRequest(ref, displayName, mimeType);
@@ -636,6 +641,9 @@ public final class AndroidDocumentsPlugin extends Plugin {
         if (AndroidDocumentIngressPolicy.MIME_HEIC.equals(mimeType)) return "Document.heic";
         if (AndroidDocumentIngressPolicy.MIME_DOCX.equals(mimeType)) return "Document.docx";
         if (AndroidDocumentIngressPolicy.MIME_PPTX.equals(mimeType)) return "Document.pptx";
+        if (OwnedDocumentWritePolicy.MIME_ZIP.equals(mimeType)) return "Document.zip";
+        if (OwnedDocumentWritePolicy.MIME_TEXT.equals(mimeType)) return "Document.txt";
+        if (OwnedDocumentWritePolicy.MIME_WEBP.equals(mimeType)) return "Document.webp";
         return "Document.pdf";
     }
 
@@ -686,6 +694,14 @@ public final class AndroidDocumentsPlugin extends Plugin {
         if (!Double.isFinite(value) || value != integer
                 || integer < minimum || integer > maximum) return null;
         return integer;
+    }
+
+    /** A separate event prevents ordinary tool pickers from navigating away. */
+    public void announceIncomingPdf(String ref) {
+        if (!PendingImportRecord.isValidRef(ref)) return;
+        JSObject event = new JSObject();
+        event.put("ref", ref);
+        notifyListeners("incomingPdfReady", event, true);
     }
 
     private PdfChefApplication application() { return (PdfChefApplication) getContext().getApplicationContext(); }

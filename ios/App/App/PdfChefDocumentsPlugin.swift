@@ -59,7 +59,11 @@ final class PdfChefDocumentsPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func beginWrite(_ call: CAPPluginCall) {
         perform(call) { store in
-            let sessionID = try store.beginWrite(name: call.getString("name"), mimeType: call.getString("mimeType"))
+            let sessionID = try store.beginWrite(
+                name: call.getString("name"),
+                mimeType: call.getString("mimeType"),
+                transient: call.getBool("transient", false)
+            )
             call.resolve(["sessionId": sessionID, "maximumChunkBytes": PdfChefDocumentStore.maximumChunkBytes])
         }
     }

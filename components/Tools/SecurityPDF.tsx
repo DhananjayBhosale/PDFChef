@@ -221,7 +221,7 @@ export const SecurityPDF: React.FC = () => {
                 icon={<Lock aria-hidden size={18} />}
                 onClick={() => void handleProtect()}
               >
-                Encrypt PDF
+                Protect with password
               </Button>
               <Button tone="quiet" block onClick={reset} disabled={status.isProcessing}>
                 Choose another file

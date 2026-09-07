@@ -240,7 +240,7 @@ export const MergePDF: React.FC = () => {
               className="chef-target chef-pressable flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-5 font-semibold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-55"
             >
               {status.isProcessing ? <Loader2 aria-hidden className="animate-spin" size={18} /> : <Download aria-hidden size={18} />}
-              <span>Export merged PDF</span>
+              <span>Save the combined PDF</span>
             </button>
 
             <div className="relative space-y-2" aria-label="PDF merge order">

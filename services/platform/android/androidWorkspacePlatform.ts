@@ -6,6 +6,8 @@ import type {
 } from '../../domain/workspaceModels.ts';
 import type {
   ImportedDocument,
+  FreshResult,
+  OutputDeliveryHandler,
   PendingImportDeliveryService,
   RecordAbilities,
   RecordRecoveryService,
@@ -19,6 +21,7 @@ import {
   isAndroidDocumentsAvailable,
   type AndroidOwnedDocument,
   type AndroidPendingDocument,
+  type SupportedOwnedMime,
   type SupportedPickerMime,
 } from './androidDocuments.ts';
 import {
@@ -41,6 +44,7 @@ import {
   AndroidStorageStatsClient,
   isAndroidStorageStatsAvailable,
 } from './androidStorageStats.ts';
+import { installOutputDeliveryHandler } from '../../pdfShared.ts';
 import type {
   AndroidLegacyCollectionHistoryEntry,
   AndroidLegacyFileHistoryEntry,
@@ -347,8 +351,9 @@ export const createAndroidWorkspacePlatform = (
     ? (isAndroidLegacyInspectorAvailable() ? new AndroidLegacyInspectorClient() : null)
     : legacyOverride;
 
+  const transientRefs = new Set<string>();
   const listOwned = async (): Promise<readonly RecentRecord[]> =>
-    (await documents.listOwned()).map(ownedRecordOf);
+    (await documents.listOwned()).filter(item => !transientRefs.has(item.ref)).map(ownedRecordOf);
 
   const listLegacy = async (): Promise<readonly RecentRecord[]> => {
     if (!legacy) return [];
@@ -566,7 +571,7 @@ export const createAndroidWorkspacePlatform = (
       await documents.exportItem(
         view.ref,
         name || view.name,
-        view.kind === 'file' ? view.mimeType as SupportedPickerMime : undefined,
+        view.kind === 'file' ? view.mimeType as SupportedOwnedMime : undefined,
       );
     },
 
@@ -579,7 +584,7 @@ export const createAndroidWorkspacePlatform = (
       await documents.shareItem(
         view.ref,
         name || view.name,
-        view.kind === 'file' ? view.mimeType as SupportedPickerMime : undefined,
+        view.kind === 'file' ? view.mimeType as SupportedOwnedMime : undefined,
       );
     },
 
@@ -614,6 +619,85 @@ export const createAndroidWorkspacePlatform = (
   if (isAndroidNativePdfReaderAvailable()) {
     platform.pdfReader = createAndroidPdfReaderService(documents);
   }
+
+  // The writer's closed MIME set includes generated ZIP, text and WebP outputs.
+  // Keep picker ingress separate from delivery of validated, already-owned bytes.
+  const RETAINABLE = new Set<string>([
+    'application/pdf', 'application/zip', 'text/plain',
+    'image/jpeg', 'image/png', 'image/webp', 'image/heic',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  ]);
+
+  const retain = async (request: FreshResult, transient = false) => {
+    if (request.blob.size < 1 || !RETAINABLE.has(request.mimeType)) {
+      throw new Error('This output cannot be saved on this device.');
+    }
+    const session = await documents.beginWrite(
+      request.mimeType as SupportedOwnedMime,
+      request.name,
+    );
+    try {
+      for (let offset = 0; offset < request.blob.size; offset += session.maximumChunkBytes) {
+        const chunk = await request.blob.slice(offset, offset + session.maximumChunkBytes).arrayBuffer();
+        await documents.appendWrite(session.sessionRef, new Uint8Array(chunk));
+      }
+      return await documents.finishWrite(session.sessionRef, transient);
+    } catch (failure) {
+      await documents.abortWrite(session.sessionRef).catch(() => undefined);
+      throw failure;
+    }
+  };
+
+  const deliverOutput: OutputDeliveryHandler = async (request) => {
+    if (!request.keepLocalHistory && !request.autoDownload) return;
+    const document = await retain(request, !request.keepLocalHistory);
+    if (!request.keepLocalHistory) transientRefs.add(document.ref);
+    try {
+      if (request.autoDownload) {
+        try {
+          const result = await documents.exportItem(document.ref, request.name, document.mimeType);
+          if (result.status === 'cancelled') {
+            if (request.keepLocalHistory) return { exportIssue: 'cancelled' };
+            throw new Error('Saving the output was cancelled.');
+          }
+        } catch (failure) {
+          if (request.keepLocalHistory) return { exportIssue: 'failed' };
+          throw failure;
+        }
+      }
+    } finally {
+      // A download-only result must not become a permanent Recent document.
+      if (!request.keepLocalHistory) {
+        await documents.deleteOwned(document.ref);
+        transientRefs.delete(document.ref);
+      }
+    }
+  };
+
+  platform.saveFresh = async (result) => {
+    const document = await retain(result, true);
+    transientRefs.add(document.ref);
+    try {
+      const delivery = await documents.exportItem(document.ref, result.name, document.mimeType);
+      if (delivery.status === 'cancelled') throw new Error('Saving the output was cancelled.');
+    } finally {
+      await documents.deleteOwned(document.ref);
+      transientRefs.delete(document.ref);
+    }
+  };
+  platform.shareFresh = async (result) => {
+    const document = await retain(result, true);
+    transientRefs.add(document.ref);
+    try {
+      await documents.shareItem(document.ref, result.name, document.mimeType);
+    } finally {
+      await documents.deleteOwned(document.ref);
+      transientRefs.delete(document.ref);
+    }
+  };
+
+  installOutputDeliveryHandler(deliverOutput);
 
   return platform;
 };

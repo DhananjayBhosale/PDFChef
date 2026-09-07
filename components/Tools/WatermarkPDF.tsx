@@ -12,6 +12,9 @@ import { PDFFile, ProcessingStatus } from '../../types';
 import { addWatermarkToPDF } from '../../services/pdfDocument';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
 import { loadPDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
+import { getPdfPreviewLayoutSize } from '../../services/pdfPageGeometry';
+import { getPdfPreviewFont } from '../../services/pdfPreviewFont';
+import type { PDFFont } from 'pdf-lib';
 import {
   DEFAULT_WATERMARK_COLOR_HEX,
   DEFAULT_WATERMARK_OPACITY,
@@ -33,22 +36,7 @@ import {
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-/**
- * Helvetica-Bold advance widths, as a fraction of the font size, so the preview measures the mark
- * with the same metrics the export uses. Canvas would measure whatever font the browser picked,
- * which is how a preview drifts from its own output.
- */
-const HELVETICA_BOLD_AVERAGE_ADVANCE = 0.584;
-const measureWatermarkTextWidth = (value: string, fontSize: number) =>
-  value.length * fontSize * HELVETICA_BOLD_AVERAGE_ADVANCE;
-
-/**
- * Draws the overlay from the export layout, scaled by its own measured pixel size.
- *
- * It measures itself because the mark's font size is in page points: without the real pixel height
- * of the preview box there is no honest conversion, and guessing one is how a preview stops
- * predicting its output.
- */
+/** Draw in the same page coordinate system as export; SVG scales with either preview size. */
 const WatermarkPreviewSurface: React.FC<{
   containerRef: React.RefObject<HTMLDivElement | null>;
   large: boolean;
@@ -74,34 +62,9 @@ const WatermarkPreviewSurface: React.FC<{
   opacity,
   onPointerDown,
 }) => {
-  const [boxSize, setBoxSize] = useState({ width: 0, height: 0 });
-
-  const attachRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      containerRef.current = node;
-      if (node) {
-        const rect = node.getBoundingClientRect();
-        setBoxSize({ width: rect.width, height: rect.height });
-      }
-    },
-    [containerRef],
-  );
-
-  useEffect(() => {
-    const node = containerRef.current;
-    if (!node || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(([entry]) => {
-      setBoxSize({ width: entry.contentRect.width, height: entry.contentRect.height });
-    });
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [containerRef, imageUrl, large]);
-
-  const scaleY = boxSize.height > 0 ? boxSize.height / Math.max(1, pageHeight) : 0;
-
   return (
     <div
-      ref={attachRef}
+      ref={containerRef}
       className={`relative ${large ? 'h-full max-w-full' : 'w-full'} overflow-hidden rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-white dark:bg-slate-900 ${
         isDragging ? 'cursor-grabbing' : 'cursor-grab'
       }`}
@@ -114,25 +77,23 @@ const WatermarkPreviewSurface: React.FC<{
         <div className="flex h-full items-center justify-center text-xs text-[var(--text-tertiary)]">No preview</div>
       )}
 
-      {layout && scaleY > 0 && (
-        <div className="pointer-events-none absolute inset-0">
-          <div
-            className="absolute whitespace-nowrap font-bold tracking-wide"
-            style={{
-              left: `${(layout.centerX / Math.max(1, pageWidth)) * 100}%`,
-              top: `${(1 - layout.centerY / Math.max(1, pageHeight)) * 100}%`,
-              // Screen Y runs the other way, so the same angle has to be negated to look the same.
-              transform: `translate(-50%, -50%) rotate(${-layout.rotationDegrees}deg)`,
-              color,
-              opacity,
-              fontSize: `${layout.fontSize * scaleY}px`,
-              textShadow: '0 1px 2px rgba(0, 0, 0, 0.35)',
-              userSelect: 'none',
-            }}
+      {layout && (
+        <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${pageWidth} ${pageHeight}`} aria-hidden>
+          <text
+            x={layout.baselineX}
+            y={pageHeight - layout.baselineY}
+            transform={`rotate(${-layout.rotationDegrees} ${layout.centerX} ${pageHeight - layout.centerY})`}
+            fill={color}
+            opacity={opacity}
+            fontFamily="Helvetica, Arial, sans-serif"
+            fontWeight="bold"
+            fontSize={layout.fontSize}
+            textLength={layout.textWidth || undefined}
+            lengthAdjust="spacingAndGlyphs"
           >
             {layout.text}
-          </div>
-        </div>
+          </text>
+        </svg>
       )}
     </div>
   );
@@ -140,6 +101,7 @@ const WatermarkPreviewSurface: React.FC<{
 
 export const WatermarkPDF: React.FC = () => {
   const [file, setFile] = useState<PDFFile | null>(null);
+  const [previewFont, setPreviewFont] = useState<PDFFont | null>(null);
   const [text, setText] = useState(DEFAULT_WATERMARK_TEXT);
   const [size, setSize] = useState(DEFAULT_WATERMARK_SIZE);
   const [opacity, setOpacity] = useState(DEFAULT_WATERMARK_OPACITY);
@@ -182,9 +144,9 @@ export const WatermarkPDF: React.FC = () => {
         fontSize: size,
         rotationDegrees: rotation,
         placement: { xPercent, yPercent },
-        measureTextWidth: measureWatermarkTextWidth,
+        measureTextWidth: (value, fontSize) => previewFont?.widthOfTextAtSize(value, fontSize) ?? 0,
       }),
-    [previewDimensions.height, previewDimensions.width, rotation, size, text, xPercent, yPercent],
+    [previewFont, previewDimensions.height, previewDimensions.width, rotation, size, text, xPercent, yPercent],
   );
 
   // Opening the preview after scrolling used to leave Close wherever the page
@@ -308,6 +270,8 @@ export const WatermarkPDF: React.FC = () => {
           quality: 0.9,
         });
 
+        const font = await getPdfPreviewFont(true);
+        const layoutSize = getPdfPreviewLayoutSize(await pdfDoc.getPage(1));
         if (cancelled) {
           URL.revokeObjectURL(rendered.objectUrl);
           return;
@@ -316,14 +280,15 @@ export const WatermarkPDF: React.FC = () => {
         revoke(previewUrlRef.current);
         previewUrlRef.current = rendered.objectUrl;
         setOriginalPreviewUrl(rendered.objectUrl);
-        setPreviewDimensions({ width: rendered.width, height: rendered.height });
+        setPreviewFont(font);
+        setPreviewDimensions(layoutSize);
       } catch {
         if (!cancelled) {
           setStatus({
             isProcessing: false,
             progress: 0,
             message: '',
-            error: 'Unable to render the preview. You can choose another PDF and try again.',
+            error: 'The preview could not be shown. You can still add the watermark, or choose another file.',
           });
         }
       } finally {
@@ -525,7 +490,7 @@ export const WatermarkPDF: React.FC = () => {
                 className="chef-target chef-pressable flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-5 font-semibold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-55"
               >
                 {status.isProcessing ? <Loader2 aria-hidden className="animate-spin" size={18} /> : <Droplets aria-hidden size={18} />}
-                <span>Export watermarked PDF</span>
+                <span>Save stamped PDF</span>
               </button>
               <button type="button" onClick={() => setFile(null)} className="chef-target w-full text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
                 Choose another file

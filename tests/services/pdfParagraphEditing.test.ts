@@ -693,3 +693,37 @@ test('a font nobody has read yet refuses nothing and says so', () => {
     ['○'],
   );
 });
+
+test('a replacement checks the font of its actual run, even for letters already elsewhere in the paragraph', () => {
+  const [block] = buildTextBlocks([
+    run(0, 'Label:', 72, 100, 35, 12, 'heading'),
+    run(1, ' boat', 107, 100, 35, 12, 'body'),
+  ], 0);
+  const checked: Array<[string, string]> = [];
+  const plan = planBlockEdit(block, block.text.replace('Label:', 'Boat:'), {
+    canDraw: (text, fontKey) => {
+      checked.push([text, fontKey]);
+      return fontKey !== 'heading';
+    },
+  });
+  assert.equal(plan.mode, 'reflow');
+  assert.deepEqual(checked, [['Boat:', 'heading']]);
+});
+
+test('missing glyphs in a rotated run refuse redraw instead of writing horizontal text', () => {
+  const [block] = buildTextBlocks([
+    { ...run(0, 'Label', 72, 100, 35), angle: Math.PI / 4 },
+  ], 0);
+  const plan = planBlockEdit(block, 'Boat', { canDraw: () => false });
+  assert.equal(plan.mode, 'blocked');
+});
+
+test('reflow encoding checks the edited result against the standard export face', () => {
+  const standard = resolveFont({
+    key: 'body', psName: 'Helvetica', loadedName: '', fallbackFamily: 'sans-serif',
+    ascent: 0.75, descent: -0.22, vertical: false, bold: false, italic: false,
+    isType3: false, embedded: false, data: null, resolution: 'read',
+  }, 'Hello');
+  assert.deepEqual(unencodableCharacters('Hello 世界', standard), ['世', '界']);
+  assert.deepEqual(unencodableCharacters('Hello', standard), []);
+});

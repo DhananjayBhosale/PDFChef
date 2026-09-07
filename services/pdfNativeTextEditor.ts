@@ -875,6 +875,52 @@ export interface NativePdfTextClearance {
   pdfRect: PdfSpaceRect;
 }
 
+// Form streams can be shared by multiple placements, including placements on other pages.
+// PDFium mutates that shared stream when a child is removed. Record all untouched ink before
+// doing so and reject the result if saving altered another occurrence.
+const collectUntouchedCharacters = (
+  engine: PdfiumEngine,
+  document: number,
+  areasByPage: Map<number, PdfSpaceRect[]>,
+) => {
+  const characters: Array<{ pageIndex: number; unicode: number; bounds: PdfSpaceRect }> = [];
+  const pointers = [malloc(engine, 8), malloc(engine, 8), malloc(engine, 8), malloc(engine, 8)];
+  try {
+    for (let pageIndex = 0; pageIndex < engine.FPDF_GetPageCount(document); pageIndex += 1) {
+      const page = engine.FPDF_LoadPage(document, pageIndex);
+      if (!page) throw new Error('Direct text edit failed: unrelated page content could not be checked.');
+      let textPage = 0;
+      try {
+        textPage = engine.FPDFText_LoadPage(page);
+        if (!textPage) throw new Error('Direct text edit failed: unrelated page text could not be checked.');
+        const areas = areasByPage.get(pageIndex) ?? [];
+        for (let index = 0; index < engine.FPDFText_CountChars(textPage); index += 1) {
+          if (engine.FPDFText_IsGenerated(textPage, index) === 1) continue;
+          const unicode = engine.FPDFText_GetUnicode(textPage, index);
+          if (!unicode) continue;
+          if (!engine.FPDFText_GetCharBox(textPage, index, ...pointers as [number, number, number, number])) {
+            throw new Error('Direct text edit failed: unrelated text bounds could not be checked.');
+          }
+          const bounds: PdfSpaceRect = [
+            readFloat64(engine, pointers[0]), readFloat64(engine, pointers[2]),
+            readFloat64(engine, pointers[1]), readFloat64(engine, pointers[3]),
+          ];
+          if (!areas.some((area) => containedWithin(bounds, area))) {
+            characters.push({ pageIndex, unicode, bounds });
+          }
+        }
+      } finally {
+        if (textPage) engine.FPDFText_ClosePage(textPage);
+        engine.FPDF_ClosePage(page);
+      }
+    }
+  } finally {
+    pointers.forEach((pointer) => free(engine, pointer));
+  }
+  return characters.sort((a, b) => a.pageIndex - b.pageIndex || a.unicode - b.unicode
+    || a.bounds[0] - b.bounds[0] || a.bounds[1] - b.bounds[1]);
+};
+
 /**
  * Remove the text objects sitting inside a redrawn paragraph's own rectangles.
  *
@@ -901,7 +947,7 @@ export const clearNativePdfTextInAreas = async (
 
   return serializePdfiumOperation(async () => {
     const engine = await loadEngine();
-    return withDocument(engine, input, (document) => {
+    return withDocument(engine, input, async (document) => {
       const areasByPage = new Map<number, PdfSpaceRect[]>();
       clearances.forEach((clearance) => {
         const areas = areasByPage.get(clearance.pageIndex) ?? [];
@@ -911,6 +957,7 @@ export const clearNativePdfTextInAreas = async (
 
       let removed = 0;
       let uncleared = 0;
+      let untouchedCharacters: ReturnType<typeof collectUntouchedCharacters> | undefined;
       for (const [pageIndex, areas] of areasByPage) {
         if (!pageExists(engine, document, pageIndex)) continue;
         const page = engine.FPDF_LoadPage(document, pageIndex);
@@ -975,10 +1022,10 @@ export const clearNativePdfTextInAreas = async (
               } else {
                 uncleared += 1;
               }
-            } else if (engine.FPDFFormObj_RemoveObject(owner, object)) {
-              removed += 1;
             } else {
-              uncleared += 1;
+              untouchedCharacters ??= collectUntouchedCharacters(engine, document, areasByPage);
+              if (engine.FPDFFormObj_RemoveObject(owner, object)) removed += 1;
+              else uncleared += 1;
             }
           }
         };
@@ -1000,7 +1047,21 @@ export const clearNativePdfTextInAreas = async (
         }
       }
 
-      return { bytes: removed > 0 ? saveDocument(engine, document) : input, uncleared };
+      const bytes = removed > 0 ? saveDocument(engine, document) : input;
+      if (untouchedCharacters) {
+        const original = untouchedCharacters;
+        await withDocument(engine, bytes, (saved) => {
+          const actual = collectUntouchedCharacters(engine, saved, areasByPage);
+          if (actual.length !== original.length || original.some((character, index) => (
+            character.pageIndex !== actual[index].pageIndex
+            || character.unicode !== actual[index].unicode
+            || character.bounds.some((bound, side) => !closeEnough(bound, actual[index].bounds[side]))
+          ))) {
+            throw new Error('Direct text edit failed: removing a shared form would change text outside the edited paragraph.');
+          }
+        });
+      }
+      return { bytes, uncleared };
     });
   });
 };

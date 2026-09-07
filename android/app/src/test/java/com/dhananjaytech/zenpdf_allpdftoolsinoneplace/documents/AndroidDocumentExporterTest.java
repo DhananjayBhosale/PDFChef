@@ -40,6 +40,22 @@ public final class AndroidDocumentExporterTest {
         assertFalse(Files.exists(files.resolve("pdfchef_documents/export/current.export")));
     }
 
+    @Test public void generatedZipTextAndWebpOutputsReachDownloadsUnchanged() throws Exception {
+        for (String mime : List.of("application/zip", "text/plain", "image/webp")) {
+            Path files = Files.createTempDirectory("export-generated");
+            FakeDestination destination = new FakeDestination();
+            AndroidDocumentExporter exporter = exporter(files, destination, () -> 100,
+                    tokens("abcdefghijklmnopqrstuv"), ignored -> {});
+            byte[] bytes = "already-validated-owned-bytes".getBytes();
+            assertTrue(exporter.export(source(bytes, mime), "Output", mime, () -> false).completedValue());
+            FakeDestination.Row row = destination.rows.values().iterator().next();
+            assertEquals(mime, row.mimeType);
+            assertEquals(AndroidDocumentExporter.MediaTarget.DOWNLOADS, row.target);
+            assertArrayEquals(bytes, row.bytes);
+            assertFalse(row.pending);
+        }
+    }
+
     @Test public void prepublicationFailureDeletesOnlyExactPendingRow() throws Exception {
         Path files = Files.createTempDirectory("export-rollback");
         FakeDestination destination = new FakeDestination();
@@ -202,8 +218,12 @@ public final class AndroidDocumentExporterTest {
     }
 
     private static OwnedDocumentWriter.DocumentSource source(byte[] bytes) {
+        return source(bytes, AndroidDocumentIngressPolicy.MIME_PDF);
+    }
+
+    private static OwnedDocumentWriter.DocumentSource source(byte[] bytes, String mimeType) {
         return new OwnedDocumentWriter.DocumentSource() {
-            @Override public String mimeType() { return AndroidDocumentIngressPolicy.MIME_PDF; }
+            @Override public String mimeType() { return mimeType; }
             @Override public long sizeBytes() { return bytes.length; }
             @Override public int read(long offset, byte[] target) {
                 if (offset >= bytes.length) return 0;

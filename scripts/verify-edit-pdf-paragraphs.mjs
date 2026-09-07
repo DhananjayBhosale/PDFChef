@@ -550,8 +550,8 @@ try {
     const notice = await page.locator('[role="status"]').first().innerText();
     assert.match(notice, /is a picture, so its words cannot be edited/i);
     assert.match(notice, /text box/i, 'a page that cannot be edited must say what to do instead');
-    assert.match(notice, /OCR/);
-    assert.equal(await page.getByRole('link', { name: 'OCR' }).count(), 1, 'the notice must link to the OCR tool');
+    assert.match(notice, /Extract Text/, 'the notice must name the tool that reads a scan');
+    assert.equal(await page.getByRole('link', { name: 'Extract Text' }).count(), 1, 'the notice must link to the text tool');
     console.log('PASS a scanned page says why it cannot be edited and points at the fix');
 
     assert.deepEqual(consoleErrors, [], 'console errors on a scanned page');

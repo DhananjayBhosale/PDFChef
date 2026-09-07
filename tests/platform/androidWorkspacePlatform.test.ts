@@ -1,3 +1,4 @@
+import { downloadBlob } from '../../services/pdfShared.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type {
@@ -778,4 +779,102 @@ test('T928: collection delivery failure propagates unchanged and never attempts 
   };
 
   await assert.rejects(platform.save(record, 'Images'), error => error === failure);
+});
+
+
+const outputHarness = () => {
+  const plugin = native();
+  const calls: string[] = [];
+  const chunks: Uint8Array[] = [];
+  const transientFlags: boolean[] = [];
+  let mimeType = 'application/pdf';
+  let owned = false;
+  plugin.beginWrite = async options => {
+    calls.push('begin'); mimeType = options.mimeType;
+    return { sessionRef: `w1_${'C'.repeat(22)}`, maximumChunkBytes: 524288 };
+  };
+  plugin.appendWrite = async ({ data }) => {
+    const chunk = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+    chunks.push(chunk); return { acceptedBytes: chunk.length };
+  };
+  plugin.finishWrite = async options => {
+    transientFlags.push(options.transient === true);
+    calls.push('finish'); owned = true;
+    return { item: { ...pendingItem, mimeType, pending: false } };
+  };
+  plugin.exportItem = async options => {
+    calls.push(`export:${options.mimeType}`); return { status: 'completed' };
+  };
+  plugin.shareItem = async options => {
+    calls.push(`share:${options.mimeType}`); return { status: 'completed' };
+  };
+  plugin.deleteOwned = async () => { calls.push('delete'); owned = false; return { deleted: true }; };
+  plugin.abortWrite = async () => { calls.push('abort'); return { aborted: true }; };
+  plugin.listOwned = async () => ({ items: owned ? [{ ...pendingItem, mimeType, pending: false }] : [] });
+  return { plugin, calls, chunks, transientFlags, platform: androidPlatform(plugin) };
+};
+
+test('fresh Android save and share deliver all generated types through native storage and remove staging', async () => {
+  for (const mimeType of ['application/pdf', 'application/zip', 'text/plain', 'image/webp']) {
+    const { platform, calls, transientFlags } = outputHarness();
+    const result = { blob: new Blob(['output']), name: 'result', mimeType };
+    await platform.saveFresh(result);
+    await platform.shareFresh!(result);
+    assert.deepEqual(calls, ['begin', 'finish', `export:${mimeType}`, 'delete',
+      'begin', 'finish', `share:${mimeType}`, 'delete']);
+    assert.deepEqual(await platform.records.list(), []);
+    assert.deepEqual(transientFlags, [true, true]);
+  }
+});
+
+test('fresh Android delivery preserves native failures and cleans up incomplete writes and staging', async () => {
+  const first = outputHarness();
+  const failure = new Error('No storage');
+  first.plugin.appendWrite = async () => { throw failure; };
+  await assert.rejects(first.platform.saveFresh({ blob: new Blob(['output']), name: 'result.pdf', mimeType: 'application/pdf' }), error => error === failure);
+  assert.deepEqual(first.calls, ['begin', 'abort']);
+  const second = outputHarness();
+  second.plugin.exportItem = async () => { throw failure; };
+  await assert.rejects(second.platform.saveFresh({ blob: new Blob(['output']), name: 'result.pdf', mimeType: 'application/pdf' }), error => error === failure);
+  assert.deepEqual(second.calls, ['begin', 'finish', 'delete']);
+});
+
+test('Android writes read bounded Blob slices and preserve exact bytes', async () => {
+  const { platform, chunks } = outputHarness();
+  const bytes = Uint8Array.from({ length: 524289 }, (_, index) => index % 256);
+  const blob = new Blob([bytes]);
+  blob.arrayBuffer = async () => { throw new Error('Whole-blob reads are forbidden'); };
+  await platform.saveFresh({ blob, name: 'result.pdf', mimeType: 'application/pdf' });
+  assert.deepEqual(chunks.map(chunk => chunk.length), [524288, 1]);
+  assert.deepEqual(new Uint8Array(await new Blob(chunks).arrayBuffer()), bytes);
+});
+
+test('Android automatic output delivery honors all history and download settings', async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  try {
+    for (const keepLocalHistory of [false, true]) {
+      for (const autoDownload of [false, true]) {
+        const { calls, platform, transientFlags } = outputHarness();
+        let announced = false;
+        Object.defineProperty(globalThis, 'window', { configurable: true, value: {
+          location: { pathname: '/compress' },
+          localStorage: { getItem: () => JSON.stringify({ keepLocalHistory, autoDownload }) },
+          dispatchEvent: () => { announced = true; return true; },
+        } });
+        downloadBlob(new Blob(['output']), 'result.pdf', 'application/pdf');
+        for (let attempt = 0; attempt < 100 && !announced; attempt++) {
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+        assert.equal(announced, true);
+        assert.equal(calls.includes('begin'), keepLocalHistory || autoDownload);
+        assert.equal(calls.includes('export:application/pdf'), autoDownload);
+        assert.equal(calls.includes('delete'), !keepLocalHistory && autoDownload);
+        assert.equal((await platform.records.list()).length, keepLocalHistory ? 1 : 0);
+        assert.deepEqual(transientFlags, keepLocalHistory || autoDownload ? [!keepLocalHistory] : []);
+      }
+    }
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'window', descriptor);
+    else delete (globalThis as { window?: unknown }).window;
+  }
 });

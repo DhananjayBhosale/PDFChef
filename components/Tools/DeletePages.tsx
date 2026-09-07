@@ -43,7 +43,7 @@ export const DeletePages: React.FC = () => {
         .catch((error) => {
           if (cancelled) return;
           console.error(error);
-          setPreviewError(error instanceof Error ? error.message : 'Unable to load page previews.');
+          setPreviewError(error instanceof Error ? error.message : 'The pages could not be shown. Choose another file, or run Repair PDF on it first.');
           setLoadingPreviews(false);
         });
     } else {
@@ -119,7 +119,7 @@ export const DeletePages: React.FC = () => {
         isProcessing: false,
         progress: 0,
         message: '',
-        error: error instanceof Error ? error.message : 'Failed to delete pages.',
+        error: error instanceof Error ? error.message : 'The pages could not be removed. Try again, or run Repair PDF on this file first.',
       });
     }
   };
@@ -158,7 +158,7 @@ export const DeletePages: React.FC = () => {
                       onChange={(event) => setRangeInput(event.target.value)}
                       onKeyDown={(event) => { if (event.key === 'Enter') markRange(); }}
                       placeholder="2,4-6"
-                      inputMode="numeric"
+                      inputMode="text"
                       maxLength={512}
                       className="chef-field mt-1 h-10 w-full px-3 text-sm"
                     />
@@ -199,7 +199,7 @@ export const DeletePages: React.FC = () => {
               icon={<Trash2 aria-hidden size={18} />}
               onClick={() => void handleDelete()}
             >
-              Export trimmed PDF
+              Save without those pages
             </Button>
 
             {loadingPreviews ? (
@@ -209,7 +209,7 @@ export const DeletePages: React.FC = () => {
               </div>
             ) : previewError ? (
               <div className="flex flex-col items-center gap-2 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] px-4 py-4 text-center">
-                <p className="font-semibold text-[var(--status-danger-text)]">Unable to load page previews.</p>
+                <p className="font-semibold text-[var(--status-danger-text)]">The pages could not be shown. Choose another file, or run Repair PDF on it first.</p>
                 <p className="max-w-measure text-sm text-[var(--text-secondary)]">{previewError}</p>
                 <Button tone="secondary" onClick={() => setFile(null)}>Choose another PDF</Button>
               </div>

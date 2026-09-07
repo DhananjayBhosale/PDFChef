@@ -12,6 +12,7 @@ import { PDFFile, ProcessingStatus } from '../../types';
 import { getPageSelectableTextLines, loadPDFDocument, loadProtectedPDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
 import { downloadBlob, isPdfFile, revokeObjectUrl } from '../../services/pdfShared';
 import { NO_EXTRACTABLE_TEXT_MESSAGE } from '../../services/docxExport';
+import { textFromSelectionTargets } from '../../services/pdfToolResults';
 import { shouldWarnForFiles } from '../../services/workspace';
 import { useOpenedPdf, type OpenedPdfRouteState } from '../../hooks/useOpenedPdf';
 
@@ -19,8 +20,8 @@ import { useOpenedPdf, type OpenedPdfRouteState } from '../../hooks/useOpenedPdf
  * Written by a page that found nothing. It is a placeholder for the on-screen preview only and
  * must never reach the exported .txt — see `EMPTY_PAGE_PLACEHOLDERS` below.
  */
-const NO_TEXT_LAYER_PLACEHOLDER = 'No selectable text found on this page.';
-const NO_OCR_TEXT_PLACEHOLDER = 'No readable text detected on this page.';
+const NO_TEXT_LAYER_PLACEHOLDER = 'This page has no words stored in it — it looks like a picture or a scan. Switch to Scanned pages above to read the words off it.';
+const NO_OCR_TEXT_PLACEHOLDER = 'No words could be read from this page. If the scan is faint or crooked, try a clearer copy.';
 const EMPTY_PAGE_PLACEHOLDERS = new Set([NO_TEXT_LAYER_PLACEHOLDER, NO_OCR_TEXT_PLACEHOLDER]);
 
 type ExtractionMode = 'text-layer' | 'ocr';
@@ -114,8 +115,10 @@ const buildOcrSelectionLines = (
 ): SelectableTextLine[] => {
   if (sourceWidth <= 0 || sourceHeight <= 0) return [];
 
-  const entries = Array.isArray(ocrData?.lines) && ocrData.lines.length > 0
-    ? ocrData.lines.map((line: any, index: number) => ({
+  const detectedLines = ocrData?.lines ?? ocrData?.blocks?.flatMap((block: any) =>
+    (block.paragraphs ?? []).flatMap((paragraph: any) => paragraph.lines ?? []));
+  const entries = Array.isArray(detectedLines) && detectedLines.length > 0
+    ? detectedLines.map((line: any, index: number) => ({
         id: `ocr-page-${pageNumber}-line-${index}`,
         text: typeof line?.text === 'string' ? line.text.trim() : '',
         bbox: line?.bbox,
@@ -255,7 +258,7 @@ export const OCRPDF: React.FC = () => {
         }
 
         const selectionLines = buildPdfSelectionLines(pageIndex + 1, textLines);
-        const pageText = selectionLines.map((line) => line.text).join('\n') || NO_TEXT_LAYER_PLACEHOLDER;
+        const pageText = textFromSelectionTargets(selectionLines) || NO_TEXT_LAYER_PLACEHOLDER;
 
         nextResults.push({
           pageNumber: pageIndex + 1,
@@ -314,10 +317,10 @@ export const OCRPDF: React.FC = () => {
 
         try {
           if (activeRunRef.current !== runId) throw new DOMException('Operation cancelled.', 'AbortError');
-          const result = await worker.recognize(rendered.objectUrl);
+          const result = await worker.recognize(rendered.objectUrl, {}, { text: true, blocks: true });
           if (activeRunRef.current !== runId) throw new DOMException('Operation cancelled.', 'AbortError');
           const selectionLines = buildOcrSelectionLines(pageIndex + 1, result.data, rendered.width, rendered.height);
-          const pageText = result.data.text?.trim() || selectionLines.map((line) => line.text).join('\n') || NO_OCR_TEXT_PLACEHOLDER;
+          const pageText = result.data.text?.trim() || textFromSelectionTargets(selectionLines) || NO_OCR_TEXT_PLACEHOLDER;
 
           nextResults.push({
             pageNumber: pageIndex + 1,
@@ -367,7 +370,7 @@ export const OCRPDF: React.FC = () => {
     setStatus({
       isProcessing: true,
       progress: 5,
-      message: extractionMode === 'ocr' ? 'Preparing local English OCR…' : 'Opening PDF text layer…',
+      message: extractionMode === 'ocr' ? 'Getting ready to read the pages on your device…' : 'Opening the PDF…',
     });
 
     try {
@@ -378,7 +381,7 @@ export const OCRPDF: React.FC = () => {
       }
       if (activeRunRef.current !== runId) return;
 
-      setStatus({ isProcessing: false, progress: 100, message: 'Text extraction complete.' });
+      setStatus({ isProcessing: false, progress: 100, message: 'Done. The words are below.' });
     } catch (error) {
       if (activeRunRef.current !== runId || isAbortError(error)) return;
       replacePageResults([]);
@@ -388,10 +391,10 @@ export const OCRPDF: React.FC = () => {
         progress: 0,
         message: '',
         error: extractionMode === 'ocr'
-          ? 'OCR could not read this PDF. Try fewer pages, or use Text Layer mode for a searchable PDF.'
+          ? 'The words could not be read from this scan. Try fewer pages, or switch to Normal PDF if the file already has real words in it.'
           : error instanceof Error && error.message
             ? error.message
-            : 'The PDF text layer could not be read.',
+            : 'The words could not be read from this PDF. If it is a scan, switch to Scanned pages above.',
       });
     }
   };
@@ -507,20 +510,20 @@ export const OCRPDF: React.FC = () => {
             <FileUpload
               onFilesSelected={handleFilesSelected}
               accept=".pdf,application/pdf"
-              label={mode === 'ocr' ? 'Choose a PDF for OCR' : 'Choose a PDF with selectable text'}
+              label={mode === 'ocr' ? 'Choose a scanned PDF' : 'Choose a PDF'}
             />
             <div className="rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-secondary)]">Extraction mode</div>
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-secondary)]">How should we read this PDF?</div>
               {/* The product's one segmented control: a raised chip on a sunken
                   track, with arrow-key radiogroup semantics. The pair of flat
                   accent-filled buttons this replaced read as a status block
                   rather than as a choice. */}
               <SegmentedControl
-                label="Extraction mode"
+                label="How should we read this PDF?"
                 value={mode}
                 options={[
-                  { value: 'text-layer', label: 'Text Layer (Fast)' },
-                  { value: 'ocr', label: 'OCR (Scans)' },
+                  { value: 'text-layer', label: 'Normal PDF' },
+                  { value: 'ocr', label: 'Scanned pages' },
                 ]}
                 onChange={setMode}
               />
@@ -528,13 +531,13 @@ export const OCRPDF: React.FC = () => {
               {/* Kept: each mode fails in a way the label does not show. */}
               <p className="type-footnote mt-2 text-[var(--text-secondary)]">
                 {mode === 'text-layer'
-                  ? 'Reads embedded text only, so a scanned PDF returns nothing.'
-                  : 'English only, and recognition can be wrong, so check the text.'}
+                  ? 'Fast. Works when the PDF already carries real words. A scan gives nothing back.'
+                  : 'Slower. Reads the words off a picture of the page. English only, and it does make mistakes, so read it over.'}
               </p>
 
               {mode === 'ocr' && (
                 <div className="mt-2.5">
-                  <label htmlFor="ocr-page-limit" className="mb-1 block type-footnote font-semibold text-[var(--text-secondary)]">Max pages to OCR</label>
+                  <label htmlFor="ocr-page-limit" className="mb-1 block type-footnote font-semibold text-[var(--text-secondary)]">How many pages to read</label>
                   <input
                     id="ocr-page-limit"
                     value={ocrMaxPages}
@@ -566,7 +569,7 @@ export const OCRPDF: React.FC = () => {
               </button>
               <div className="min-w-0 text-right">
                 <div className="inline-flex rounded-full bg-[var(--surface-sunken)] px-2 py-1 text-xs font-semibold text-[var(--text-secondary)]">
-                  {mode === 'ocr' ? 'English OCR' : 'Text Layer'}
+                  {mode === 'ocr' ? 'Scanned pages' : 'Normal PDF'}
                 </div>
                 <p className="mt-1 max-w-[12rem] truncate text-xs text-[var(--text-tertiary)]">{file.name}</p>
               </div>

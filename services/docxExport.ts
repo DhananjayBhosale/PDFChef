@@ -9,7 +9,7 @@ import { loadPDFDocument } from './pdfBrowser';
  * fail instead of handing back a junk file.
  */
 export const NO_EXTRACTABLE_TEXT_MESSAGE =
-  'No selectable text was found. This PDF looks like a scan, so its pages are images with no text layer to export.';
+  'This PDF is a scan, so its pages are pictures rather than words. Run Extract Text on it first to make the words readable, then try again.';
 
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 

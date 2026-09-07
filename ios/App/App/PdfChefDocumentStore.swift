@@ -28,6 +28,8 @@ struct PdfChefStoredDocument: Codable, Equatable {
     let sizeBytes: Int64
     let contentHash: String
     let retainedAt: Int64
+    // Optional for compatibility with documents written before transient staging.
+    var transient: Bool? = nil
 }
 
 struct PdfChefPendingImport: Codable, Equatable {
@@ -62,6 +64,7 @@ final class PdfChefDocumentStore {
         let handle: FileHandle
         let name: String?
         let mimeType: String?
+        let transient: Bool
         var sizeBytes: Int64
         var hasher: SHA256
     }
@@ -130,6 +133,7 @@ final class PdfChefDocumentStore {
         try protect(writesURL)
         try protect(presentationURL)
         try recoverMutation()
+        try removeAbandonedTransientDocuments()
         try removeAbandonedWrites()
         try removeAbandonedPresentationCopies()
         try garbageCollectOrphanedContent()
@@ -141,7 +145,7 @@ final class PdfChefDocumentStore {
         }
     }
 
-    func beginWrite(name: String?, mimeType: String?) throws -> String {
+    func beginWrite(name: String?, mimeType: String?, transient: Bool = false) throws -> String {
         try queue.sync {
             let sessionID = UUID().uuidString
             let url = writesURL.appendingPathComponent(sessionID).appendingPathExtension("part")
@@ -155,6 +159,7 @@ final class PdfChefDocumentStore {
                 handle: handle,
                 name: clean(name),
                 mimeType: clean(mimeType),
+                transient: transient,
                 sizeBytes: 0,
                 hasher: SHA256()
             )
@@ -198,7 +203,8 @@ final class PdfChefDocumentStore {
                     mimeType: session.mimeType,
                     sizeBytes: session.sizeBytes,
                     contentHash: verified.hash,
-                    retainedAt: Int64(Date().timeIntervalSince1970 * 1_000)
+                    retainedAt: Int64(Date().timeIntervalSince1970 * 1_000),
+                    transient: session.transient ? true : nil
                 )
                 if enqueuePending {
                     let stagedURL = stagedIncomingURL(for: ref)
@@ -306,7 +312,7 @@ final class PdfChefDocumentStore {
                     available: (try? statUnlocked(ref: ref)) != nil,
                     pending: pendingRefs.contains(ref)
                 )
-            }
+            }.filter { $0.document.transient != true }
         }
     }
 
@@ -521,6 +527,19 @@ final class PdfChefDocumentStore {
             if url.pathExtension == "part" || url.pathExtension == "incoming" {
                 try? fileManager.removeItem(at: url)
             }
+        }
+    }
+
+    private func removeAbandonedTransientDocuments() throws {
+        for ref in try metadataReferencesUnlocked() {
+            let metadata = metadataFileURL(for: ref)
+            let document = try JSONDecoder().decode(PdfChefStoredDocument.self, from: Data(contentsOf: metadata))
+            guard document.ref == ref else { throw PdfChefDocumentStoreError.invalidReference }
+            guard document.transient == true else { continue }
+            // Delete bytes first: a crash between removals leaves a marked metadata
+            // entry that the next launch safely retries, never a recovered result.
+            try removeIfPresent(contentURL(for: ref))
+            try removeIfPresent(metadata)
         }
     }
 

@@ -598,7 +598,7 @@ export const getPageTextBackgroundPatch = async (
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext('2d');
-  if (!context) throw new Error('Unable to prepare the selected text background.');
+  if (!context) throw new Error('The highlight behind the text could not be drawn. Try again, or pick a different colour.');
 
   let maximumObservedOperationIndex = -1;
   await page.render({
@@ -670,7 +670,7 @@ const toRgbaPixels = (image: any) => {
   const height = image.height || 0;
   const data = image.data;
   if (!width || !height || !(data instanceof Uint8Array)) {
-    throw new Error('Unsupported embedded image payload');
+    throw new Error('This picture is in a format the app cannot read. Try replacing it with a JPG or PNG.');
   }
 
   if (image.kind === pdfjs.ImageKind.RGBA_32BPP) {
@@ -878,19 +878,23 @@ export const getPageTextSignatures = async (
     : pdf.numPages;
   const signatures: string[] = [];
 
-  for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const textContent = await page.getTextContent();
-    const text = textContent.items
-      .map((item: any) => item.str)
-      .join(' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, maxChars);
-    signatures.push(text);
-  }
+  try {
+    for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const textContent = await page.getTextContent();
+      const text = textContent.items
+        .map((item: any) => item.str)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, maxChars);
+      signatures.push(text);
+    }
 
-  return signatures;
+    return signatures;
+  } finally {
+    await pdf.destroy();
+  }
 };
 
 export const generatePreviewPair = async (
@@ -970,7 +974,7 @@ export const compressPDFAdaptive = async (
     const arrayBuffer = await readFileAsArrayBuffer(file);
     onProgress(50);
     const pdfDoc = await PDFDocument.load(arrayBuffer);
-    const saved = await pdfDoc.save({ useObjectStreams: false });
+    const saved = await pdfDoc.save({ useObjectStreams: true });
     onProgress(100);
     return {
       data: saved,

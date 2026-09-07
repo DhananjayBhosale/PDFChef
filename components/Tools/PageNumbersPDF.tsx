@@ -7,6 +7,9 @@ import { ChefSliderField } from '../UI/ChefSlider';
 import { PDFFile, ProcessingStatus } from '../../types';
 import { addPageNumbersToPDF, getPDFPageCount } from '../../services/pdfDocument';
 import { loadPDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
+import { getPdfPreviewLayoutSize } from '../../services/pdfPageGeometry';
+import { getPdfPreviewFont } from '../../services/pdfPreviewFont';
+import type { PDFFont } from 'pdf-lib';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
 import {
   DEFAULT_PAGE_NUMBER_FONT_SIZE,
@@ -35,16 +38,11 @@ const parsePageInput = (value: string) => {
   return rounded > 0 ? rounded : null;
 };
 
-/**
- * Helvetica advance widths as a fraction of the font size. The export measures the real embedded
- * font, so the preview approximates the same metrics rather than whatever font Canvas resolved.
- */
-const HELVETICA_AVERAGE_ADVANCE = 0.54;
-const measurePageNumberTextWidth = (value: string, size: number) =>
-  value.length * size * HELVETICA_AVERAGE_ADVANCE;
+
 
 export const PageNumbersPDF: React.FC = () => {
   const [file, setFile] = useState<PDFFile | null>(null);
+  const [previewFont, setPreviewFont] = useState<PDFFont | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
 
   const [format, setFormat] = useState(DEFAULT_PAGE_NUMBER_FORMAT);
@@ -108,6 +106,8 @@ export const PageNumbersPDF: React.FC = () => {
         scale: 1.4,
       });
 
+      const font = await getPdfPreviewFont();
+      const layoutSize = getPdfPreviewLayoutSize(await pdf.getPage(clampedPage + 1));
       if (requestId !== previewRequestRef.current) {
         URL.revokeObjectURL(preview.objectUrl);
         return;
@@ -119,14 +119,15 @@ export const PageNumbersPDF: React.FC = () => {
       previewUrlRef.current = preview.objectUrl;
 
       setPreviewUrl(preview.objectUrl);
-      setPreviewDimensions({ width: preview.width, height: preview.height });
+      setPreviewFont(font);
+      setPreviewDimensions(layoutSize);
       setPreviewPageIndex(clampedPage);
       setPreviewError(null);
       setTotalPages(count);
     } catch (error) {
       if (requestId !== previewRequestRef.current) return;
       console.error(error);
-      setPreviewError('Unable to load preview page.');
+      setPreviewError('The preview could not be shown. You can still add page numbers, or choose another file.');
     } finally {
       if (requestId === previewRequestRef.current) setPreviewLoading(false);
     }
@@ -184,9 +185,9 @@ export const PageNumbersPDF: React.FC = () => {
         text: previewText,
         placement: { xPercent, yPercent },
         fontSize,
-        measureTextWidth: measurePageNumberTextWidth,
+        measureTextWidth: (value, fontSize) => previewFont?.widthOfTextAtSize(value, fontSize) ?? 0,
       }),
-    [fontSize, previewDimensions.height, previewDimensions.width, previewText, xPercent, yPercent],
+    [previewFont, fontSize, previewDimensions.height, previewDimensions.width, previewText, xPercent, yPercent],
   );
 
   const previewScaleX = previewSize.width / Math.max(1, previewDimensions.width);
@@ -196,7 +197,9 @@ export const PageNumbersPDF: React.FC = () => {
   const overlayBoxHeight = Math.max(overlayFontPx * 1.6, 24);
   const overlayCenterX = (layout?.placement.xPercent ?? xPercent) * previewSize.width;
   // The layout's Y is measured from the bottom of the page; CSS `top` runs the other way.
-  const overlayCenterY = (1 - (layout?.placement.yPercent ?? yPercent)) * previewSize.height;
+  const overlayCenterY = layout
+    ? (previewDimensions.height - layout.baselineY - layout.fontSize * 0.35) * previewScaleY
+    : (1 - yPercent) * previewSize.height;
   const overlayLeft = clamp(overlayCenterX - overlayBoxWidth / 2, 0, Math.max(0, previewSize.width - overlayBoxWidth));
   const overlayTop = clamp(overlayCenterY - overlayBoxHeight / 2, 0, Math.max(0, previewSize.height - overlayBoxHeight));
 
@@ -349,9 +352,23 @@ export const PageNumbersPDF: React.FC = () => {
                   >
                     <img src={previewUrl} alt="Page preview" className="absolute inset-0 h-full w-full object-contain" />
 
+                    {previewIsNumbered && layout && (
+                      <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${previewDimensions.width} ${previewDimensions.height}`} aria-hidden>
+                        <text
+                          x={layout.baselineX}
+                          y={previewDimensions.height - layout.baselineY}
+                          fontFamily="Helvetica, Arial, sans-serif"
+                          fontSize={layout.fontSize}
+                          fill="#4d4d4d"
+                          textLength={previewFont?.widthOfTextAtSize(layout.text, layout.fontSize) || undefined}
+                          lengthAdjust="spacingAndGlyphs"
+                        >{layout.text}</text>
+                      </svg>
+                    )}
                     {previewIsNumbered && (
                       <div
-                        className={`absolute border-2 border-dashed bg-ink-50/70 ${editing ? 'border-ink-600' : 'border-ink-500'}`}
+                        className={`absolute border-2 border-dashed ${editing ? 'border-ink-600' : 'border-ink-500'}`}
+                        aria-label="Drag page number to reposition"
                         style={{
                           left: overlayLeft,
                           top: overlayTop,
@@ -362,7 +379,6 @@ export const PageNumbersPDF: React.FC = () => {
                         }}
                         onPointerDown={(event) => startEditing(event, 'drag')}
                       >
-                        <div className="flex h-full items-center justify-center px-2 text-center font-medium text-paper-900">{previewText}</div>
                       </div>
                     )}
                   </div>
@@ -406,7 +422,7 @@ export const PageNumbersPDF: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">
                 <div>
                   <ChefSliderField label="Horizontal" suffix="%" decimals={2} min={0} max={100} step={0.25} value={xPercent * 100} onChange={(next) => setXPercent(next / 100)} ariaLabel="Page number horizontal position" />
                 </div>
@@ -452,7 +468,7 @@ export const PageNumbersPDF: React.FC = () => {
                 icon={<Hash aria-hidden size={18} />}
                 onClick={() => void handleApply()}
               >
-                {status.isProcessing ? status.message || 'Applying page numbers...' : 'Export numbered PDF'}
+                {status.isProcessing ? status.message || 'Applying page numbers...' : 'Save numbered PDF'}
               </Button>
 
               <button

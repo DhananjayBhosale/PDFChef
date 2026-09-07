@@ -2,6 +2,7 @@ import React, { Suspense, useEffect, useMemo } from 'react';
 import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AppShell } from './components/Layout/AppShell';
 import { NativeBackHandler } from './components/Layout/NativeBackHandler';
+import { AndroidIncomingPdfHandler } from './components/Layout/AndroidIncomingPdfHandler';
 import { Dashboard } from './components/Tools/Dashboard';
 import { RouteSEO } from './components/SEO/RouteSEO';
 import { OpenedPdfProvider } from './hooks/useOpenedPdf';
@@ -38,6 +39,9 @@ const MakeFillable = React.lazy(() => import('./components/Tools/MakeFillable').
 const WordToPDF = React.lazy(() => import('./components/Tools/WordToPDF').then((module) => ({ default: module.WordToPDF })));
 const PowerPointToPDF = React.lazy(() => import('./components/Tools/PowerPointToPDF').then((module) => ({ default: module.PowerPointToPDF })));
 const BatchPDF = React.lazy(() => import('./components/Tools/BatchPDF').then((module) => ({ default: module.BatchPDF })));
+const CreateInvoice = React.lazy(() => import('./components/Tools/BusinessDocumentBuilder').then((module) => ({ default: module.CreateInvoice })));
+const CreateReceipt = React.lazy(() => import('./components/Tools/BusinessDocumentBuilder').then((module) => ({ default: module.CreateReceipt })));
+const CreateQuote = React.lazy(() => import('./components/Tools/BusinessDocumentBuilder').then((module) => ({ default: module.CreateQuote })));
 const CropPDF = React.lazy(() => import('./components/Tools/PdfAdvancedTools').then((module) => ({ default: module.CropPDF })));
 const HeaderFooterPDF = React.lazy(() => import('./components/Tools/PdfAdvancedTools').then((module) => ({ default: module.HeaderFooterPDF })));
 const RemoveMetadataPDF = React.lazy(() => import('./components/Tools/PdfAdvancedTools').then((module) => ({ default: module.RemoveMetadataPDF })));
@@ -105,6 +109,9 @@ const AppRoutes = () => {
             <Route path="/extract-images" element={<ExtractImagesPDF />} />
             <Route path="/sanitize" element={<SanitizePDF />} />
             <Route path="/batch" element={<BatchPDF />} />
+            <Route path="/invoice" element={<CreateInvoice />} />
+            <Route path="/receipt" element={<CreateReceipt />} />
+            <Route path="/quote" element={<CreateQuote />} />
             <Route path="/recent" element={<RecentPage />} />
             {/* The pre-tab route stays live so an existing bookmark or deep link
                 still lands on the same screen. */}
@@ -157,6 +164,7 @@ const AppContent = () => {
       <RouteSEO />
       <LegacyHashRedirect />
       <NativeBackHandler />
+      <AndroidIncomingPdfHandler />
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[200] focus:rounded-[var(--radius-control)] focus:bg-[var(--surface-raised)] focus:px-4 focus:py-2 focus:font-semibold"

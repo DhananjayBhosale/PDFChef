@@ -42,6 +42,8 @@ export interface BlockEditPlanOptions {
   measure?: (text: string, fontSize: number, fontKey: string) => number;
   /** Reading-space coordinate past which text would leave the page. */
   maxU?: number;
+  /** False when the original run's font cannot draw its replacement. */
+  canDraw?: (text: string, fontKey: string) => boolean;
 }
 
 /** Blocks tilted more than this cannot be compared against an axis-aligned page limit. */
@@ -204,6 +206,12 @@ export const planBlockEdit = (
     if (line.text === nextLines[index]) continue;
     const change = planLineChange(line, nextLines[index], block, options);
     if (change.reason) return cannotRedraw(change.reason);
+    for (const edit of change.runEdits) {
+      const run = line.runs.find((candidate) => candidate.itemIndex === edit.itemIndex);
+      if (run && options.canDraw && !options.canDraw(edit.replacementText, run.fontKey)) {
+        return cannotRedraw('the original font for this text cannot draw the replacement');
+      }
+    }
     runEdits.push(...change.runEdits);
   }
 

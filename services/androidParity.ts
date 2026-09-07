@@ -661,6 +661,6 @@ export const UNLOCK_FAILED_MESSAGE = 'Unable to unlock PDF. Check password and t
 export const DELETE_ALL_PAGES_MESSAGE = 'You cannot delete all pages.';
 export const MAX_DELETE_PAGES_INPUT_BYTES = 128 * 1024 * 1024;
 export const DELETE_PAGES_TOO_LARGE_MESSAGE =
-  'This PDF is too large for page deletion on a mobile device.';
+  'This PDF is too big to remove pages from on a phone. Try it on a computer, or split it into smaller files first.';
 
 export const NO_PAGES_MESSAGE = 'Selected PDF has no pages.';

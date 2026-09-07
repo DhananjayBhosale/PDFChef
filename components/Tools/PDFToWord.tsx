@@ -146,7 +146,7 @@ export const PDFToWord: React.FC = () => {
 
             {status.error && (
               <div role="alert" className="mt-3 rounded-[var(--radius-field)] border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-400 dark:bg-rose-500/10 dark:text-rose-200">
-                <p className="font-bold">{refusal ? 'No text to convert' : 'Conversion failed'}</p>
+                <p className="font-bold">{refusal ? 'There are no words to convert' : 'That did not work'}</p>
                 <p className="mt-1 leading-relaxed">{status.error}</p>
               </div>
             )}
@@ -170,7 +170,7 @@ export const PDFToWord: React.FC = () => {
                   icon={<FileType2 aria-hidden size={18} />}
                   onClick={() => void handleConvert()}
                 >
-                  {status.error ? 'Try again' : 'Export Word document'}
+                  {status.error ? 'Try again' : 'Save Word file document'}
                 </Button>
               )}
               <Button tone="secondary" block className="sm:w-auto" disabled={status.isProcessing} onClick={chooseAnother}>

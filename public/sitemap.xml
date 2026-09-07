@@ -186,6 +186,21 @@
     <changefreq>monthly</changefreq>
   </url>
   <url>
+    <loc>https://pdfchef.dhananjaytech.app/invoice</loc>
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://pdfchef.dhananjaytech.app/receipt</loc>
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://pdfchef.dhananjaytech.app/quote</loc>
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
     <loc>https://pdfchef.dhananjaytech.app/help</loc>
     <priority>0.6</priority>
     <changefreq>monthly</changefreq>

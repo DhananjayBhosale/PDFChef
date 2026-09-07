@@ -249,6 +249,73 @@ public final class AndroidDocumentsPluginInstrumentedTest {
         }
     }
 
+    @Test public void systemBarContrastTracksTheExplicitWebTheme() throws Exception {
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            for (boolean light : new boolean[] {false, true}) {
+                bridgeValue(scenario, "Capacitor.Plugins.StatusBar.setStyle({style:'" + (light ? "LIGHT" : "DARK") + "'}).then(()=>({done:true}))");
+                java.util.concurrent.atomic.AtomicBoolean matched = new java.util.concurrent.atomic.AtomicBoolean();
+                long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(3);
+                while (!matched.get() && System.nanoTime() < deadline) {
+                    scenario.onActivity(activity -> {
+                        var controller = androidx.core.view.WindowCompat.getInsetsController(activity.getWindow(), activity.getWindow().getDecorView());
+                        var background = activity.findViewById(android.R.id.content).getBackground();
+                        int expected = android.graphics.Color.parseColor(light ? "#f8f5ef" : "#16140f");
+                        matched.set(background instanceof android.graphics.drawable.ColorDrawable color
+                                && color.getColor() == expected
+                                && controller.isAppearanceLightStatusBars() == light
+                                && controller.isAppearanceLightNavigationBars() == light);
+                    });
+                    if (!matched.get()) Thread.sleep(50);
+                }
+                assertTrue("Inset background and both system icon sets must follow theme " + light, matched.get());
+            }
+        }
+    }
+
+    @Test public void generatedTransientOutputsReachDownloadsWithoutRecentHistory() throws Exception {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        DocumentLifecycleCoordinator coordinator = ((PdfChefApplication)
+                context.getApplicationContext()).getDocumentLifecycleCoordinator();
+        java.io.ByteArrayOutputStream zipBytes = new java.io.ByteArrayOutputStream();
+        try (java.util.zip.ZipOutputStream zip = new java.util.zip.ZipOutputStream(zipBytes)) {
+            zip.putNextEntry(new java.util.zip.ZipEntry("result.txt"));
+            zip.write("Generated ZIP".getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+        }
+        java.io.ByteArrayOutputStream webpBytes = new java.io.ByteArrayOutputStream();
+        android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(2, 2, android.graphics.Bitmap.Config.ARGB_8888);
+        assertTrue(bitmap.compress(android.graphics.Bitmap.CompressFormat.WEBP, 90, webpBytes));
+        bitmap.recycle();
+        byte[][] outputs = {zipBytes.toByteArray(), "Generated text ₹".getBytes(StandardCharsets.UTF_8), webpBytes.toByteArray()};
+        String[] mimes = {"application/zip", "text/plain", "image/webp"};
+        String[] extensions = {"zip", "txt", "webp"};
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            for (int i = 0; i < outputs.length; i++) {
+                String name = "Generated-" + UUID.randomUUID() + "." + extensions[i];
+                String ref = null;
+                Uri exported = null;
+                try {
+                    JSONObject session = bridgeValue(scenario, "Capacitor.Plugins.AndroidDocuments.beginWrite({mimeType:'" + mimes[i] + "',displayName:'" + name + "'})");
+                    String sessionRef = session.getString("sessionRef");
+                    bridgeValue(scenario, "Capacitor.Plugins.AndroidDocuments.appendWrite({sessionRef:'" + sessionRef + "',data:'" + Base64.encodeToString(outputs[i], Base64.NO_WRAP) + "'})");
+                    JSONObject finished = bridgeValue(scenario, "Capacitor.Plugins.AndroidDocuments.finishWrite({sessionRef:'" + sessionRef + "',transient:true})");
+                    ref = finished.getJSONObject("item").getString("ref");
+                    for (var owned : coordinator.listOwnedDocuments()) assertFalse(ref.equals(owned.ref()));
+                    JSONObject result = bridgeValue(scenario, "Capacitor.Plugins.AndroidDocuments.exportItem({ref:'" + ref + "',displayName:'" + name + "',mimeType:'" + mimes[i] + "'})");
+                    assertEquals("completed", result.getString("status"));
+                    exported = findDownload(context, name);
+                    assertNotNull("Generated output must exist in Downloads", exported);
+                    try (java.io.InputStream input = context.getContentResolver().openInputStream(exported)) {
+                        assertArrayEquals(outputs[i], input.readAllBytes());
+                    }
+                } finally {
+                    if (ref != null) coordinator.deleteOwnedDocument(ref);
+                    if (exported != null) context.getContentResolver().delete(exported, null, null);
+                }
+            }
+        }
+    }
+
     @Test public void nativeOwnedRenameIsDurableExactAndPayloadPreserving() throws Exception {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         DocumentLifecycleCoordinator coordinator = ((PdfChefApplication)

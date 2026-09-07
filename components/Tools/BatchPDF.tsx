@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import JSZip from 'jszip';
+import { reserveArchiveName } from '../../services/pdfToolResults';
 import { AlertTriangle, Plus, ArrowDown, ArrowUp, Files, Loader2, Trash2, XCircle } from 'lucide-react';
 import { FileUpload } from '../UI/FileUpload';
 import { StatusToast } from '../UI/StatusToast';
@@ -36,13 +37,13 @@ const actions: Array<{ value: BatchAction; label: string; detail?: string }> = [
   { value: 'compress', label: 'Compress PDF' },
   { value: 'split', label: 'Split PDF' },
   { value: 'pdf-to-image', label: 'PDF to Image', detail: 'JPG pages in one ZIP per PDF' },
-  { value: 'pdf-to-word', label: 'PDF to Word', detail: 'DOCX' },
+  { value: 'pdf-to-word', label: 'PDF to Word', detail: 'One Word file per PDF' },
   { value: 'rotate', label: 'Rotate Pages' },
   { value: 'protect', label: 'Protect PDF', detail: 'One password for every PDF' },
   { value: 'unlock', label: 'Unlock PDF', detail: 'One password for every PDF' },
-  { value: 'metadata', label: 'Clear Metadata' },
-  { value: 'flatten', label: 'Flatten PDF' },
-  { value: 'extract-text', label: 'Extract Text', detail: 'TXT' },
+  { value: 'metadata', label: 'Remove hidden info', detail: 'Author, dates and app names' },
+  { value: 'flatten', label: 'Flatten PDF', detail: 'Locks filled answers' },
+  { value: 'extract-text', label: 'Extract Text', detail: 'One plain text file per PDF' },
   { value: 'watermark', label: 'Watermark PDF' },
   { value: 'page-numbers', label: 'Page Numbers' },
   { value: 'repair', label: 'Repair PDF' },
@@ -254,6 +255,7 @@ export const BatchPDF: React.FC = () => {
     setStatus({ isProcessing: true, progress: 1, message: 'Starting batch…' });
 
     const zip = new JSZip();
+    const archiveNames = new Set<string>(['failures.txt']);
     const failures: string[] = [];
     let completedCount = 0;
 
@@ -278,7 +280,7 @@ export const BatchPDF: React.FC = () => {
         try {
           const result = await processFile(file, updateProgress, () => cancelRequestedRef.current);
           if (cancelRequestedRef.current) throw new BatchCanceledError();
-          zip.file(result.filename, result.blob);
+          zip.file(reserveArchiveName(result.filename, archiveNames), result.blob);
           completedCount += 1;
           setItemStatuses((current) => ({ ...current, [key]: { phase: 'completed', progress: 100 } }));
         } catch (error) {
@@ -286,7 +288,7 @@ export const BatchPDF: React.FC = () => {
             setItemStatuses((current) => ({ ...current, [key]: { phase: 'canceled', progress: 0 } }));
             break;
           }
-          const message = error instanceof Error ? error.message : 'Unable to process this file.';
+          const message = error instanceof Error ? error.message : 'This file could not be processed. Skip it, or run Repair PDF on it first.';
           failures.push(`${file.name}: ${message}`);
           setItemStatuses((current) => ({ ...current, [key]: { phase: 'failed', progress: 0, message } }));
         }

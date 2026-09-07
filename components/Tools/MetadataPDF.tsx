@@ -15,13 +15,13 @@ import { formatBytes } from '../UI/format';
 
 type MetadataTextField = 'title' | 'author' | 'subject' | 'keywords' | 'creator' | 'producer';
 
-const METADATA_FIELDS: ReadonlyArray<{ key: MetadataTextField; label: string }> = [
-  { key: 'title', label: 'Title' },
-  { key: 'author', label: 'Author' },
-  { key: 'subject', label: 'Subject' },
-  { key: 'keywords', label: 'Keywords' },
-  { key: 'creator', label: 'Creator' },
-  { key: 'producer', label: 'Producer' },
+const METADATA_FIELDS: ReadonlyArray<{ key: MetadataTextField; label: string; hint: string }> = [
+  { key: 'title', label: 'Title', hint: 'The name of the document, which some readers show instead of the file name' },
+  { key: 'author', label: 'Author', hint: 'Who wrote it' },
+  { key: 'subject', label: 'Subject', hint: 'A short line about what it covers' },
+  { key: 'keywords', label: 'Keywords', hint: 'Words to help you find it later, separated by commas' },
+  { key: 'creator', label: 'Made with', hint: 'The app the document was originally written in' },
+  { key: 'producer', label: 'Saved as PDF by', hint: 'The app that turned it into a PDF' },
 ];
 
 const emptyStatus = (): ProcessingStatus => ({ isProcessing: false, progress: 0, message: '' });
@@ -41,7 +41,7 @@ export const MetadataPDF: React.FC = () => {
       return;
     }
 
-    setStatus({ isProcessing: true, progress: 10, message: 'Reading metadata on this device…' });
+    setStatus({ isProcessing: true, progress: 10, message: 'Reading this PDF\u2019s details on your device…' });
     try {
       const probe = await loadPDFDocument(selected);
       const pageCount = Number(probe?.numPages) || 0;
@@ -58,14 +58,14 @@ export const MetadataPDF: React.FC = () => {
         name: selected.name,
         size: selected.size,
       });
-      setStatus({ isProcessing: false, progress: 100, message: 'Metadata loaded.' });
+      setStatus({ isProcessing: false, progress: 100, message: 'Details loaded.' });
     } catch (error) {
       console.error(error);
       setStatus({
         isProcessing: false,
         progress: 0,
         message: '',
-        error: 'Unable to read metadata from this PDF. Choose another file or try Repair PDF first.',
+        error: 'This PDF\u2019s details could not be read. Choose another file, or run Repair PDF on it first.',
       });
     }
   };
@@ -84,7 +84,7 @@ export const MetadataPDF: React.FC = () => {
     setStatus({
       isProcessing: false,
       progress: 0,
-      message: 'Original values restored in this draft.',
+      message: 'Your changes have been undone. Nothing is saved until you press Save changes.',
     });
   };
 
@@ -94,12 +94,11 @@ export const MetadataPDF: React.FC = () => {
     setStatus({
       isProcessing: false,
       progress: 0,
-      message: 'Six document properties cleared in this draft.',
+      message: 'All six boxes emptied. Nothing is saved until you press Save changes.',
     });
   };
 
   const updateMetadataField = (field: MetadataTextField, value: string) => {
-    setClearAllPending(false);
     setMetadata((current) => ({ ...current, [field]: value }));
   };
 
@@ -117,9 +116,7 @@ export const MetadataPDF: React.FC = () => {
       setStatus({
         isProcessing: false,
         progress: 100,
-        message: clearAllPending
-          ? 'Updated PDF created with the six editable properties cleared.'
-          : 'Updated PDF created.',
+        message: 'Updated PDF created with the details shown above.',
       });
     } catch (error) {
       console.error(error);
@@ -127,14 +124,14 @@ export const MetadataPDF: React.FC = () => {
         isProcessing: false,
         progress: 0,
         message: '',
-        error: 'Unable to create the updated PDF. Your original file was not changed.',
+        error: 'The updated PDF could not be made, so your original file is untouched. Try saving again, or run Repair PDF on it first.',
       });
     }
   };
 
   return (
     <ToolShell width="list" centered={!file}>
-      <ToolHeader title="Metadata" />
+      <ToolHeader title="Document Info" />
 
       <AnimatePresence mode="wait">
         {!file ? (
@@ -148,11 +145,11 @@ export const MetadataPDF: React.FC = () => {
               className="flex items-center justify-center gap-3 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] px-4 py-4 text-[var(--text-secondary)]"
             >
               <Loader2 aria-hidden className="h-5 w-5 animate-spin text-[var(--accent-text)]" />
-              <span className="font-medium">Reading metadata on this device…</span>
+              <span className="font-medium">Reading this PDF’s details on your device…</span>
             </motion.div>
           ) : (
             <motion.div key="upload" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-              <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label="Choose a PDF to inspect" />
+              <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label="Choose a PDF to see its details" />
             </motion.div>
           )
         ) : (
@@ -181,7 +178,7 @@ export const MetadataPDF: React.FC = () => {
             >
               <div className="grid gap-2 sm:grid-cols-2">
                 <Button icon={<RotateCcw aria-hidden size={18} />} onClick={resetToSource} block>
-                  Reset to source
+                  Undo my changes
                 </Button>
                 <Button
                   tone="destructive"
@@ -189,27 +186,32 @@ export const MetadataPDF: React.FC = () => {
                   onClick={clearSixProperties}
                   block
                 >
-                  Clear six properties
+                  Empty all six boxes
                 </Button>
               </div>
 
               {/* Kept: without it, "Clear" reads as full sanitization, which
                   it is not. */}
               <p className="mt-2 rounded-[var(--radius-field)] bg-[var(--surface-sunken)] px-3 py-2 type-footnote text-[var(--text-secondary)]">
-                XMP, attachments, annotations, form values, scripts and hidden layers remain.
+                This empties the six boxes below. Other hidden information — comments, attachments,
+                anything you typed into a form — stays in the file. Clean Up PDF removes document details and comments; it does not erase form values.
               </p>
 
               <div className="mt-3 space-y-2.5">
-                {METADATA_FIELDS.map(({ key, label }) => (
+                {METADATA_FIELDS.map(({ key, label, hint }) => (
                   <div key={key}>
-                    <label htmlFor={`metadata-${key}`} className="mb-1.5 block text-sm font-semibold text-[var(--text-primary)]">
+                    <label htmlFor={`metadata-${key}`} className="block text-sm font-semibold text-[var(--text-primary)]">
                       {label}
                     </label>
+                    <p id={`metadata-${key}-hint`} className="type-footnote mb-1.5 text-[var(--text-secondary)]">
+                      {hint}
+                    </p>
                     <input
                       id={`metadata-${key}`}
                       type="text"
                       value={typeof metadata[key] === 'string' ? metadata[key] : ''}
                       onChange={(event) => updateMetadataField(key, event.target.value)}
+                      aria-describedby={`metadata-${key}-hint`}
                       autoComplete="off"
                       className="chef-field"
                     />
@@ -219,7 +221,7 @@ export const MetadataPDF: React.FC = () => {
 
               {/* Kept: an empty field does not mean an empty value. */}
               <p className="type-footnote mt-3 text-[var(--text-secondary)]">
-                Blank fields leave the source value unchanged.
+                Leaving a box empty keeps whatever the file already had. To wipe a value, use Empty all six boxes.
               </p>
 
               <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
@@ -230,7 +232,7 @@ export const MetadataPDF: React.FC = () => {
                   onClick={handleSave}
                   className="w-full sm:w-auto"
                 >
-                  Export updated PDF
+                  Save changes
                 </Button>
               </div>
             </section>

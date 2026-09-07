@@ -361,7 +361,7 @@ final class AndroidDocumentExporter {
                 || displayName.length() > 180 || displayName.indexOf('\0') >= 0
                 || displayName.contains("/") || displayName.contains("\\")
                 || mimeType == null || !mimeType.equals(source.mimeType())
-                || !AndroidDocumentIngressPolicy.isSupportedMimeType(mimeType)) throw invalid();
+                || !OwnedDocumentWritePolicy.isSupportedMimeType(mimeType)) throw invalid();
     }
 
     private static byte[] encode(ExportRecord value) throws IOException {

@@ -99,7 +99,7 @@ export const RepairPDF: React.FC = () => {
 
   const handleRepair = async () => {
     if (!file) return;
-    setStatus({ isProcessing: true, progress: 10, message: 'Re-saving the PDF structure on this device…' });
+    setStatus({ isProcessing: true, progress: 10, message: 'Re-saving the PDF on your device…' });
     try {
       const bytes = await repairPDF(file.file);
       downloadBlob(
@@ -118,7 +118,7 @@ export const RepairPDF: React.FC = () => {
         isProcessing: false,
         progress: 0,
         message: '',
-        error: 'This PDF could not be re-saved. It may be encrypted, unreadable or too damaged for browser repair.',
+        error: 'This PDF could not be repaired. If it has a password, remove it with Unlock PDF first; otherwise the file is too damaged to fix here.',
       });
     }
   };
@@ -144,7 +144,7 @@ export const RepairPDF: React.FC = () => {
                 <p className="chef-filename text-sm font-semibold text-[var(--text-primary)]">{file.name}</p>
                 <p className="type-caption text-[var(--text-tertiary)]">{formatBytes(file.size)}</p>
               </div>
-              <Button tone="quiet" onClick={chooseAnotherFile} className="shrink-0">
+              <Button tone="quiet" onClick={chooseAnotherFile} disabled={status.isProcessing} className="shrink-0">
                 Change
               </Button>
             </section>
@@ -208,7 +208,7 @@ export const RepairPDF: React.FC = () => {
                   onClick={handleRepair}
                   className="w-full sm:w-auto"
                 >
-                  Export repaired PDF
+                  Save repaired PDF
                 </Button>
               </div>
             </section>

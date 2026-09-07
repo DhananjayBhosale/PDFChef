@@ -51,7 +51,7 @@ const createTransparentSignature = async (dataUrl: string, threshold = 242) => {
 
   await new Promise<void>((resolve, reject) => {
     image.onload = () => resolve();
-    image.onerror = () => reject(new Error('Failed to process signature image.'));
+    image.onerror = () => reject(new Error('This signature picture could not be read. Try a JPG or PNG instead.'));
     image.src = dataUrl;
   });
 
@@ -90,7 +90,7 @@ const rotateSignatureImage = async (dataUrl: string) => {
   const image = new Image();
   await new Promise<void>((resolve, reject) => {
     image.onload = () => resolve();
-    image.onerror = () => reject(new Error('Failed to rotate signature image.'));
+    image.onerror = () => reject(new Error('The signature could not be turned. Try drawing or adding it again.'));
     image.src = dataUrl;
   });
   const canvas = document.createElement('canvas');
@@ -156,7 +156,9 @@ const SignatureOverlay: React.FC<{
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const step = event.shiftKey ? 0.05 : 0.01;
-    const height = item.width / item.aspectRatio;
+    const rect = containerRef.current?.getBoundingClientRect();
+    const pageAspect = rect && rect.height > 0 ? rect.width / rect.height : 1;
+    const height = item.width * pageAspect / item.aspectRatio;
     const movement = {
       ArrowLeft: { x: -step, y: 0 },
       ArrowRight: { x: step, y: 0 },
@@ -195,13 +197,13 @@ const SignatureOverlay: React.FC<{
         const nextY = clamp(
           originRef.current.y + dy / rect.height,
           0,
-          1 - originRef.current.width / originRef.current.aspectRatio,
+          1 - originRef.current.width * rect.width / (originRef.current.aspectRatio * rect.height),
         );
         onUpdate(item.localId, { x: nextX, y: nextY });
       } else if (modeRef.current === 'resize') {
         const rawWidth = originRef.current.width + dx / rect.width;
         const maxWidthByX = 1 - originRef.current.x;
-        const maxWidthByY = (1 - originRef.current.y) * originRef.current.aspectRatio;
+        const maxWidthByY = (1 - originRef.current.y) * originRef.current.aspectRatio * rect.height / rect.width;
         const maxWidth = Math.max(0.1, Math.min(0.9, maxWidthByX, maxWidthByY));
         const nextWidth = clampWidth(clamp(rawWidth, 0.1, maxWidth));
         onUpdate(item.localId, { width: nextWidth });
@@ -590,7 +592,7 @@ export const SignPDF: React.FC = () => {
       downloadBlob(new Blob([bytes], { type: 'application/pdf' }), outputName);
       setStatus({ isProcessing: false, progress: 100, message: `Signed copy ready: ${outputName}.` });
     } catch {
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Failed to export signed PDF.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: 'The signed PDF could not be saved. Try again, or run Repair PDF on this file first.' });
     }
   };
 
@@ -726,7 +728,7 @@ export const SignPDF: React.FC = () => {
       });
       image.src = dataUrl;
     } catch {
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Unable to rotate this signature.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: 'The signature could not be turned. Try drawing or adding it again.' });
     }
   };
 
@@ -737,7 +739,12 @@ export const SignPDF: React.FC = () => {
     // the empty drop zone a screen below the fold.
     <div className={`mx-auto w-full max-w-7xl px-4 py-4 sm:py-6 ${file ? 'chef-workspace-fill flex flex-col' : 'chef-tool-landing-centered'}`}>
       <div className="mb-2 flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">Sign PDF</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Sign PDF</h1>
+          {!file && (
+            <p className="mt-1 text-[var(--text-secondary)]">Draw your signature and place it on the page.</p>
+          )}
+        </div>
         {file && (
           <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
             <button

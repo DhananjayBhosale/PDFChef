@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { OutputDeliveryHandler } from '../../services/platform/contracts.ts';
-import { deliverBlob, downloadBlob, installOutputDeliveryHandler } from '../../services/pdfShared.ts';
+import { deliverBlob, downloadBlob, installOutputDeliveryHandler, type OutputReadyRecord } from '../../services/pdfShared.ts';
 import { OUTPUT_EVENT } from '../../services/workspace.ts';
 
 interface BrowserHarness {
@@ -100,7 +100,7 @@ test('native handler receives one exact request and announces the Blob after suc
   }
 });
 
-test('awaitable native delivery rejects without a false output announcement', async () => {
+test('awaitable native failure rejects while retaining the exact bytes only in the retry event', async () => {
   const browser = installBrowserHarness({ keepLocalHistory: false, autoDownload: true });
   const uninstall = installOutputDeliveryHandler(async () => { throw new Error('native failed'); });
   try {
@@ -108,7 +108,11 @@ test('awaitable native delivery rejects without a false output announcement', as
       deliverBlob(new Blob(['recoverable']), 'recoverable.pdf', 'application/pdf'),
       /native failed/,
     );
-    assert.equal(browser.events.length, 0);
+    assert.equal(browser.events.length, 1);
+    const retry = browser.events[0].detail as OutputReadyRecord;
+    assert.equal(retry.deliveryIssue, 'failed');
+    assert.equal(retry.historyRetained, false);
+    assert.equal(await retry.blob!.text(), 'recoverable');
     assert.deepEqual(browser.created, []);
   } finally {
     uninstall();
@@ -139,7 +143,11 @@ test('awaitable browser delivery keeps the result dirty when an unretained picke
       deliverBlob(new Blob(['result']), 'result.pdf', 'application/pdf'),
       (error: unknown) => error instanceof Error && error.name === 'AbortError',
     );
-    assert.equal(browser.events.length, 0);
+    assert.equal(browser.events.length, 1);
+    const retry = browser.events[0].detail as OutputReadyRecord;
+    assert.equal(retry.deliveryIssue, 'cancelled');
+    assert.equal(retry.historyRetained, false);
+    assert.equal(await retry.blob!.text(), 'result');
     assert.deepEqual(browser.clicks, []);
   } finally {
     browser.restore();
@@ -171,7 +179,7 @@ test('installer cleanup is identity-safe even when the same function is reinstal
   }
 });
 
-test('handler rejection does not announce a falsely retained result or start browser download', async () => {
+test('fire-and-forget handler rejection exposes an unretained retry without a browser download', async () => {
   const browser = installBrowserHarness();
   const warning = console.warn;
   let warnings = 0;
@@ -181,12 +189,71 @@ test('handler rejection does not announce a falsely retained result or start bro
   try {
     downloadBlob(blob, 'recoverable.pdf', 'application/pdf');
     await new Promise(resolve => setTimeout(resolve, 0));
-    assert.equal(browser.events.length, 0);
+    assert.equal(browser.events.length, 1);
+    const retry = browser.events[0].detail as OutputReadyRecord;
+    assert.equal(retry.blob, blob);
+    assert.equal(retry.deliveryIssue, 'failed');
+    assert.equal(retry.historyRetained, false);
     assert.equal(warnings, 1);
     assert.deepEqual(browser.created, []);
   } finally {
     uninstall();
     console.warn = warning;
+    browser.restore();
+  }
+});
+
+test('retained native output stays saved while a cancelled optional export remains retryable', async () => {
+  const browser = installBrowserHarness({ keepLocalHistory: true, autoDownload: true });
+  const uninstall = installOutputDeliveryHandler(async () => ({ exportIssue: 'cancelled' }));
+  const blob = new Blob(['retained']);
+  try {
+    await deliverBlob(blob, 'retained.pdf', 'application/pdf');
+    assert.equal(browser.events.length, 1);
+    const retry = browser.events[0].detail as OutputReadyRecord;
+    assert.equal(retry.blob, blob);
+    assert.equal(retry.deliveryIssue, 'cancelled');
+    assert.equal(retry.historyRetained, true);
+    assert.deepEqual(browser.created, []);
+  } finally {
+    uninstall();
+    browser.restore();
+  }
+});
+
+test('fire-and-forget browser cancellation exposes exact bytes without retaining history or falling back', async () => {
+  const browser = installBrowserHarness();
+  (window as unknown as { showSaveFilePicker: () => Promise<never> }).showSaveFilePicker = async () => {
+    throw new DOMException('cancelled', 'AbortError');
+  };
+  const blob = new Blob([new Uint8Array([0, 1, 255])]);
+  try {
+    assert.equal(downloadBlob(blob, 'result.pdf', 'application/pdf'), null);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(browser.events.length, 1);
+    const retry = browser.events[0].detail as OutputReadyRecord;
+    assert.equal(retry.blob, blob);
+    assert.equal(retry.deliveryIssue, 'cancelled');
+    assert.equal(retry.historyRetained, false);
+    assert.deepEqual(browser.created, []);
+  } finally {
+    browser.restore();
+  }
+});
+
+test('unavailable browser history leaves a retryable result when automatic saving is off', async () => {
+  const browser = installBrowserHarness({ keepLocalHistory: true, autoDownload: false });
+  const blob = new Blob(['private output']);
+  try {
+    // Node has no IndexedDB: persistence fails before a write can occur.
+    await assert.rejects(deliverBlob(blob, 'result.pdf', 'application/pdf'));
+    assert.equal(browser.events.length, 1);
+    const retry = browser.events[0].detail as OutputReadyRecord;
+    assert.equal(retry.blob, blob);
+    assert.equal(retry.deliveryIssue, 'failed');
+    assert.equal(retry.historyRetained, false);
+    assert.deepEqual(browser.created, []);
+  } finally {
     browser.restore();
   }
 });

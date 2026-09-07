@@ -15,6 +15,7 @@ import type {
   PendingImportDeliveryService,
   OutputDeliveryHandler,
   OutputDeliveryRequest,
+  OutputDeliveryResult,
   RecentRepository,
   SettingsRepository,
   StorageInformation,
@@ -51,7 +52,7 @@ const FALLBACK_MIME_TYPE = 'application/octet-stream';
 export interface IOSDocumentBridge {
   retain(
     input: ReadableStream<Uint8Array>,
-    metadata: Pick<StoredDocument, 'name' | 'mimeType'>,
+    metadata: Pick<StoredDocument, 'name' | 'mimeType'> & { transient?: boolean },
   ): Promise<StoredDocument>;
   open(ref: DurableDocumentRef): ReadableStream<Uint8Array>;
   stat(ref: DurableDocumentRef): Promise<StoredDocument>;
@@ -256,7 +257,7 @@ export const createIOSWorkspacePlatform = (
   const retainFresh = async (result: { blob: Blob; name: string; mimeType: string }): Promise<StoredDocument> => {
     const document = await bridge.retain(
       result.blob.stream(),
-      documentMetadata(result.name, result.mimeType || result.blob.type || null),
+      { ...documentMetadata(result.name, result.mimeType || result.blob.type || null), transient: true },
     );
     transientRefs.add(document.ref);
     return document;
@@ -296,11 +297,15 @@ export const createIOSWorkspacePlatform = (
 
     const document = await bridge.retain(
       request.blob.stream(),
-      documentMetadata(request.name, request.mimeType),
+      {
+        ...documentMetadata(request.name, request.mimeType),
+        ...(!request.keepLocalHistory ? { transient: true } : {}),
+      },
     );
 
     if (request.keepLocalHistory) {
       let persistenceFailure: unknown;
+      let exportIssue: OutputDeliveryResult['exportIssue'] | undefined;
       try {
         await recent.save(outputEntry(document, request, document.retainedAt ?? now()));
       } catch (error) {
@@ -311,12 +316,14 @@ export const createIOSWorkspacePlatform = (
       if (request.autoDownload) {
         try {
           await bridge.exportDocument(document.ref, request.name, request.mimeType);
-        } catch {
-          // The retained result remains available for an explicit retry.
+        } catch (error) {
+          // The durable save succeeded; report the optional export separately so
+          // the interface can offer a retry without treating the document as lost.
+          exportIssue = error instanceof Error && error.name === 'AbortError' ? 'cancelled' : 'failed';
         }
       }
       if (persistenceFailure !== undefined) throw persistenceFailure;
-      return;
+      return exportIssue ? { exportIssue } : undefined;
     }
 
     transientRefs.add(document.ref);

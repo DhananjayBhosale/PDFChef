@@ -1,5 +1,7 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import { cx } from './Primitives';
+import { tools } from '../Tools/toolCatalog';
 
 /**
  * The frame every tool page is built in, and the small set of surfaces an
@@ -51,12 +53,20 @@ export const ToolHeader: React.FC<{
   title: React.ReactNode;
   note?: React.ReactNode;
   className?: string;
-}> = ({ title, note, className }) => (
-  <div className={cx('mb-3 sm:mb-6', className)}>
-    <h1 className="text-3xl font-bold text-[var(--text-primary)]">{title}</h1>
-    {note ? <p className="mt-1 text-sm text-[var(--text-secondary)]">{note}</p> : null}
-  </div>
-);
+}> = ({ title, note, className }) => {
+  // Most tool screens opened with a title and "Choose a PDF to flatten", which
+  // only helps someone who already knew what flattening was. The catalogue
+  // already carries one plain line per tool for the list they arrived from;
+  // show them the same line here rather than making them go back and read it.
+  const { pathname } = useLocation();
+  const line = note ?? tools.find((tool) => tool.path === pathname)?.description;
+  return (
+    <div className={cx('mb-3 sm:mb-6', className)}>
+      <h1 className="text-3xl font-bold text-[var(--text-primary)]">{title}</h1>
+      {line ? <p className="mt-1 text-[var(--text-secondary)]">{line}</p> : null}
+    </div>
+  );
+};
 
 /* --------------------------------------------------------------- Panel --- */
 
