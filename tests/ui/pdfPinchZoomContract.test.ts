@@ -43,3 +43,44 @@ test('Edit PDF keeps zoomed scrolling inside the PDF box and changes pages at it
   assert.doesNotMatch(editor, /overflow-y-clip/);
   assert.doesNotMatch(editor, /window\.scrollTo/);
 });
+
+test('the shared reader releases off-screen canvases and its PDF document', () => {
+  const reader = read('components/Tools/ViewPDF.tsx');
+  const browserService = read('services/pdfBrowser.ts');
+  assert.match(reader, /setIsVisible\(entry\.isIntersecting\)/);
+  assert.match(reader, /renderTask\?\.cancel\?\.\(\)/);
+  assert.match(reader, /canvas\.width = 0/);
+  assert.match(reader, /width=\{0\}/);
+  assert.match(reader, /currentDocument\.destroy\(\)/);
+  assert.match(reader, /aria-label="PDF password"/);
+  assert.match(reader, /loadDisposablePDFDocument\(openedPdf\.file\)/);
+  assert.match(browserService, /export const loadDisposablePDFDocument/);
+  assert.match(browserService, /caller exclusively owns and must destroy/);
+  assert.match(browserService, /export const loadProtectedPDFDocument[\s\S]*await loadingTask\.destroy\(\)/);
+  assert.match(reader, /passwordAttemptRef\.current !== passwordAttempt/);
+  assert.match(reader, /activeOpenedPdfIdRef\.current !== openedPdfId/);
+});
+
+test('full-screen PDF previews are named modal dialogs with contained focus', () => {
+  for (const path of [
+    'components/UI/PDFPreviewModal.tsx',
+    'components/Tools/ReadabilityPreview.tsx',
+  ]) {
+    const source = read(path);
+    assert.match(source, /role="dialog"/);
+    assert.match(source, /aria-modal="true"/);
+    assert.match(source, /aria-labelledby=\{titleId\}/);
+    assert.match(source, /event\.key !== 'Tab'/);
+    assert.match(source, /previous\?\.isConnected/);
+  }
+});
+
+test('Extract Pages exposes one selection control per page', () => {
+  const extract = read('components/Tools/ExtractPages.tsx');
+  const thumbnail = read('components/UI/PageThumbnail.tsx');
+  assert.match(extract, /if \(status\.isProcessing\) return/);
+  assert.match(extract, /onToggle=\{\(\) => togglePage\(index\)\}/);
+  assert.match(extract, /disabled=\{status\.isProcessing\}/);
+  assert.match(thumbnail, /aria-disabled=\{disabled \|\| undefined\}/);
+  assert.doesNotMatch(extract, /<button[\s\S]{0,500}<PageThumbnail/);
+});

@@ -8,6 +8,7 @@ interface PageThumbnailProps {
   loadPreview?: () => Promise<string>;
   isSelected: boolean;
   onToggle: () => void;
+  disabled?: boolean;
   rotation?: number; // Visual rotation in degrees
 }
 
@@ -17,6 +18,7 @@ export const PageThumbnail: React.FC<PageThumbnailProps> = ({
   loadPreview,
   isSelected,
   onToggle,
+  disabled = false,
   rotation = 0
 }) => {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -126,15 +128,18 @@ export const PageThumbnail: React.FC<PageThumbnailProps> = ({
       role="button"
       tabIndex={0}
       aria-pressed={isSelected}
+      aria-disabled={disabled || undefined}
       aria-label={`Page ${pageIndex + 1}${isSelected ? ', selected' : ''}`}
-      onClick={onToggle}
+      onClick={disabled ? undefined : onToggle}
       onKeyDown={(event: React.KeyboardEvent) => {
+        if (disabled) return;
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
         onToggle?.();
       }}
       className={`
-        relative group cursor-pointer rounded-lg overflow-hidden border-2 transition-all duration-200
+        relative group rounded-lg overflow-hidden border-2 transition-all duration-200
+        ${disabled ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}
         focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]
         ${isSelected 
           ? 'border-blue-500 shadow-md ring-2 ring-blue-500/20' 

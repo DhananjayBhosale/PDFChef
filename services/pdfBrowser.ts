@@ -96,13 +96,10 @@ const renderPageToBlob = async (
   };
 };
 
-export const loadPDFDocument = async (file: File) => {
-  const cached = pdfDocumentCache.get(file);
-  if (cached) return cached;
-
-  const next = (async () => {
-    const arrayBuffer = await getFileBuffer(file);
-    const loadingTask = pdfjs.getDocument({ data: getSafeBuffer(arrayBuffer), ...pdfjsResourceOptions });
+const loadOwnedPDFDocument = async (file: File, onDestroy?: () => void): Promise<any> => {
+  const arrayBuffer = await getFileBuffer(file);
+  const loadingTask = pdfjs.getDocument({ data: getSafeBuffer(arrayBuffer), ...pdfjsResourceOptions });
+  try {
     const doc = await loadingTask.promise;
     let destroyed = false;
     Object.defineProperty(doc, 'destroy', {
@@ -110,14 +107,38 @@ export const loadPDFDocument = async (file: File) => {
       value: async () => {
         if (destroyed) return;
         destroyed = true;
-        pdfDocumentCache.delete(file);
+        onDestroy?.();
         await loadingTask.destroy();
       },
     });
-
     return doc;
-  })().catch((error) => {
-    pdfDocumentCache.delete(file);
+  } catch (error) {
+    try {
+      await loadingTask.destroy();
+    } catch {
+      // Preserve the document-opening error; cleanup failure is secondary.
+    }
+    throw error;
+  }
+};
+
+/**
+ * Opens a PDF that the caller exclusively owns and must destroy.
+ *
+ * Long-lived readers use this instead of the shared probe cache so a closing
+ * screen can release its PDF.js worker without invalidating another consumer.
+ */
+export const loadDisposablePDFDocument = (file: File) => loadOwnedPDFDocument(file);
+
+export const loadPDFDocument = async (file: File) => {
+  const cached = pdfDocumentCache.get(file);
+  if (cached) return cached;
+
+  let next: Promise<any>;
+  next = loadOwnedPDFDocument(file, () => {
+    if (pdfDocumentCache.get(file) === next) pdfDocumentCache.delete(file);
+  }).catch((error) => {
+    if (pdfDocumentCache.get(file) === next) pdfDocumentCache.delete(file);
     throw error;
   });
 
@@ -171,7 +192,7 @@ export const loadEditablePDFDocument = async (file: File) => {
   return next;
 };
 
-export const loadProtectedPDFDocument = async (file: File, password: string) => {
+export const loadProtectedPDFDocument = async (file: File, password: string): Promise<any> => {
   const exactPassword = password;
   if (!exactPassword) {
     throw new Error('Password is required');
@@ -183,7 +204,17 @@ export const loadProtectedPDFDocument = async (file: File, password: string) => 
     ...pdfjsResourceOptions,
     password: exactPassword,
   });
-  const doc = await loadingTask.promise;
+  let doc;
+  try {
+    doc = await loadingTask.promise;
+  } catch (error) {
+    try {
+      await loadingTask.destroy();
+    } catch {
+      // Preserve the password/opening error; cleanup failure is secondary.
+    }
+    throw error;
+  }
   let destroyed = false;
   Object.defineProperty(doc, 'destroy', {
     configurable: true,

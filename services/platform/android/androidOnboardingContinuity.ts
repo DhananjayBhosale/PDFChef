@@ -2,7 +2,10 @@ import {
   AndroidLegacyInspectorClient,
   isAndroidLegacyInspectorAvailable,
 } from './androidLegacyInspector.ts';
-import type { AndroidLegacySettingsSnapshot } from './legacyCompatibilityContracts.ts';
+import type {
+  AndroidLegacyHistorySnapshot,
+  AndroidLegacySettingsSnapshot,
+} from './legacyCompatibilityContracts.ts';
 import {
   getExplicitWorkspaceInterfaceFont,
   getWorkspaceSettings,
@@ -23,6 +26,7 @@ export type AndroidOnboardingContinuityStatus =
 
 export interface AndroidOnboardingContinuityPorts {
   readonly readLegacySettings: () => Promise<AndroidLegacySettingsSnapshot>;
+  readonly readLegacyHistory?: () => Promise<AndroidLegacyHistorySnapshot>;
   readonly readSharedOnboardingComplete: () => boolean;
   readonly markSharedOnboardingComplete: () => void;
   /** Optional as a group so older focused callers keep the original onboarding-only seam. */
@@ -54,6 +58,13 @@ export const legacyOnboardingIsComplete = (
 ): boolean => (
   (snapshot.health === 'ok' || snapshot.health === 'partial_invalid')
   && snapshot.values.onboarding_completed === true
+);
+
+const legacyHistoryShowsExistingUser = (
+  snapshot: AndroidLegacyHistorySnapshot,
+): boolean => (
+  (snapshot.health === 'ok' || snapshot.health === 'partial_invalid')
+  && snapshot.returnedCount > 0
 );
 
 export interface AndroidLegacyInterfaceFontResolution {
@@ -127,7 +138,19 @@ export const importAndroidOnboardingContinuity = async (
   } catch {
     return 'unavailable';
   }
-  const importOnboarding = !alreadyComplete && legacyOnboardingIsComplete(snapshot);
+  let importOnboarding = !alreadyComplete && legacyOnboardingIsComplete(snapshot);
+  // An explicit false still means first run. If the older preference is absent
+  // or unreadable, however, a valid non-empty legacy history proves this is an
+  // existing installation and avoids replaying onboarding after an upgrade.
+  if (!alreadyComplete
+      && snapshot.values.onboarding_completed === undefined
+      && ports.readLegacyHistory) {
+    try {
+      importOnboarding = legacyHistoryShowsExistingUser(await ports.readLegacyHistory());
+    } catch {
+      // History is only a fallback signal. Its failure must not hide onboarding.
+    }
+  }
   const fontResolution = inspectLegacyFont
     ? resolveAndroidLegacyInterfaceFont(snapshot)
     : Object.freeze({ font: null, settled: false });
@@ -156,6 +179,12 @@ export const runAndroidOnboardingContinuity: AndroidOnboardingContinuityRun =
         throw new TypeError('Android legacy settings are unavailable.');
       }
       return new AndroidLegacyInspectorClient().readSettings();
+    },
+    readLegacyHistory: async () => {
+      if (!isAndroidLegacyInspectorAvailable()) {
+        throw new TypeError('Android legacy history is unavailable.');
+      }
+      return new AndroidLegacyInspectorClient().readHistory();
     },
     markSharedOnboardingComplete: () => {
       updateWorkspaceSettings({ onboardingComplete: true });

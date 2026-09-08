@@ -8,7 +8,7 @@ import { StatusToast } from '../UI/StatusToast';
 import { Button } from '../UI/Primitives';
 import { ToolHeader, ToolPanel, ToolSelectionBar, ToolShell } from '../UI/ToolLayout';
 import { PDFFile, ProcessingStatus } from '../../types';
-import { loadPDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
+import { loadDisposablePDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
 import { extractPages } from '../../services/pdfDocument';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
 
@@ -35,7 +35,7 @@ export const ExtractPages: React.FC = () => {
       setPreviewError('');
       setPdfDoc(null);
       setTotalPages(0);
-      void loadPDFDocument(file.file)
+      void loadDisposablePDFDocument(file.file)
         .then((document) => {
           openedDocument = document;
           if (cancelled) {
@@ -95,6 +95,7 @@ export const ExtractPages: React.FC = () => {
   };
 
   const togglePage = (index: number) => {
+    if (status.isProcessing) return;
     setSelectedPages((prev) => (
       prev.includes(index)
         ? prev.filter((value) => value !== index)
@@ -195,22 +196,14 @@ export const ExtractPages: React.FC = () => {
             ) : (
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
                 {Array.from({ length: totalPages }, (_, index) => (
-                  <button
+                  <PageThumbnail
                     key={index}
-                    type="button"
-                    aria-label={`${selectedPages.includes(index) ? 'Deselect' : 'Select'} page ${index + 1}`}
-                    aria-pressed={selectedPages.includes(index)}
+                    pageIndex={index}
+                    loadPreview={() => loadPagePreview(index)}
+                    isSelected={selectedPages.includes(index)}
+                    onToggle={() => togglePage(index)}
                     disabled={status.isProcessing}
-                    onClick={() => togglePage(index)}
-                    className="min-w-0 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-canvas)] disabled:opacity-60"
-                  >
-                    <PageThumbnail
-                      pageIndex={index}
-                      loadPreview={() => loadPagePreview(index)}
-                      isSelected={selectedPages.includes(index)}
-                      onToggle={() => undefined}
-                    />
-                  </button>
+                  />
                 ))}
               </div>
             )}
