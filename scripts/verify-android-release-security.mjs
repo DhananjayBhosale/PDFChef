@@ -100,6 +100,7 @@ function expectedComponents(packageName, debug, binary) {
     { type: 'service', attrs: { exported: bool(false), name: 'com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService', permission: 'android.permission.BIND_JOB_SERVICE' } },
     { type: 'receiver', attrs: { exported: bool(false), name: 'com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver' } },
     { type: 'receiver', attrs: { directBootAware: bool(false), enabled: bool(true), exported: bool(true), name: 'androidx.profileinstaller.ProfileInstallReceiver', permission: 'android.permission.DUMP' } },
+    { type: 'activity', attrs: { exported: bool(false), name: 'com.google.android.play.core.common.PlayCoreDialogWrapperActivity', stateNotNeeded: bool(true), theme: binary ? ANY_RESOURCE : '@style/Theme.PlayCore.Transparent' } },
   );
   return catalogue.map(({ type, attrs }) => ({ type, attrs: Object.fromEntries(Object.entries(attrs).sort(([a], [b]) => a.localeCompare(b))) }));
 }
@@ -168,7 +169,7 @@ function assertNoSdkNamespaces(apk, variant) {
 
 const rootBuild = text(paths.rootBuild), appBuild = text(paths.appBuild), sourceManifest = text(paths.sourceManifest);
 for (const forbidden of ['com.google.gms:google-services', 'com.google.gms.google-services', 'google-services.json', 'crashlytics', 'analytics', 'measurement', 'admob']) assert(!lower(rootBuild).includes(forbidden) && !lower(appBuild).includes(forbidden), `Gradle activates forbidden service: ${forbidden}`);
-for (const required of ['namespace = "com.dhananjaytech.zenpdf_allpdftoolsinoneplace"', 'applicationId "com.dhananjaytech.pdfchef"', 'applicationIdSuffix ".debug"', 'minifyEnabled true', 'shrinkResources true', "getDefaultProguardFile('proguard-android-optimize.txt')", 'JavaVersion.VERSION_21', 'androidx.datastore:datastore-preferences-proto:1.2.1', 'com.google.code.gson:gson:2.13.2', "implementation 'com.google.android.gms:play-services-mlkit-document-scanner:16.0.0'"]) assert(appBuild.includes(required), `Required Gradle invariant missing: ${required}`);
+for (const required of ['namespace = "com.dhananjaytech.zenpdf_allpdftoolsinoneplace"', 'applicationId "com.dhananjaytech.pdfchef"', 'applicationIdSuffix ".debug"', 'minifyEnabled true', 'shrinkResources true', "getDefaultProguardFile('proguard-android-optimize.txt')", 'JavaVersion.VERSION_21', 'androidx.datastore:datastore-preferences-proto:1.2.1', 'com.google.code.gson:gson:2.13.2', "implementation 'com.google.android.gms:play-services-mlkit-document-scanner:16.0.0'", "implementation 'com.google.android.play:app-update:2.1.0'"]) assert(appBuild.includes(required), `Required Gradle invariant missing: ${required}`);
 assert(/compileSdk\s*\{\s*version\s*=\s*release\(36\)\s*\{\s*minorApiLevel\s*=\s*1\s*\}\s*\}/s.test(appBuild),
   'App must compile against Android 36.1 (extension 20)');
 assert((appBuild.match(/androidx\.pdf:pdf-viewer-fragment:1\.0\.0-beta01/g) ?? []).length === 1,

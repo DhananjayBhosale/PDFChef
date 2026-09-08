@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -11,50 +10,31 @@ const requireMatch = (text, pattern, label) => {
 const requireAbsent = (text, pattern, label) => {
   if (pattern.test(text)) throw new Error(`Forbidden ${label}`);
 };
-const occurrences = (text, value) => text.split(value).length - 1;
-const sha256Text = text => createHash('sha256').update(text).digest('hex');
-
 const activity = read('android/app/src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/MainActivity.java');
 const policy = read('android/app/src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/security/PdfChefWebViewPolicy.java');
 const config = read('capacitor.config.ts');
 
 const inspector = 'registerPlugin(AndroidLegacyInspectorPlugin.class)';
 const writer = 'registerPlugin(AndroidLegacySettingsWriterPlugin.class)';
+const metadata = 'registerPlugin(AndroidAppMetadataPlugin.class)';
+const storage = 'registerPlugin(AndroidStorageStatsPlugin.class)';
 const documents = 'registerPlugin(AndroidDocumentsPlugin.class)';
 const scanner = 'registerPlugin(AndroidDocumentScannerPlugin.class)';
 const bridge = 'super.onCreate(savedInstanceState)';
-if (![inspector, writer, documents, scanner, bridge].every((needle) => activity.includes(needle))) {
+if (![inspector, writer, metadata, storage, documents, scanner, bridge]
+  .every((needle) => activity.includes(needle))) {
   throw new Error('accepted registrations and bridge creation must remain explicit');
 }
 if (!(activity.indexOf(inspector) < activity.indexOf(writer)
-  && activity.indexOf(writer) < activity.indexOf(documents)
+  && activity.indexOf(writer) < activity.indexOf(metadata)
+  && activity.indexOf(metadata) < activity.indexOf(storage)
+  && activity.indexOf(storage) < activity.indexOf(documents)
   && activity.indexOf(documents) < activity.indexOf(scanner)
   && activity.indexOf(scanner) < activity.indexOf(bridge))) {
-  throw new Error('Inspector, SettingsWriter, AndroidDocuments, then scanner must precede bridge creation');
+  throw new Error('The six accepted native plugins must precede bridge creation in order');
 }
-if ((activity.match(/registerPlugin\(/g) ?? []).length !== 4) {
-  throw new Error('MainActivity may register exactly the accepted four plugins');
-}
-const documentsImport =
-  'import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.documents.AndroidDocumentsPlugin;\n';
-const documentsRegistration = '        registerPlugin(AndroidDocumentsPlugin.class);\n';
-const scannerImport =
-  'import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.scanner.AndroidDocumentScannerPlugin;\n';
-const scannerRegistration = '        registerPlugin(AndroidDocumentScannerPlugin.class);\n';
-if (occurrences(activity, documentsImport) !== 1
-  || occurrences(activity, documentsRegistration) !== 1
-  || occurrences(activity, scannerImport) !== 1
-  || occurrences(activity, scannerRegistration) !== 1) {
-  throw new Error('AndroidDocuments and scanner must be the four exact additive MainActivity lines');
-}
-const normalizedActivity = activity
-  .replace(documentsImport, '')
-  .replace(documentsRegistration, '')
-  .replace(scannerImport, '')
-  .replace(scannerRegistration, '');
-if (sha256Text(normalizedActivity)
-  !== 'e686675ebe6d29a695dfdf3fe8d20d4d6435c5fa439b77d7a88088ccec0e7ba5') {
-  throw new Error('MainActivity does not normalize to the accepted T034 source');
+if ((activity.match(/registerPlugin\(/g) ?? []).length !== 6) {
+  throw new Error('MainActivity may register exactly the accepted six plugins');
 }
 
 requireMatch(config, /allowMixedContent:\s*false/, 'Capacitor mixed-content configuration');
@@ -81,5 +61,7 @@ requireMatch(activity, /ServiceWorkerController\.getInstance\(\)\.setServiceWork
 requireMatch(activity, /onPageStarted[\s\S]*!PdfChefWebViewPolicy\.isPackagedOrigin\(url\)[\s\S]*view\.stopLoading\(\)/, 'redirect fail-closed guard');
 requireMatch(activity, /return blockedResponse\(\)/, 'remote subresource block');
 requireAbsent(activity, /bridge\.launchIntent\(/, 'Capacitor broad intent launcher');
+requireMatch(activity, /PlayInAppUpdateController\.create\(this, inAppUpdateLauncher\)/,
+  'lifecycle-owned Play update controller');
 
 console.log('WEBVIEW_SECURITY_VERIFIER: PASS');

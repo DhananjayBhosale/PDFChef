@@ -7,6 +7,7 @@ import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.legacy.AndroidLegacyInspec
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.legacy.AndroidLegacySettingsWriterPlugin;
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.scanner.AndroidDocumentScannerPlugin;
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.security.PdfChefWebViewPolicy;
+import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.updates.PlayInAppUpdateController;
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
@@ -19,6 +20,9 @@ import android.webkit.ServiceWorkerController;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.IntentSenderRequest;
+import androidx.activity.result.contract.ActivityResultContracts;
 import com.getcapacitor.PluginHandle;
 import java.io.ByteArrayInputStream;
 import java.util.concurrent.ExecutorService;
@@ -29,6 +33,15 @@ import java.util.concurrent.RejectedExecutionException;
 public class MainActivity extends BridgeActivity {
     private android.view.ViewTreeObserver.OnPreDrawListener systemBarBackgroundListener;
     private Boolean lightSystemBars;
+    private PlayInAppUpdateController inAppUpdateController;
+    private final ActivityResultLauncher<IntentSenderRequest> inAppUpdateLauncher =
+            registerForActivityResult(
+                    new ActivityResultContracts.StartIntentSenderForResult(),
+                    result -> {
+                        if (inAppUpdateController != null) {
+                            inAppUpdateController.onUpdateFlowResult(result.getResultCode());
+                        }
+                    });
     private final ExecutorService intakeExecutor = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "pdfchef-incoming-pdf");
         thread.setDaemon(true);
@@ -37,6 +50,7 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onDestroy() {
+        if (inAppUpdateController != null) inAppUpdateController.close();
         intakeExecutor.shutdownNow();
         if (systemBarBackgroundListener != null) {
             getWindow().getDecorView().getViewTreeObserver().removeOnPreDrawListener(systemBarBackgroundListener);
@@ -53,7 +67,15 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AndroidDocumentsPlugin.class);
         registerPlugin(AndroidDocumentScannerPlugin.class);
         super.onCreate(savedInstanceState);
+        inAppUpdateController = PlayInAppUpdateController.create(this, inAppUpdateLauncher);
+        inAppUpdateController.checkForUpdate();
         acceptIncomingPdf(getIntent());
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (inAppUpdateController != null) inAppUpdateController.checkForUpdate();
     }
 
     /**
