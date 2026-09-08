@@ -1,5 +1,25 @@
 apply plugin: 'com.android.application'
 
+def releaseStoreFile = providers.gradleProperty('ZENPDF_RELEASE_STORE_FILE')
+        .orElse(providers.environmentVariable('ZENPDF_RELEASE_STORE_FILE'))
+def releaseStorePassword = providers.gradleProperty('ZENPDF_RELEASE_STORE_PASSWORD')
+        .orElse(providers.environmentVariable('ZENPDF_RELEASE_STORE_PASSWORD'))
+def releaseKeyAlias = providers.gradleProperty('ZENPDF_RELEASE_KEY_ALIAS')
+        .orElse(providers.environmentVariable('ZENPDF_RELEASE_KEY_ALIAS'))
+def releaseKeyPassword = providers.gradleProperty('ZENPDF_RELEASE_KEY_PASSWORD')
+        .orElse(providers.environmentVariable('ZENPDF_RELEASE_KEY_PASSWORD'))
+def releaseSigningValues = [releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword]
+def hasReleaseSigningConfig = releaseSigningValues.every { provider ->
+    provider.orNull?.trim()
+}
+def hasPartialReleaseSigningConfig = releaseSigningValues.any { provider ->
+    provider.orNull?.trim()
+} && !hasReleaseSigningConfig
+
+if (hasPartialReleaseSigningConfig) {
+    throw new GradleException('Release signing requires all four ZENPDF_RELEASE_* values.')
+}
+
 android {
     namespace = "com.dhananjaytech.zenpdf_allpdftoolsinoneplace"
     compileSdk {
@@ -23,6 +43,16 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseSigningConfig) {
+            release {
+                storeFile file(releaseStoreFile.get())
+                storePassword releaseStorePassword.get()
+                keyAlias releaseKeyAlias.get()
+                keyPassword releaseKeyPassword.get()
+            }
+        }
+    }
     buildTypes {
         debug {
             applicationIdSuffix ".debug"
@@ -31,6 +61,9 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigningConfig) {
+                signingConfig signingConfigs.release
+            }
         }
         minifiedQa {
             initWith release
