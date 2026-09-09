@@ -155,6 +155,11 @@ public final class PdfReaderDocumentSession implements AutoCloseable {
 
     Path snapshotForTest() { return snapshot; }
 
+    synchronized Path snapshotForVerification() {
+        if (closed) throw new IllegalStateException("Reader session is closed");
+        return snapshot;
+    }
+
     private static void copyOnce(Source source, Path part) throws IOException, Failure {
         byte[] prefix = new byte[5];
         int prefixLength = 0;

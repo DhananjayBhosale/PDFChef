@@ -142,8 +142,13 @@ const planLineChange = (
         : Number.POSITIVE_INFINITY;
     const available = limitU - first.run.u0;
     if (Number.isFinite(available)) {
-      const required = measure(rebuiltText, first.run.fontSize, first.run.fontKey);
-      if (required > available) {
+      // The PDF advance is authoritative. A substitute face can be much wider than the
+      // original even before editing; only the measured change should consume extra room.
+      const previousText = originalText.slice(first.start, last.end);
+      const required = last.run.u1 - first.run.u0
+        + measure(rebuiltText, first.run.fontSize, first.run.fontKey)
+        - measure(previousText, first.run.fontSize, first.run.fontKey);
+      if (required > available + 0.5) {
         return {
           runEdits: [],
           // Naming the space matters: a document that positions every glyph separately leaves a
@@ -271,7 +276,20 @@ export const wrapStyledText = (
         const advance = measure(piece, segment.fontKey);
         if (current.length > 0 && !blank && maxWidth > 0 && width + advance > maxWidth) finish();
         if (current.length === 0 && blank) return;
-        push(piece, segment.fontKey, advance);
+        // A URL or a long replacement without spaces still has to fit the explicit line model.
+        // Split by Unicode character rather than UTF-16 units so surrogate pairs stay intact.
+        if (!blank && maxWidth > 0 && advance > maxWidth) {
+          let chunk = '';
+          for (const character of piece) {
+            const candidate = chunk + character;
+            if (chunk && measure(candidate, segment.fontKey) > maxWidth) {
+              push(chunk, segment.fontKey, measure(chunk, segment.fontKey));
+              finish();
+              chunk = character;
+            } else chunk = candidate;
+          }
+          if (chunk) push(chunk, segment.fontKey, measure(chunk, segment.fontKey));
+        } else push(piece, segment.fontKey, advance);
       });
     });
 

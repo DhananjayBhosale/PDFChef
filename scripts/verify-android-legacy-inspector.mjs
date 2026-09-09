@@ -74,7 +74,7 @@ const files = Object.freeze({
 const source = Object.fromEntries(Object.entries(files).map(([key, name]) => [key, read(name)]));
 
 const frozen = Object.freeze({
-  history: 'b0a26dba3f0fd8ef8a74ce9f9bc56b437c9297534fa38658ff42919863775f66',
+  history: '4c664195be8dc66c121187a54dbd979d6fefe5d384d43c3d05d11296f57b3ebd',
   settings: 'bf4acfb0efd1e5199a6b540b43e7b99a55bbbf96b256ae49301998431d304827',
   t012: 'ba6d3576e82a196a4311c2946f540e90bcf730e91560e8f58549fddb37defa96',
   t016: '44af983eebb6b419f64e5890f0025188850370c45dc6e04aa9245e0403674909',
@@ -220,6 +220,8 @@ const requiredTests = [
   'exactRawSchemaAndStrictNumericTypesAreEnforced',
   'addressLikeMetadataAndStoredNameEscapesNeverCross',
   'availableAndMissingFilesPreserveStoredSizeMimeAndExactWireKeys',
+  'earlyFileRecordWithoutNewerOptionalFieldsRemainsVisible',
+  'earlyCollectionWithoutNewerOptionalFieldsRemainsVisibleAndReadOnly',
   'collectionsUseStoredCountOrBoundedFallbackForPopulatedDirectory',
   'emptyAndMissingCollectionFallbackToOneWhileWrongTypesAreRecordLocalInvalid',
   'symlinkIndexRootOutputAndDescendantCannotEscapeOrTouchVictims',
@@ -241,7 +243,7 @@ const requiredTests = [
 ];
 const tests = source.historyTest + source.settingsTest + source.contractTest;
 for (const name of requiredTests) requireMatch(tests, new RegExp(`@Test\\s+public\\s+void\\s+${name}\\s*\\(`), `test ${name}`);
-if (occurrenceCount(tests, /@Test\s+public\s+void\s+\w+\s*\(/g) !== 25) throw new Error('expected exactly 25 focused JUnit4 tests');
+if (occurrenceCount(tests, /@Test\s+public\s+void\s+\w+\s*\(/g) !== 27) throw new Error('expected exactly 27 focused JUnit4 tests');
 for (const marker of ['inspectTwiceUnchanged', 'snapshotTree', 'walkFileTree', 'NOFOLLOW_LINKS', 'readSymbolicLink', 'SHA-256', 'modifiedMillis', 'size', 'sha256', 'symlinkTarget']) {
   requireMatch(tests, new RegExp(marker), `preservation marker ${marker}`);
 }

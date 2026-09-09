@@ -1,5 +1,7 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { planBlockEdit } from '../../services/pdfBlockEditPlanning';
 import type { PdfTextAlign, PdfTextBlock, PdfTextLine } from '../../services/pdfTextBlocks';
+import { capturePdfFocusAnchor, pdfCaretScroll, pdfFocusAnchorScroll, type PdfFocusAnchor } from '../../services/pdfEditingFocus';
 import {
   fitTextMetrics,
   measureTextWidth,
@@ -38,6 +40,18 @@ export interface BlockEditState {
   reflowing: boolean;
 }
 
+/** A settled layout from the same plan used by Save. Editing keeps its explicit newlines. */
+export interface BlockTextPreview {
+  text: string;
+  reflow: boolean;
+  width: number;
+  height: number;
+  pieces: Array<{
+    text: string; x: number; y: number; width: number; lineIndex: number;
+    fontSize: number; font: ResolvedFont;
+  }>;
+}
+
 export interface ResolvedBlock {
   block: PdfTextBlock;
   /** The paragraph's dominant face, used for its own metrics and for anything typed fresh. */
@@ -66,6 +80,7 @@ interface Props {
   blocks: PdfTextBlock[];
   fonts: Map<string, PdfFontDescriptor>;
   edits: Record<string, BlockEditState>;
+  previews?: Record<string, BlockTextPreview>;
   activeBlockId: string | null;
   displayScale: number;
   /** False while a shape or text-box insert is armed, so page taps are not stolen. */
@@ -215,6 +230,7 @@ const writeBlockContent = (
   fonts: Map<string, ResolvedFont>,
   fallback: ResolvedFont,
   fits: Array<Array<{ wordSpacing: number; letterSpacing: number }>> | null,
+  baseFontSize: number,
 ) => {
   const fragment = document.createDocumentFragment();
   lines.forEach((line, lineIndex) => {
@@ -227,12 +243,15 @@ const writeBlockContent = (
       span.style.fontFamily = font.cssFamily;
       span.style.fontWeight = font.cssWeight;
       span.style.fontStyle = font.cssStyle;
+      span.style.fontSize = `${run.fontSize / baseFontSize}em`;
       const fit = fits?.[lineIndex]?.[runIndex];
-      if (fit?.wordSpacing) span.style.wordSpacing = `${fit.wordSpacing}px`;
-      if (fit?.letterSpacing) span.style.letterSpacing = `${fit.letterSpacing}px`;
+      if (fit?.wordSpacing) span.style.wordSpacing = `${fit.wordSpacing / run.fontSize}em`;
+      if (fit?.letterSpacing) span.style.letterSpacing = `${fit.letterSpacing / run.fontSize}em`;
       fragment.append(span);
     });
   });
+  // Chromium needs a final sentinel to place a caret on an intentional empty last line.
+  if (lines.length > 1 && lines[lines.length - 1].text === '') fragment.append(document.createTextNode('\n'));
   element.replaceChildren(fragment);
 };
 
@@ -277,28 +296,35 @@ export const readStyledSegments = (
   };
 
   element.childNodes.forEach((child) => walk(child, fallbackKey));
-  // A trailing empty line is the browser's, not the user's.
-  while (lines.length > 1 && lines[lines.length - 1].length === 0) lines.pop();
+  // Remove exactly one caret sentinel, never the intentional blank lines before it.
+  if (lines.length > 1 && lines[lines.length - 1].length === 0) lines.pop();
   return lines;
 };
 
 const BlockEditor: React.FC<{
   resolved: ResolvedBlock & { stackOrder: number };
   edit: BlockEditState | undefined;
+  preview?: BlockTextPreview;
   isActive: boolean;
   displayScale: number;
   enabled: boolean;
   onActivate: (blockId: string | null) => void;
   onChange: (blockId: string, text: string, segments: StyledSegment[][]) => void;
   onBeginChange: (blockId: string) => void;
-}> = ({ resolved, edit, isActive, displayScale, enabled, onActivate, onChange, onBeginChange }) => {
+}> = ({ resolved, edit, preview, isActive, displayScale, enabled, onActivate, onChange, onBeginChange }) => {
   const { block, font, fontsByKey, runFits, overlayAlign, hitPadding, stackOrder } = resolved;
   const editableRef = useRef<HTMLDivElement>(null);
+  const [focused, setFocused] = useState(false);
   const committedText = useRef(edit?.text ?? block.text);
   const typingSession = useRef(false);
-  const isDirty = Boolean(edit) && (edit?.text ?? block.text) !== block.text;
+  const isDirty = Boolean(edit) && ((edit?.text ?? block.text) !== block.text
+    || Boolean(edit?.fontOverride) || edit?.fontSize !== undefined
+    || (preview?.text === edit?.text && preview?.reflow === true));
   const text = edit?.text ?? block.text;
-  const hasOutgrownItsBox = isDirty && text.split('\n').length > block.lines.length;
+  const currentPreview = preview?.text === text ? preview : undefined;
+  const showPreview = !focused && Boolean(currentPreview);
+  const hasOutgrownItsBox = isDirty && (text.split('\n').length > block.lines.length
+    || (currentPreview?.height ?? 0) > block.height + 1);
   const fontSizePx = (edit?.fontSize ?? block.fontSize) * displayScale;
   const lineHeightPx = Math.max(fontSizePx, block.leading * displayScale);
   /**
@@ -331,40 +357,47 @@ const BlockEditor: React.FC<{
     if (!element) return;
     if (written.current && committedText.current === text) return;
     committedText.current = text;
+    typingSession.current = false;
     written.current = true;
     const current = renderRef.current;
-    // Once a paragraph has been edited its lines are the user's, so it is rewritten as plain lines
-    // in the paragraph's own face rather than reasserting the PDF's original run boundaries.
-    const lines: PdfTextLine[] = text === block.text
-      ? block.lines
-      : text.split('\n').map((line) => ({
-        v: 0,
-        u0: 0,
-        u1: 0,
-        fontSize: block.fontSize,
-        runs: [{ text: line, fontKey: block.fontKey, fontSize: block.fontSize, u0: 0, u1: 0, itemIndex: -1, charStart: 0, charEnd: line.length }],
-        text: line,
-      }));
-    writeBlockContent(
-      element,
-      lines,
-      current.fontsByKey,
-      current.font,
-      text === block.text ? current.runFits : null,
-    );
-  }, [block, isDirty, text]);
-
-  // Spacing corrections put every glyph of the original back where the PDF drew it. Once the
-  // paragraph has been edited the line is the user's, so the corrections are dropped — by clearing
-  // the styles in place rather than rebuilding, which would take the caret with it.
-  useLayoutEffect(() => {
-    const element = editableRef.current;
-    if (!element || !isDirty) return;
-    element.querySelectorAll('span').forEach((span) => {
-      span.style.wordSpacing = '';
-      span.style.letterSpacing = '';
-    });
-  }, [isDirty]);
+    const selection = window.getSelection();
+    const offsetOf = (node: Node | null, offset: number) => {
+      if (!node || !element.contains(node)) return null;
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      range.setEnd(node, offset);
+      return range.toString().length;
+    };
+    const anchor = selection ? offsetOf(selection.anchorNode, selection.anchorOffset) : null;
+    const focus = selection ? offsetOf(selection.focusNode, selection.focusOffset) : null;
+    // Reconstruct external edits/undo from the original runs whenever they still map in place.
+    // The normal input path never gets here, so IME and native selections keep their DOM nodes.
+    const plan = planBlockEdit(block, text);
+    const replacements = plan.mode === 'direct'
+      ? new Map(plan.runEdits.map((run) => [run.itemIndex, run.replacementText]))
+      : new Map<number, string>();
+    const direct = text === block.text || plan.mode === 'direct';
+    const lines: PdfTextLine[] = direct
+      ? block.lines.map((line) => ({ ...line, runs: line.runs.map((run) => ({
+        ...run, text: replacements.get(run.itemIndex) ?? run.text,
+      })) }))
+      : (edit?.segments ?? text.split('\n').map((line) => [{ text: line, fontKey: block.fontKey }]))
+        .map((segments) => ({
+          v: 0, u0: 0, u1: 0, fontSize: block.fontSize,
+          runs: segments.map((segment) => ({
+            ...segment, fontSize: block.fontSize, u0: 0, u1: 0, itemIndex: -1,
+            charStart: 0, charEnd: segment.text.length,
+          })),
+          text: segments.map((segment) => segment.text).join(''),
+        }));
+    writeBlockContent(element, lines, current.fontsByKey, current.font,
+      direct ? current.runFits : null, block.fontSize);
+    if (anchor !== null && focus !== null && selection) {
+      const a = blockRange(element, Math.min(anchor, text.length), Math.min(anchor, text.length));
+      const f = blockRange(element, Math.min(focus, text.length), Math.min(focus, text.length));
+      if (a && f) selection.setBaseAndExtent(a.startContainer, a.startOffset, f.startContainer, f.startOffset);
+    }
+  }, [block, text, edit?.segments]);
 
   const handleInput = useCallback(() => {
     const element = editableRef.current;
@@ -377,7 +410,7 @@ const BlockEditor: React.FC<{
     const next = readBlockText(element, keepsNonBreakingSpace);
     committedText.current = next;
     onChange(block.id, next, readStyledSegments(element, block.fontKey, keepsNonBreakingSpace));
-  }, [block.id, onBeginChange, onChange]);
+  }, [block, onBeginChange, onChange]);
 
   return (
     <div
@@ -430,8 +463,8 @@ const BlockEditor: React.FC<{
         translate="no"
         dir={block.direction}
         tabIndex={enabled ? 0 : -1}
-        onFocus={() => onActivate(block.id)}
-        onBlur={() => { typingSession.current = false; }}
+        onFocus={() => { setFocused(true); onActivate(block.id); }}
+        onBlur={() => { typingSession.current = false; setFocused(false); }}
         onInput={handleInput}
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
@@ -463,7 +496,7 @@ const BlockEditor: React.FC<{
           transform: iosZoomGuard > 1 ? `scale(${1 / iosZoomGuard})` : undefined,
           transformOrigin: '0 0',
           minWidth: unit(Math.max(block.width, block.measure) * displayScale),
-          minHeight: unit(Math.max(block.height, lineHeightPx)),
+          minHeight: unit(Math.max((showPreview ? currentPreview!.height : block.height) * displayScale, lineHeightPx)),
           paddingTop: unit(hitPadding * displayScale),
           paddingBottom: unit(hitPadding * displayScale),
           // An indent is a left-edge idea. Applied under centring or right alignment it adds to the
@@ -482,11 +515,13 @@ const BlockEditor: React.FC<{
           textAlign: overlayAlign,
           direction: block.direction,
           // Untouched paragraphs stay invisible so the canvas below is what the user reads.
-          color: isDirty ? inkColor : 'transparent',
+          color: isDirty && !showPreview ? inkColor : 'transparent',
           caretColor: inkColor,
-          // A paragraph only starts wrapping once it has been edited; before that its lines are
-          // exactly the lines the PDF drew and must not be re-broken by browser metrics.
-          whiteSpace: isDirty ? 'pre-wrap' : 'pre',
+          // Only the explicit line model may introduce a line. The focused native surface stays
+          // intact; after blur the settled export layout supplies the rendered preview.
+          whiteSpace: 'pre',
+          overflowWrap: 'normal',
+          wordBreak: 'normal',
           outline: 'none',
           cursor: 'text',
           // One-finger drags still scroll and pinch still zooms; a tap places the caret and a
@@ -501,6 +536,30 @@ const BlockEditor: React.FC<{
           pointerEvents: enabled ? 'auto' : 'none',
         }}
       />
+      {focused && currentPreview?.reflow && (
+        <div role="status" data-testid="pdf-block-overflow" className="absolute rounded bg-amber-50 px-2 py-1 text-xs text-amber-950"
+          style={{ top: (hitPadding + block.height) * displayScale + 4, width: 240, pointerEvents: 'none' }}>
+          Text needs a new layout. Finish editing to preview how it will be saved.
+        </div>
+      )}
+      {showPreview && currentPreview && (
+        <svg aria-hidden="true" data-testid="pdf-block-preview" data-preview-block-id={block.id}
+          className="pointer-events-none absolute" overflow="visible"
+          width={currentPreview.width * displayScale} height={currentPreview.height * displayScale}
+          viewBox={`0 0 ${currentPreview.width} ${currentPreview.height}`}
+          style={{ left: 0, top: hitPadding * displayScale }}>
+          {currentPreview.pieces.map((piece, index) => (
+            <text key={index} data-preview-line={piece.lineIndex}
+              direction={block.direction}
+              x={piece.x + (block.direction === 'rtl' ? piece.width : 0)} y={piece.y} textLength={piece.width > 0 ? piece.width : undefined}
+              lengthAdjust="spacingAndGlyphs" xmlSpace="preserve" fill={inkColor}
+              fontFamily={piece.font.cssFamily} fontSize={piece.fontSize}
+              fontWeight={piece.font.cssWeight} fontStyle={piece.font.cssStyle}>
+              {piece.text}
+            </text>
+          ))}
+        </svg>
+      )}
     </div>
   );
 };
@@ -509,6 +568,7 @@ export const PdfTextBlockLayer: React.FC<Props> = ({
   blocks,
   fonts,
   edits,
+  previews,
   activeBlockId,
   displayScale,
   enabled,
@@ -538,6 +598,7 @@ export const PdfTextBlockLayer: React.FC<Props> = ({
           key={resolved.block.id}
           resolved={{ ...resolved, stackOrder }}
           edit={edits[resolved.block.id]}
+          preview={previews?.[resolved.block.id]}
           isActive={activeBlockId === resolved.block.id}
           displayScale={displayScale}
           enabled={enabled}
@@ -716,33 +777,120 @@ export const scrollBlockIntoViewport = (container: HTMLElement, element: HTMLEle
   }
 };
 
-/**
- * Keep the paragraph being edited above the on-screen keyboard. `scrollIntoView` alone puts the
- * caret behind the keyboard on both iOS and Android, because neither shrinks the layout viewport.
- */
+const focusedCaretRect = (element: HTMLElement): DOMRect | null => {
+  const selection = window.getSelection();
+  const range = document.createRange();
+  if (selection?.focusNode && element.contains(selection.focusNode)) {
+    range.setStart(selection.focusNode, selection.focusOffset);
+    range.collapse(true);
+    const caret = range.getBoundingClientRect();
+    if (caret.height > 0) return caret;
+  }
+  const firstText = document.createTreeWalker(element, NodeFilter.SHOW_TEXT).nextNode();
+  if (!firstText) return null;
+  range.setStart(firstText, 0);
+  range.setEnd(firstText, Math.min(1, firstText.textContent?.length ?? 0));
+  return range.getBoundingClientRect();
+};
+
+/** Preserve the selected PDF point through focus zoom, then keep its caret above the keyboard. */
 export const useKeyboardSafeFocus = (
   scrollContainer: HTMLElement | null,
   activeBlockId: string | null,
+  zoom: number,
+  bottomBar: HTMLElement | null,
 ) => {
-  useEffect(() => {
+  const preserved = useRef<{ element: HTMLElement; page: HTMLElement; anchor: PdfFocusAnchor } | null>(null);
+  const scheduleRef = useRef<((restoreAnchor: boolean) => void) | null>(null);
+  const captureFocusAnchor = useCallback((element: HTMLElement, point?: { x: number; y: number }) => {
+    // A pointer capture happens before focus, when the platform has not placed the caret yet.
+    // Keep that exact point when onFocus subsequently asks to magnify the paragraph.
+    if (!point && preserved.current?.element === element) return;
+    const page = element.closest<HTMLElement>('[data-pdf-page]');
+    if (!page) return;
+    const target = focusedCaretRect(element) ?? element.getBoundingClientRect();
+    preserved.current = {
+      element,
+      page,
+      anchor: capturePdfFocusAnchor(page.getBoundingClientRect(), point ?? { x: target.left, y: target.top }),
+    };
+    scheduleRef.current?.(true);
+  }, []);
+
+  useLayoutEffect(() => {
     if (!activeBlockId || !scrollContainer) return undefined;
-    const frame = window.requestAnimationFrame(() => {
-      const element = scrollContainer.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(activeBlockId)}"]`);
-      if (!element) return;
+    const element = scrollContainer.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(activeBlockId)}"]`);
+    if (!element) return undefined;
+    const originalPadding = scrollContainer.style.paddingBottom;
+    const basePadding = Number.parseFloat(window.getComputedStyle(scrollContainer).paddingBottom) || 0;
+    let frame = 0;
+    let restorePending = false;
+    const keepVisible = () => {
+      frame = 0;
+      if (document.activeElement !== element || scrollContainer.dataset.pdfPinching === 'true') return;
       const container = scrollContainer.getBoundingClientRect();
-      const target = element.getBoundingClientRect();
-      const visualBottom = window.visualViewport
-        ? Math.min(container.bottom, window.visualViewport.offsetTop + window.visualViewport.height)
-        : container.bottom;
-      const margin = 24;
-      if (target.bottom > visualBottom - margin) {
-        scrollContainer.scrollTop += target.bottom - visualBottom + margin;
-      } else if (target.top < container.top + margin) {
-        scrollContainer.scrollTop -= container.top + margin - target.top;
+      const visual = window.visualViewport;
+      const visible = {
+        left: Math.max(container.left, visual?.offsetLeft ?? 0),
+        top: Math.max(container.top, visual?.offsetTop ?? 0),
+        right: Math.min(container.right, visual ? visual.offsetLeft + visual.width : window.innerWidth),
+        bottom: Math.min(container.bottom, visual ? visual.offsetTop + visual.height : window.innerHeight),
+      };
+      const bar = bottomBar?.getBoundingClientRect();
+      if (bar && bar.right > visible.left && bar.left < visible.right && bar.bottom > visible.top) {
+        visible.bottom = Math.min(visible.bottom, bar.top);
       }
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [activeBlockId, scrollContainer]);
+      if (visible.bottom <= visible.top || visible.right <= visible.left) return;
+      // The last line on a page still needs room to move above an overlapping inspector.
+      scrollContainer.style.paddingBottom = `${basePadding + Math.max(0, container.bottom - visible.bottom)}px`;
+      const saved = preserved.current;
+      if (restorePending && saved?.element === element) {
+        const delta = pdfFocusAnchorScroll(saved.anchor, saved.page.getBoundingClientRect(), visible);
+        scrollContainer.scrollLeft += delta.left;
+        scrollContainer.scrollTop += delta.top;
+      }
+      restorePending = false;
+      const caret = focusedCaretRect(element);
+      if (!caret) return;
+      const delta = pdfCaretScroll(caret, visible);
+      scrollContainer.scrollLeft += delta.left;
+      scrollContainer.scrollTop += delta.top;
+    };
+    const schedule = (restoreAnchor = false) => {
+      restorePending ||= restoreAnchor;
+      if (!frame) frame = window.requestAnimationFrame(keepVisible);
+    };
+    const resized = () => schedule(true);
+    const selectionChanged = () => schedule();
+    const releaseAnchor = () => { preserved.current = null; };
+    const typed = () => { releaseAnchor(); schedule(); };
+    scheduleRef.current = schedule;
+    schedule(true);
+    window.visualViewport?.addEventListener('resize', resized);
+    window.visualViewport?.addEventListener('scroll', resized);
+    document.addEventListener('selectionchange', selectionChanged);
+    element.addEventListener('input', typed);
+    element.addEventListener('blur', releaseAnchor);
+    scrollContainer.addEventListener('touchmove', releaseAnchor, { passive: true });
+    scrollContainer.addEventListener('wheel', releaseAnchor, { passive: true });
+    const observer = new ResizeObserver(resized);
+    observer.observe(scrollContainer);
+    if (bottomBar) observer.observe(bottomBar);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      scheduleRef.current = null;
+      observer.disconnect();
+      scrollContainer.style.paddingBottom = originalPadding;
+      window.visualViewport?.removeEventListener('resize', resized);
+      window.visualViewport?.removeEventListener('scroll', resized);
+      document.removeEventListener('selectionchange', selectionChanged);
+      element.removeEventListener('input', typed);
+      element.removeEventListener('blur', releaseAnchor);
+      scrollContainer.removeEventListener('touchmove', releaseAnchor);
+      scrollContainer.removeEventListener('wheel', releaseAnchor);
+    };
+  }, [activeBlockId, bottomBar, scrollContainer, zoom]);
+  return captureFocusAnchor;
 };
 
 /** Turn a character range inside a paragraph into a DOM range over its text nodes. */

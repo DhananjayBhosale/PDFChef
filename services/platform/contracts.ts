@@ -115,6 +115,12 @@ export interface PdfReaderService {
   open(document: StoredDocument): Promise<PdfReaderResult>;
 }
 
+/** Native-only signature details for the exact retained File returned by reopen. */
+export interface PdfSignatureVerificationService {
+  isEligible(file: File): boolean;
+  present(file: File): Promise<void>;
+}
+
 /** Capabilities consumed by the React workspace without importing a native SDK. */
 export interface WorkspaceCapabilities {
   persistentRename: boolean;
@@ -213,6 +219,7 @@ export interface WorkspacePlatform {
   applicationMetadata?: ApplicationMetadataService;
   documentScanner?: DocumentScannerService;
   pdfReader?: PdfReaderService;
+  pdfSignatureVerification?: PdfSignatureVerificationService;
   pendingImports?: PendingImportDeliveryService;
   recordRecovery?: RecordRecoveryService;
   save(record: RecentRecord, name: string): Promise<void>;

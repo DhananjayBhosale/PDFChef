@@ -27,7 +27,7 @@ import {
   visualRectangleToPdf,
 } from './pdfEditorGeometry';
 import type { PdfSpaceRect } from './pdfNativeTextPlanning';
-import { substituteForStandardFont } from './pdfFontResolution';
+import { layoutParagraphLines, paragraphStandardFontKey } from './pdfParagraphLayout';
 import {
   DELETE_ALL_PAGES_MESSAGE,
   DELETE_PAGES_TOO_LARGE_MESSAGE,
@@ -1192,15 +1192,6 @@ export const savePDFWithAnnotations = async (
 
   const visualTextRuns: Array<{ pageIndex: number; text: string; x: number; y: number }> = [];
   if (reflowParagraphEdits.length > 0) {
-    const resolveParagraphFont = (face: ParagraphFace) => {
-      const standardKey = face.family === 'TimesRoman'
-        ? face.bold && face.italic ? 'TimesRomanBoldItalic' : face.bold ? 'TimesRomanBold' : face.italic ? 'TimesRomanItalic' : 'TimesRoman'
-        : face.family === 'Courier'
-          ? face.bold && face.italic ? 'CourierBoldOblique' : face.bold ? 'CourierBold' : face.italic ? 'CourierOblique' : 'Courier'
-          : face.bold && face.italic ? 'HelveticaBoldOblique' : face.bold ? 'HelveticaBold' : face.italic ? 'HelveticaOblique' : 'Helvetica';
-      return fonts[standardKey as keyof typeof fonts];
-    };
-
     for (const edit of reflowParagraphEdits) {
       if (edit.pageIndex < 0 || edit.pageIndex >= pages.length) continue;
       const page = pages[edit.pageIndex];
@@ -1237,83 +1228,30 @@ export const savePDFWithAnnotations = async (
       }
 
       const color = hexToRgb(edit.color);
-      // Every face this paragraph needs, embedded once before anything is drawn.
-      const faces = new Map<string, any>();
-      for (const line of edit.lines) {
-        for (const piece of line) {
-          if (faces.has(piece.face.key)) continue;
-          faces.set(piece.face.key, resolveParagraphFont(piece.face));
-        }
-      }
-      const widthOf = (text: string, key: string) => {
-        try {
-          return faces.get(key).widthOfTextAtSize(text, edit.fontSize);
-        } catch {
-          return text.length * edit.fontSize * 0.5;
-        }
-      };
-      const lineWidthOf = (line: typeof edit.lines[number]) =>
-        line.reduce((total, piece) => total + widthOf(piece.text, piece.face.key), 0);
-
-      edit.lines.forEach((line, index) => {
-        const text = line.map((piece) => piece.text).join('');
-        if (!text.trim()) return;
-        const baselineY = visualY + edit.fontSize + index * edit.lineHeight;
-        const isLastLine = index === edit.lines.length - 1;
-
-        const drawPiece = (rawSegment: string, key: string, offsetX: number) => {
-          // Typography the standard faces have no code for is written as its plain equivalent
-          // rather than dropped: a non-breaking hyphen becomes a hyphen, an fi ligature becomes fi.
-          const segment = substituteForStandardFont(rawSegment).text;
-          if (!segment) return;
-          const point = visualPointToPdf(geometry, visualX + offsetX, baselineY);
-          // The saved run is checked back out of the file, but only when the originals were
-          // removed. Drawing over text that is still there produces two objects on one baseline,
-          // and PDF engines report the duplicate as empty rather than as the text that was drawn.
-          if (edit.runDeletions.length > 0 && segment.trim()) {
-            visualTextRuns.push({ pageIndex: edit.pageIndex, text: segment, x: point.x, y: point.y });
-          }
-          page.drawText(segment, {
-            x: point.x,
-            y: point.y,
-            size: edit.fontSize,
-            font: faces.get(key),
-            color,
-            rotate: degrees(geometry.rotation),
-          });
-        };
-
-        // Justified paragraphs pin both margins, so the gaps have to be widened by hand; every
-        // other alignment is a single offset applied to the whole line.
-        if (edit.align === 'justify' && !isLastLine) {
-          const words: Array<{ text: string; key: string }> = [];
-          line.forEach((piece) => piece.text.split(/(\s+)/).filter(Boolean).forEach((part) => {
-            if (/^\s+$/.test(part)) return;
-            words.push({ text: part, key: piece.face.key });
-          }));
-          if (words.length > 1) {
-            const spacing = (width - words.reduce((total, word) => total + widthOf(word.text, word.key), 0))
-              / (words.length - 1);
-            let offset = 0;
-            words.forEach((word) => {
-              drawPiece(word.text, word.key, offset);
-              offset += widthOf(word.text, word.key) + Math.max(0, spacing);
-            });
-            return;
-          }
-        }
-
-        const lineWidth = lineWidthOf(line);
-        let offset = edit.align === 'right'
-          ? Math.max(0, width - lineWidth)
-          : edit.align === 'center'
-            ? Math.max(0, (width - lineWidth) / 2)
-            : 0;
-        line.forEach((piece) => {
-          drawPiece(piece.text, piece.face.key, offset);
-          offset += widthOf(piece.text, piece.face.key);
-        });
+      const positioned = layoutParagraphLines(edit.lines, {
+        width,
+        fontSize: edit.fontSize,
+        lineHeight: edit.lineHeight,
+        align: edit.align,
       });
+      for (const piece of positioned) {
+        // Space advances are already in the layout; empty ink needs no PDF text object.
+        if (!piece.text.trim()) continue;
+        const point = visualPointToPdf(geometry, visualX + piece.x, visualY + piece.y);
+        // Check the saved text only when the original objects were removed; overlapping old
+        // objects can otherwise make PDF extraction report duplicates instead of the drawn text.
+        if (edit.runDeletions.length > 0 && piece.text.trim()) {
+          visualTextRuns.push({ pageIndex: edit.pageIndex, text: piece.text, x: point.x, y: point.y });
+        }
+        page.drawText(piece.text, {
+          x: point.x,
+          y: point.y,
+          size: edit.fontSize,
+          font: fonts[paragraphStandardFontKey(piece.face)],
+          color,
+          rotate: degrees(geometry.rotation),
+        });
+      }
     }
   }
 

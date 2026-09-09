@@ -154,15 +154,60 @@ try {
   assert.ok(touchZoomedIn > 1, 'touchscreen pinch-in did not increase PDF zoom');
   assert.ok(touchZoomedOut < touchZoomedIn, 'touchscreen pinch-out did not decrease PDF zoom');
 
+  // The fling/pinch control above may retain compositor momentum; isolate focus geometry from it.
+  await upload();
+
   const currentPage = page.getByLabel('Current editor page');
   const paragraphs = page.locator('[data-testid="pdf-text-block"]');
   await paragraphs.first().waitFor({ timeout: 60_000 });
+  const ordinaryParagraph = paragraphs.filter({ hasText: 'This is QA content for tool verification' });
+  await page.getByTestId('pdf-zoom-viewport').evaluate(element => { element.scrollTop = 0; element.scrollLeft = 0; });
+  const focusBefore = await ordinaryParagraph.evaluate(element => {
+    const block = element.getBoundingClientRect();
+    const pdf = element.closest('[data-pdf-page]').getBoundingClientRect();
+    const x = block.left + 20;
+    const y = block.top + block.height / 2;
+    return {
+      x, y,
+      pageX: (x - pdf.left) / pdf.width,
+      pageY: (y - pdf.top) / pdf.height,
+      blockTop: (block.top - pdf.top) / pdf.height,
+      zoom: Number(document.querySelector('[data-testid="pdf-zoom-viewport"]').dataset.pdfZoom),
+      windowScrollY: window.scrollY,
+    };
+  });
+  await page.touchscreen.tap(focusBefore.x, focusBefore.y);
+  await page.waitForFunction(previous => Number(document.querySelector('[data-testid="pdf-zoom-viewport"]').dataset.pdfZoom) > previous, focusBefore.zoom);
+  await page.waitForTimeout(200);
+  const focusAfter = await ordinaryParagraph.evaluate((element, anchor) => {
+    const block = element.getBoundingClientRect();
+    const pdf = element.closest('[data-pdf-page]').getBoundingClientRect();
+    const selection = window.getSelection();
+    const caret = document.createRange();
+    caret.setStart(selection.focusNode, selection.focusOffset);
+    caret.collapse(true);
+    return {
+      x: pdf.left + anchor.pageX * pdf.width,
+      y: pdf.top + anchor.pageY * pdf.height,
+      blockTop: (block.top - pdf.top) / pdf.height,
+      windowScrollY: window.scrollY,
+      editable: element.isContentEditable,
+      userSelect: getComputedStyle(element).userSelect,
+      caret: caret.getBoundingClientRect().toJSON(),
+      viewport: element.closest('[data-testid="pdf-zoom-viewport"]').getBoundingClientRect().toJSON(),
+    };
+  }, focusBefore);
+  assert.ok(Math.abs(focusAfter.x - focusBefore.x) < 2, `focus zoom moved the selected page point horizontally: ${JSON.stringify({ focusBefore, focusAfter })}`);
+  assert.ok(Math.abs(focusAfter.y - focusBefore.y) < 2, `focus zoom moved the selected page point vertically: ${JSON.stringify({ focusBefore, focusAfter })}`);
+  assert.ok(Math.abs(focusAfter.blockTop - focusBefore.blockTop) < 0.0001, 'focus zoom altered PDF-relative block position');
+  assert.equal(focusAfter.windowScrollY, focusBefore.windowScrollY, 'focus zoom scrolled the application page');
+  assert.equal(focusAfter.editable, true);
+  assert.equal(focusAfter.userSelect, 'text', 'touch selection is unavailable');
   // The bottom bar has to stay on screen when the keyboard is up, which is the one moment it
   // matters. A phone raises the keyboard by shrinking the WebView, so shrinking the viewport
   // reproduces it exactly — and catches the real cause, which is never the bar's own CSS: any
   // ancestor left holding a transform becomes the containing block for `position: fixed`, and the
   // bar silently re-anchors to that ancestor's taller box instead of the viewport.
-  await paragraphs.first().tap();
   await page.waitForFunction(() => document.activeElement?.dataset?.testid === 'pdf-text-block');
   await page.setViewportSize({ width: 390, height: 530 });
   await page.waitForTimeout(400);
@@ -187,9 +232,34 @@ try {
     keyboardChrome.bottom !== null && keyboardChrome.bottom <= keyboardChrome.innerHeight + 1,
     `editor bottom bar ends at ${keyboardChrome.bottom} with only ${keyboardChrome.innerHeight} visible`,
   );
+  const keyboardCaret = await ordinaryParagraph.evaluate(element => {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(selection.focusNode, selection.focusOffset);
+    range.collapse(true);
+    const caret = range.getBoundingClientRect();
+    const viewport = element.closest('[data-testid="pdf-zoom-viewport"]').getBoundingClientRect();
+    const inspector = document.querySelector('[data-testid="pdf-paragraph-inspector"]').closest('.chef-chrome').getBoundingClientRect();
+    const block = element.getBoundingClientRect();
+    const pdf = element.closest('[data-pdf-page]').getBoundingClientRect();
+    return { top: caret.top, bottom: caret.bottom, visibleTop: viewport.top, visibleBottom: Math.min(viewport.bottom, inspector.top, window.innerHeight), blockTop: (block.top - pdf.top) / pdf.height };
+  });
+  assert.ok(keyboardCaret.top >= keyboardCaret.visibleTop - 1, 'keyboard avoidance scrolled the caret above the PDF viewport');
+  assert.ok(keyboardCaret.bottom <= keyboardCaret.visibleBottom + 1, 'keyboard or inspector obscures the caret');
+  assert.ok(Math.abs(keyboardCaret.blockTop - focusBefore.blockTop) < 0.0001, 'keyboard resize altered PDF-relative block position');
+  await ordinaryParagraph.press('ControlOrMeta+A');
+  assert.equal(await page.evaluate(() => window.getSelection()?.toString()), 'This is QA content for tool verification.', 'native selection no longer selects existing text');
+  await page.keyboard.insertText('This is QA content for tool verification!');
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  assert.equal(await ordinaryParagraph.innerText(), 'This is QA content for tool verification!', 'Done discarded the inline change');
+  assert.equal(await ordinaryParagraph.evaluate(element => document.activeElement === element), false, 'Done did not dismiss editing');
+  await page.getByRole('button', { name: 'Undo added element change' }).click();
+  assert.equal(await ordinaryParagraph.innerText(), 'This is QA content for tool verification.', 'Undo did not restore the original paragraph');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => document.activeElement?.blur());
   await page.waitForTimeout(200);
+  const resetZoom = page.getByRole('button', { name: 'Reset zoom to 100%' });
+  if (await resetZoom.isEnabled()) await resetZoom.click();
 
   const firstPageParagraphs = await paragraphs.evaluateAll(blocks => blocks.map(block => block.innerText));
   await page.getByRole('button', { name: 'Next page' }).click();
@@ -325,6 +395,9 @@ try {
     checked: [
       'touchscreen pinch-in and pinch-out inside the PDF viewport',
       'one-finger vertical scrolling stays inside the zoomed PDF box',
+      'touch focus zoom preserves the selected PDF point and native text selection',
+      'keyboard and inspector leave the caret visible without changing PDF-relative position',
+      'Done retains existing-text changes and Undo restores them',
       'visible Next and Previous page controls render different PDF pages',
       'reconstructed paragraphs go inert while an insert is armed',
       'text and shape placement',

@@ -16,6 +16,7 @@ import type {
   OutputDeliveryHandler,
   OutputDeliveryRequest,
   OutputDeliveryResult,
+  PdfSignatureVerificationService,
   RecentRepository,
   SettingsRepository,
   StorageInformation,
@@ -69,6 +70,8 @@ export interface IOSDocumentBridge {
   pickDocuments(acceptedMimeTypes: readonly string[]): Promise<readonly ImportedDocument[]>;
   exportDocument(ref: DurableDocumentRef, name: string | null, mimeType: string | null): Promise<void>;
   shareDocument(ref: DurableDocumentRef, name: string | null, mimeType: string | null): Promise<void>;
+  signatureVerificationAvailable?(): Promise<boolean>;
+  presentSignatureReport?(ref: DurableDocumentRef, name: string | null): Promise<void>;
   signalHaptic(signal: string): Promise<void>;
   getApplicationMetadata(): Promise<ApplicationMetadata>;
 }
@@ -154,6 +157,8 @@ export const createIOSWorkspacePlatform = (
   const recent = options.recent ?? repositories.recent;
   const now = options.now ?? Date.now;
   const transientRefs = new Set<DurableDocumentRef>();
+  const reopenedDocuments = new WeakMap<File, StoredDocument>();
+  let signatureVerificationAvailable = false;
 
   const records = {
     async list(): Promise<readonly RecentRecord[]> {
@@ -276,6 +281,12 @@ export const createIOSWorkspacePlatform = (
   let stopPendingImports: (() => Promise<void>) | null = null;
   const initialized = pendingImportRegistration.then(async stop => {
     stopPendingImports = stop;
+    try {
+      signatureVerificationAvailable = await bridge.signatureVerificationAvailable?.() ?? false;
+    } catch {
+      // Older native packages do not expose this method. Their reader remains unchanged.
+      signatureVerificationAvailable = false;
+    }
     await migrateLegacyWorkspace({
       source: options.legacyWorkspaceSource ?? new IndexedDbLegacyWorkspaceSource(),
       journal: options.legacyWorkspaceJournal ?? new LocalStorageLegacyWorkspaceMigrationJournal(),
@@ -290,6 +301,28 @@ export const createIOSWorkspacePlatform = (
     } finally {
       transientRefs.delete(document.ref);
     }
+  };
+
+  const pdfSignatureVerification: PdfSignatureVerificationService = {
+    isEligible(file) {
+      const document = reopenedDocuments.get(file);
+      const documentMimeType = document?.mimeType?.toLocaleLowerCase();
+      const hasPdfIdentity = documentMimeType
+        ? documentMimeType === 'application/pdf'
+        : file.type.toLocaleLowerCase() === 'application/pdf'
+          || file.name.toLocaleLowerCase().endsWith('.pdf');
+      return signatureVerificationAvailable
+        && Boolean(document)
+        && hasPdfIdentity;
+    },
+    async present(file) {
+      const document = reopenedDocuments.get(file);
+      const present = bridge.presentSignatureReport;
+      if (!signatureVerificationAvailable || !document || !present) {
+        throw new Error('Signature details are unavailable for this PDF.');
+      }
+      await present.call(bridge, document.ref, document.name ?? file.name);
+    },
   };
 
   const deliverOutput: OutputDeliveryHandler = async request => {
@@ -371,6 +404,7 @@ export const createIOSWorkspacePlatform = (
     applicationMetadata: {
       getApplicationMetadata: () => bridge.getApplicationMetadata(),
     },
+    pdfSignatureVerification,
     save: (record, name) => {
       if (!record.document || !record.available) throw new Error('The retained document is unavailable.');
       return bridge.exportDocument(record.document.ref, name, record.document.mimeType);
@@ -382,9 +416,11 @@ export const createIOSWorkspacePlatform = (
     async reopen(record): Promise<File> {
       if (!record.document || !record.available) throw new Error('The retained document is unavailable.');
       const parts = await readAll(bridge.open(record.document.ref));
-      return new File(parts, record.entry.name || record.document.name || FALLBACK_DOCUMENT_NAME, {
+      const file = new File(parts, record.entry.name || record.document.name || FALLBACK_DOCUMENT_NAME, {
         type: record.entry.mimeType || record.document.mimeType || FALLBACK_MIME_TYPE,
       });
+      reopenedDocuments.set(file, record.document);
+      return file;
     },
     async rename(record, name): Promise<void> {
       if (!record.document || !record.available) throw new Error('The retained document is unavailable.');

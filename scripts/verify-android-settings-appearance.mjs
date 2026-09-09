@@ -42,22 +42,23 @@ assert(!/androidThemeModeFor[\s\S]{0,500}DYNAMIC/.test(settings),
 for (const required of [
   "export const THEME_MARKER_KEY = 'pdfchef.appearance.android-theme-write.v1'",
   'Reflect.ownKeys(value)',
-  'reconcilePendingTheme(marker, await readLegacy())',
+  'reconcilePendingTheme(marker, resolution)',
+  'if (launchSequence !== sequence) return',
   'if (local) return',
-  'if (!storage.write(THEME_MARKER_KEY, serializeThemeMarker({ target: next, confirmed })))',
+  'const localSaved = settle(next, false)',
+  'storage.remove(THEME_MARKER_KEY)',
   'await persistence.writeTheme(next)',
-  "report('failed')",
-  "report(clean ? 'saved' : 'unsaved')",
+  "report(localSaved ? 'saved' : 'unsaved')",
+  'applyTextScaleImmediately(next, document.documentElement, browserStorage)',
+  'root.dataset.textScale = next',
   "isAndroid: Capacitor.getPlatform() === 'android'",
 ]) {
   assert(appearance.includes(required), `appearance transaction drifted: ${required}`);
 }
-const markerGuard = appearance.indexOf(
-  'if (!storage.write(THEME_MARKER_KEY, serializeThemeMarker({ target: next, confirmed })))',
-);
-const nativeWrite = appearance.indexOf('await persistence.writeTheme(next)', markerGuard);
-assert(markerGuard >= 0 && nativeWrite > markerGuard,
-  'durable marker publication must precede the native theme write');
+const localWrite = appearance.indexOf('const localSaved = settle(next, false)');
+const nativeWrite = appearance.indexOf('await persistence.writeTheme(next)', localWrite);
+assert(localWrite >= 0 && nativeWrite > localWrite,
+  'the current app theme must be durable before optional legacy sync');
 
 const feedbackStart = surface.indexOf('const THEME_SYNC_FEEDBACK');
 const themeRowStart = surface.indexOf('<Row label="Theme" stacked>');
@@ -79,7 +80,8 @@ for (const proof of [
   'legacy theme resolution preserves health and maps DYNAMIC without rewriting it',
   'explicit native writes are serialized and a failed write does not strand later choices',
   'a real local choice stays authoritative and the older store is not read',
-  'a marker that cannot be published stops the choice before the device is asked',
+  'a theme choice no longer depends on publishing a legacy marker',
+  'a first-launch compatibility read cannot overwrite a theme chosen while it is pending',
   'the feedback is anchored in the Theme row, in flow, and announced politely',
 ]) {
   assert(contractTest.includes(proof) || surfaceTest.includes(proof), `focused proof missing: ${proof}`);
@@ -90,6 +92,6 @@ assert(!/READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|MANAGE_EXTERNAL_STORAGE/.t
 
 console.log('ANDROID_SETTINGS_APPEARANCE_VERIFIER: PASS');
 console.log('AUTHORITY: valid shared local theme, otherwise one read-only legacy import');
-console.log('WRITES: explicit SYSTEM/LIGHT/DARK only, serialized behind a durable marker');
-console.log('FAILURE: fixed anchored feedback; no native message, path, or false success');
-console.log('TEXT_SCALE_RESET_SIGNING_PLAY_PRODUCTION: NOT_IN_SCOPE');
+console.log('WRITES: current local preference first; exact SYSTEM/LIGHT/DARK compatibility sync second');
+console.log('FAILURE: a legacy sync failure never rolls the current app back to System');
+console.log('TEXT_SCALE: selected size paints Settings during the press');

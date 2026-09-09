@@ -137,4 +137,9 @@ export class AndroidThemePersistence {
 }
 
 export const createAndroidThemePersistence = (): AndroidThemePersistence | null =>
-  isAndroidSettingsAvailable() ? new AndroidThemePersistence() : null;
+  // MainActivity registers this fixed plugin before bridge startup. Construct
+  // its proxy for every Android shell instead of permanently disabling theme
+  // sync when Capacitor's header discovery is briefly unavailable at first
+  // render. The appearance layer keeps the current local choice even if the
+  // compatibility call itself later fails.
+  Capacitor.getPlatform() === 'android' ? new AndroidThemePersistence() : null;

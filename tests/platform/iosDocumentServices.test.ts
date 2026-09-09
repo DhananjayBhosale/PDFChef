@@ -53,6 +53,8 @@ class FakeBridge implements IOSDocumentBridge {
   deleted: DurableDocumentRef[] = [];
   exports: Array<{ ref: DurableDocumentRef; name: string | null }> = [];
   shares: Array<{ ref: DurableDocumentRef; name: string | null }> = [];
+  signaturePresentations: Array<{ ref: DurableDocumentRef; name: string | null }> = [];
+  signatureAvailable = true;
   picked: readonly ImportedDocument[] = [];
   pending: readonly ImportedDocument[] = [];
   retained = document('FRESH');
@@ -121,6 +123,10 @@ class FakeBridge implements IOSDocumentBridge {
   async shareDocument(value: DurableDocumentRef, name: string | null) {
     this.shares.push({ ref: value, name });
     if (this.shareError) throw this.shareError;
+  }
+  async signatureVerificationAvailable() { return this.signatureAvailable; }
+  async presentSignatureReport(value: DurableDocumentRef, name: string | null) {
+    this.signaturePresentations.push({ ref: value, name });
   }
   async signalHaptic() {}
   async getApplicationMetadata(): Promise<ApplicationMetadata> { return { name: 'PDF Chef', version: '1.0', build: '1' }; }
@@ -336,6 +342,26 @@ test('aggregate exposes native services and crash-safe pending delivery seam', a
   assert.deepEqual(await platform.applicationMetadata?.getApplicationMetadata(), {
     name: 'PDF Chef', version: '1.0', build: '1',
   });
+});
+
+test('signature report accepts only the exact File reopened from a durable iOS PDF', async () => {
+  const { bridge, recent, platform } = harness();
+  const signed = document('SIGNED', 'signed.pdf');
+  bridge.documents.set(signed.ref, signed);
+  await recent.save(entry('signed', signed.ref));
+  await platform.ready;
+  const record = (await platform.records.list()).find(value => value.entry.id === 'signed');
+  assert.ok(record);
+
+  const reopened = await platform.reopen(record);
+  assert.equal(platform.pdfSignatureVerification?.isEligible(reopened), true);
+  assert.equal(
+    platform.pdfSignatureVerification?.isEligible(new File([reopened], reopened.name, { type: reopened.type })),
+    false,
+  );
+
+  await platform.pdfSignatureVerification?.present(reopened);
+  assert.deepEqual(bridge.signaturePresentations, [{ ref: signed.ref, name: signed.name }]);
 });
 
 test('installed output delivery covers the four settings states without double-retaining', async () => {

@@ -201,7 +201,42 @@ public final class LegacyDocumentOpenResolver {
         if (lookup.matchCount != 1 || lookup.record == null || !lookup.record.schemaValid) {
             throw corrupt();
         }
+        if (!lookup.record.hasCollection) {
+            inferLegacyKind(root, lookup.record);
+        }
+        if (!lookup.record.collection && lookup.record.mimeType == null) throw corrupt();
         return new RecordResolution(root, lookup.record);
+    }
+
+    /**
+     * The earliest Kotlin history records did not carry an explicit collection bit.
+     * Resolve only the exact managed child without following links; this keeps old
+     * multi-file results openable without trusting a name or walking their tree.
+     */
+    private static void inferLegacyKind(Path root, RawRecord record) throws Failure {
+        try {
+            Path processed = root.resolve("processed");
+            if (!Files.exists(processed, LinkOption.NOFOLLOW_LINKS)) throw missing();
+            if (Files.isSymbolicLink(processed)
+                    || !Files.isDirectory(processed, LinkOption.NOFOLLOW_LINKS)) throw unsafe();
+            Path canonicalProcessed = processed.toRealPath(LinkOption.NOFOLLOW_LINKS);
+            Path candidate = canonicalProcessed.resolve(record.storedFileName).normalize();
+            if (!canonicalProcessed.equals(candidate.getParent())) throw unsafe();
+            if (!Files.exists(candidate, LinkOption.NOFOLLOW_LINKS)) throw missing();
+            if (Files.isSymbolicLink(candidate)) throw unsafe();
+            boolean directory = Files.isDirectory(candidate, LinkOption.NOFOLLOW_LINKS);
+            boolean file = Files.isRegularFile(candidate, LinkOption.NOFOLLOW_LINKS);
+            if (!directory && !file) throw unavailable();
+            Path canonicalCandidate = candidate.toRealPath(LinkOption.NOFOLLOW_LINKS);
+            if (!canonicalProcessed.equals(canonicalCandidate.getParent())) throw unsafe();
+            record.collection = directory;
+        } catch (Failure failure) {
+            throw failure;
+        } catch (NoSuchFileException disappeared) {
+            throw unsafe();
+        } catch (IOException | SecurityException failure) {
+            throw unavailable();
+        }
     }
 
     private Path resolveCollectionDirectory(Path root, String storedFileName) throws Failure {
@@ -413,15 +448,18 @@ public final class LegacyDocumentOpenResolver {
             }
         }
         source.endObject();
+        if (record.mimeType == null && record.storedFileName != null) {
+            String inferred = mimeType(record.storedFileName);
+            if (!inferred.isEmpty()) record.mimeType = inferred;
+        }
         if (record.id == null || record.displayName == null || record.toolName == null
                 || record.sizeBytes == null || record.createdAt == null
                 || record.storedFileName == null
-                || (!record.collection && record.mimeType == null)
+                || (record.hasCollection && !record.collection && record.mimeType == null)
                 || (record.mimeType != null
                     && !(AndroidDocumentIngressPolicy.isSupportedMimeType(record.mimeType)
                         || (record.collection && ("image/*".equals(record.mimeType)
                             || "application/vnd.zenpdf.directory".equals(record.mimeType)))))
-                || !record.hasCollection
                 || (!record.collection && record.itemCount != null && record.itemCount != 1)
                 || record.displayName.isBlank()
                 || ADDRESS.matcher(record.displayName).find()

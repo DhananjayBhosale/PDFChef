@@ -163,7 +163,7 @@ public final class LegacyHistoryInspector {
         reader.endObject();
         if (record.id == null || record.displayName == null || record.toolName == null
                 || record.sizeBytes == null || record.createdAt == null
-                || record.storedFileName == null || !record.hasCollection) {
+                || record.storedFileName == null) {
             record.schemaValid = false;
         }
         if (record.schemaValid && (ADDRESS.matcher(record.displayName).find()
@@ -297,6 +297,13 @@ public final class LegacyHistoryInspector {
                 available = false;
                 if (collection) resolvedItemCount = hasItemCount ? itemCount : 1;
                 return;
+            }
+            // Early PDF Chef indexes predate the explicit isDirectory field.
+            // Infer only from this exact no-follow managed child; never reject
+            // an otherwise valid older file merely because the newer metadata
+            // key did not exist when it was created.
+            if (!hasCollection) {
+                collection = Files.isDirectory(output.toPath(), LinkOption.NOFOLLOW_LINKS);
             }
             boolean correctType = collection
                     ? Files.isDirectory(output.toPath(), LinkOption.NOFOLLOW_LINKS)

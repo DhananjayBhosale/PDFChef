@@ -48,6 +48,23 @@ public final class LegacyDocumentOpenResolverTest {
         assertTrue(eof.done());
     }
 
+    @Test public void earlyPdfRecordWithoutNewerOptionalFieldsStillOpens() throws Exception {
+        CaseRoot item = fresh("early-compatible");
+        byte[] bytes = "%PDF-1.7\nearly".getBytes(StandardCharsets.US_ASCII);
+        Files.write(item.processed.resolve("early.pdf"), bytes);
+        String early = record(4, "Early.pdf", "Create PDF", bytes.length, 1,
+                "early.pdf", false)
+                .replace(",\"mimeType\":\"application/pdf\"", "")
+                .replace(",\"isDirectory\":false", "");
+        writeIndex(item, "[" + early + "]");
+
+        BoundedDocumentReader.Chunk read =
+                new LegacyDocumentOpenResolver(item.files.toFile())
+                        .readChunk("a1_4", 0, bytes.length);
+        assertArrayEquals(bytes, read.bytes());
+        assertTrue(read.done());
+    }
+
     @Test public void rawAddressesNoncanonicalRefsAndUnsafeBoundsAreInvalid() throws Exception {
         CaseRoot item = fresh("invalid-authority");
         Files.write(item.processed.resolve("safe.pdf"), new byte[] {1});
@@ -291,13 +308,14 @@ public final class LegacyDocumentOpenResolverTest {
         record.addProperty("id", 6); record.addProperty("displayName", "Legacy pages");
         record.addProperty("toolName", "SPLIT"); record.addProperty("sizeBytes", pdf.length);
         record.addProperty("createdAtMillis", 1); record.addProperty("storedFileName", "album");
-        record.addProperty("isDirectory", true);
         writeIndex(item, "[" + record + "]");
+        List<String> before = manifest(item.outer);
         try (LegacyDocumentOpenResolver.CollectionSource source =
                      new LegacyDocumentOpenResolver(item.files.toFile()).openCollection("a1_6")) {
             assertEquals(1, source.itemCount());
             assertEquals("application/pdf", source.mimeType());
         }
+        assertEquals(before, manifest(item.outer));
     }
 
     private CaseRoot fresh(String name) throws Exception {

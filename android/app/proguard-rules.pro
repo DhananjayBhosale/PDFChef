@@ -24,3 +24,7 @@
 -keepclassmembers class com.google.mlkit.common.internal.CommonComponentRegistrar {
     public <init>();
 }
+
+# PdfBox can optionally decode JPEG 2000 page images through this commercial
+# decoder. Signature verification never renders page images or calls that path.
+-dontwarn com.gemalto.jp2.JP2Decoder

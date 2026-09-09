@@ -32,6 +32,8 @@ export interface PdfChefDocumentsNativePlugin {
   pickDocuments(options: { acceptedMimeTypes: string[] }): Promise<unknown>;
   exportDocument(options: { ref: string; name?: string; mimeType?: string }): Promise<unknown>;
   shareDocument(options: { ref: string; name?: string; mimeType?: string }): Promise<unknown>;
+  signatureVerificationAvailable(): Promise<unknown>;
+  presentSignatureReport(options: { ref: string; name?: string }): Promise<unknown>;
   signalHaptic(options: { signal: string }): Promise<unknown>;
   getApplicationMetadata(): Promise<unknown>;
   addListener(
@@ -361,6 +363,28 @@ export class PdfChefDocumentsBridge {
       mimeType: optionalNativeString(nullableString(mimeType, 'mimeType')),
     }), 'shareDocument result');
     if (typeof payload.completed !== 'boolean') throw new TypeError('shareDocument result.completed must be boolean');
+    if (!payload.completed) throw new DOMException('Operation cancelled.', 'AbortError');
+  }
+
+  async signatureVerificationAvailable(): Promise<boolean> {
+    const payload = object(
+      await this.native.signatureVerificationAvailable(),
+      'signatureVerificationAvailable result',
+    );
+    if (typeof payload.available !== 'boolean') {
+      throw new TypeError('signatureVerificationAvailable result.available must be boolean');
+    }
+    return payload.available;
+  }
+
+  async presentSignatureReport(ref: DurableDocumentRef, name: string | null): Promise<void> {
+    const payload = object(await this.native.presentSignatureReport({
+      ref: durableRef(ref, 'ref'),
+      name: optionalNativeString(nullableString(name, 'name')),
+    }), 'presentSignatureReport result');
+    if (typeof payload.completed !== 'boolean') {
+      throw new TypeError('presentSignatureReport result.completed must be boolean');
+    }
     if (!payload.completed) throw new DOMException('Operation cancelled.', 'AbortError');
   }
 

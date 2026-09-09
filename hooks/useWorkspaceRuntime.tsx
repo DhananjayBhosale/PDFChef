@@ -7,6 +7,7 @@ import type {
   DocumentShareService,
   DocumentStorageService,
   HapticsService,
+  PdfSignatureVerificationService,
   PdfReaderService,
   RecordAbilities,
   RecordRecoveryService,
@@ -114,6 +115,8 @@ export interface WorkspacePlatform {
    * declarations from services/platform/contracts.ts.
    */
   pdfReader?: PdfReaderService;
+  /** Native signature details for the exact durable File returned by reopen. */
+  pdfSignatureVerification?: PdfSignatureVerificationService;
   /**
    * Per-record abilities and reversible deletion. Absent means every deletion
    * this platform performs is permanent, which is what the surface then says.

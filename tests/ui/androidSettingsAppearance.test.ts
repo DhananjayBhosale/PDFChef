@@ -339,17 +339,13 @@ test('a marker that is not exactly ours is discarded rather than acted on', asyn
 
 /* ------------------------------------------------------ explicit choice --- */
 
-test('an explicit choice paints at once and is only called saved once the device confirms it', async () => {
+test('an explicit choice paints and saves locally before compatibility sync finishes', async () => {
   const test = harness({ legacy: async () => resolutionOf(null, null, 'missing') });
   const pending = test.bridge.choose('dark');
   assert.deepEqual(test.applied, ['dark']);
   assert.deepEqual(test.reported, ['saving']);
-  // Until the device answers, the marker is the record and the store is not.
-  assert.equal(test.storage.values.has(THEME_KEY), false);
-  assert.deepEqual(appearance.parseThemeMarker(test.storage.values.get(MARKER_KEY) ?? null), {
-    target: 'dark',
-    confirmed: 'system',
-  });
+  assert.equal(test.storage.values.get(THEME_KEY), 'dark');
+  assert.equal(test.storage.values.has(MARKER_KEY), false);
   await pending;
   assert.deepEqual(test.reported, ['saving', 'saved']);
   assert.equal(test.storage.values.get(THEME_KEY), 'dark');
@@ -357,7 +353,7 @@ test('an explicit choice paints at once and is only called saved once the device
   assert.deepEqual(test.writes, ['dark']);
 });
 
-test('a refused write rolls back to the last confirmed theme and never leaks the reason', async () => {
+test('a refused legacy write keeps the current app theme selected and durable', async () => {
   const test = harness({
     storage: storageStub({ [THEME_KEY]: 'light' }),
     legacy: async () => resolutionOf('light', 'LIGHT'),
@@ -369,13 +365,13 @@ test('a refused write rolls back to the last confirmed theme and never leaks the
   });
   await test.bridge.start();
   await test.bridge.choose('dark');
-  assert.deepEqual(test.applied, ['dark', 'light']);
-  assert.deepEqual(test.reported, ['saving', 'failed']);
-  assert.equal(test.storage.values.get(THEME_KEY), 'light');
+  assert.deepEqual(test.applied, ['dark']);
+  assert.deepEqual(test.reported, ['saving', 'saved']);
+  assert.equal(test.storage.values.get(THEME_KEY), 'dark');
   assert.equal(test.storage.values.has(MARKER_KEY), false);
 });
 
-test('under rapid choices only the newest one finishes, and an earlier confirmed one becomes its fallback', async () => {
+test('under rapid choices the newest local choice stays authoritative when native sync fails', async () => {
   const releases: Array<(failed?: boolean) => void> = [];
   const test = harness({
     storage: storageStub({ [THEME_KEY]: 'system' }),
@@ -398,22 +394,39 @@ test('under rapid choices only the newest one finishes, and an earlier confirmed
   releases[0]!();
   await light;
   await settled();
-  // The older write really did land, so it is stored and becomes the fallback
-  // the newer one would return to. It reports nothing of its own.
-  assert.equal(test.storage.values.get(THEME_KEY), 'light');
-  assert.deepEqual(appearance.parseThemeMarker(test.storage.values.get(MARKER_KEY) ?? null), {
-    target: 'dark',
-    confirmed: 'light',
-  });
+  assert.equal(test.storage.values.get(THEME_KEY), 'dark');
+  assert.equal(test.storage.values.has(MARKER_KEY), false);
   assert.deepEqual(test.reported, ['saving', 'saving']);
 
   releases[1]!(true);
   await dark;
   await settled();
-  assert.deepEqual(test.applied, ['light', 'dark', 'light']);
-  assert.deepEqual(test.reported, ['saving', 'saving', 'failed']);
-  assert.equal(test.storage.values.get(THEME_KEY), 'light');
+  assert.deepEqual(test.applied, ['light', 'dark']);
+  assert.deepEqual(test.reported, ['saving', 'saving', 'saved']);
+  assert.equal(test.storage.values.get(THEME_KEY), 'dark');
   assert.equal(test.storage.values.has(MARKER_KEY), false);
+});
+
+test('a first-launch compatibility read cannot overwrite a theme chosen while it is pending', async () => {
+  let releaseRead!: (resolution: AndroidLegacyThemeResolution) => void;
+  const test = harness({
+    legacy: () => new Promise((resolveRead) => {
+      releaseRead = resolveRead;
+    }),
+  });
+
+  const starting = test.bridge.start();
+  await settled();
+  const choosing = test.bridge.choose('dark');
+  assert.equal(test.storage.values.get(THEME_KEY), 'dark');
+  assert.deepEqual(test.applied, ['dark']);
+
+  releaseRead(resolutionOf('light', 'LIGHT'));
+  await starting;
+  await choosing;
+  assert.equal(test.storage.values.get(THEME_KEY), 'dark');
+  assert.deepEqual(test.applied, ['dark']);
+  assert.deepEqual(test.writes, ['dark']);
 });
 
 test('nothing is painted or announced after the surface is gone', async () => {
@@ -458,51 +471,44 @@ test('a local store that refuses the write is never reported as imported', async
   assert.equal(test.storage.values.has(THEME_KEY), false);
 });
 
-test('a confirmed write that this store refuses is not called saved and keeps its marker for a retry', async () => {
+test('a refused local store is reported unsaved even if compatibility sync succeeds', async () => {
   const test = harness({
     storage: storageStub({ [THEME_KEY]: 'light' }, { write: (key) => key === THEME_KEY }),
     legacy: async () => resolutionOf('light', 'LIGHT'),
   });
   await test.bridge.start();
   await test.bridge.choose('dark');
-  assert.deepEqual(test.reported, ['saving', 'unsaved']);
+  assert.deepEqual(test.reported, ['unsaved']);
   assert.equal(test.storage.values.get(THEME_KEY), 'light');
-  // The marker survives, so the next launch reconciles rather than losing it.
-  assert.deepEqual(appearance.parseThemeMarker(test.storage.values.get(MARKER_KEY) ?? null), {
-    target: 'dark',
-    confirmed: 'light',
-  });
+  assert.equal(test.storage.values.has(MARKER_KEY), false);
 });
 
-test('a marker that cannot be published stops the choice before the device is asked', async () => {
+test('a theme choice no longer depends on publishing a legacy marker', async () => {
   const test = harness({
     storage: storageStub({ [THEME_KEY]: 'light' }, { write: (key) => key === MARKER_KEY }),
     legacy: async () => resolutionOf('light', 'LIGHT'),
   });
   await test.bridge.start();
   await test.bridge.choose('dark');
-  // Nothing was asked of the device, so a process death here cannot leave the
-  // two stores holding different themes with no record to reconcile them.
-  assert.deepEqual(test.writes, []);
-  // Pressed, then honestly put back. Never in flight, never saved.
-  assert.deepEqual(test.applied, ['dark', 'light']);
-  assert.deepEqual(test.reported, ['failed']);
-  assert.equal(test.storage.values.get(THEME_KEY), 'light');
+  assert.deepEqual(test.writes, ['dark']);
+  assert.deepEqual(test.applied, ['dark']);
+  assert.deepEqual(test.reported, ['saving', 'saved']);
+  assert.equal(test.storage.values.get(THEME_KEY), 'dark');
   assert.equal(test.storage.values.has(MARKER_KEY), false);
 });
 
-test('a marker this store will not release is not called saved either', async () => {
+test('an obsolete marker removal failure cannot undo a saved current theme', async () => {
   const test = harness({
     storage: storageStub({ [THEME_KEY]: 'light' }, { remove: (key) => key === MARKER_KEY }),
     legacy: async () => resolutionOf('light', 'LIGHT'),
   });
   await test.bridge.start();
   await test.bridge.choose('dark');
-  assert.deepEqual(test.reported, ['saving', 'unsaved']);
+  assert.deepEqual(test.reported, ['saving', 'saved']);
   assert.equal(test.storage.values.get(THEME_KEY), 'dark');
 });
 
-test('Android without its accepted reader and writer fails honestly instead of saving locally', async () => {
+test('Android keeps a local theme when its legacy compatibility bridge is unavailable', async () => {
   const test = harness({
     storage: storageStub({ [THEME_KEY]: 'light' }),
     legacy: null,
@@ -510,11 +516,18 @@ test('Android without its accepted reader and writer fails honestly instead of s
   });
   await test.bridge.start();
   await test.bridge.choose('dark');
-  assert.deepEqual(test.applied, ['dark', 'light']);
-  assert.deepEqual(test.reported, ['failed']);
-  // Nothing was stored, so nothing claims the device took the choice.
-  assert.equal(test.storage.values.get(THEME_KEY), 'light');
+  assert.deepEqual(test.applied, ['dark']);
+  assert.deepEqual(test.reported, ['saved']);
+  assert.equal(test.storage.values.get(THEME_KEY), 'dark');
   assert.equal(test.storage.values.has(MARKER_KEY), false);
+});
+
+test('text size paints the Settings surface and persists during the press', () => {
+  const root = { dataset: {} as DOMStringMap };
+  const storage = storageStub();
+  assert.equal(appearance.applyTextScaleImmediately('larger', root as never, storage), true);
+  assert.equal(root.dataset.textScale, 'larger');
+  assert.equal(storage.values.get('pdfchef.appearance.text-scale.v1'), 'larger');
 });
 
 test('the browser and iOS keep the one-store behaviour they already had', async () => {

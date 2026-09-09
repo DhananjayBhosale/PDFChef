@@ -158,6 +158,42 @@ public final class LegacyHistoryInspectorTest {
         assertEquals(JsonNull.INSTANCE, missing.get("mimeType"));
     }
 
+    @Test public void earlyFileRecordWithoutNewerOptionalFieldsRemainsVisible() throws Exception {
+        CaseRoot item = fresh("history-early-file");
+        Files.createDirectories(item.files.resolve("processed"));
+        Files.write(item.files.resolve("processed/early.pdf"), new byte[] {1, 2, 3});
+        String early = record(7, "early.pdf", "Create PDF", 3, 9,
+                "early.pdf", false, null, null)
+                .replace(",\"isDirectory\":false", "");
+        writeIndex(item, "[" + early + "]");
+
+        JsonObject result = inspect(item);
+        LegacyInspectorTestSupport.assertHistory(result, "ok", 1, 0, 1, false);
+        JsonObject visible = entry(result, 0);
+        assertEquals("file", visible.get("kind").getAsString());
+        assertEquals("a1_7", visible.get("ref").getAsString());
+        assertEquals("early.pdf", visible.get("displayName").getAsString());
+        assertEquals(JsonNull.INSTANCE, visible.get("mimeType"));
+    }
+
+    @Test public void earlyCollectionWithoutNewerOptionalFieldsRemainsVisibleAndReadOnly()
+            throws Exception {
+        CaseRoot item = fresh("history-early-collection");
+        Files.createDirectories(item.files.resolve("processed/album"));
+        Files.write(item.files.resolve("processed/album/page.pdf"), new byte[] {1, 2, 3});
+        String early = record(8, "Album", "PDF to Image", 3, 10,
+                "album", true, null, null)
+                .replace(",\"isDirectory\":true", "");
+        writeIndex(item, "[" + early + "]");
+
+        JsonObject result = inspect(item);
+        LegacyInspectorTestSupport.assertHistory(result, "ok", 1, 0, 1, false);
+        JsonObject visible = entry(result, 0);
+        assertEquals("collection", visible.get("kind").getAsString());
+        assertEquals("a1_8", visible.get("ref").getAsString());
+        assertEquals(1, visible.get("itemCount").getAsInt());
+    }
+
     @Test public void collectionsUseStoredCountOrBoundedFallbackForPopulatedDirectory()
             throws Exception {
         CaseRoot item = fresh("history-collections-populated");

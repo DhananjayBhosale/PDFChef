@@ -44,6 +44,7 @@ const createFixture = async () => {
   const document = await PDFDocument.create();
   const body = await document.embedFont(StandardFonts.Helvetica);
   const heading = await document.embedFont(StandardFonts.HelveticaBold);
+  const italic = await document.embedFont(StandardFonts.HelveticaOblique);
   const page = document.addPage([595, 842]);
 
   page.drawText(HEADING, { x: 72, y: 760, size: 22, font: heading, color: rgb(0.1, 0.1, 0.15) });
@@ -53,7 +54,12 @@ const createFixture = async () => {
 
   // A bold lead-in inside one paragraph, and a two-column block below it.
   page.drawText(LEAD_IN, { x: 72, y: 560, size: 11, font: heading });
-  page.drawText(LEAD_BODY, { x: 105, y: 560, size: 11, font: body });
+  const italicStart = LEAD_BODY.indexOf('continues');
+  const regularLead = LEAD_BODY.slice(0, italicStart);
+  page.drawText(regularLead, { x: 105, y: 560, size: 11, font: body });
+  page.drawText(LEAD_BODY.slice(italicStart), {
+    x: 105 + body.widthOfTextAtSize(regularLead, 11), y: 560, size: 11, font: italic,
+  });
   for (let line = 0; line < COLUMNS; line += 1) {
     page.drawText(`Left column line ${line + 1}`, { x: 72, y: 520 - line * 14, size: 10, font: body });
     page.drawText(`Right column line ${line + 1}`, { x: 340, y: 520 - line * 14, size: 10, font: body });
@@ -141,9 +147,12 @@ const createScan = async () => {
   return Buffer.from(await document.save());
 };
 
+const errorsByPage = new WeakMap();
+
 const openEditor = async (context, fixture) => {
   const page = await context.newPage();
   const consoleErrors = [];
+  errorsByPage.set(page, consoleErrors);
   page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
   page.on('pageerror', error => consoleErrors.push(error.message));
 
@@ -206,18 +215,21 @@ const saveAndRead = async (page, nextOutput, pageCount = 1) => {
   const bytes = new Uint8Array(await Promise.race([
     output,
     page.getByRole('alert').waitFor({ timeout: 30_000 })
-      .then(async () => { throw new Error(`Save reported: ${await page.getByRole('alert').innerText()}`); }),
+      .then(async () => { throw new Error(
+        `Save reported: ${await page.getByRole('alert').innerText()}\n${(errorsByPage.get(page) ?? []).join('\n')}`,
+      ); }),
   ]));
   const task = pdfjs.getDocument({ data: Uint8Array.from(bytes) });
   const document = await task.promise;
   const first = await document.getPage(1);
   const operators = await first.getOperatorList();
+  const items = (await first.getTextContent()).items;
   const pages = [];
   for (let index = 1; index <= Math.min(pageCount, document.numPages); index += 1) {
     pages.push((await (await document.getPage(index)).getTextContent()).items.map(item => item.str).join(''));
   }
   await task.destroy();
-  return { bytes, text: pageCount === 1 ? pages[0] : pages, operators };
+  return { bytes, text: pageCount === 1 ? pages[0] : pages, operators, items };
 };
 
 /** Find one run in a PDF by its text, and report the matrix it is drawn with. */
@@ -257,6 +269,100 @@ const retypeStart = (page, index, count, replacement) => page.evaluate(({ index,
   selection.removeAllRanges();
   selection.addRange(range);
 }, { index, count }).then(() => page.keyboard.insertText(replacement));
+
+/** Read actual painted glyph rows, independently of CSS line-height or the editor's line model. */
+const paragraphGeometry = (paragraph) => paragraph.evaluate(element => {
+  const box = element.getBoundingClientRect();
+  const page = element.closest('[role="group"][aria-label^="Page "]');
+  const pageBox = page.getBoundingClientRect();
+  const scale = pageBox.height / 842;
+  const rows = [];
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) {
+    for (let index = 0; index < node.length; index += 1) {
+      if (/\s/.test(node.textContent[index])) continue;
+      const range = document.createRange();
+      range.setStart(node, index);
+      range.setEnd(node, index + 1);
+      const rect = range.getBoundingClientRect();
+      if (!rect.width || !rect.height) continue;
+      const top = (rect.top - pageBox.top) / scale;
+      const bottom = (rect.bottom - pageBox.top) / scale;
+      const row = rows.find(candidate => Math.abs(candidate.top - top) < 0.25);
+      if (row) row.text += node.textContent[index];
+      else rows.push({ top, bottom, text: node.textContent[index] });
+    }
+  }
+  // Chromium leaves one final newline as a caret placeholder after Enter at the end.
+  const text = element.innerText.replace(/\r\n?/g, '\n').replace(/\n$/, '');
+  return {
+    text,
+    newlines: (text.match(/\n/g) ?? []).length,
+    rows,
+    top: (box.top - pageBox.top) / scale,
+    height: box.height / scale,
+    whiteSpace: getComputedStyle(element).whiteSpace,
+    overflowWrap: getComputedStyle(element).overflowWrap,
+    wordBreak: getComputedStyle(element).wordBreak,
+    editable: element.isContentEditable,
+  };
+});
+
+const assertSameGeometry = (before, after, label) => {
+  assert.equal(after.newlines, before.newlines, `${label}: an explicit newline appeared`);
+  assert.equal(after.rows.length, before.rows.length, `${label}: Chromium introduced a visual line`);
+  assert.equal(after.whiteSpace, 'pre', `${label}: existing text enabled incidental CSS wrapping`);
+  assert.equal(after.overflowWrap, 'normal', `${label}: overflow-wrap may split PDF lines`);
+  assert.equal(after.wordBreak, 'normal', `${label}: word-break may split PDF lines`);
+  assert.ok(after.editable, `${label}: existing text stopped being contentEditable`);
+  assert.ok(Math.abs(after.top - before.top) <= 0.25, `${label}: the PDF-relative block top moved`);
+  assert.ok(Math.abs(after.height - before.height) <= 0.25, `${label}: the block height changed`);
+  before.rows.forEach((row, index) => {
+    assert.ok(Math.abs(after.rows[index].top - row.top) <= 0.25, `${label}: line ${index + 1} top moved`);
+    assert.ok(Math.abs(after.rows[index].bottom - row.bottom) <= 0.25, `${label}: line ${index + 1} baseline moved`);
+  });
+};
+
+const spanAppearance = (paragraph) => paragraph.evaluate(element =>
+  [...element.querySelectorAll('span')].map(span => {
+    const style = getComputedStyle(span);
+    return {
+      text: span.textContent,
+      font: span.dataset.font,
+      family: style.fontFamily,
+      weight: style.fontWeight,
+      italic: style.fontStyle,
+      wordSpacing: style.wordSpacing,
+      letterSpacing: style.letterSpacing,
+    };
+  }));
+
+const caretOffset = (paragraph) => paragraph.evaluate(element => {
+  const selection = getSelection();
+  if (!selection?.rangeCount || !element.contains(selection.anchorNode)) return -1;
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.setEnd(selection.anchorNode, selection.anchorOffset);
+  return range.toString().length;
+});
+
+const undoTyping = (page) => page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z');
+
+const normalizedLine = text => text.replace(/\s+/g, ' ').trim();
+const exportedLines = items => {
+  const rows = new Map();
+  for (const item of items) {
+    if (!item.str) continue;
+    const baseline = item.transform[5].toFixed(2);
+    const row = rows.get(baseline) ?? [];
+    row.push(item);
+    rows.set(baseline, row);
+  }
+  return [...rows.values()].map(row => normalizedLine(
+    row.sort((left, right) => left.transform[4] - right.transform[4]).map(item => item.str).join(''),
+  ));
+};
 
 /** Twelve pages that all say the same thing, for checking find and replace across a document. */
 const createMultipage = async () => {
@@ -305,6 +411,79 @@ const multipage = await createMultipage();
 const browser = await chromium.launch({ headless: true });
 
 try {
+  // --- Fitting replacements keep every PDF row; Enter is the only added hard break ------------
+  {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const { page, consoleErrors } = await openEditor(context, fixture);
+    await waitForParagraphs(page);
+    const paragraph = page.getByTestId('pdf-text-block').nth(1);
+    await paragraph.click();
+    await page.evaluate(() => document.fonts.ready);
+    const before = await paragraphGeometry(paragraph);
+    const originalSpans = await spanAppearance(paragraph);
+    assert.equal(before.rows.length, BODY.length, 'the fixture must start with the original PDF rows');
+    assert.equal(before.newlines, BODY.length - 1);
+
+    await retypeStart(page, 1, 'Revenue'.length, 'Profits');
+    assertSameGeometry(before, await paragraphGeometry(paragraph), 'equal-length replacement');
+    assert.equal(await caretOffset(paragraph), 'Profits'.length, 'a replacement reset the caret');
+    assert.deepEqual((await spanAppearance(paragraph)).slice(1), originalSpans.slice(1),
+      'editing the first run changed an untouched line or its spacing correction');
+
+    await retypeStart(page, 1, 'Profits'.length, 'Sales');
+    assertSameGeometry(before, await paragraphGeometry(paragraph), 'short fitting replacement');
+    assert.equal(await caretOffset(paragraph), 'Sales'.length, 'a shorter replacement reset the caret');
+    console.log('PASS equal-length and shorter edits preserve explicit rows, glyph positions, height and caret');
+
+    const enterParagraph = page.getByTestId('pdf-text-block').nth(2);
+    await enterParagraph.click();
+    const original = await paragraphGeometry(enterParagraph);
+    for (const atEnd of [false, true]) {
+      if (atEnd) {
+        await enterParagraph.evaluate(element => {
+          element.focus();
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          range.collapse(false);
+          const selection = getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+        });
+      } else await placeCaret(page, 2, 7);
+      await page.keyboard.press('Enter');
+      const entered = await paragraphGeometry(enterParagraph);
+      assert.equal(entered.newlines, original.newlines + 1,
+        `Enter ${atEnd ? 'at the end' : 'inside text'} must create exactly one intentional newline`);
+      assert.equal(entered.whiteSpace, 'pre', 'Enter must not enable browser wrapping');
+      assert.ok(entered.editable, 'Enter disabled paragraph editing');
+      await undoTyping(page);
+      await page.waitForFunction(({ index, text }) =>
+        document.querySelectorAll('[data-testid="pdf-text-block"]')[index]
+          ?.innerText.replace(/\n$/, '') === text,
+      { index: 2, text: original.text });
+      const restored = await paragraphGeometry(enterParagraph);
+      assert.equal(restored.text, original.text, 'Undo failed to remove the deliberate newline');
+      assertSameGeometry(original, restored, 'undo Enter');
+    }
+    console.log('PASS Enter inside a line and at paragraph end adds one newline; Undo restores its geometry');
+
+    const mixed = page.getByTestId('pdf-text-block').nth(5);
+    await mixed.click();
+    const facesBefore = await spanAppearance(mixed);
+    assert.ok(new Set(facesBefore.map(span => span.font)).size >= 3,
+      'the mixed-style fixture must include bold, regular and italic PDF faces');
+    await placeCaret(page, 5, 1);
+    await page.keyboard.type('x');
+    const facesAfter = await spanAppearance(mixed);
+    assert.deepEqual(facesAfter.slice(1), facesBefore.slice(1),
+      'editing the bold run flattened an untouched font, style or spacing correction');
+    assert.equal(await caretOffset(mixed), 2, 'editing a mixed-style run reset the caret');
+    console.log('PASS typing in one run retains untouched regular and italic faces and spacing');
+
+    assert.deepEqual(consoleErrors, [], 'console errors during explicit-line regression checks');
+    await context.close();
+  }
+
   // --- Paragraph reconstruction and a direct, in-place edit -------------------------------------
   {
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
@@ -430,7 +609,10 @@ try {
     const nextOutput = await installOutputCapture(page);
 
     await waitForParagraphs(page);
-    await page.locator('[data-testid="pdf-text-block"]').nth(2).click();
+    const paragraph = page.getByTestId('pdf-text-block').nth(2);
+    await paragraph.click();
+    const before = await paragraphGeometry(paragraph);
+    const blockId = await paragraph.getAttribute('data-block-id');
     await page.evaluate(() => {
       const element = document.querySelectorAll('[data-testid="pdf-text-block"]')[2];
       element.focus();
@@ -445,12 +627,32 @@ try {
     const provenance = await waitForPlan(page);
     assert.match(provenance, /will be redrawn/i, `expected a redraw, got: ${provenance}`);
     assert.match(provenance, /taller than the space it had/i, 'a paragraph that outgrows its space must say so');
+    assertSameGeometry(before, await paragraphGeometry(paragraph), 'focused overflow');
+    assert.match(await page.getByTestId('pdf-block-overflow').innerText(), /finish editing to preview/i,
+      'focused overflow must explain when the deterministic preview will appear');
+    await paragraph.evaluate(element => element.blur());
+    const preview = page.locator(`[data-testid="pdf-block-preview"][data-preview-block-id="${blockId}"]`);
+    await preview.waitFor();
+    const previewLines = await preview.locator('[data-preview-line]').evaluateAll(pieces => {
+      const lines = new Map();
+      pieces.forEach(piece => {
+        const line = Number(piece.getAttribute('data-preview-line'));
+        lines.set(line, (lines.get(line) ?? '') + piece.textContent);
+      });
+      return [...lines.entries()].sort(([left], [right]) => left - right).map(([, text]) => text);
+    });
+    assert.ok(previewLines.length > before.rows.length, 'the deterministic preview must show genuine overflow');
     console.log('PASS an edit that no longer fits is planned as a redraw, with the overrun stated');
 
     const reflowed = await saveAndRead(page, nextOutput);
     assert.match(reflowed.text, /An appended sentence long enough/, 'the appended text is missing from the saved PDF');
     assert.match(reflowed.text, new RegExp(HEADING), 'redrawing one paragraph disturbed the rest of the page');
-    console.log('PASS the redrawn paragraph is saved and the rest of the page survives');
+    const savedLines = exportedLines(reflowed.items);
+    for (const line of previewLines) {
+      assert.ok(savedLines.includes(normalizedLine(line)),
+        `the preview line differs from the exported PDF: ${JSON.stringify(line)}; exported ${JSON.stringify(savedLines)}`);
+    }
+    console.log('PASS blur preview and exported PDF use identical deterministic line breaks');
 
     assert.deepEqual(consoleErrors, [], 'console errors during the redraw');
     await context.close();

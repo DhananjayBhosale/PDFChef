@@ -677,7 +677,9 @@ export const verifyPdfTextRunsFitWithinPage = async (
             const matches = objects.filter((object) => object.matrix
               && Math.abs(object.matrix[4] - run.x) <= 0.25
               && Math.abs(object.matrix[5] - run.y) <= 0.25);
-            if (!matches.some((object) => object.text === run.text)) throw new Error(verificationError);
+            // PDFium can append a generated space before the next positioned word. Use the
+            // same source-text comparison as direct edits; actual ink bounds are still checked.
+            if (!matches.some((object) => sameSourceRun(object.text, run.text))) throw new Error(verificationError);
             // PDFium suppresses extracted text for some overlapping duplicates.
             // Check every visible object at this baseline, even with empty text.
             for (const object of matches) verifyTextObjectFitsPage(object, cropBox);

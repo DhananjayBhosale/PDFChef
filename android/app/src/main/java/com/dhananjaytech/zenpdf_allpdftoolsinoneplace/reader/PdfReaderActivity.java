@@ -9,6 +9,7 @@ import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.InputType;
 import android.util.SparseArray;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -16,6 +17,7 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.ImageButton;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -23,6 +25,7 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.OptIn;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -39,8 +42,10 @@ import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.PdfChefApplication;
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.R;
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.documents.DocumentLifecycleCoordinator;
 
+import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 
 /**
  * The reader.
@@ -92,9 +97,17 @@ public final class PdfReaderActivity extends AppCompatActivity {
     /** The one live session, carried across a configuration change rather than re-staged. */
     private static final class RetainedSession {
         private final PdfReaderDocumentSession session;
+        private char[] password;
 
-        RetainedSession(PdfReaderDocumentSession session) {
+        RetainedSession(PdfReaderDocumentSession session, char[] password) {
             this.session = session;
+            this.password = password;
+        }
+
+        char[] takePassword() {
+            char[] value = password;
+            password = null;
+            return value;
         }
     }
 
@@ -125,8 +138,14 @@ public final class PdfReaderActivity extends AppCompatActivity {
     private ImageButton toolsButton;
 
     private Dialog toolsDialog;
+    private AlertDialog signatureDialog;
+    private AlertDialog passwordDialog;
     private boolean sharePending;
     private boolean savePending;
+    private boolean signaturePending;
+    private char[] documentPassword;
+    private char[] pendingDocumentPassword;
+    private boolean retainedPasswordAttempted;
     private boolean resultSent;
     private boolean preparing;
     /** A prepare or a load already failed, so a rotation must not silently re-copy. */
@@ -216,7 +235,11 @@ public final class PdfReaderActivity extends AppCompatActivity {
         }
 
         Object carried = getLastCustomNonConfigurationInstance();
-        if (carried instanceof RetainedSession) session = ((RetainedSession) carried).session;
+        if (carried instanceof RetainedSession) {
+            RetainedSession retained = (RetainedSession) carried;
+            session = retained.session;
+            documentPassword = retained.takePassword();
+        }
 
         if (session != null) {
             attachViewer(session);
@@ -381,10 +404,17 @@ public final class PdfReaderActivity extends AppCompatActivity {
     private void retry() {
         removeViewer();
         closeSession();
+        clearPasswords();
         prepareDocument();
     }
 
     void onDocumentLoaded(int pages) {
+        if (pendingDocumentPassword != null) {
+            clearPassword(documentPassword);
+            documentPassword = pendingDocumentPassword;
+            pendingDocumentPassword = null;
+            retainedPasswordAttempted = false;
+        }
         pageCount = Math.max(pages, 0);
         if (currentPage < 1) currentPage = 1;
         showViewer();
@@ -398,6 +428,8 @@ public final class PdfReaderActivity extends AppCompatActivity {
 
     void onDocumentFailed() {
         // A snapshot that could not be read is not worth keeping staged.
+        clearPassword(pendingDocumentPassword);
+        pendingDocumentPassword = null;
         removeViewer();
         closeSession();
         showError();
@@ -407,6 +439,64 @@ public final class PdfReaderActivity extends AppCompatActivity {
         pdfView = view;
         hideToolbox();
         restorePendingPage();
+    }
+
+    void requestDocumentPassword(@NonNull ReaderFragment fragment) {
+        if (documentPassword != null && !retainedPasswordAttempted) {
+            retainedPasswordAttempted = true;
+            fragment.submitPassword(new String(documentPassword));
+            return;
+        }
+        boolean previousPasswordFailed = pendingDocumentPassword != null || documentPassword != null;
+        clearPassword(documentPassword);
+        clearPassword(pendingDocumentPassword);
+        documentPassword = null;
+        pendingDocumentPassword = null;
+        dismissPasswordDialog();
+
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        input.setHint(R.string.pdf_reader_password_hint);
+        input.setContentDescription(getString(R.string.pdf_reader_password_description));
+
+        passwordDialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.pdf_reader_password_title)
+                .setMessage(previousPasswordFailed
+                        ? R.string.pdf_reader_password_incorrect
+                        : R.string.pdf_reader_password_body)
+                .setView(input)
+                .setPositiveButton(R.string.pdf_reader_password_open, (dialog, which) -> {
+                    String submitted = input.getText().toString();
+                    pendingDocumentPassword = submitted.toCharArray();
+                    input.getText().clear();
+                    fragment.submitPassword(submitted);
+                })
+                .setNegativeButton(android.R.string.cancel, (dialog, which) ->
+                        fragment.cancelPassword())
+                .setOnCancelListener(dialog -> fragment.cancelPassword())
+                .create();
+        passwordDialog.setCanceledOnTouchOutside(false);
+        passwordDialog.setOnShowListener(dialog -> input.requestFocus());
+        passwordDialog.show();
+    }
+
+    private void dismissPasswordDialog() {
+        if (passwordDialog != null) {
+            passwordDialog.dismiss();
+            passwordDialog = null;
+        }
+    }
+
+    private void clearPasswords() {
+        clearPassword(documentPassword);
+        clearPassword(pendingDocumentPassword);
+        documentPassword = null;
+        pendingDocumentPassword = null;
+    }
+
+    private static void clearPassword(@Nullable char[] password) {
+        if (password != null) Arrays.fill(password, '\0');
     }
 
     /**
@@ -498,7 +588,7 @@ public final class PdfReaderActivity extends AppCompatActivity {
     }
 
     private void setActionsEnabled(boolean enabled) {
-        boolean idle = enabled && !sharePending && !savePending;
+        boolean idle = enabled && !sharePending && !savePending && !signaturePending;
         searchButton.setEnabled(enabled);
         toolsButton.setEnabled(enabled);
         shareButton.setEnabled(idle);
@@ -614,6 +704,11 @@ public final class PdfReaderActivity extends AppCompatActivity {
         View sheet = LayoutInflater.from(this).inflate(R.layout.pdf_reader_tools_sheet, null, false);
         LinearLayout list = sheet.findViewById(R.id.pdf_reader_tool_list);
         LayoutInflater inflater = LayoutInflater.from(this);
+        TextView verifyRow = (TextView) inflater.inflate(R.layout.pdf_reader_tool_row, list, false);
+        verifyRow.setText(R.string.pdf_reader_verify_signatures);
+        verifyRow.setContentDescription(getString(R.string.pdf_reader_verify_signatures_description));
+        verifyRow.setOnClickListener(view -> verifyDigitalSignatures());
+        list.addView(verifyRow);
         for (String[] tool : TOOLS) {
             if (!PdfReaderLaunchContract.toolPaths().contains(tool[0])) continue;
             TextView row = (TextView) inflater.inflate(R.layout.pdf_reader_tool_row, list, false);
@@ -655,6 +750,145 @@ public final class PdfReaderActivity extends AppCompatActivity {
         if (toolsDialog != null) {
             toolsDialog.dismiss();
             toolsDialog = null;
+        }
+    }
+
+    private void verifyDigitalSignatures() {
+        if (signaturePending || session == null || executor == null) return;
+        dismissTools();
+        signaturePending = true;
+        setActionsEnabled(errorView.getVisibility() != View.VISIBLE);
+        signatureDialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.pdf_reader_signature_checking_title)
+                .setMessage(R.string.pdf_reader_signature_checking_body)
+                .setCancelable(false)
+                .create();
+        signatureDialog.show();
+        final PdfReaderDocumentSession activeSession = session;
+        final char[] verificationPassword = documentPassword == null
+                ? null : documentPassword.clone();
+        try {
+            executor.execute(() -> {
+                PdfSignatureReport report = verifySignatures(activeSession, verificationPassword);
+                main.post(() -> showSignatureReport(report));
+            });
+        } catch (RejectedExecutionException rejected) {
+            clearPassword(verificationPassword);
+            showSignatureReport(PdfSignatureReport.malformed());
+        }
+    }
+
+    private PdfSignatureReport verifySignatures(PdfReaderDocumentSession activeSession,
+            @Nullable char[] password) {
+        try {
+            return new PdfSignatureVerifier(getApplicationContext())
+                    .verify(activeSession.snapshotForVerification(), password);
+        } catch (RuntimeException unavailable) {
+            return PdfSignatureReport.malformed();
+        } finally {
+            clearPassword(password);
+        }
+    }
+
+    private void showSignatureReport(@NonNull PdfSignatureReport report) {
+        if (isFinishing() || isDestroyed()) return;
+        signaturePending = false;
+        setActionsEnabled(errorView.getVisibility() != View.VISIBLE);
+        dismissSignatureDialog();
+        String message;
+        if (report.encrypted) {
+            message = getString(R.string.pdf_reader_signature_encrypted);
+        } else if (report.malformed) {
+            message = getString(R.string.pdf_reader_signature_malformed);
+        } else if (report.signatures.isEmpty()) {
+            message = getString(R.string.pdf_reader_signature_none);
+        } else {
+            StringBuilder text = new StringBuilder();
+            for (int index = 0; index < report.signatures.size(); index++) {
+                if (index > 0) text.append("\n\n");
+                PdfSignatureReport.Signature signature = report.signatures.get(index);
+                text.append(getString(R.string.pdf_reader_signature_number, index + 1)).append('\n')
+                        .append(getString(R.string.pdf_reader_signature_signer, signature.signerName)).append('\n')
+                        .append(getString(R.string.pdf_reader_signature_integrity,
+                                integrityText(signature))).append('\n')
+                        .append(getString(R.string.pdf_reader_signature_trust,
+                                trustText(signature.trust))).append('\n')
+                        .append(getString(R.string.pdf_reader_signature_validity,
+                                validityText(signature))).append('\n')
+                        .append(getString(R.string.pdf_reader_signature_revocation,
+                                revocationText(signature.revocation))).append('\n')
+                        .append(getString(R.string.pdf_reader_signature_timestamp,
+                                timestampText(signature.timestampLtv)));
+                if (signature.legacyWeakAlgorithm) {
+                    text.append('\n').append(getString(R.string.pdf_reader_signature_sha1_warning));
+                }
+            }
+            text.append("\n\n").append(getString(R.string.pdf_reader_signature_offline_note));
+            message = text.toString();
+        }
+        signatureDialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.pdf_reader_signature_results_title)
+                .setMessage(message)
+                .setPositiveButton(android.R.string.ok, null)
+                .create();
+        signatureDialog.show();
+    }
+
+    private String integrityText(PdfSignatureReport.Signature signature) {
+        switch (signature.integrity) {
+            case VALID:
+                return getString(signature.coverage == PdfSignatureReport.Coverage.WHOLE_DOCUMENT
+                        ? R.string.pdf_reader_signature_integrity_whole
+                        : R.string.pdf_reader_signature_integrity_revision);
+            case INVALID: return getString(R.string.pdf_reader_signature_integrity_invalid);
+            case UNSUPPORTED: return getString(R.string.pdf_reader_signature_unsupported);
+            default: return getString(R.string.pdf_reader_signature_indeterminate);
+        }
+    }
+
+    private String trustText(PdfSignatureReport.Trust value) {
+        switch (value) {
+            case TRUSTED: return getString(R.string.pdf_reader_signature_trusted);
+            case UNTRUSTED: return getString(R.string.pdf_reader_signature_untrusted);
+            default: return getString(R.string.pdf_reader_signature_indeterminate);
+        }
+    }
+
+    private String validityText(PdfSignatureReport.Signature signature) {
+        switch (signature.certificateValidity) {
+            case VALID: return getString(R.string.pdf_reader_signature_certificate_valid);
+            case EXPIRED: return signature.certificateNotAfter == null
+                    ? getString(R.string.pdf_reader_signature_certificate_expired)
+                    : getString(R.string.pdf_reader_signature_certificate_expired_on,
+                    signature.certificateNotAfter.toString().substring(0, 10));
+            case NOT_YET_VALID: return getString(R.string.pdf_reader_signature_certificate_future);
+            default: return getString(R.string.pdf_reader_signature_indeterminate);
+        }
+    }
+
+    private String revocationText(PdfSignatureReport.Revocation value) {
+        switch (value) {
+            case GOOD: return getString(R.string.pdf_reader_signature_revocation_good);
+            case REVOKED: return getString(R.string.pdf_reader_signature_revocation_revoked);
+            case OFFLINE_NOT_CHECKED: return getString(R.string.pdf_reader_signature_revocation_offline);
+            default: return getString(R.string.pdf_reader_signature_indeterminate);
+        }
+    }
+
+    private String timestampText(PdfSignatureReport.TimestampLtv value) {
+        switch (value) {
+            case VALID: return getString(R.string.pdf_reader_signature_timestamp_valid);
+            case INVALID: return getString(R.string.pdf_reader_signature_timestamp_invalid);
+            case ABSENT: return getString(R.string.pdf_reader_signature_timestamp_absent);
+            case PRESENT_NOT_VERIFIED: return getString(R.string.pdf_reader_signature_timestamp_unverified);
+            default: return getString(R.string.pdf_reader_signature_indeterminate);
+        }
+    }
+
+    private void dismissSignatureDialog() {
+        if (signatureDialog != null) {
+            signatureDialog.dismiss();
+            signatureDialog = null;
         }
     }
 
@@ -702,18 +936,24 @@ public final class PdfReaderActivity extends AppCompatActivity {
     public Object onRetainCustomNonConfigurationInstance() {
         // The staged snapshot outlives this instance, so the next one attaches a
         // fresh fragment to the same session instead of copying the file again.
-        return session == null ? null : new RetainedSession(session);
+        if (session == null) return null;
+        char[] password = documentPassword;
+        documentPassword = null;
+        return new RetainedSession(session, password);
     }
 
     @Override
     protected void onDestroy() {
         main.removeCallbacks(hideMessage);
         dismissTools();
+        dismissSignatureDialog();
+        dismissPasswordDialog();
         if (actions != null) actions.close();
         if (executor != null) executor.shutdownNow();
         // A retained session belongs to the next instance. Only a real teardown
         // closes it, and close is idempotent by contract.
         if (!isChangingConfigurations()) closeSession();
+        clearPasswords();
         session = null;
         pdfView = null;
         super.onDestroy();
@@ -727,6 +967,20 @@ public final class PdfReaderActivity extends AppCompatActivity {
         @Nullable
         private PdfReaderActivity host() {
             return getActivity() instanceof PdfReaderActivity ? (PdfReaderActivity) getActivity() : null;
+        }
+
+        @Override
+        public void onPasswordRequestedState$pdf_viewer_fragment() {
+            PdfReaderActivity host = host();
+            if (host != null) host.requestDocumentPassword(this);
+        }
+
+        void submitPassword(@NonNull String password) {
+            getDocumentViewModel().loadDocument$pdf_viewer_fragment(getDocumentUri(), password);
+        }
+
+        void cancelPassword() {
+            getDocumentViewModel().passwordDialogCancelled$pdf_viewer_fragment();
         }
 
         @Override

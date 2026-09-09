@@ -727,3 +727,24 @@ test('reflow encoding checks the edited result against the standard export face'
   assert.deepEqual(unencodableCharacters('Hello 世界', standard), ['世', '界']);
   assert.deepEqual(unencodableCharacters('Hello', standard), []);
 });
+
+test('fitting substitutions use the original run advance even with substituted browser metrics', () => {
+  const [block] = buildTextBlocks([
+    run(0, 'A home on the hill', 72, 100, 90),
+    run(1, 'Another ordinary line', 72, 116, 100),
+  ], 0);
+  const measure = (text: string) => text.length * 10;
+  const plan = planBlockEdit(block, block.text.replace('home', 'hone'), { measure, maxU: 172 });
+  assert.equal(plan.mode, 'direct');
+  if (plan.mode !== 'direct') return;
+  assert.deepEqual(plan.runEdits.map(edit => edit.itemIndex), [0]);
+  assert.equal(block.lines[0].v, 100);
+  assert.equal(block.lines[1].v, 116);
+});
+
+test('an overlong unbroken replacement wraps deterministically without adding hard newlines', () => {
+  const input = [[{ text: 'abcdefghij', fontKey: 'body' }]];
+  const wrapped = wrapStyledText(input, text => text.length * 6, 24);
+  assert.deepEqual(wrapped.map(styledLineText), ['abcd', 'efgh', 'ij']);
+  assert.equal(input[0][0].text, 'abcdefghij');
+});

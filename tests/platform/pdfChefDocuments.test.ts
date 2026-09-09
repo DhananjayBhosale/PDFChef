@@ -36,6 +36,8 @@ const nativeStub = (overrides: Partial<PdfChefDocumentsNativePlugin> = {}): PdfC
   pickDocuments: async () => ({ imports: [{ document: stored }] }),
   exportDocument: async () => ({ completed: true }),
   shareDocument: async () => ({ completed: true }),
+  signatureVerificationAvailable: async () => ({ available: true }),
+  presentSignatureReport: async () => ({ completed: true }),
   signalHaptic: async () => ({}),
   getApplicationMetadata: async () => ({ name: 'PDF Chef', version: '1.0', build: '1' }),
   addListener: async () => ({ remove: async () => undefined }),

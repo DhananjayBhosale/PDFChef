@@ -18,6 +18,7 @@ import {
   type ParagraphSaveEdit,
 } from '../../services/pdfDocument';
 import { getPageTextBlocks, resolvePageFonts, type PageTextBlocks } from '../../services/pdfBlockExtraction';
+import { layoutParagraphLines, measureParagraphText } from '../../services/pdfParagraphLayout';
 import type { PdfTextBlock } from '../../services/pdfTextBlocks';
 import {
   blockStyledSegments,
@@ -50,6 +51,7 @@ import {
   useKeyboardSafeFocus,
   type BlockColors,
   type BlockEditState,
+  type BlockTextPreview,
 } from './PdfTextBlockLayer';
 import { PdfFindReplace } from './PdfFindReplace';
 import { PdfParagraphInspector } from './PdfParagraphInspector';
@@ -218,6 +220,7 @@ const PDFPage: React.FC<{
   onFormValueChange: (fieldName: string, value: PdfFormFieldValue) => void;
   onPagePress: (position: { x: number; y: number }) => void;
   blockEdits: Record<string, BlockEditState>;
+  blockPreviews: Record<string, BlockTextPreview>;
   activeBlockId: string | null;
   coarsePointer: boolean;
   cachedText?: (pageIndex: number) => PageTextBlocks | undefined;
@@ -242,6 +245,7 @@ const PDFPage: React.FC<{
   onFormValueChange,
   onPagePress,
   blockEdits,
+  blockPreviews,
   activeBlockId,
   coarsePointer,
   cachedText,
@@ -376,6 +380,7 @@ const PDFPage: React.FC<{
   return (
     <div 
       ref={pageRef}
+      data-pdf-page={pageIndex}
       role="group"
       className="relative mx-auto shrink-0 bg-white shadow-lg"
       style={{ width: scaledW, height: scaledH }} // Helper wrapper for layout flow
@@ -404,6 +409,7 @@ const PDFPage: React.FC<{
           blocks={textBlocks}
           fonts={blockFonts}
           edits={blockEdits}
+          previews={blockPreviews}
           activeBlockId={activeBlockId}
           displayScale={1}
           enabled={!insertMode}
@@ -1014,7 +1020,12 @@ export const EditPDF: React.FC = () => {
   const compactViewport = useCompactEditorViewport();
   const coarsePointer = useCoarsePointer();
 
-  useKeyboardSafeFocus(pdfZoomViewportRef.current, activeBlockId);
+  const captureFocusAnchor = useKeyboardSafeFocus(pdfZoomViewportRef.current, activeBlockId, zoom, immersiveBottomBarRef.current);
+  const handlePdfPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'mouse') return;
+    const element = (event.target as HTMLElement).closest<HTMLElement>('[data-block-id]');
+    if (element) captureFocusAnchor(element, { x: event.clientX, y: event.clientY });
+  }, [captureFocusAnchor]);
 
   /**
    * Bring a paragraph up to a size that can actually be edited by thumb before handing it the
@@ -1028,6 +1039,7 @@ export const EditPDF: React.FC = () => {
     if (!blockId || !coarsePointer) return;
     const element = document.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(blockId)}"]`);
     if (!element) return;
+    captureFocusAnchor(element);
     // The page is drawn inside a CSS transform, so the computed font size is the unscaled one.
     // What the browser and the reader actually see is that size times the transform's scale.
     const layoutHeight = element.offsetHeight;
@@ -1036,7 +1048,7 @@ export const EditPDF: React.FC = () => {
     if (!Number.isFinite(renderedFontSize) || renderedFontSize <= 0) return;
     if (renderedFontSize >= MINIMUM_EDITING_FONT_PX) return;
     setExactZoom(Math.min(EDITOR_MAX_ZOOM, zoom * (MINIMUM_EDITING_FONT_PX / renderedFontSize)));
-  }, [coarsePointer, setExactZoom, zoom]);
+  }, [captureFocusAnchor, coarsePointer, setExactZoom, zoom]);
   const isNativeAndroidEditor = Boolean(file) && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
   const isCompactViewportEditor = Boolean(file) && compactViewport;
   const isImmersiveEditor = isNativeAndroidEditor || isCompactViewportEditor;
@@ -1836,7 +1848,7 @@ export const EditPDF: React.FC = () => {
         : planBlockEdit(block, edit.text, {
           measure: (text: string, fontSize: number, fontKey: string) =>
             measureTextWidth(text, runFont(fontKey).resolved, fontSize),
-          maxU: pageText?.pageWidth,
+          maxU: Math.min(pageText?.pageWidth ?? Infinity, block.left + block.measure),
           canDraw: (text, fontKey) => {
             const face = pageText?.fonts.get(fontKey);
             const coverage = face ? checkGlyphCoverage(face, text) : null;
@@ -1882,10 +1894,20 @@ export const EditPDF: React.FC = () => {
       const faceFor = (fontKey: string) => (restyled || !fontKey
         ? { descriptor, resolved }
         : runFont(fontKey));
+      const toFace = (fontKey: string): ParagraphFace => {
+        const face = faceFor(fontKey);
+        return {
+          key: fontKey || block.fontKey,
+          family: face.resolved.klass === 'serif' ? 'TimesRoman'
+            : face.resolved.klass === 'monospace' ? 'Courier' : 'Helvetica',
+          bold: edit.fontOverride?.bold ?? face.descriptor?.bold ?? face.resolved.cssWeight === '700',
+          italic: edit.fontOverride?.italic ?? face.descriptor?.italic ?? face.resolved.cssStyle === 'italic',
+        };
+      };
       const segments = edit.segments ?? edit.text.split('\n').map((line) => [{ text: line, fontKey: block.fontKey }]);
       const lines = wrapStyledText(
         segments,
-        (text, fontKey) => measureTextWidth(text, faceFor(fontKey).resolved, fontSize),
+        (text, fontKey) => measureParagraphText(text, toFace(fontKey), fontSize),
         block.measure,
       );
       const height = Math.max(block.height, lines.length * lineHeight + fontSize * 0.3);
@@ -1905,7 +1927,7 @@ export const EditPDF: React.FC = () => {
         plan: resolvedPlan,
         font,
         descriptor,
-        reflow: { resolved, faceFor, fontSize, lineHeight, lines, height, overrun: Math.max(0, height - available) },
+        reflow: { resolved, faceFor, toFace, fontSize, lineHeight, lines, height, overrun: Math.max(0, height - available) },
       };
     }).filter((entry): entry is NonNullable<typeof entry> => entry !== null)
       .filter((entry) => entry.plan.mode !== 'unchanged');
@@ -1955,6 +1977,49 @@ export const EditPDF: React.FC = () => {
     },
     [blocksVersion, buildParagraphPlans, settledBlockEdits],
   );
+
+  const blockPreviews = useMemo(() => {
+    const previews: Record<string, BlockTextPreview> = {};
+    paragraphPlans.forEach(({ edit, block, plan, reflow }) => {
+      if (plan.mode === 'blocked') return;
+      const width = Math.max(block.width, block.measure);
+      if (reflow) {
+        const lines = reflow.lines.map((line) => line.map((segment) => ({
+          text: segment.text, face: reflow.toFace(segment.fontKey),
+        })));
+        previews[block.id] = {
+          text: edit.text, reflow: true, width, height: reflow.height,
+          pieces: layoutParagraphLines(lines, {
+            width, fontSize: reflow.fontSize, lineHeight: reflow.lineHeight, align: block.align,
+          }).map((piece) => ({ ...piece, fontSize: reflow.fontSize, font: {
+            ...FALLBACK_RESOLVED_FONT,
+            cssFamily: piece.face.family === 'TimesRoman' ? '"Times New Roman", Times, serif'
+              : piece.face.family === 'Courier' ? '"Courier New", Courier, monospace' : 'Arial, Helvetica, sans-serif',
+            cssWeight: piece.face.bold ? '700' : '400', cssStyle: piece.face.italic ? 'italic' : 'normal',
+          } })),
+        };
+      } else if (plan.mode === 'direct') {
+        const replacements = new Map(plan.runEdits.map((run) => [run.itemIndex, run.replacementText]));
+        const u0 = Math.min(...block.lines.map((line) => line.u0));
+        const fonts = pageTextRef.current.get(block.pageIndex)?.fonts;
+        previews[block.id] = {
+          text: edit.text, reflow: false, width, height: block.height,
+          pieces: block.lines.flatMap((line, lineIndex) => line.runs.map((run) => {
+            const descriptor = fonts?.get(run.fontKey);
+            const font = descriptor ? resolveFont(descriptor, run.text) : FALLBACK_RESOLVED_FONT;
+            const text = replacements.get(run.itemIndex) ?? run.text;
+            return {
+              text, x: run.u0 - u0, y: line.v - block.lines[0].v + block.ascent,
+              width: Math.max(0, run.u1 - run.u0 + measureTextWidth(text, font, run.fontSize)
+                - measureTextWidth(run.text, font, run.fontSize)),
+              font, fontSize: run.fontSize, lineIndex,
+            };
+          })),
+        };
+      }
+    });
+    return previews;
+  }, [paragraphPlans]);
 
   const activePlan = activeBlockId
     ? paragraphPlans.find((entry) => entry.edit.blockId === activeBlockId) ?? null
@@ -2037,11 +2102,6 @@ export const EditPDF: React.FC = () => {
       const fontSize = reflow?.fontSize ?? edit.fontSize ?? block.fontSize;
       const lineHeight = reflow?.lineHeight ?? Math.max(fontSize, block.leading);
       const faceFor = reflow?.faceFor ?? (() => ({ descriptor, resolved }));
-      const wrapped = reflow?.lines ?? wrapStyledText(
-        edit.segments ?? edit.text.split('\n').map((line) => [{ text: line, fontKey: block.fontKey }]),
-        (text, fontKey) => measureTextWidth(text, faceFor(fontKey).resolved, fontSize),
-        block.measure,
-      );
       const toFace = (fontKey: string): ParagraphFace => {
         const face = faceFor(fontKey);
         return {
@@ -2058,6 +2118,11 @@ export const EditPDF: React.FC = () => {
           italic: edit.fontOverride?.italic ?? face.descriptor?.italic ?? face.resolved.cssStyle === 'italic',
         };
       };
+      const wrapped = reflow?.lines ?? wrapStyledText(
+        edit.segments ?? edit.text.split('\n').map((line) => [{ text: line, fontKey: block.fontKey }]),
+        (text, fontKey) => measureParagraphText(text, toFace(fontKey), fontSize),
+        block.measure,
+      );
       const lines = wrapped.map((line) => line.map((segment) => ({ text: segment.text, face: toFace(segment.fontKey) })));
       const height = reflow?.height ?? Math.max(block.height, lines.length * lineHeight + fontSize * 0.3);
 
@@ -2489,6 +2554,7 @@ export const EditPDF: React.FC = () => {
           <div className="overflow-hidden rounded-[var(--radius-panel)] bg-[var(--surface-sunken)]">
             <div
               ref={bindPdfZoomViewport}
+              onPointerDownCapture={handlePdfPointerDown}
               data-testid="pdf-zoom-viewport"
               data-pdf-zoom={zoom.toFixed(3)}
               className={`chef-pdf-zoom-viewport h-[calc(100dvh-20.5rem)] min-h-64 max-h-[48rem] overflow-x-auto overflow-y-auto p-2 sm:p-8 ${insertMode ? 'cursor-crosshair' : ''}`}
@@ -2509,6 +2575,7 @@ export const EditPDF: React.FC = () => {
                 onFormValueChange={updateFormValue}
                 onPagePress={handlePagePress}
                 blockEdits={blockEdits}
+                blockPreviews={blockPreviews}
                 activeBlockId={activeBlockId}
                 coarsePointer={coarsePointer}
                 cachedText={readCachedPageText}
@@ -2656,6 +2723,7 @@ export const EditPDF: React.FC = () => {
                 </div>
                 <div
                   ref={bindPdfZoomViewport}
+                  onPointerDownCapture={handlePdfPointerDown}
                   data-testid="pdf-zoom-viewport"
                   data-pdf-zoom={zoom.toFixed(3)}
                   className="chef-pdf-zoom-viewport h-[70dvh] min-h-96 max-h-[48rem] overflow-x-auto overflow-y-auto p-2 sm:p-8"
@@ -2670,6 +2738,7 @@ export const EditPDF: React.FC = () => {
                           onFormValueChange={updateFormValue}
                           onPagePress={() => setSelectedId(null)}
                           blockEdits={blockEdits}
+                blockPreviews={blockPreviews}
                           activeBlockId={activeBlockId}
                           coarsePointer={coarsePointer}
                           cachedText={readCachedPageText}

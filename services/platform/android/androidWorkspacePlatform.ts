@@ -14,11 +14,11 @@ import type {
   UndoReceipt,
   WorkspacePlatform,
 } from '../contracts.ts';
+import { Capacitor } from '@capacitor/core';
 import {
   ANDROID_PICKER_MIME_TYPES,
   ANDROID_DOCUMENT_MAXIMUM_CHUNK_BYTES,
   AndroidDocumentsClient,
-  isAndroidDocumentsAvailable,
   type AndroidOwnedDocument,
   type AndroidPendingDocument,
   type SupportedOwnedMime,
@@ -34,7 +34,6 @@ import {
 } from './androidPdfReader.ts';
 import {
   AndroidLegacyInspectorClient,
-  isAndroidLegacyInspectorAvailable,
 } from './androidLegacyInspector.ts';
 import {
   AndroidAppMetadataClient,
@@ -341,14 +340,15 @@ export const createAndroidWorkspacePlatform = (
   legacyOverride?: AndroidLegacyHistoryClient | null,
 ): WorkspacePlatform => {
   const platformWithDeviceFacts = withDeviceFacts(base, deviceFactClients(deviceFactsOverride));
-  // Without the registered plugin there is no durable store to speak for, so
-  // no durable capability is advertised. Independent public device facts may
-  // still be available, so they are not made contingent on document storage.
-  if (!documentsOverride && !isAndroidDocumentsAvailable()) return platformWithDeviceFacts;
+  // The Android branch is selected by the native shell before this adapter is
+  // created. Do not turn a transient Capacitor plugin-header discovery miss
+  // into a whole-session empty Recent list: construct the fixed registered
+  // proxies and let a genuine native failure reach the existing error state.
+  if (!documentsOverride && Capacitor.getPlatform() !== 'android') return platformWithDeviceFacts;
 
   const documents = documentsOverride ?? new AndroidDocumentsClient();
   const legacy = legacyOverride === undefined
-    ? (isAndroidLegacyInspectorAvailable() ? new AndroidLegacyInspectorClient() : null)
+    ? (Capacitor.getPlatform() === 'android' ? new AndroidLegacyInspectorClient() : null)
     : legacyOverride;
 
   const transientRefs = new Set<string>();

@@ -20,9 +20,9 @@ import {
  * On Android the same preference also exists in the older app's own settings
  * store, which is a second place the truth can live. The rules below are what
  * keeps the two from drifting apart: this store stays authoritative once it
- * holds a real choice, the older store is read once when it does not, and an
- * explicit choice is not called saved until the device says it was written. The
- * one marker below exists because a process can die between those two moments.
+ * holds a real choice, while the older store is read once when it does not.
+ * Explicit choices land here first so an unavailable compatibility bridge can
+ * never make the current app's Theme control snap back to System.
  */
 
 export type ThemePreference = 'system' | 'light' | 'dark';
@@ -59,10 +59,9 @@ const readTheme = (): ThemePreference => {
 /**
  * What the Appearance surface is allowed to say about a theme choice.
  *
- * `failed` is a choice the device would not take, so the last saved theme comes
- * back. `unsaved` is the narrower truth that the theme is in use but this app
- * could not finish storing it here, which a restart can undo. Neither is ever
- * called saved.
+ * `failed` is reserved for reconciling an interrupted write left by an older
+ * build. `unsaved` means the theme is in use but this app could not persist it,
+ * which a restart can undo.
  */
 export type ThemeSyncState = 'idle' | 'saving' | 'saved' | 'imported' | 'failed' | 'unsaved';
 
@@ -153,9 +152,8 @@ export interface ThemeBridgePorts {
    */
   persistence: Pick<AndroidThemePersistence, 'readLegacyTheme' | 'writeTheme'> | null;
   /**
-   * True on Android. Without it, an Android build that cannot reach its own
-   * settings store would be indistinguishable from a browser, and a choice that
-   * never reached the device would be reported as an ordinary local save.
+   * True on Android, where a successful local save gets brief confirmation even
+   * when the optional older-app compatibility bridge is absent.
    */
   isAndroid: boolean;
   storage: AppearanceStorage;
@@ -169,12 +167,11 @@ export interface ThemeBridgePorts {
 /**
  * The ordered bridge between this store and the device's own.
  *
- * A press paints immediately and is only called saved when the device confirms
- * it. Until then the marker records what was attempted and what to fall back
- * to, so a process that dies mid-write is reconciled on the next launch rather
- * than leaving the two stores quietly disagreeing. Under rapid presses only the
- * newest one may finish visibly; an older write that confirms first is still
- * real, so it becomes the fallback the newest one would roll back to.
+ * A press paints and persists in the current app immediately. Android then
+ * mirrors the choice to the older store on a serialized best-effort path; that
+ * compatibility write can never roll back the current app. Markers written by
+ * older builds are still understood during launch so existing users are not
+ * stranded mid-upgrade.
  */
 export const createThemeBridge = ({
   persistence,
@@ -185,7 +182,6 @@ export const createThemeBridge = ({
   isAlive,
 }: ThemeBridgePorts) => {
   let confirmed: ThemePreference = 'system';
-  let pendingTarget: ThemePreference | null = null;
   let sequence = 0;
 
   const readConfirmedLocal = (): ThemePreference | null => {
@@ -194,10 +190,8 @@ export const createThemeBridge = ({
   };
 
   /**
-   * Land a preference here: store it, and only then let go of the marker that
-   * was standing in for it. A store that refuses keeps the marker, so the next
-   * launch tries again instead of losing the choice, and the caller is told the
-   * landing was not clean so nothing claims a save that did not happen.
+   * Land a preference in the current app and optionally retire an older marker.
+   * A refused local write is never called saved.
    */
   const settle = (theme: ThemePreference, clearMarker: boolean): boolean => {
     if (!storage.write(THEME_KEY, theme)) return false;
@@ -228,7 +222,12 @@ export const createThemeBridge = ({
       if (marker) {
         // A write was in flight when this app last stopped, so the device is
         // asked what actually happened even though this store holds a theme.
-        const decision = reconcilePendingTheme(marker, await readLegacy());
+        const launchSequence = sequence;
+        const resolution = await readLegacy();
+        // A press made while the compatibility read was pending is newer than
+        // this launch decision. Its locally saved choice stays authoritative.
+        if (launchSequence !== sequence) return;
+        const decision = reconcilePendingTheme(marker, resolution);
         if (decision.action === 'retain') {
           if (!isAlive()) return;
           // Nothing readable to settle against. The last confirmed preference is
@@ -249,7 +248,12 @@ export const createThemeBridge = ({
       // A real choice already lives here, so the older store is not consulted.
       if (local) return;
 
-      const outcome = importLegacyTheme(await readLegacy());
+      const launchSequence = sequence;
+      const resolution = await readLegacy();
+      // Do not let a slow first-launch import overwrite a choice the person
+      // made while the native settings store was being read.
+      if (launchSequence !== sequence) return;
+      const outcome = importLegacyTheme(resolution);
       if (outcome.action === 'none') return;
       // Read only: the older store is never written during an import, so a
       // DYNAMIC theme there stays DYNAMIC there.
@@ -262,65 +266,40 @@ export const createThemeBridge = ({
     /** An explicit choice, including Reset's return to System. */
     async choose(next: ThemePreference): Promise<void> {
       apply(next);
+      // The shared app's store is the current authority. Persist the press before
+      // attempting the older app's compatibility write so a missing, stripped or
+      // unhealthy legacy bridge can never undo a valid choice in this app.
+      const localSaved = settle(next, false);
       if (!persistence) {
-        if (isAndroid) {
-          // An Android build that cannot reach its own settings store has not
-          // saved anything, and saying nothing would be the same as claiming it
-          // had. The choice goes back to the last confirmed one.
-          const fallback = confirmed;
-          if (!isAlive()) return;
-          apply(fallback);
-          report('failed');
-          return;
-        }
-        // Browser and iOS: this store is the only store, exactly as before.
-        if (!settle(next, false) && isAlive()) report('unsaved');
+        if (!isAlive()) return;
+        if (!localSaved) report('unsaved');
+        else if (isAndroid) report('saved');
         return;
       }
 
       const ticket = (sequence += 1);
-      pendingTarget = next;
-      // The marker is published before the device is asked for anything. It is
-      // the only record that could reconcile a process death between the device
-      // accepting a theme and this store learning of it, so without it the two
-      // stores could diverge with nothing left to notice. No marker, no write.
-      if (!storage.write(THEME_MARKER_KEY, serializeThemeMarker({ target: next, confirmed }))) {
-        pendingTarget = null;
-        const fallback = confirmed;
-        if (!isAlive()) return;
-        apply(fallback);
-        report('failed');
-        return;
-      }
-      report('saving');
+      // Old builds may have left a marker behind. The current local choice is
+      // already durable, so it is safe to retire that compatibility record.
+      storage.remove(THEME_MARKER_KEY);
+      if (isAlive()) report(localSaved ? 'saving' : 'unsaved');
 
       try {
         await persistence.writeTheme(next);
       } catch {
-        // The device's own words never reach the surface.
+        // Compatibility sync failed, but the current app's durable preference
+        // remains the truth and must stay selected.
         if (ticket !== sequence) return;
-        pendingTarget = null;
-        storage.remove(THEME_MARKER_KEY);
-        const fallback = confirmed;
         if (!isAlive()) return;
-        apply(fallback);
-        report('failed');
+        report(localSaved ? 'saved' : 'unsaved');
         return;
       }
 
       const latest = ticket === sequence;
-      const clean = settle(next, latest);
       if (!latest) {
-        // An older write landed while a newer one is still out. It is confirmed
-        // truth now, so it becomes what the newer one falls back to.
-        if (pendingTarget) {
-          storage.write(THEME_MARKER_KEY, serializeThemeMarker({ target: pendingTarget, confirmed }));
-        }
         return;
       }
-      pendingTarget = null;
       if (!isAlive()) return;
-      report(clean ? 'saved' : 'unsaved');
+      if (localSaved) report('saved');
     },
   };
 };
@@ -359,6 +338,16 @@ const readTextScale = (): TextScale => {
   if (typeof window === 'undefined') return 'default';
   const saved = window.localStorage.getItem(TEXT_SCALE_KEY);
   return isTextScale(saved) ? saved : 'default';
+};
+
+/** Paint and store a readable-text choice in the same event as the press. */
+export const applyTextScaleImmediately = (
+  next: TextScale,
+  root: Pick<HTMLElement, 'dataset'>,
+  storage: Pick<AppearanceStorage, 'write'>,
+): boolean => {
+  root.dataset.textScale = next;
+  return storage.write(TEXT_SCALE_KEY, next);
 };
 
 const prefersDark = () =>
@@ -468,8 +457,8 @@ export const AppearanceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   );
 
   const setTextScale = useCallback((next: TextScale) => {
+    applyTextScaleImmediately(next, document.documentElement, browserStorage);
     setTextScaleState(next);
-    window.localStorage.setItem(TEXT_SCALE_KEY, next);
   }, []);
 
   // Reset is an explicit choice of System, so it takes the same path a press

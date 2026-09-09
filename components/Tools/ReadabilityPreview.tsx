@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import React, { useEffect, useId, useState, useRef, useCallback, useMemo } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import {
   AlertTriangle,
   Eye,
@@ -41,12 +41,67 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
   const [isPanning, setIsPanning] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const wheelSurfaceRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const [bounds, setBounds] = useState({ w: 0, h: 0, cw: 0, ch: 0 });
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
   const dragStartRef = useRef<{ clientX: number; clientY: number; panX: number; panY: number } | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const selector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const focusables = (): HTMLElement[] => {
+      const panel = panelRef.current;
+      if (!panel) return [];
+      const items: HTMLElement[] = [];
+      panel.querySelectorAll(selector).forEach((item) => {
+        if (item instanceof HTMLElement && item.getClientRects().length > 0) items.push(item);
+      });
+      return items;
+    };
+    (focusables()[0] || panelRef.current)?.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const items = focusables();
+      if (items.length === 0) {
+        event.preventDefault();
+        panelRef.current?.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (!panelRef.current?.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    const { overflow } = document.body.style;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = overflow;
+      if (previous?.isConnected) previous.focus();
+    };
+  }, [onClose]);
 
   const previewFiles = useMemo(() => {
     return files?.length ? files : [{ file, name: file.name }];
@@ -182,8 +237,8 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
   );
 
   const handleWheelZoom = useCallback(
-    (event: React.WheelEvent<HTMLDivElement>) => {
-      if (!images) return;
+    (event: WheelEvent) => {
+      if (!images || event.deltaY === 0) return;
 
       event.preventDefault();
       const delta = event.deltaY < 0 ? 0.2 : -0.2;
@@ -191,6 +246,13 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
     },
     [images, setZoomByDelta],
   );
+
+  useEffect(() => {
+    const surface = wheelSurfaceRef.current;
+    if (!surface) return undefined;
+    surface.addEventListener('wheel', handleWheelZoom, { passive: false });
+    return () => surface.removeEventListener('wheel', handleWheelZoom);
+  }, [handleWheelZoom]);
 
   const startPan = (event: React.PointerEvent<HTMLDivElement>) => {
     if (zoom <= 1) return;
@@ -285,19 +347,24 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
 
   return (
     <Portal>
-    <div className="chef-safe-x fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div className="chef-safe-x fixed inset-0 z-[100] flex items-center justify-center px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-[calc(1rem+env(safe-area-inset-top))]">
       <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={onClose} />
 
       <motion.div
-        initial={{ scale: 0.98, opacity: 0 }}
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        initial={reduceMotion ? false : { scale: 0.98, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="relative z-10 flex h-[95vh] w-full max-w-[95vw] flex-col overflow-hidden rounded-2xl border border-paper-600 bg-paper-950 shadow-2xl"
+        className="relative z-10 flex h-[95vh] h-[95dvh] max-h-full w-full max-w-[95vw] flex-col overflow-hidden rounded-2xl border border-paper-600 bg-paper-950 shadow-2xl"
       >
         <div className="z-20 flex flex-col gap-3 border-b border-paper-600 bg-paper-950 px-4 py-3 lg:flex-row lg:items-center lg:justify-between lg:px-5 lg:py-4">
           <div className="min-w-0">
             {/* The file's own name is the title. "Readability check" said less
                 than the two panes below it already show. */}
-            <h3 className="flex items-center gap-2 truncate text-base font-bold text-paper-25 lg:max-w-[48vw]">
+            <h3 id={titleId} className="flex items-center gap-2 truncate text-base font-bold text-paper-25 lg:max-w-[48vw]">
               <Eye aria-hidden size={18} className="shrink-0 text-ink-400" />
               <span className="truncate">{activeFile.name}</span>
             </h3>
@@ -307,9 +374,10 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
             {isBatchPreview && (
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => requestFile(activeFileIndex - 1)}
                   disabled={loading || activeFileIndex <= 0}
-                  className="rounded-md p-2 text-paper-300 transition hover:bg-paper-800 disabled:opacity-55"
+                  className="chef-pressable chef-target grid place-items-center rounded-md text-paper-300 transition hover:bg-paper-800 disabled:opacity-55"
                   aria-label="Previous file"
                 >
                   <ChevronLeft size={18} />
@@ -318,9 +386,10 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
                   File {activeFileIndex + 1} / {previewFiles.length}
                 </div>
                 <button
+                  type="button"
                   onClick={() => requestFile(activeFileIndex + 1)}
                   disabled={loading || activeFileIndex >= previewFiles.length - 1}
-                  className="rounded-md p-2 text-paper-300 transition hover:bg-paper-800 disabled:opacity-55"
+                  className="chef-pressable chef-target grid place-items-center rounded-md text-paper-300 transition hover:bg-paper-800 disabled:opacity-55"
                   aria-label="Next file"
                 >
                   <ChevronRight size={18} />
@@ -330,9 +399,10 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
 
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => requestPage(pageIndex - 1)}
                 disabled={loading || pageIndex <= 0}
-                className="rounded-md p-2 text-paper-300 transition hover:bg-paper-800 disabled:opacity-55"
+                className="chef-pressable chef-target grid place-items-center rounded-md text-paper-300 transition hover:bg-paper-800 disabled:opacity-55"
                 aria-label="Previous page"
               >
                 <ChevronLeft size={18} />
@@ -341,9 +411,10 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
                 Page {pageIndex + 1} / {pageCount}
               </div>
               <button
+                type="button"
                 onClick={() => requestPage(pageIndex + 1)}
                 disabled={loading || pageIndex >= pageCount - 1}
-                className="rounded-md p-2 text-paper-300 transition hover:bg-paper-800 disabled:opacity-55"
+                className="chef-pressable chef-target grid place-items-center rounded-md text-paper-300 transition hover:bg-paper-800 disabled:opacity-55"
                 aria-label="Next page"
               >
                 <ChevronRight size={18} />
@@ -352,48 +423,50 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
 
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => setZoomByDelta(-0.25)}
                 disabled={zoom <= 1}
-                className="rounded-md p-2 text-paper-300 transition hover:bg-paper-800 disabled:opacity-55"
+                className="chef-pressable chef-target grid place-items-center rounded-md text-paper-300 transition hover:bg-paper-800 disabled:opacity-55"
                 aria-label="Zoom out"
               >
                 <Minus size={16} />
               </button>
               <span className="tabular w-12 text-center text-sm font-bold text-paper-25">{Math.round(zoom * 100)}%</span>
               <button
+                type="button"
                 onClick={() => setZoomByDelta(0.25)}
                 disabled={zoom >= 10}
-                className="rounded-md p-2 text-paper-300 transition hover:bg-paper-800 disabled:opacity-55"
+                className="chef-pressable chef-target grid place-items-center rounded-md text-paper-300 transition hover:bg-paper-800 disabled:opacity-55"
                 aria-label="Zoom in"
               >
                 <Plus size={16} />
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setZoomTo(1);
                   setPan({ x: 0, y: 0 });
                 }}
-                className="rounded-md p-2 text-paper-300 transition hover:bg-paper-800"
+                className="chef-pressable chef-target grid place-items-center rounded-md text-paper-300 transition hover:bg-paper-800"
                 aria-label="Reset zoom"
               >
                 <RotateCcw size={16} />
               </button>
             </div>
 
-            <button type="button" aria-label="Close readability preview" onClick={onClose} className="ml-auto chef-target grid place-items-center rounded-lg p-2 text-paper-400 transition hover:bg-paper-800 hover:text-paper-25 lg:ml-0">
+            <button type="button" aria-label="Close readability preview" onClick={onClose} className="chef-pressable chef-target ml-auto grid place-items-center rounded-lg text-paper-400 transition hover:bg-paper-800 hover:text-paper-25 lg:ml-0">
               <X size={22} />
             </button>
           </div>
         </div>
 
-        <div className="relative flex flex-1 flex-col divide-y divide-paper-600 overflow-hidden bg-black/60 md:flex-row md:divide-x md:divide-y-0">
+        <div ref={wheelSurfaceRef} className="relative flex flex-1 flex-col divide-y divide-paper-600 overflow-hidden bg-black/60 md:flex-row md:divide-x md:divide-y-0">
           <div
             ref={containerRef}
             className={`relative flex flex-1 items-center justify-center overflow-hidden bg-paper-900/40 ${
               zoom > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
             }`}
             onPointerDown={startPan}
-            onWheel={handleWheelZoom}
             style={{ touchAction: zoom > 1 ? 'none' : 'auto' }}
           >
             {images ? (
@@ -410,7 +483,7 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
                   style={{
                     transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
                     transformOrigin: 'center center',
-                    transition: isPanning ? 'none' : 'transform 160ms ease-out',
+                    transition: isPanning || reduceMotion ? 'none' : 'transform 160ms ease-out',
                   }}
                   draggable={false}
                 />
@@ -425,7 +498,6 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
               zoom > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
             }`}
             onPointerDown={startPan}
-            onWheel={handleWheelZoom}
             style={{ touchAction: zoom > 1 ? 'none' : 'auto' }}
           >
             {images ? (
@@ -449,7 +521,7 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
                   style={{
                     transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
                     transformOrigin: 'center center',
-                    transition: isPanning ? 'none' : 'transform 160ms ease-out',
+                    transition: isPanning || reduceMotion ? 'none' : 'transform 160ms ease-out',
                   }}
                   draggable={false}
                 />

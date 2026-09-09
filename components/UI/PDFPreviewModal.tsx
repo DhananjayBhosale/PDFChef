@@ -1,9 +1,9 @@
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useId, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Loader2, ArrowLeft, ArrowRight, Move } from 'lucide-react';
-import { loadPDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
-import { motion } from 'framer-motion';
+import { loadDisposablePDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
+import { motion, useReducedMotion } from 'framer-motion';
 import { ZoomControls } from './ZoomControls';
 import { useZoom } from '../../hooks/useZoom';
 
@@ -26,6 +26,56 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
   const [isPanning, setIsPanning] = useState(false);
   const imageUrlRef = useRef<string | null>(null);
   const pdfDocRef = useRef<any | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const reduceMotion = useReducedMotion();
+  const renderScale = zoom >= 2 ? 2.6 : 2.0;
+
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const selector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const focusables = (): HTMLElement[] => {
+      const panel = panelRef.current;
+      if (!panel) return [];
+      const items: HTMLElement[] = [];
+      panel.querySelectorAll(selector).forEach((item) => {
+        if (item instanceof HTMLElement && item.getClientRects().length > 0) items.push(item);
+      });
+      return items;
+    };
+    (focusables()[0] || panelRef.current)?.focus();
+
+    const handleTab = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+      const items = focusables();
+      if (items.length === 0) {
+        event.preventDefault();
+        panelRef.current?.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (!panelRef.current?.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    const { overflow } = document.body.style;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', handleTab);
+    return () => {
+      document.removeEventListener('keydown', handleTab);
+      document.body.style.overflow = overflow;
+      if (previous?.isConnected) previous.focus();
+    };
+  }, []);
 
   // Close on ESC
   useEffect(() => {
@@ -54,8 +104,11 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
     (async () => {
       try {
         setError(null);
-        const doc = await loadPDFDocument(file);
-        if (!active) return;
+        const doc = await loadDisposablePDFDocument(file);
+        if (!active) {
+          if (doc?.destroy) void doc.destroy();
+          return;
+        }
         pdfDocRef.current = doc;
         setPdfDoc(doc);
         setTotalPages(doc?.numPages ?? 0);
@@ -72,7 +125,6 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
         void pdfDocRef.current.destroy();
       }
       pdfDocRef.current = null;
-      setPdfDoc(null);
     };
   }, [file]);
 
@@ -84,7 +136,6 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
       try {
         setLoading(true);
         setError(null);
-        const renderScale = zoom >= 2 ? 2.6 : 2.0;
         const { objectUrl } = await renderPageAsImage(pdfDoc, currentPageIndex, {
           scale: renderScale,
           format: 'image/jpeg',
@@ -111,7 +162,7 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
     return () => {
       active = false;
     };
-  }, [pdfDoc, currentPageIndex, zoom]);
+  }, [pdfDoc, currentPageIndex, renderScale]);
 
   useEffect(() => {
     setPan({ x: 0, y: 0 });
@@ -150,20 +201,25 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
 
   return createPortal(
     <motion.div 
-      initial={{ opacity: 0 }}
+      initial={reduceMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="chef-safe-x fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-2 backdrop-blur-sm sm:p-4"
+      className="chef-safe-x fixed inset-0 z-[100] flex items-center justify-center bg-black/80 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-[calc(0.5rem+env(safe-area-inset-top))] backdrop-blur-sm sm:px-4 sm:pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pt-[calc(1rem+env(safe-area-inset-top))]"
       onClick={onClose}
     >
       <div 
-        className="relative flex h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-paper-500 bg-slate-900 shadow-2xl sm:h-[90vh]"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="relative flex h-[92dvh] max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-paper-500 bg-slate-900 shadow-2xl sm:h-[90vh]"
         onClick={(e) => e.stopPropagation()} // Prevent closing when clicking content
       >
         {/* Header */}
         <div className="z-10 flex flex-col gap-2 border-b border-paper-600 bg-slate-900 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="min-w-0 text-base font-bold text-white sm:text-lg">
+            <h3 id={titleId} className="min-w-0 text-base font-bold text-white sm:text-lg">
               {pageLabel} • Page {currentPageIndex + 1}{totalPages > 0 ? ` of ${totalPages}` : ''}
             </h3>
             <button
@@ -222,7 +278,7 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
               style={{ 
                 transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
                 transformOrigin: 'center',
-                transition: 'transform 0.2s ease-out'
+                transition: reduceMotion ? 'none' : 'transform 0.2s ease-out'
               }}
               className="flex max-h-full max-w-full items-center justify-center shadow-2xl"
             >

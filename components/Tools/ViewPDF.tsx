@@ -8,13 +8,14 @@ import {
   Loader2,
   Search,
   Share2,
+  ShieldCheck,
   X,
 } from 'lucide-react';
 import { useImmersiveWorkspace } from '../Layout/AppShell';
 import { FileUpload } from '../UI/FileUpload';
 import { ZoomControls } from '../UI/ZoomControls';
 import { StatusToast } from '../UI/StatusToast';
-import { loadPDFDocument, loadProtectedPDFDocument } from '../../services/pdfBrowser';
+import { loadDisposablePDFDocument, loadProtectedPDFDocument } from '../../services/pdfBrowser';
 import { downloadBlob } from '../../services/pdfShared';
 import { useOpenedPdf } from '../../hooks/useOpenedPdf';
 import { useZoom } from '../../hooks/useZoom';
@@ -25,6 +26,7 @@ import type { ToolCardData } from './toolCatalog';
 import { ToolIdentity } from './ToolIdentity';
 import { ToolHeader, ToolShell } from '../UI/ToolLayout';
 import { Portal } from '../UI/Primitives';
+import { useWorkspacePlatform } from '../../hooks/useWorkspaceRuntime';
 
 const VIEWER_TOOL_PATHS = [
   '/compress',
@@ -70,7 +72,7 @@ const ViewerPage: React.FC<{
 
   useEffect(() => {
     const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) setIsVisible(true);
+      setIsVisible(entry.isIntersecting);
     }, { rootMargin: '600px' });
 
     if (containerRef.current) observer.observe(containerRef.current);
@@ -96,26 +98,39 @@ const ViewerPage: React.FC<{
     if (!isVisible || !pdfDoc || !canvasRef.current) return;
 
     let cancelled = false;
+    let renderTask: { promise: Promise<unknown>; cancel?: () => void } | null = null;
+    const canvas = canvasRef.current;
     const render = async () => {
-      const page = await pdfDoc.getPage(pageIndex + 1);
-      const viewport = page.getViewport({ scale: 2 });
-      const canvas = canvasRef.current;
-      if (!canvas || cancelled) return;
+      try {
+        const page = await pdfDoc.getPage(pageIndex + 1);
+        const viewport = page.getViewport({ scale: 2 });
+        if (!canvas || cancelled) return;
 
-      const context = canvas.getContext('2d');
-      if (!context) return;
+        const context = canvas.getContext('2d');
+        if (!context) return;
 
-      setDimensions({ width: viewport.width / 2, height: viewport.height / 2 });
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      context.fillStyle = '#ffffff';
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      await page.render({ canvasContext: context, viewport }).promise;
+        setDimensions({ width: viewport.width / 2, height: viewport.height / 2 });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        renderTask = page.render({ canvasContext: context, viewport });
+        await renderTask.promise;
+      } catch (error: any) {
+        if (!cancelled && error?.name !== 'RenderingCancelledException') {
+          console.error(error);
+        }
+      }
     };
 
     void render();
     return () => {
       cancelled = true;
+      renderTask?.cancel?.();
+      if (canvas) {
+        canvas.width = 0;
+        canvas.height = 0;
+      }
     };
   }, [isVisible, pageIndex, pdfDoc]);
 
@@ -143,6 +158,8 @@ const ViewerPage: React.FC<{
       >
         <canvas
           ref={canvasRef}
+          width={0}
+          height={0}
           className="block origin-top-left"
           style={{
             width: dimensions.width,
@@ -157,6 +174,7 @@ const ViewerPage: React.FC<{
 };
 
 export const ViewPDF: React.FC = () => {
+  const platform = useWorkspacePlatform();
   const {
     openedPdf,
     setOpenedPdfFile,
@@ -164,6 +182,7 @@ export const ViewPDF: React.FC = () => {
     clearOpenedPdf,
   } = useOpenedPdf();
   const [pdfDoc, setPdfDoc] = useState<any>(null);
+  const pdfDocRef = useRef<any>(null);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const [toolsOpen, setToolsOpen] = useState(false);
   const toolsCloseRef = useRef<HTMLButtonElement>(null);
@@ -176,10 +195,29 @@ export const ViewPDF: React.FC = () => {
   const [searchIndex, setSearchIndex] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [openAttempt, setOpenAttempt] = useState(0);
+  const [signatureReportOpening, setSignatureReportOpening] = useState(false);
+  const passwordAttemptRef = useRef(0);
+  const activeOpenedPdfIdRef = useRef(openedPdf?.id);
+  activeOpenedPdfIdRef.current = openedPdf?.id;
   const { zoom, zoomIn, zoomOut, resetZoom, setExactZoom } = useZoom(1, 0.5, 2, 0.25);
   const setPdfZoomViewport = usePdfPinchZoom({ zoom, setZoom: setExactZoom });
   const navigate = useNavigate();
   const handleActivePage = useCallback((page: number) => setCurrentPage(page), []);
+  const replacePdfDoc = useCallback((nextDocument: any | null) => {
+    const previousDocument = pdfDocRef.current;
+    pdfDocRef.current = nextDocument;
+    setPdfDoc(nextDocument);
+    if (previousDocument && previousDocument !== nextDocument && previousDocument.destroy) {
+      void previousDocument.destroy();
+    }
+  }, []);
+
+  useEffect(() => () => {
+    passwordAttemptRef.current += 1;
+    const currentDocument = pdfDocRef.current;
+    pdfDocRef.current = null;
+    if (currentDocument?.destroy) void currentDocument.destroy();
+  }, []);
 
   // The reader takes the whole screen, but only once there is something to
   // read. Before that this is an ordinary tool screen with the shell's own
@@ -187,8 +225,9 @@ export const ViewPDF: React.FC = () => {
   useImmersiveWorkspace(Boolean(openedPdf));
 
   useEffect(() => {
+    passwordAttemptRef.current += 1;
+    replacePdfDoc(null);
     if (!openedPdf) {
-      setPdfDoc(null);
       return;
     }
 
@@ -202,10 +241,13 @@ export const ViewPDF: React.FC = () => {
     setSearchResults([]);
     setCurrentPage(1);
 
-    loadPDFDocument(openedPdf.file)
+    loadDisposablePDFDocument(openedPdf.file)
       .then((doc) => {
-        if (cancelled) return;
-        setPdfDoc(doc);
+        if (cancelled) {
+          if (doc?.destroy) void doc.destroy();
+          return;
+        }
+        replacePdfDoc(doc);
         setStatus({ isProcessing: false, progress: 100, message: '' });
       })
       .catch((error) => {
@@ -219,7 +261,7 @@ export const ViewPDF: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [openAttempt, openedPdf]);
+  }, [openAttempt, openedPdf, replacePdfDoc]);
 
   // The tools sheet closes on Escape and puts focus on its Close control, the
   // same contract every other modal in the product follows.
@@ -268,17 +310,53 @@ export const ViewPDF: React.FC = () => {
     }
   };
 
+  const signatureVerification = platform.pdfSignatureVerification;
+  const canVerifySignatures = Boolean(
+    openedPdf && signatureVerification?.isEligible(openedPdf.file),
+  );
+
+  const openSignatureReport = async () => {
+    if (!openedPdf || !signatureVerification || !canVerifySignatures || signatureReportOpening) return;
+    setSignatureReportOpening(true);
+    try {
+      await signatureVerification.present(openedPdf.file);
+    } catch {
+      setStatus({
+        isProcessing: false,
+        progress: 0,
+        message: '',
+        error: 'Signature details could not be opened for this PDF.',
+      });
+    } finally {
+      setSignatureReportOpening(false);
+    }
+  };
+
   const openWithPassword = async () => {
     if (!openedPdf || !password) return;
+    const openedPdfId = openedPdf.id;
+    const passwordAttempt = passwordAttemptRef.current + 1;
+    passwordAttemptRef.current = passwordAttempt;
     setStatus({ isProcessing: true, progress: 20, message: 'Checking password…' });
     try {
       const doc = await loadProtectedPDFDocument(openedPdf.file, password);
-      setPdfDoc(doc);
+      if (
+        passwordAttemptRef.current !== passwordAttempt ||
+        activeOpenedPdfIdRef.current !== openedPdfId
+      ) {
+        if (doc?.destroy) void doc.destroy();
+        return;
+      }
+      replacePdfDoc(doc);
       setNeedsPassword(false);
       setVerifiedPassword(password);
       setPassword('');
       setStatus({ isProcessing: false, progress: 100, message: 'PDF opened.' });
     } catch {
+      if (
+        passwordAttemptRef.current !== passwordAttempt ||
+        activeOpenedPdfIdRef.current !== openedPdfId
+      ) return;
       setStatus({ isProcessing: false, progress: 0, message: '', error: 'That password did not open this PDF.' });
     }
   };
@@ -434,6 +512,18 @@ export const ViewPDF: React.FC = () => {
                 {searchOpen ? <X size={18} /> : <Search size={18} />}
               </button>
             )}
+            {canVerifySignatures && (
+              <button
+                type="button"
+                onClick={() => void openSignatureReport()}
+                disabled={signatureReportOpening}
+                className="chef-pressable chef-target inline-flex min-h-touch items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-3 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-sunken)] disabled:opacity-55"
+                aria-label="Verify PDF signatures"
+              >
+                <ShieldCheck aria-hidden size={18} />
+                <span>Signatures</span>
+              </button>
+            )}
             <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} />
             {canShare && (
               <button
@@ -491,7 +581,7 @@ export const ViewPDF: React.FC = () => {
             <h2 className="mt-2 text-xl font-bold">Password required</h2>
             {/* Kept: whitespace in a PDF password is significant. */}
             <p className="type-footnote mt-1 text-[var(--text-secondary)]">Spaces are preserved exactly.</p>
-            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void openWithPassword(); }} autoFocus className="chef-field mt-3 w-full px-3.5" />
+            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void openWithPassword(); }} aria-label="PDF password" autoFocus className="chef-field mt-3 w-full px-3.5" />
             <button type="button" onClick={() => void openWithPassword()} disabled={password === '' || status.isProcessing} className="chef-target chef-pressable mt-3 w-full rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] disabled:opacity-55">Open PDF</button>
             <button type="button" onClick={clearOpenedPdf} className="chef-target chef-pressable mt-2 w-full rounded-[var(--radius-control)] px-4 font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)]">Close</button>
           </div>

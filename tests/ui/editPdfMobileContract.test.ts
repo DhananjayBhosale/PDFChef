@@ -107,8 +107,8 @@ test('the browser keeps ownership of an editable paragraph while it is being typ
   assert.match(blockLayer, /if \(written\.current && committedText\.current === text\) return/);
   const editable = blockLayer.slice(blockLayer.indexOf('data-testid="pdf-text-block"'));
   assert.doesNotMatch(editable.slice(0, editable.indexOf('</div>')), /\{lines\.map\(/);
-  // Spacing corrections are cleared in place for the same reason.
-  assert.match(blockLayer, /span\.style\.wordSpacing = ''/);
+  // Typing must retain original run spacing and leave the native selection intact.
+  assert.doesNotMatch(blockLayer, /span\.style\.(?:wordSpacing|letterSpacing) = ''/);
 });
 
 test('each run keeps the face the PDF drew it in, in the overlay and on export', () => {
@@ -172,7 +172,7 @@ test('what the reader placed on the page stays above the paragraph overlay', () 
   // an IRS 1040 carries nearly two hundred fields — a label's paragraph box covers its input.
   assert.match(blockLayer, /const PARAGRAPH_ACTIVE_LAYER = 150/);
   // Only a paragraph that actually grew steps aside; a replace-all keeps its shape and its place.
-  assert.match(blockLayer, /const hasOutgrownItsBox = isDirty && text\.split\('\\n'\)\.length > block\.lines\.length/);
+  assert.match(blockLayer, /const hasOutgrownItsBox = isDirty && \(text\.split\('\\n'\)\.length > block\.lines\.length/);
   assert.match(blockLayer, /PARAGRAPH_LAYER_BASE \+ Math\.round\(\(index \/ last\) \* PARAGRAPH_LAYER_SPAN\)/);
   assert.match(editor, /\/\/ Above the transparent paragraph overlay[\s\S]*zIndex: 400/);
   assert.match(editor, /absolute z-\[300\]/);
@@ -180,9 +180,11 @@ test('what the reader placed on the page stays above the paragraph overlay', () 
 });
 
 test('an untouched paragraph shows the canvas through it and only paints out once edited', () => {
-  assert.match(blockLayer, /color: isDirty \? inkColor : 'transparent'/);
+  assert.match(blockLayer, /color: isDirty && !showPreview \? inkColor : 'transparent'/);
   assert.match(blockLayer, /caretColor: inkColor/);
-  assert.match(blockLayer, /whiteSpace: isDirty \? 'pre-wrap' : 'pre'/);
+  assert.match(blockLayer, /whiteSpace: 'pre'/);
+  assert.match(blockLayer, /overflowWrap: 'normal'/);
+  assert.match(blockLayer, /wordBreak: 'normal'/);
   assert.match(blockLayer, /data-testid="pdf-block-patch"/);
   assert.match(editor, /getPageTextBackgroundPatch/);
   assert.match(editor, /samplePageBlockColors/);
@@ -208,7 +210,7 @@ test('the editing overlay leaves scrolling, pinch zoom and native selection to t
   assert.match(editor, /const EDITOR_MAX_ZOOM = 4/);
   assert.match(editor, /setExactZoom\(Math\.min\(EDITOR_MAX_ZOOM, zoom \* \(MINIMUM_EDITING_FONT_PX \/ renderedFontSize\)\)\)/);
   assert.match(blockLayer, /window\.visualViewport/);
-  assert.match(editor, /useKeyboardSafeFocus\(pdfZoomViewportRef\.current, activeBlockId\)/);
+  assert.match(editor, /useKeyboardSafeFocus\(pdfZoomViewportRef\.current, activeBlockId, zoom, immersiveBottomBarRef\.current\)/);
 });
 
 test('a paragraph edit states whether it rewrites the PDF or redraws the paragraph', () => {
@@ -299,7 +301,8 @@ test('an edit the document cannot draw is refused while it is being typed', () =
   assert.match(editor, /describeCharacters\(/);
   // Typography with a plain equivalent is written as that, rather than refused.
   assert.match(read('services/pdfFontResolution.ts'), /export const substituteForStandardFont/);
-  assert.match(read('services/pdfDocument.ts'), /substituteForStandardFont\(rawSegment\)\.text/);
+  assert.match(read('services/pdfDocument.ts'), /layoutParagraphLines\(edit\.lines/);
+  assert.match(read('services/pdfParagraphLayout.ts'), /exportText\(piece\.text\)/);
   // The refusal is an answer the editor chose, so it is not also logged as a fault.
   assert.match(editor, /const chosen = error instanceof Error && error\.name === 'PdfChefRefusal'/);
   assert.match(editor, /if \(!chosen && message !== PDF_EDIT_PERMISSION_MESSAGE\)/);

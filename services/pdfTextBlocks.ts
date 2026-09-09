@@ -587,6 +587,68 @@ const dominantFontKey = (lines: PdfTextLine[]) => {
   return best;
 };
 
+/**
+ * Some PDFs draw list markers as paths, leaving only a narrow column of short labels in the text
+ * layer. A repeated run of those rows is stronger evidence than any single short line (which may
+ * simply end a paragraph). Require contrasting nearby geometry as well, so narrow prose and short
+ * final lines do not become lists merely because of their word count.
+ */
+const shortRowParagraphBoundaries = (lines: PdfTextLine[]): Set<PdfTextLine> => {
+  const boundaries = new Set<PdfTextLine>();
+  const isShortRow = (line: PdfTextLine) => (
+    line.text.trim().split(/\s+/).length <= 2
+    && line.u1 - line.u0 <= line.fontSize * 3
+  );
+
+  let start = 0;
+  while (start < lines.length) {
+    const first = lines[start];
+    if (!isShortRow(first)) {
+      start += 1;
+      continue;
+    }
+    const fontKey = dominantFontKey([first]);
+    let end = start + 1;
+    while (end < lines.length) {
+      const next = lines[end];
+      if (
+        !isShortRow(next)
+        || Math.abs(next.u0 - first.u0) > first.fontSize * 0.35
+        || dominantFontKey([next]) !== fontKey
+        || !linesShareParagraph(lines[end - 1], next, end > start + 1 ? lines[start + 1].v - first.v : 0)
+      ) break;
+      end += 1;
+    }
+
+    if (end - start >= 3) {
+      const rowWidth = Math.max(...lines.slice(start, end).map(line => line.u1 - line.u0));
+      const widerNeighbor = (neighbor: PdfTextLine | undefined, row: PdfTextLine) => (
+        neighbor
+        && neighbor.u1 - neighbor.u0 >= rowWidth * 2.5
+        && Math.abs(neighbor.v - row.v) <= PARA_LEADING_MAX * Math.max(row.fontSize, neighbor.fontSize)
+      );
+      const before = lines[start - 1];
+      const after = lines[end];
+      const wideBefore = widerNeighbor(before, first);
+      const wideAfter = widerNeighbor(after, lines[end - 1]);
+      const changesColumnOrFont = (neighbor: PdfTextLine) => (
+        Math.abs(neighbor.u0 - first.u0) > first.fontSize * 0.5
+        || dominantFontKey([neighbor]) !== fontKey
+      );
+      if (
+        (wideBefore && wideAfter)
+        || (wideBefore && changesColumnOrFont(before))
+        || (wideAfter && changesColumnOrFont(after))
+      ) {
+        // Start each label independently, and keep the following prose out of the last label.
+        lines.slice(start, Math.min(end + 1, lines.length)).forEach(line => boundaries.add(line));
+      }
+    }
+    start = end;
+  }
+  return boundaries;
+};
+
 const createBlock = (
   lines: PdfTextLine[],
   pageIndex: number,
@@ -673,6 +735,7 @@ export const buildTextBlocks = (
     lines.sort((first, second) => first.v - second.v || first.u0 - second.u0);
 
     groupLinesIntoColumns(lines).forEach((columnLines) => {
+      const shortRowBoundaries = shortRowParagraphBoundaries(columnLines);
       let current: PdfTextLine[] = [];
       let currentLeading = 0;
 
@@ -689,7 +752,7 @@ export const buildTextBlocks = (
           return;
         }
         const previous = current[current.length - 1];
-        if (!linesShareParagraph(previous, line, currentLeading)) {
+        if (shortRowBoundaries.has(line) || !linesShareParagraph(previous, line, currentLeading)) {
           flush();
           current = [line];
           return;
