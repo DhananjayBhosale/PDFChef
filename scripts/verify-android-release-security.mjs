@@ -201,7 +201,7 @@ for (const [variant, apk] of [['debug', paths.debugApk], ['release', paths.relea
   const absolute = resolve(root, apk);
   const badging = command(aapt, ['dump', 'badging', absolute]);
   const packageName = variant === 'debug' ? 'com.dhananjaytech.pdfchef.debug' : 'com.dhananjaytech.pdfchef';
-  assert(badging.includes(`package: name='${packageName}'`) && badging.includes("versionCode='23'") && badging.includes("versionName='2.2.5'"), `${variant} APK identity/version drifted`);
+  assert(badging.includes(`package: name='${packageName}'`) && badging.includes("versionCode='24'") && badging.includes("versionName='2.2.6'"), `${variant} APK identity/version drifted`);
   assertXmltreeCatalogue(command(aapt, ['dump', 'xmltree', absolute, 'AndroidManifest.xml']), variant);
   assertNoSdkNamespaces(absolute, variant);
   assert(!dexStrings(absolute).some(value => value.includes('DocumentRecipientProbeService')),
