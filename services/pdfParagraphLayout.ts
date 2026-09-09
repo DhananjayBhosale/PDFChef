@@ -13,7 +13,13 @@ export const paragraphStandardFontKey = (face: StandardParagraphFace): Paragraph
       ? face.bold && face.italic ? 'CourierBoldOblique' : face.bold ? 'CourierBold' : face.italic ? 'CourierOblique' : 'Courier'
       : face.bold && face.italic ? 'HelveticaBoldOblique' : face.bold ? 'HelveticaBold' : face.italic ? 'HelveticaOblique' : 'Helvetica';
 
-const exportText = (text: string) => substituteForStandardFont(text).text.replace(/\t/g, '    ');
+/** Treat every platform line separator the same before wrapping, measuring, and exporting. */
+export const normalizeParagraphLineBreaks = (text: string) => text.replace(/\r\n?|[\u2028\u2029]/g, '\n');
+
+const exportText = (text: string) => normalizeParagraphLineBreaks(substituteForStandardFont(text).text)
+  // Lines are split before layout. If a separator reaches one piece, keep export safe and visible.
+  .replace(/\n/g, ' ')
+  .replace(/\t/g, '    ');
 
 const metricFaces = new Map<ParagraphStandardFontKey, StandardFontEmbedder>();
 

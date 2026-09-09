@@ -4,13 +4,24 @@ import { PDFDocument, StandardFonts } from 'pdf-lib';
 import {
   layoutParagraphLines,
   measureParagraphText,
+  normalizeParagraphLineBreaks,
   paragraphStandardFontKey,
 } from '../../services/pdfParagraphLayout.ts';
 import { styledLineText, wrapStyledText } from '../../services/pdfBlockEditPlanning.ts';
+import { unencodableCharacters, type ResolvedFont } from '../../services/pdfFontResolution.ts';
 import type { ParagraphFace } from '../../services/pdfDocument.ts';
 
 const regular: ParagraphFace = { key: 'regular', family: 'Helvetica', bold: false, italic: false };
 const bold: ParagraphFace = { ...regular, key: 'bold', bold: true };
+const substitutedFont: ResolvedFont = {
+  mode: 'substituted',
+  cssFamily: 'Helvetica, Arial, sans-serif',
+  cssWeight: '400',
+  cssStyle: 'normal',
+  klass: 'sans-serif',
+  reason: null,
+  missingGlyphs: [],
+};
 const options = { width: 200, fontSize: 12, lineHeight: 16, align: 'left' as const };
 const near = (actual: number, expected: number) => assert.ok(Math.abs(actual - expected) < 0.00001, `${actual} != ${expected}`);
 
@@ -94,4 +105,24 @@ test('pasted tabs have the same printable width in preview and export', () => {
   const [piece] = layoutParagraphLines([[{ text: 'a\tb', face: regular }]], options);
   assert.equal(piece.text, 'a    b');
   near(piece.width, measureParagraphText('a\tb', regular, 12));
+});
+
+test('all platform line separators become stable paragraph boundaries', () => {
+  assert.equal(normalizeParagraphLineBreaks('first\rsecond\r\nthird\u2028fourth\u2029fifth'),
+    'first\nsecond\nthird\nfourth\nfifth');
+  for (const separator of ['\n', '\r', '\u2028', '\u2029']) {
+    assert.deepEqual(unencodableCharacters(separator, substitutedFont), []);
+    assert.doesNotThrow(() => measureParagraphText(`before${separator}after`, regular, 12));
+  }
+});
+
+test('every BMP character allowed by the standard-font guard can be measured', () => {
+  for (let codePoint = 0; codePoint <= 0xffff; codePoint += 1) {
+    const character = String.fromCodePoint(codePoint);
+    if (unencodableCharacters(character, substitutedFont).length > 0) continue;
+    assert.doesNotThrow(
+      () => measureParagraphText(character, regular, 12),
+      `U+${codePoint.toString(16).toUpperCase().padStart(4, '0')} passed the guard but could not be measured`,
+    );
+  }
 });

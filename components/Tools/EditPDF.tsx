@@ -2738,7 +2738,7 @@ export const EditPDF: React.FC = () => {
                           onFormValueChange={updateFormValue}
                           onPagePress={() => setSelectedId(null)}
                           blockEdits={blockEdits}
-                blockPreviews={blockPreviews}
+                          blockPreviews={blockPreviews}
                           activeBlockId={activeBlockId}
                           coarsePointer={coarsePointer}
                           cachedText={readCachedPageText}

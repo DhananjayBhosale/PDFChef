@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { planBlockEdit } from '../../services/pdfBlockEditPlanning';
 import type { PdfTextAlign, PdfTextBlock, PdfTextLine } from '../../services/pdfTextBlocks';
 import { capturePdfFocusAnchor, pdfCaretScroll, pdfFocusAnchorScroll, type PdfFocusAnchor } from '../../services/pdfEditingFocus';
+import { normalizeParagraphLineBreaks } from '../../services/pdfParagraphLayout';
 import {
   fitTextMetrics,
   measureTextWidth,
@@ -203,7 +204,7 @@ export const useResolvedBlocks = (
  * an edit that was never made. Where the original never used one, they are read back as spaces.
  */
 const readBlockText = (element: HTMLElement, allowNonBreakingSpace: boolean) => {
-  const text = element.innerText.replace(/\r\n?/g, '\n').replace(/\n$/, '');
+  const text = normalizeParagraphLineBreaks(element.innerText).replace(/\n$/, '');
   return allowNonBreakingSpace ? text : text.replace(/\u00a0/g, ' ');
 };
 
@@ -269,7 +270,8 @@ export const readStyledSegments = (
 ): StyledSegment[][] => {
   const lines: StyledSegment[][] = [[]];
   const append = (raw: string, fontKey: string) => {
-    const text = allowNonBreakingSpace ? raw : raw.replace(/\u00a0/g, ' ');
+    const normalized = normalizeParagraphLineBreaks(raw);
+    const text = allowNonBreakingSpace ? normalized : normalized.replace(/\u00a0/g, ' ');
     if (!text) return;
     text.split('\n').forEach((part, index) => {
       if (index > 0) lines.push([]);

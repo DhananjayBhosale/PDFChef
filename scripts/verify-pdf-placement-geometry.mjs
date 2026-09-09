@@ -5,7 +5,7 @@ import { chromium } from 'playwright';
 import { PDFDocument, degrees } from 'pdf-lib';
 
 // Run against the source Vite server so the real service exports can be exercised.
-const baseUrl = process.env.PDF_CHEF_URL || 'http://127.0.0.1:4174';
+const baseUrl = process.env.PDF_CHEF_URL || 'http://127.0.0.1:3000';
 const outputDir = path.resolve('output/pdf-geometry-verification');
 await fs.mkdir(outputDir, { recursive: true });
 const fixtures = [];

@@ -79,10 +79,10 @@ test('a redrawn paragraph is repainted before it is redrawn, and before any anno
 
   const reflow = exporter.slice(reflowLoop, annotationLoop);
   const patch = reflow.indexOf('pdfDoc.embedPng(edit.backgroundImage)');
-  const redraw = reflow.indexOf('page.drawText(segment');
+  const redraw = reflow.indexOf('page.drawText(piece.text');
   assert.ok(patch >= 0 && redraw > patch, 'the paragraph area must be painted out before new text lands on it');
   // Each stretch is drawn in the face it carries, so a bold lead-in survives a redraw.
-  assert.match(reflow, /font: faces\.get\(key\)/);
+  assert.match(reflow, /font: fonts\[paragraphStandardFontKey\(piece\.face\)\]/);
 
   // A page whose drawing operations cannot be reconstructed falls back to the sampled paper
   // colour rather than an assumed white rectangle.
@@ -92,7 +92,7 @@ test('a redrawn paragraph is repainted before it is redrawn, and before any anno
   // The document's own program is deliberately NOT re-embedded: what PDF.js exposes is a copy
   // transcoded for the browser, and drawing Unicode through it lost characters off the page.
   assert.doesNotMatch(exporter, /embedFont\(face\.data/);
-  assert.match(exporter, /const resolveParagraphFont = \(face: ParagraphFace\)/);
+  assert.match(exporter, /layoutParagraphLines\(edit\.lines/);
 });
 
 test('direct paragraph edits rewrite text objects and never reach the pdf-lib redraw', () => {
