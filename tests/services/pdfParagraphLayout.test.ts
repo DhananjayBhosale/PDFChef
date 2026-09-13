@@ -5,11 +5,13 @@ import {
   layoutParagraphLines,
   measureParagraphText,
   normalizeParagraphLineBreaks,
+  paragraphLineOrigins,
   paragraphStandardFontKey,
 } from '../../services/pdfParagraphLayout.ts';
 import { styledLineText, wrapStyledText } from '../../services/pdfBlockEditPlanning.ts';
 import { unencodableCharacters, type ResolvedFont } from '../../services/pdfFontResolution.ts';
 import type { ParagraphFace } from '../../services/pdfDocument.ts';
+import type { PdfTextBlock } from '../../services/pdfTextBlocks.ts';
 
 const regular: ParagraphFace = { key: 'regular', family: 'Helvetica', bold: false, italic: false };
 const bold: ParagraphFace = { ...regular, key: 'bold', bold: true };
@@ -24,6 +26,37 @@ const substitutedFont: ResolvedFont = {
 };
 const options = { width: 200, fontSize: 12, lineHeight: 16, align: 'left' as const };
 const near = (actual: number, expected: number) => assert.ok(Math.abs(actual - expected) < 0.00001, `${actual} != ${expected}`);
+
+test('an extended amount retains its explicit row and original baseline despite exceeding the old width', () => {
+  const lines = [[{ text: '2099 Dr fdagadga', face: regular }]];
+  const [piece] = layoutParagraphLines(lines, {
+    ...options, width: 42, align: 'right', lineOrigins: [{ x: 0, y: 9.5 }],
+  });
+  assert.equal(piece.text, lines[0][0].text);
+  assert.equal(piece.lineIndex, 0);
+  near(piece.x, 0);
+  near(piece.y, 9.5);
+  assert.ok(piece.width > 42, 'long text should extend sideways instead of wrapping');
+});
+
+test('redraw retains irregular PDF baselines and indents, while Enter creates only one explicit row', () => {
+  const block = {
+    fontSize: 12, ascent: 9.5, leading: 19, padLeft: 0, textIndent: 0,
+    lines: [{ u0: 220, v: 100 }, { u0: 224, v: 119 }, { u0: 220, v: 134 }],
+  } as PdfTextBlock;
+  const original = paragraphLineOrigins(block, 3, 12);
+  assert.deepEqual(original, [{ x: 0, y: 9.5 }, { x: 4, y: 28.5 }, { x: 0, y: 43.5 }]);
+  const lines = ['Extended amount still here', 'Second row', 'Third row'].map(text => [{ text, face: regular }]);
+  const positioned = layoutParagraphLines(lines, { ...options, width: 42, lineOrigins: original });
+  assert.deepEqual(positioned.map(({ x, y }) => ({ x, y })), original);
+  const entered = [...lines, [{ text: 'Intentional new row', face: bold }]];
+  const afterEnter = layoutParagraphLines(entered, {
+    ...options, width: 42, lineOrigins: paragraphLineOrigins(block, entered.length, 12),
+  });
+  assert.equal(afterEnter.length, positioned.length + 1);
+  near(afterEnter[0].y, original[0].y);
+  assert.deepEqual(paragraphLineOrigins(block, 3, 12), original, 'Undo restores original row geometry');
+});
 
 test('reflow measurement uses the exact export face for all twelve standard styles', async () => {
   const document = await PDFDocument.create();
@@ -67,6 +100,24 @@ test('center and right alignment use the measured whole-line width', () => {
     const width = positioned.reduce((total, piece) => total + piece.width, 0);
     near(positioned[0].x, (options.width - width) / (align === 'center' ? 2 : 1));
     near(positioned[1].x, positioned[0].x + positioned[0].width);
+  }
+});
+
+test('Enter retains center and right alignment while unchanged row counts retain PDF origins', () => {
+  for (const align of ['center', 'right'] as const) {
+    const block = {
+      fontSize: 12, ascent: 9.5, leading: 16, padLeft: 20, textIndent: -20, align,
+      lines: [{ u0: 100, v: 100 }, { u0: 120, v: 116 }],
+    } as PdfTextBlock;
+    assert.deepEqual(paragraphLineOrigins(block, 2, 12), [{ x: 0, y: 9.5 }, { x: 20, y: 25.5 }]);
+    const lines = ['First part', 'Second part', 'Last row'].map(text => [{ text, face: regular }]);
+    const pieces = layoutParagraphLines(lines, {
+      ...options, align, lineOrigins: paragraphLineOrigins(block, 3, 12),
+    });
+    pieces.forEach((piece, index) => {
+      near(piece.x, (options.width - piece.width) / (align === 'center' ? 2 : 1));
+      near(piece.y, 9.5 + index * 16);
+    });
   }
 });
 

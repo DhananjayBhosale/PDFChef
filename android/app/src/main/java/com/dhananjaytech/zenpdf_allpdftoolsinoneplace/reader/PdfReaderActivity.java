@@ -1,5 +1,6 @@
 package com.dhananjaytech.zenpdf_allpdftoolsinoneplace.reader;
 
+import android.annotation.SuppressLint;
 import android.app.Dialog;
 import android.content.Intent;
 import android.content.res.Configuration;
@@ -975,10 +976,12 @@ public final class PdfReaderActivity extends AppCompatActivity {
             if (host != null) host.requestDocumentPassword(this);
         }
 
+        @SuppressLint("RestrictedApi")
         void submitPassword(@NonNull String password) {
             getDocumentViewModel().loadDocument$pdf_viewer_fragment(getDocumentUri(), password);
         }
 
+        @SuppressLint("RestrictedApi")
         void cancelPassword() {
             getDocumentViewModel().passwordDialogCancelled$pdf_viewer_fragment();
         }

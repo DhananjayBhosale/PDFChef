@@ -104,7 +104,10 @@ test('the browser keeps ownership of an editable paragraph while it is being typ
   // the caret back to the start of the paragraph on every keystroke.
   assert.match(blockLayer, /const writeBlockContent = \(/);
   assert.match(blockLayer, /element\.replaceChildren\(fragment\)/);
-  assert.match(blockLayer, /if \(written\.current && committedText\.current === text\) return/);
+  assert.match(blockLayer, /const externalChange = !written\.current \|\| committedText\.current !== text/);
+  assert.match(blockLayer, /if \(!lostRun && new Set\(keys\)\.size === keys\.length\) return/);
+  assert.match(blockLayer, /if \(composing \|\| text\.split/);
+  assert.match(blockLayer, /selection\.setBaseAndExtent/);
   const editable = blockLayer.slice(blockLayer.indexOf('data-testid="pdf-text-block"'));
   assert.doesNotMatch(editable.slice(0, editable.indexOf('</div>')), /\{lines\.map\(/);
   // Typing must retain original run spacing and leave the native selection intact.
@@ -120,7 +123,9 @@ test('each run keeps the face the PDF drew it in, in the overlay and on export',
   // Browsers swap in a non-breaking space while typing; a document that never used one gets a
   // plain space back, so an untouched paragraph does not read as edited.
   assert.match(blockLayer, /const keepsNonBreakingSpace = block\.text\.includes/);
-  assert.match(editor, /wrapStyledText\(/);
+  assert.doesNotMatch(editor, /wrapStyledText\(/, 'existing text may only break at explicit newlines');
+  assert.match(editor, /lineOrigins: reflow\.lineOrigins/);
+  assert.match(read('services/pdfDocument.ts'), /lineOrigins: edit\.lineOrigins/);
   assert.match(editor, /const toFace = \(fontKey: string\): ParagraphFace/);
 });
 
@@ -200,6 +205,8 @@ test('the editing overlay leaves scrolling, pinch zoom and native selection to t
   // Tap targets grow towards the neighbours but never past halfway between two paragraphs.
   assert.match(blockLayer, /Math\.min\(wanted, gapAbove \/ 2, gapBelow \/ 2\)/);
   assert.match(blockLayer, /paddingTop: unit\(hitPadding \* displayScale\)/);
+  assert.match(blockLayer, /data-testid="pdf-block-outline" className="pointer-events-none absolute"/);
+  assert.match(blockLayer, /height: keepsOriginalRows \? unit\(\(block\.height \+ hitPadding \* 2\) \* displayScale\)/);
   // Page zoom makes the text legible but leaves the computed font size alone, and the computed
   // size is what iOS reads before zooming a focused editable itself. The overlay lays out in
   // larger units and scales back so its computed size clears that threshold.
@@ -218,7 +225,8 @@ test('a paragraph edit states whether it rewrites the PDF or redraws the paragra
   assert.match(editor, /mode: 'direct'/);
   assert.match(editor, /mode: 'reflow'/);
   assert.match(paragraphInspector, /goes straight into the document/);
-  assert.match(paragraphInspector, /redrawn rather than typed over/);
+  assert.match(paragraphInspector, /redrawn with a matching typeface/);
+  assert.match(paragraphInspector, /line breaks are kept/);
   assert.match(paragraphInspector, /data-testid="pdf-paragraph-provenance"/);
   // "Original" is a selectable state, so a paragraph is never silently restyled.
   assert.match(paragraphInspector, /\{ value: 'original', label: 'Original' \}/);

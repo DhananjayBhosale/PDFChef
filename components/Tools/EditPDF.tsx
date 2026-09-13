@@ -18,7 +18,7 @@ import {
   type ParagraphSaveEdit,
 } from '../../services/pdfDocument';
 import { getPageTextBlocks, resolvePageFonts, type PageTextBlocks } from '../../services/pdfBlockExtraction';
-import { layoutParagraphLines, measureParagraphText } from '../../services/pdfParagraphLayout';
+import { layoutParagraphLines, paragraphLineOrigins } from '../../services/pdfParagraphLayout';
 import type { PdfTextBlock } from '../../services/pdfTextBlocks';
 import {
   blockStyledSegments,
@@ -26,7 +26,6 @@ import {
   planBlockEdit,
   replaceInStyledLines,
   styledLineText,
-  wrapStyledText,
   type BlockEditPlan,
   type StyledMatch,
   type StyledSegment,
@@ -1380,11 +1379,8 @@ export const EditPDF: React.FC = () => {
     const generation = documentGeneration.current;
     const pageText = pageTextRef.current.get(block.pageIndex);
     if (!file || !pageText) return;
-    // A paragraph on a single colour needs no picture of its background: the preview fills it with
-    // the colour sampled off the page, and the save writes the same colour as a vector rectangle.
-    // Skipping the render keeps the common case free, and keeps it off the page PDF.js has already
-    // drawn for the screen.
-    if (blockColorsRef.current[block.id]?.flat) return;
+    // Ink-coloured rules and drawings cannot be distinguished from glyphs by a colour histogram.
+    // Only a render with text omitted can safely reproduce the area behind an edited paragraph.
     try {
       // The editor's own document, not a second copy of the file: one page render at a time is
       // serialised by the queue above, and a second parse of a 200-page report is tens of
@@ -1401,10 +1397,10 @@ export const EditPDF: React.FC = () => {
       if (generation !== documentGeneration.current) return;
       const existing = blockEditsRef.current[block.id];
       if (!existing) return;
-      replaceBlockEdits({ ...blockEditsRef.current, [block.id]: { ...existing, patch } });
+      replaceBlockEdits({ ...blockEditsRef.current, [block.id]: { ...existing, patch, patchFlat: false } });
     } catch {
-      // Pages whose drawing operations cannot be matched safely keep the sampled paper colour.
-      // That is a flat fill rather than a reconstruction, so the paragraph stays honest about it.
+      // Keep the narrow run masks if the background cannot be reconstructed safely. A whole
+      // paragraph fill could erase table rules or unrelated drawings between its lines.
     }
   }, [pdfDoc, replaceBlockEdits]);
 
@@ -1904,13 +1900,13 @@ export const EditPDF: React.FC = () => {
           italic: edit.fontOverride?.italic ?? face.descriptor?.italic ?? face.resolved.cssStyle === 'italic',
         };
       };
-      const segments = edit.segments ?? edit.text.split('\n').map((line) => [{ text: line, fontKey: block.fontKey }]);
-      const lines = wrapStyledText(
-        segments,
-        (text, fontKey) => measureParagraphText(text, toFace(fontKey), fontSize),
-        block.measure,
-      );
-      const height = Math.max(block.height, lines.length * lineHeight + fontSize * 0.3);
+      // A redraw changes how the PDF stores the text, not where its line breaks belong.
+      // Use the same explicit rows as contentEditable, even when a line exceeds its old width.
+      const lines = edit.segments ?? edit.text.split('\n').map((line) => [{ text: line, fontKey: block.fontKey }]);
+      const lineOrigins = paragraphLineOrigins(block, lines.length, fontSize);
+      const height = lines.length === block.lines.length && fontSize === block.fontSize
+        ? block.height
+        : Math.max(block.height, (lineOrigins.at(-1)?.y ?? 0) + fontSize * 0.3);
       // Redrawing does not push the rest of the page down, so a paragraph that outgrows its own
       // space lands on whatever follows it. That has to be said out loud, not discovered on save.
       const next = pageBlocks.find((candidate) => (
@@ -1927,7 +1923,7 @@ export const EditPDF: React.FC = () => {
         plan: resolvedPlan,
         font,
         descriptor,
-        reflow: { resolved, faceFor, toFace, fontSize, lineHeight, lines, height, overrun: Math.max(0, height - available) },
+        reflow: { resolved, faceFor, toFace, fontSize, lineHeight, lines, lineOrigins, height, overrun: Math.max(0, height - available) },
       };
     }).filter((entry): entry is NonNullable<typeof entry> => entry !== null)
       .filter((entry) => entry.plan.mode !== 'unchanged');
@@ -1936,10 +1932,8 @@ export const EditPDF: React.FC = () => {
   /**
    * Fetch a paragraph's background only when something will actually draw it.
    *
-   * A patch is a full page render, and only a redraw ever uses one — a rewrite in place never
-   * touches the background at all. Firing one per edited paragraph the moment the text changed
-   * meant a whole-document replace put a thousand page renders on the main thread. Driven from the
-   * settled plan instead, and one at a time, so the page it is prepared for stays usable.
+   * Direct edits need this for their on-screen preview too. Limit those to the visible page, so a
+   * whole-document replacement does not render every page just to prepare invisible previews.
    */
   const patchQueueRef = useRef<PdfTextBlock[]>([]);
   const patchDrainingRef = useRef(false);
@@ -1991,6 +1985,7 @@ export const EditPDF: React.FC = () => {
           text: edit.text, reflow: true, width, height: reflow.height,
           pieces: layoutParagraphLines(lines, {
             width, fontSize: reflow.fontSize, lineHeight: reflow.lineHeight, align: block.align,
+            lineOrigins: reflow.lineOrigins,
           }).map((piece) => ({ ...piece, fontSize: reflow.fontSize, font: {
             ...FALLBACK_RESOLVED_FONT,
             cssFamily: piece.face.family === 'TimesRoman' ? '"Times New Roman", Times, serif'
@@ -2027,14 +2022,14 @@ export const EditPDF: React.FC = () => {
 
   useEffect(() => {
     paragraphPlans.forEach(({ edit, block, plan }) => {
-      if (plan.mode !== 'reflow') return;
-      if (edit.patch || edit.patchFlat) return;
+      if (plan.mode === 'blocked' || edit.patch) return;
+      if (plan.mode === 'direct' && block.pageIndex !== targetPageIndex) return;
       // Unknown means the page was never drawn, so its colours were never sampled. A flat fill in
       // the paper colour is the honest answer there, not a page render nobody asked for.
       if (!edit.sampledColors) return;
       enqueueBlockPatch(block);
     });
-  }, [enqueueBlockPatch, paragraphPlans]);
+  }, [enqueueBlockPatch, paragraphPlans, targetPageIndex]);
 
   const blockedParagraphs = useMemo(
     () => paragraphPlans
@@ -2118,13 +2113,9 @@ export const EditPDF: React.FC = () => {
           italic: edit.fontOverride?.italic ?? face.descriptor?.italic ?? face.resolved.cssStyle === 'italic',
         };
       };
-      const wrapped = reflow?.lines ?? wrapStyledText(
-        edit.segments ?? edit.text.split('\n').map((line) => [{ text: line, fontKey: block.fontKey }]),
-        (text, fontKey) => measureParagraphText(text, toFace(fontKey), fontSize),
-        block.measure,
-      );
-      const lines = wrapped.map((line) => line.map((segment) => ({ text: segment.text, face: toFace(segment.fontKey) })));
-      const height = reflow?.height ?? Math.max(block.height, lines.length * lineHeight + fontSize * 0.3);
+      const segments = reflow?.lines ?? edit.segments
+        ?? edit.text.split('\n').map((line) => [{ text: line, fontKey: block.fontKey }]);
+      const lines = segments.map((line) => line.map((segment) => ({ text: segment.text, face: toFace(segment.fontKey) })));
 
       return [{
         mode: 'reflow' as const,
@@ -2132,7 +2123,9 @@ export const EditPDF: React.FC = () => {
         x: block.left / pageWidth,
         y: block.top / pageHeight,
         width: Math.max(block.width, block.measure) / pageWidth,
-        height: height / pageHeight,
+        // A fallback background covers only the original area; growing text must not stretch
+        // table rules or paint out a larger part of the page.
+        height: block.height / pageHeight,
         // Every source run in the paragraph is removed before the redraw, so the file never keeps
         // words that are no longer on the page.
         runDeletions: deleteOriginalRuns
@@ -2148,6 +2141,7 @@ export const EditPDF: React.FC = () => {
         backgroundColor: edit.patchColor ?? '#ffffff',
         backgroundFlat: deleteOriginalRuns && (edit.patchFlat ?? false),
         lines,
+        lineOrigins: reflow?.lineOrigins ?? paragraphLineOrigins(block, lines.length, fontSize),
         fontSize,
         lineHeight,
         align: block.align,
@@ -2172,13 +2166,6 @@ export const EditPDF: React.FC = () => {
       let fallbackReason = '';
       // Planned from the live edits rather than the settled ones: a save can arrive inside the
       // window where the last keystroke has not been planned yet.
-      if (patchQueueRef.current.length > 0 || patchDrainingRef.current) {
-        setStatus({ isProcessing: true, progress: 15, message: 'Getting the page ready…' });
-        while (patchQueueRef.current.length > 0 || patchDrainingRef.current) {
-          await new Promise((resolve) => window.setTimeout(resolve, 60));
-          if (generation !== documentGeneration.current) return;
-        }
-      }
       let plans = buildParagraphPlans(savingBlockEdits);
 
       // In-place edits also need the actual font's glyph coverage. Replace-all can touch pages
@@ -2209,9 +2196,20 @@ export const EditPDF: React.FC = () => {
       const blockedPlans = plans.filter((entry) => entry.plan.mode === 'blocked');
       const savablePlans = plans.filter((entry) => entry.plan.mode !== 'blocked');
       // Narrowed if the rewrite has to fall back to redrawing, which not every paragraph can do.
-      const redrawable = new Set(savablePlans);
+      const redrawable = new Set<(typeof paragraphPlans)[number]>(savablePlans);
       if (savablePlans.length === 0 && blockedPlans.length > 0) {
         throw refusal(describeBlockedParagraphs(blockedPlans));
+      }
+      // A direct rewrite does not use preview pixels. If it later needs a background fallback,
+      // that path explicitly awaits requestBlockPatch; pending previews need not delay Save.
+      if (savablePlans.some((entry) => entry.plan.mode === 'reflow')) {
+        if (patchQueueRef.current.length > 0 || patchDrainingRef.current) {
+          setStatus({ isProcessing: true, progress: 15, message: 'Getting the page ready…' });
+          while (patchQueueRef.current.length > 0 || patchDrainingRef.current) {
+            await new Promise((resolve) => window.setTimeout(resolve, 60));
+            if (generation !== documentGeneration.current) return;
+          }
+        }
       }
       try {
         bytes = await savePDFWithAnnotations(file.file, savingElements, savingFormValues, buildParagraphSaveEdits({ plans: savablePlans }));
@@ -2301,6 +2299,11 @@ export const EditPDF: React.FC = () => {
           redrawReason = deletionError.message.replace(/^Direct text edit failed:\s*/, '');
           // eslint-disable-next-line no-console
           console.warn('Original text could not be removed before redrawing:', redrawReason);
+          for (const entry of redrawable) {
+            if (entry.plan.mode !== 'direct' || stubborn.has(entry.edit.blockId)) {
+              await requestBlockPatch(entry.block);
+            }
+          }
           bytes = await savePDFWithAnnotations(
             file.file,
             savingElements,

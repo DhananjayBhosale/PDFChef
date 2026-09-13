@@ -902,7 +902,8 @@ export const getPageTextSignatures = async (
   file: File,
   options?: { maxPages?: number; maxCharsPerPage?: number },
 ): Promise<string[]> => {
-  const pdf = await loadPDFDocument(file);
+  // Comparing must not destroy the cached document still used by the page preview.
+  const pdf = await loadDisposablePDFDocument(file);
   const maxChars = options?.maxCharsPerPage ?? 500;
   const totalPages = options?.maxPages
     ? Math.min(pdf.numPages, Math.max(1, options.maxPages))

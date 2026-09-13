@@ -14,8 +14,10 @@
  * viewport once a paragraph takes focus, which is exactly when mobile browsers rescale the page.
  */
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 const baseUrl = process.env.PDF_CHEF_URL || 'http://127.0.0.1:4173';
@@ -185,12 +187,12 @@ const waitForParagraphs = (page) =>
  * Planning a paragraph measures every word of it, so it settles a moment after the last keystroke
  * rather than running on each one. Reading the sentence before then gets the previous answer.
  */
-const waitForPlan = async (page) => {
+const waitForPlan = async (page, outcome = 'goes straight into the document|will be redrawn|cannot be changed') => {
   await page.waitForFunction(
-    () => /goes straight into the document|will be redrawn|cannot be changed/i.test(
+    pattern => new RegExp(pattern, 'i').test(
       document.querySelector('[data-testid="pdf-paragraph-provenance"]')?.textContent ?? '',
     ),
-    null,
+    outcome,
     { timeout: 20_000 },
   );
   return page.getByTestId('pdf-paragraph-provenance').innerText();
@@ -411,6 +413,254 @@ const multipage = await createMultipage();
 const browser = await chromium.launch({ headless: true });
 
 try {
+  // Real PDFs commonly store a visible line as separate words or glyphs. A fitting edit must
+  // keep their embedded font, with no substitute face or background cover in the saved PDF.
+  for (const glyphs of [false, true]) {
+    const document = await PDFDocument.create();
+    document.registerFontkit(fontkit);
+    const font = await document.embedFont(await readFile('node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf'));
+    const sheet = document.addPage([595, 842]);
+    const original = 'Device note';
+    const replacement = 'Device tone';
+    let x = 72;
+    for (const part of glyphs ? [...original] : ['Device ', 'note']) {
+      sheet.drawText(part, { x, y: 720, size: 16, font });
+      x += font.widthOfTextAtSize(part, 16);
+    }
+    sheet.drawText('The next line stays here.', { x: 72, y: 690, size: 16, font });
+    const bytes = Buffer.from(await document.save());
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const { page, consoleErrors } = await openEditor(context, bytes);
+    await waitForParagraphs(page);
+    const paragraph = page.getByTestId('pdf-text-block').first();
+    await paragraph.click();
+    const before = await paragraphGeometry(paragraph);
+    const fontsBefore = await spanAppearance(paragraph);
+    if (!glyphs) await page.evaluate(() => {
+      window.__deferredPreviewCallbacks = [];
+      window.requestIdleCallback = callback => window.__deferredPreviewCallbacks.push(callback);
+    });
+    await retypeStart(page, 0, original.length, replacement);
+    assertSameGeometry(before, await paragraphGeometry(paragraph), 'embedded fragmented run');
+    assert.deepEqual((await spanAppearance(paragraph)).map(({family, font}) => ({family, font})),
+      fontsBefore.map(({family, font}) => ({family, font})), 'typing changed the embedded overlay font');
+    const nextOutput = await installOutputCapture(page);
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    if (!glyphs) await page.waitForFunction(() => window.__deferredPreviewCallbacks.length > 0);
+    const result = await saveAndRead(page, nextOutput);
+    assert.ok(result.text.includes(replacement), 'fragmented replacement was not saved');
+    assert.deepEqual(await readFaces(result.bytes, [replacement, 'The next']),
+      await readFaces(bytes, [original, 'The next']), 'Save substituted the embedded font');
+    for (const [oldText, newText] of [[original, replacement], ['The next', 'The next']]) {
+      const oldRun = await readRunAppearance(bytes, new RegExp(oldText));
+      const newRun = await readRunAppearance(result.bytes, new RegExp(newText));
+      oldRun.transform.forEach((value, index) => {
+        assert.ok(Math.abs(value - newRun.transform[index]) < 0.02, 'Save changed a baseline, size or transform');
+      });
+    }
+    assert.equal(result.operators.fnArray.some(operation => imageOperatorSet.has(operation)), false);
+    assert.deepEqual(consoleErrors, []);
+    console.log(`PASS ${glyphs ? 'glyph' : 'word'} objects retain their embedded font and baselines through typing, Done and Save`);
+    if (!glyphs) console.log('PASS direct Save completes while the preview-render queue is paused');
+    await context.close();
+  }
+
+  for (const align of ['center', 'right']) {
+    const document = await PDFDocument.create();
+    const font = await document.embedFont(StandardFonts.Helvetica);
+    const sheet = document.addPage([595, 842]);
+    const originalLines = ['Centered text label', 'Second line'];
+    originalLines.forEach((text, index) => sheet.drawText(text, {
+      x: 72 + (240 - font.widthOfTextAtSize(text, 12)) / (align === 'center' ? 2 : 1),
+      y: 720 - index * 16, size: 12, font,
+    }));
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const { page, consoleErrors } = await openEditor(context, Buffer.from(await document.save()));
+    await waitForParagraphs(page);
+    const paragraph = page.getByTestId('pdf-text-block').first();
+    await paragraph.click();
+    assert.equal(await paragraph.evaluate(element => getComputedStyle(element).textAlign), align);
+    await placeCaret(page, 0, 8);
+    await page.keyboard.press('Enter');
+    await waitForPlan(page);
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    const preview = page.getByTestId('pdf-block-preview');
+    await preview.waitFor();
+    const geometry = await preview.evaluate(svg => {
+      const box = svg.getBoundingClientRect();
+      const page = svg.closest('[data-pdf-page]').getBoundingClientRect();
+      return { left: (box.left - page.left) / (page.width / 595), width: svg.viewBox.baseVal.width,
+        pieces: [...svg.querySelectorAll('[data-preview-line]')].map(piece => ({
+          text: piece.textContent, x: Number(piece.getAttribute('x')),
+          width: Number(piece.getAttribute('textLength')),
+        })) };
+    });
+    assert.equal(geometry.pieces.length, 3, `${align}: Enter did not create exactly one row`);
+    const divisor = align === 'center' ? 2 : 1;
+    geometry.pieces.forEach(piece => assert.ok(
+      Math.abs(piece.x + piece.width / divisor - geometry.width / divisor) < 0.02,
+      `${align}: Done lost the paragraph alignment`,
+    ));
+    const nextOutput = await installOutputCapture(page);
+    const result = await saveAndRead(page, nextOutput);
+    for (const piece of geometry.pieces) {
+      const item = result.items.find(item => item.str.trim() === piece.text.trim());
+      assert.ok(item, `${align}: saved row is missing`);
+      // PDF.js may omit a leading space from extraction, moving the reported origin to the ink.
+      const prefix = piece.text.slice(0, Math.max(0, piece.text.indexOf(item.str)));
+      const prefixWidth = font.widthOfTextAtSize(prefix, 12);
+      assert.ok(Math.abs(item.transform[4] - geometry.left - piece.x - prefixWidth) < 0.25,
+        `${align}: saved row differs from the aligned preview`);
+    }
+    assert.deepEqual(consoleErrors, []);
+    console.log(`PASS ${align} alignment survives Enter, Done and exported line placement`);
+    await context.close();
+  }
+
+  // Extending an amount must not acquire a newline when finishing or saving the edit.
+  {
+    const document = await PDFDocument.create();
+    const font = await document.embedFont(StandardFonts.Helvetica);
+    const sheet = document.addPage([595, 842]);
+    sheet.drawText('2099 Dr', { x: 480, y: 700, size: 12, font });
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const { page, consoleErrors } = await openEditor(context, Buffer.from(await document.save()));
+    await waitForParagraphs(page);
+    const paragraph = page.getByTestId('pdf-text-block').first();
+    for (let step = 0; step < 4; step += 1) {
+      await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+    }
+    await paragraph.click();
+    const original = await paragraphGeometry(paragraph);
+    // Chromium can replace a whole run with an untagged span, dropping its calibrated baseline.
+    await retypeStart(page, 0, 7, '3099 Dr');
+    assertSameGeometry(original, await paragraphGeometry(paragraph), 'whole-run replacement');
+    assert.equal(await caretOffset(paragraph), 7, 'repairing a replaced run reset the caret');
+    await undoTyping(page);
+    assertSameGeometry(original, await paragraphGeometry(paragraph), 'undo whole-run replacement');
+    assert.equal((await paragraphGeometry(paragraph)).text, original.text, 'Undo did not restore the replaced text');
+    const outline = page.getByTestId('pdf-block-outline');
+    await outline.waitFor();
+    const target = await paragraph.boundingBox();
+    const frame = await outline.boundingBox();
+    assert.ok(frame.y > target.y + 2, 'the visible outline included the expanded touch target above the text');
+    assert.ok(frame.y + frame.height < target.y + target.height - 2,
+      'the touch target must also extend below the visible text outline');
+    await placeCaret(page, 0, 7);
+    await page.keyboard.insertText(' fdagadga');
+    await waitForPlan(page);
+    assertSameGeometry(original, await paragraphGeometry(paragraph), 'extended amount while typing');
+    const warning = page.getByTestId('pdf-block-overflow');
+    await warning.waitFor();
+    const warningBox = await warning.boundingBox();
+    const viewportBox = await page.getByTestId('pdf-zoom-viewport').boundingBox();
+    assert.ok(warningBox.x >= viewportBox.x && warningBox.x + warningBox.width <= viewportBox.x + viewportBox.width,
+      `the overflow hint is clipped at the right edge: ${JSON.stringify({ warningBox, viewportBox })}`);
+    const nextOutput = await installOutputCapture(page);
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    const preview = page.getByTestId('pdf-block-preview');
+    await preview.waitFor();
+    const pieces = await preview.locator('[data-preview-line]').evaluateAll(nodes => nodes.map(node => ({
+      text: node.textContent, line: Number(node.dataset.previewLine),
+      baseline: Number(node.getAttribute('y')), x: Number(node.getAttribute('x')),
+    })));
+    assert.equal(new Set(pieces.map(piece => piece.line)).size, 1, 'Done wrapped the extended amount without Enter');
+    assert.equal(pieces.map(piece => piece.text).join(''), '2099 Dr fdagadga');
+    const previewTop = await preview.evaluate(svg => {
+      const page = svg.closest('[role="group"][aria-label^="Page "]').getBoundingClientRect();
+      return (svg.getBoundingClientRect().top - page.top) / (page.height / 842);
+    });
+    assert.ok(Math.abs(previewTop + pieces[0].baseline - 142) < 0.25, 'Done moved the original amount baseline');
+    const saved = await saveAndRead(page, nextOutput);
+    const amount = saved.items.find(item => item.str.includes('2099'));
+    assert.equal(amount?.str, '2099 Dr fdagadga', 'Save split the amount onto another line');
+    assert.ok(Math.abs(amount.transform[5] - 700) < 0.25, 'Save moved the original amount baseline');
+    assert.ok(Math.abs(amount.transform[4] - 480) < 0.25, 'Save moved the original amount horizontally');
+    assert.deepEqual(consoleErrors, []);
+    await context.close();
+    console.log('PASS extended amount stays on its original line and baseline after Done and Save');
+  }
+
+  // A statement column has alternating wrapped-line and row gaps, with rules through its box.
+  // Keep this synthetic: statements used to report the bug contain private financial details.
+  {
+    const document = await PDFDocument.create();
+    const font = await document.embedFont(StandardFonts.Helvetica);
+    const sheet = document.addPage([595, 842]);
+    const baselines = [700, 681, 666, 647, 632, 613, 598];
+    const words = ['Details', 'Market purchase', 'City branch', 'Market purchase', 'City branch', 'Market purchase', 'City branch'];
+    baselines.forEach((y, index) => sheet.drawText(words[index], { x: 220, y, size: 12, font }));
+    const ruleY = 694;
+    for (const y of [706, ruleY, 660, 626, 592]) {
+      sheet.drawLine({ start: { x: 60, y }, end: { x: 490, y }, thickness: 1 });
+    }
+    const table = Buffer.from(await document.save());
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const { page, consoleErrors } = await openEditor(context, table);
+    await waitForParagraphs(page);
+    const paragraph = page.getByTestId('pdf-text-block').first();
+    await paragraph.click();
+    const before = await paragraphGeometry(paragraph);
+    assert.equal(before.rows.length, baselines.length);
+    before.rows.forEach((row, index) => assert.ok(
+      Math.abs((row.top - before.rows[0].top) - (baselines[0] - baselines[index])) < 0.3,
+      `statement row ${index + 1}: the caret layer replaced PDF spacing with a uniform line pitch`,
+    ));
+    const wordPoint = await paragraph.locator('span[data-pdf-line="5"]').first().evaluate(span => {
+      const range = document.createRange();
+      range.setStart(span.firstChild, 7); range.setEnd(span.firstChild, 15);
+      const box = range.getBoundingClientRect();
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    });
+    await page.mouse.dblclick(wordPoint.x, wordPoint.y);
+    assert.equal(await page.evaluate(() => getSelection().toString()), 'purchase',
+      'double-clicking the visible word selected text from a different PDF row');
+    await retypeStart(page, 0, 7, 'Detailx');
+    assertSameGeometry(before, await paragraphGeometry(paragraph), 'table replacement');
+    const nextOutput = await installOutputCapture(page);
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await page.waitForFunction(() => {
+      const patch = document.querySelector('[data-testid="pdf-block-patch"]');
+      return patch && getComputedStyle(patch).backgroundImage !== 'none';
+    });
+    const rulePixel = await page.evaluate(async ({ x, y }) => {
+      const patch = document.querySelector('[data-testid="pdf-block-patch"]');
+      const editor = document.querySelector('[data-testid="pdf-text-block"]');
+      const page = editor.closest('[data-pdf-page]');
+      const scale = page.getBoundingClientRect().height / 842;
+      const box = patch.getBoundingClientRect();
+      const origin = page.getBoundingClientRect();
+      const url = getComputedStyle(patch).backgroundImage.slice(5, -2);
+      const image = new Image(); image.src = url; await image.decode();
+      const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
+      const context = canvas.getContext('2d'); context.drawImage(image, 0, 0);
+      const px = (origin.left + x * scale - box.left) / box.width * image.width;
+      const py = (origin.top + y * scale - box.top) / box.height * image.height;
+      return [...context.getImageData(Math.round(px), Math.round(py), 1, 1).data];
+    }, { x: 240, y: 842 - ruleY });
+    assert.ok(rulePixel[0] < 100, 'editing painted over the table rule in the preview');
+    const direct = await saveAndRead(page, nextOutput);
+    assert.match(direct.text, /Detailx/);
+
+    // Force a redraw too: after deleting only text, export must retain the original vector rules.
+    await paragraph.click();
+    await retypeStart(page, 0, 7, 'A substantially longer description for this table column');
+    await waitForPlan(page);
+    const redrawn = await saveAndRead(page, nextOutput);
+    const untouchedRows = redrawn.items.filter(item => ['Market purchase', 'City branch'].includes(item.str));
+    assert.deepEqual(untouchedRows.map(item => Math.round(item.transform[5])), baselines.slice(1),
+      'redrawing the edited heading moved untouched table rows');
+    const reopened = await openEditor(context, Buffer.from(redrawn.bytes));
+    await waitForParagraphs(reopened.page);
+    const pixel = await reopened.page.locator('canvas').first().evaluate((canvas, y) => {
+      const scale = canvas.width / 595;
+      return [...canvas.getContext('2d').getImageData(Math.round(300 * scale), Math.round(y * scale), 1, 1).data];
+    }, 842 - ruleY);
+    assert.ok(pixel[0] < 100, 'redraw export painted a rectangle over the table rule');
+    assert.deepEqual(consoleErrors, []);
+    await context.close();
+    console.log('PASS statement row positions and table rules survive direct edits, Done and redraw export');
+  }
   // --- Fitting replacements keep every PDF row; Enter is the only added hard break ------------
   {
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
@@ -479,6 +729,29 @@ try {
       'editing the bold run flattened an untouched font, style or spacing correction');
     assert.equal(await caretOffset(mixed), 2, 'editing a mixed-style run reset the caret');
     console.log('PASS typing in one run retains untouched regular and italic faces and spacing');
+
+    await undoTyping(page);
+    await retypeStart(page, 5, LEAD_IN.length, 'Memo:');
+    const repairedFaces = await spanAppearance(mixed);
+    assert.equal(repairedFaces[0].font, facesBefore[0].font, 'replacing the entire bold run lost its font');
+    assert.equal(repairedFaces[0].family, facesBefore[0].family);
+    assert.deepEqual(repairedFaces.slice(1), facesBefore.slice(1), 'repair flattened untouched mixed fonts');
+    assert.equal(await caretOffset(mixed), 5, 'repairing a styled run lost the caret');
+    await undoTyping(page);
+
+    // Real Chromium IME events: an in-progress composition must retain its browser-owned node.
+    await placeCaret(page, 5, 1);
+    const originalNode = await mixed.locator('span').first().elementHandle();
+    const ime = await context.newCDPSession(page);
+    await ime.send('Input.imeSetComposition', { text: 'x', selectionStart: 1, selectionEnd: 1 });
+    assert.ok(await originalNode.evaluate(node => node.isConnected), 'composition replaced the native text node');
+    await ime.send('Input.insertText', { text: 'x' });
+    assert.match(await mixed.innerText(), /^Nxote:/, 'IME commit lost or duplicated the composed character');
+    assert.equal(await caretOffset(mixed), 2, 'IME commit reset the caret');
+    await ime.detach();
+    await undoTyping(page);
+    assert.equal((await mixed.innerText()).split(' ')[0], LEAD_IN, 'Undo did not restore the IME edit');
+    console.log('PASS full-run replacement retains styling and caret; native IME composition and Undo remain functional');
 
     assert.deepEqual(consoleErrors, [], 'console errors during explicit-line regression checks');
     await context.close();
@@ -561,7 +834,8 @@ try {
     const nextOutput = await installOutputCapture(page);
     await page.locator('[data-testid="pdf-text-block"]').nth(1).click();
     await retypeStart(page, 1, 'Revenue'.length, 'Profits');
-    const provenance = await waitForPlan(page);
+    // The earlier ABCDE insertion had a redraw plan; wait for this fitting edit's new answer.
+    const provenance = await waitForPlan(page, 'goes straight into the document');
     assert.match(provenance, /goes straight into the document/i, `expected a direct edit, got: ${provenance}`);
     console.log('PASS an edit that fits is planned as a direct rewrite');
 
@@ -623,13 +897,13 @@ try {
       selection.removeAllRanges();
       selection.addRange(range);
     });
-    await page.keyboard.insertText(' An appended sentence long enough to push this paragraph well past the width the original occupied.');
+    await page.keyboard.insertText(' Additional details.');
     const provenance = await waitForPlan(page);
     assert.match(provenance, /will be redrawn/i, `expected a redraw, got: ${provenance}`);
-    assert.match(provenance, /taller than the space it had/i, 'a paragraph that outgrows its space must say so');
+    assert.match(provenance, /will not wrap automatically/i, 'the editor must explain that it preserves explicit lines');
     assertSameGeometry(before, await paragraphGeometry(paragraph), 'focused overflow');
-    assert.match(await page.getByTestId('pdf-block-overflow').innerText(), /finish editing to preview/i,
-      'focused overflow must explain when the deterministic preview will appear');
+    assert.match(await page.getByTestId('pdf-block-overflow').innerText(), /Press Enter for a new line/i,
+      'horizontal overflow must leave the line-break decision with the user');
     await paragraph.evaluate(element => element.blur());
     const preview = page.locator(`[data-testid="pdf-block-preview"][data-preview-block-id="${blockId}"]`);
     await preview.waitFor();
@@ -641,11 +915,12 @@ try {
       });
       return [...lines.entries()].sort(([left], [right]) => left - right).map(([, text]) => text);
     });
-    assert.ok(previewLines.length > before.rows.length, 'the deterministic preview must show genuine overflow');
-    console.log('PASS an edit that no longer fits is planned as a redraw, with the overrun stated');
+    assert.equal(previewLines.length, before.rows.length, 'Done must not introduce soft lines');
+    assertSameGeometry(before, await paragraphGeometry(paragraph), 'finished overflow');
+    console.log('PASS longer text keeps its explicit rows after Done, with horizontal overflow stated');
 
     const reflowed = await saveAndRead(page, nextOutput);
-    assert.match(reflowed.text, /An appended sentence long enough/, 'the appended text is missing from the saved PDF');
+    assert.match(reflowed.text, /Additional details\./, 'the appended text is missing from the saved PDF');
     assert.match(reflowed.text, new RegExp(HEADING), 'redrawing one paragraph disturbed the rest of the page');
     const savedLines = exportedLines(reflowed.items);
     for (const line of previewLines) {
@@ -677,11 +952,11 @@ try {
       selection.removeAllRanges();
       selection.addRange(range);
     });
-    await page.keyboard.insertText(' An appended clause long enough to force this paragraph onto the redraw path entirely.');
+    await page.keyboard.insertText(' Added clause.');
     assert.match(await waitForPlan(page), /will be redrawn/i);
 
     const redrawn = await saveAndRead(page, nextOutput);
-    assert.match(redrawn.text, /An appended clause long enough/);
+    assert.match(redrawn.text, /Added clause\./);
     // The originals are removed rather than covered, so the old words are not still searchable.
     assert.equal(
       (redrawn.text.match(new RegExp(LEAD_BODY.slice(0, 24), 'g')) ?? []).length,
@@ -843,11 +1118,11 @@ try {
       selection.removeAllRanges();
       selection.addRange(range);
     });
-    await page.keyboard.insertText(' and this appended clause is long enough to push the paragraph onto the redraw path.');
+    await page.keyboard.insertText(' Added.');
     await waitForPlan(page);
 
     const redrawn = await saveAndRead(page, nextOutput);
-    assert.match(redrawn.text, /appended clause is long enough/, 'the redrawn paragraph is missing');
+    assert.match(redrawn.text, /Added\./, 'the redrawn paragraph is missing');
     // Exactly one copy: the redraw's. A second would mean the words the PDF drew are still in the
     // file under the new ones, where search and copy would keep finding them.
     const probe = WORD_PER_OBJECT.slice(0, 30).replace(/\s+/g, '');

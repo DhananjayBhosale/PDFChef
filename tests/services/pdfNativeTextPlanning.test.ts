@@ -240,3 +240,84 @@ test('a run spanning invented spaces is measured from its glyphs, not the gaps',
     `run rectangle started at ${resolution.target.pdfRect[0]}, so an invented space was measured`,
   );
 });
+
+test('extractor-owned spaces without an object character still permit exact source matching', () => {
+  const object = createObject('one home, ', 3, 72, 'generated');
+  const target = targetFor(object, object.text, 0);
+  object.characters = object.characters.filter(character => !character.generated);
+  assert.equal(resolveNativePdfTextTarget([object], target).supported, true);
+  // A missing visible glyph must still refuse; only gaps made entirely of whitespace are safe.
+  object.characters = object.characters.filter(character => character.start !== 1);
+  assert.equal(resolveNativePdfTextTarget([object], target).supported, false);
+});
+
+const fragmentedRun = (parts: string[]) => {
+  let left = 72;
+  const objects = parts.map((part, index) => {
+    const object = { ...createObject(part, index, left), fontId: 1, baseline: [left, 690] as [number, number] };
+    left = object.bounds[2];
+    return object;
+  });
+  const text = parts.join('');
+  const rect: [number, number, number, number] = [72, 690, left, 710];
+  return { objects, target: {
+    sourceText: text, pdfRect: rect,
+    sourceRun: { text, start: 0, end: text.length, pdfRect: rect },
+  } };
+};
+
+test('a fitting whole-run replacement preserves separately stored word objects', () => {
+  const { objects, target } = fragmentedRun(['DEVICE ', 'PAD']);
+  const result = planNativePdfTextEdits(objects, [{ ...target, replacementText: 'DEVICE PAP' }]);
+  assert.equal(result.supported, true);
+  if (result.supported) assert.deepEqual(result.changes, [{
+    objectIndex: 1, originalText: 'PAD', replacementText: 'PAP',
+  }]);
+});
+
+test('a fragmented word is rewritten in its original font without introducing artificial spaces', () => {
+  const { objects, target } = fragmentedRun([...('Career note')]);
+  const result = planNativePdfTextEdits(objects, [{ ...target, replacementText: 'Career tone' }]);
+  assert.equal(result.supported, true);
+  if (result.supported) assert.deepEqual(result.changes, [
+    { objectIndex: 7, originalText: 'n', replacementText: 'tone' },
+    { objectIndex: 8, originalText: 'o', replacementText: '' },
+    { objectIndex: 9, originalText: 't', replacementText: '' },
+    { objectIndex: 10, originalText: 'e', replacementText: '' },
+  ]);
+});
+
+test('appending to a fragmented run keeps its existing objects and font', () => {
+  const { objects, target } = fragmentedRun(['100 ', 'Dr']);
+  const result = planNativePdfTextEdits(objects, [{ ...target, replacementText: '100 Dr extra' }]);
+  assert.equal(result.supported, true);
+  if (result.supported) assert.deepEqual(result.changes, [{
+    objectIndex: 1, originalText: 'Dr', replacementText: 'Dr extra',
+  }]);
+});
+
+test('fragment matching rejects duplicate, incomplete, other-row and mixed-font objects', () => {
+  const { objects, target } = fragmentedRun(['DEVICE ', 'PAD']);
+  for (const candidates of [
+    [...objects, { ...objects[1], objectIndex: 99 }],
+    objects.slice(0, 1),
+    [objects[0], { ...objects[1], baseline: [objects[1].bounds[0], 696] as [number, number] }],
+    [objects[0], { ...objects[1], fontId: 2 }],
+  ]) {
+    const result = planNativePdfTextEdits(candidates, [{ ...target, replacementText: 'DEVICE PAP' }]);
+    assert.equal(result.supported, false);
+  }
+});
+
+test('a comma below the baseline remains part of a fragmented original-font word', () => {
+  const { objects, target } = fragmentedRun(['Go ', 'h', 'o', 'm', 'e, ', 'again']);
+  const comma = objects[4].characters.find(character => character.text === ',')!;
+  comma.bounds[1] = 687;
+  comma.bounds[3] = 689;
+  const result = planNativePdfTextEdits(objects, [{ ...target, replacementText: 'Go hone, again' }]);
+  assert.equal(result.supported, true);
+  if (result.supported) {
+    assert.equal(result.changes[0].replacementText, 'hone, ');
+    assert.deepEqual(result.changes.map(change => change.objectIndex), [1, 2, 3, 4]);
+  }
+});

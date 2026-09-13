@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { planBlockEdit } from '../../services/pdfBlockEditPlanning';
 import type { PdfTextAlign, PdfTextBlock, PdfTextLine } from '../../services/pdfTextBlocks';
 import { capturePdfFocusAnchor, pdfCaretScroll, pdfFocusAnchorScroll, type PdfFocusAnchor } from '../../services/pdfEditingFocus';
@@ -240,6 +241,10 @@ const writeBlockContent = (
       const span = document.createElement('span');
       span.textContent = run.text;
       span.dataset.font = run.fontKey;
+      if (fits) {
+        span.dataset.pdfLine = String(lineIndex);
+        span.dataset.pdfRun = String(runIndex);
+      }
       const font = fonts.get(run.fontKey) ?? fallback;
       span.style.fontFamily = font.cssFamily;
       span.style.fontWeight = font.cssWeight;
@@ -316,7 +321,10 @@ const BlockEditor: React.FC<{
 }> = ({ resolved, edit, preview, isActive, displayScale, enabled, onActivate, onChange, onBeginChange }) => {
   const { block, font, fontsByKey, runFits, overlayAlign, hitPadding, stackOrder } = resolved;
   const editableRef = useRef<HTMLDivElement>(null);
+  const outlineRef = useRef<HTMLDivElement>(null);
+  const overflowRef = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState(false);
+  const [composing, setComposing] = useState(false);
   const committedText = useRef(edit?.text ?? block.text);
   const typingSession = useRef(false);
   const isDirty = Boolean(edit) && ((edit?.text ?? block.text) !== block.text
@@ -325,6 +333,7 @@ const BlockEditor: React.FC<{
   const text = edit?.text ?? block.text;
   const currentPreview = preview?.text === text ? preview : undefined;
   const showPreview = !focused && Boolean(currentPreview);
+  const extendsPastWidth = currentPreview?.pieces.some(piece => piece.x + piece.width > currentPreview.width + 0.5);
   const hasOutgrownItsBox = isDirty && (text.split('\n').length > block.lines.length
     || (currentPreview?.height ?? 0) > block.height + 1);
   const fontSizePx = (edit?.fontSize ?? block.fontSize) * displayScale;
@@ -352,14 +361,30 @@ const BlockEditor: React.FC<{
   const renderRef = useRef({ fontsByKey, runFits, font });
   renderRef.current = { fontsByKey, runFits, font };
 
-  // The browser owns these children while the user types. They are only rewritten when the text
-  // changed from somewhere else — the first render, an undo, a redo, or a revert.
+  // Keep ordinary typing in browser-owned nodes. Rebuild only external changes or a run whose
+  // wrapper Chromium discarded during a full selection replacement, retaining the caret below.
   useLayoutEffect(() => {
     const element = editableRef.current;
     if (!element) return;
-    if (written.current && committedText.current === text) return;
+    const externalChange = !written.current || committedText.current !== text;
+    if (!externalChange) {
+      if (composing || text.split('\n').length !== block.lines.length) return;
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      let lostRun = false;
+      let node: Node | null;
+      while ((node = walker.nextNode())) {
+        if (node.textContent?.trim() && !node.parentElement?.closest('[data-pdf-line][data-pdf-run]')) {
+          lostRun = true;
+          break;
+        }
+      }
+      const runs = [...element.querySelectorAll<HTMLElement>('[data-pdf-line][data-pdf-run]')];
+      const keys = runs.map(run => `${run.dataset.pdfLine}:${run.dataset.pdfRun}`);
+      if (!lostRun && new Set(keys).size === keys.length) return;
+      if (planBlockEdit(block, text).mode !== 'direct') return;
+    }
     committedText.current = text;
-    typingSession.current = false;
+    if (externalChange) typingSession.current = false;
     written.current = true;
     const current = renderRef.current;
     const selection = window.getSelection();
@@ -372,8 +397,7 @@ const BlockEditor: React.FC<{
     };
     const anchor = selection ? offsetOf(selection.anchorNode, selection.anchorOffset) : null;
     const focus = selection ? offsetOf(selection.focusNode, selection.focusOffset) : null;
-    // Reconstruct external edits/undo from the original runs whenever they still map in place.
-    // The normal input path never gets here, so IME and native selections keep their DOM nodes.
+    // Restore original run styles and spacing only where the edit still maps to those runs.
     const plan = planBlockEdit(block, text);
     const replacements = plan.mode === 'direct'
       ? new Map(plan.runEdits.map((run) => [run.itemIndex, run.replacementText]))
@@ -399,7 +423,125 @@ const BlockEditor: React.FC<{
       const f = blockRange(element, Math.min(focus, text.length), Math.min(focus, text.length));
       if (a && f) selection.setBaseAndExtent(a.startContainer, a.startOffset, f.startContainer, f.startOffset);
     }
-  }, [block, text, edit?.segments]);
+    if (!externalChange) {
+      // The discarded wrapper may have been the only record of an edited bold/italic run.
+      onChange(block.id, text, readStyledSegments(element, block.fontKey, block.text.includes('\u00a0')));
+    }
+  }, [block, text, edit?.segments, composing, onChange]);
+
+  // PDF rows need not have a uniform pitch (a wrapped table cell is a common example).
+  // Move the existing inline runs onto their real baselines without replacing text nodes or
+  // taking selection/IME away from the browser. Font ascent also differs from the CSS line box.
+  const keepsOriginalRows = text.split('\n').length === block.lines.length && edit?.fontSize === undefined;
+  useLayoutEffect(() => {
+    const element = editableRef.current;
+    if (!element || composing) return;
+    // Rotated text is already laid out in its rotated wrapper; screen-axis rectangles cannot
+    // calibrate that reading space.
+    if (Math.abs(block.angle) > 0.02) return;
+    const spans = [...element.querySelectorAll<HTMLElement>('[data-pdf-line][data-pdf-run]')];
+    if (!keepsOriginalRows) {
+      spans.forEach(span => { span.style.left = ''; span.style.top = ''; });
+      return;
+    }
+    const context = document.createElement('canvas').getContext('2d');
+    if (!context) return;
+    const box = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    const scale = box.width / Number.parseFloat(style.width);
+    if (!(scale > 0)) return;
+    const unit = Number.parseFloat(style.fontSize) / block.fontSize;
+    const u0 = Math.min(...block.lines.map(line => line.u0));
+    // Read every rectangle first, then apply offsets, avoiding a layout per run while typing.
+    const offsets = spans.map(span => {
+      const line = block.lines[Number(span.dataset.pdfLine)];
+      const run = line?.runs[Number(span.dataset.pdfRun)];
+      if (!run) return null;
+      const font = getComputedStyle(span);
+      const size = Number.parseFloat(font.fontSize);
+      context.font = `${font.fontStyle} ${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
+      const ascent = context.measureText('Hg').fontBoundingBoxAscent;
+      if (!Number.isFinite(ascent)) return null;
+      const rect = span.getBoundingClientRect();
+      const x = box.left + (run.u0 - u0) * unit * scale;
+      const baseline = box.top + (hitPadding + block.ascent + line.v - block.lines[0].v) * unit * scale;
+      return { span,
+        left: ((Number.parseFloat(font.left) || 0) + (x - rect.left) / scale) / size,
+        top: ((Number.parseFloat(font.top) || 0) + (baseline - rect.top) / scale - ascent) / size,
+      };
+    });
+    offsets.forEach(offset => {
+      if (!offset) return;
+      offset.span.style.position = 'relative';
+      offset.span.style.left = `${offset.left}em`;
+      offset.span.style.top = `${offset.top}em`;
+    });
+  }, [block, text, displayScale, keepsOriginalRows, hitPadding, showPreview, composing]);
+
+  // The selection frame describes the text. The larger invisible target still accepts a finger
+  // above or below it. Reading CSS sizes here also lets the frame grow with unwrapped typing.
+  useLayoutEffect(() => {
+    const element = editableRef.current;
+    const outline = outlineRef.current;
+    if (!element || !outline) return;
+    const style = getComputedStyle(element);
+    outline.style.width = `${Number.parseFloat(style.width) / iosZoomGuard}px`;
+    outline.style.height = `${keepsOriginalRows ? block.height * displayScale
+      : Number.parseFloat(style.height) / iosZoomGuard - hitPadding * displayScale * 2}px`;
+  }, [isActive, text, showPreview, currentPreview, block.height, displayScale, iosZoomGuard, keepsOriginalRows, hitPadding]);
+
+  // Keep guidance outside the scaled/clipped PDF canvas. Position only the hint; never move
+  // the editing surface or selection to make a message fit.
+  useLayoutEffect(() => {
+    const element = editableRef.current;
+    const hint = overflowRef.current;
+    const viewport = element?.closest<HTMLElement>('[data-testid="pdf-zoom-viewport"]');
+    if (!element || !hint || !viewport) return;
+    const page = element.closest<HTMLElement>('[data-pdf-page]');
+    const bar = document.querySelector('[data-testid="pdf-paragraph-inspector"]')?.closest('.chef-chrome');
+    const visual = window.visualViewport;
+    let frame = 0;
+    const position = () => {
+      frame = 0;
+      const bounds = viewport.getBoundingClientRect();
+      const left = Math.max(bounds.left, visual?.offsetLeft ?? 0) + 8;
+      const right = Math.min(bounds.right, visual ? visual.offsetLeft + visual.width : window.innerWidth) - 8;
+      const top = Math.max(bounds.top, visual?.offsetTop ?? 0) + 8;
+      const bottom = Math.min(bounds.bottom, visual ? visual.offsetTop + visual.height : window.innerHeight,
+        bar?.getBoundingClientRect().top ?? Infinity) - 8;
+      const caret = focusedCaretRect(element) ?? element.getBoundingClientRect();
+      hint.style.visibility = 'hidden';
+      if (right <= left || bottom <= top || caret.bottom < top || caret.top > bottom
+        || caret.right < left || caret.left > right) return;
+      hint.style.width = `${Math.min(320, right - left)}px`;
+      const size = hint.getBoundingClientRect();
+      const y = caret.bottom + 8 + size.height <= bottom ? caret.bottom + 8 : caret.top - size.height - 8;
+      if (y < top) return;
+      hint.style.left = `${Math.max(left, Math.min(caret.left, right - size.width))}px`;
+      hint.style.top = `${y}px`;
+      hint.style.visibility = 'visible';
+    };
+    const schedule = () => { if (!frame) frame = window.requestAnimationFrame(position); };
+    position();
+    const observer = new ResizeObserver(schedule);
+    observer.observe(viewport);
+    if (page) observer.observe(page);
+    if (bar) observer.observe(bar);
+    window.addEventListener('scroll', schedule, true);
+    window.addEventListener('resize', schedule);
+    visual?.addEventListener('resize', schedule);
+    visual?.addEventListener('scroll', schedule);
+    document.addEventListener('selectionchange', schedule);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener('scroll', schedule, true);
+      window.removeEventListener('resize', schedule);
+      visual?.removeEventListener('resize', schedule);
+      visual?.removeEventListener('scroll', schedule);
+      document.removeEventListener('selectionchange', schedule);
+    };
+  }, [focused, extendsPastWidth, text]);
 
   const handleInput = useCallback(() => {
     const element = editableRef.current;
@@ -432,7 +574,7 @@ const BlockEditor: React.FC<{
         zIndex: isActive ? PARAGRAPH_ACTIVE_LAYER : hasOutgrownItsBox ? 1 : stackOrder,
       }}
     >
-      {isDirty && (
+      {isDirty && edit?.patch && (
         <div
           aria-hidden
           data-testid="pdf-block-patch"
@@ -447,6 +589,20 @@ const BlockEditor: React.FC<{
             backgroundSize: '100% 100%',
           }}
         />
+      )}
+      {isDirty && !edit?.patch && (
+        <svg aria-hidden="true" data-testid="pdf-block-patch" className="pointer-events-none absolute"
+          width={block.width * displayScale} height={block.height * displayScale}
+          viewBox={`0 0 ${block.width} ${block.height}`} overflow="visible"
+          style={{ left: 0, top: hitPadding * displayScale }}>
+          {block.lines.flatMap((line, lineIndex) => line.runs.map((run, runIndex) => (
+            <rect key={`${lineIndex}-${runIndex}`}
+              x={run.u0 - Math.min(...block.lines.map(row => row.u0))}
+              y={line.v - block.lines[0].v + block.ascent - run.fontSize * 0.82}
+              width={Math.max(0, run.u1 - run.u0)} height={run.fontSize * 1.08}
+              fill={edit?.patchColor ?? '#ffffff'} />
+          )))}
+        </svg>
       )}
       <div
         ref={editableRef}
@@ -468,6 +624,8 @@ const BlockEditor: React.FC<{
         onFocus={() => { setFocused(true); onActivate(block.id); }}
         onBlur={() => { typingSession.current = false; setFocused(false); }}
         onInput={handleInput}
+        onCompositionStart={() => setComposing(true)}
+        onCompositionEnd={() => setComposing(false)}
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
@@ -498,7 +656,8 @@ const BlockEditor: React.FC<{
           transform: iosZoomGuard > 1 ? `scale(${1 / iosZoomGuard})` : undefined,
           transformOrigin: '0 0',
           minWidth: unit(Math.max(block.width, block.measure) * displayScale),
-          minHeight: unit(Math.max((showPreview ? currentPreview!.height : block.height) * displayScale, lineHeightPx)),
+          height: keepsOriginalRows ? unit((block.height + hitPadding * 2) * displayScale) : undefined,
+          minHeight: unit(((showPreview ? currentPreview!.height : block.height) + hitPadding * 2) * displayScale),
           paddingTop: unit(hitPadding * displayScale),
           paddingBottom: unit(hitPadding * displayScale),
           // An indent is a left-edge idea. Applied under centring or right alignment it adds to the
@@ -531,18 +690,21 @@ const BlockEditor: React.FC<{
           touchAction: 'pan-x pan-y',
           WebkitUserSelect: 'text',
           userSelect: 'text',
-          boxShadow: isActive
-            ? `0 0 0 ${unit(2)}px var(--accent-rest, #2563eb)`
-            : undefined,
           borderRadius: unit(2),
           pointerEvents: enabled ? 'auto' : 'none',
         }}
       />
-      {focused && currentPreview?.reflow && (
-        <div role="status" data-testid="pdf-block-overflow" className="absolute rounded bg-amber-50 px-2 py-1 text-xs text-amber-950"
-          style={{ top: (hitPadding + block.height) * displayScale + 4, width: 240, pointerEvents: 'none' }}>
-          Text needs a new layout. Finish editing to preview how it will be saved.
-        </div>
+      {isActive && (
+        <div ref={outlineRef} aria-hidden="true" data-testid="pdf-block-outline" className="pointer-events-none absolute"
+          style={{ left: 0, top: hitPadding * displayScale, borderRadius: 2,
+            boxShadow: '0 0 0 2px var(--accent-rest, #2563eb)' }} />
+      )}
+      {focused && extendsPastWidth && createPortal(
+        <div ref={overflowRef} role="status" data-testid="pdf-block-overflow" className="fixed rounded bg-amber-50 px-2 py-1 text-sm text-amber-950"
+          style={{ zIndex: PARAGRAPH_ACTIVE_LAYER, visibility: 'hidden', pointerEvents: 'none' }}>
+          Text extends beyond its original space. Press Enter for a new line, or shorten it to avoid overlap.
+        </div>,
+        document.body,
       )}
       {showPreview && currentPreview && (
         <svg aria-hidden="true" data-testid="pdf-block-preview" data-preview-block-id={block.id}

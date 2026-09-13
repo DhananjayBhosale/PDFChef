@@ -89,19 +89,12 @@ const touchscreenScrollDown = async () => {
   const startY = Math.min(bounds.y + bounds.height - 48, bounds.y + 300);
   const endY = Math.max(bounds.y + 48, startY - 180);
   const cdp = await context.newCDPSession(page);
-  await cdp.send('Input.dispatchTouchEvent', {
-    type: 'touchStart',
-    touchPoints: [{ x, y: startY }],
+  // Let Chromium pace a real touch swipe across frames. Sending every move in one burst can
+  // coalesce the entire gesture before the compositor starts scrolling, especially after pinch.
+  await cdp.send('Input.synthesizeScrollGesture', {
+    x, y: startY, yDistance: endY - startY,
+    gestureSourceType: 'touch', speed: 600, preventFling: true,
   });
-  await cdp.send('Input.dispatchTouchEvent', {
-    type: 'touchMove',
-    touchPoints: [{ x, y: (startY + endY) / 2 }],
-  });
-  await cdp.send('Input.dispatchTouchEvent', {
-    type: 'touchMove',
-    touchPoints: [{ x, y: endY }],
-  });
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await cdp.detach();
   await page.waitForFunction(
     previous => (document.querySelector('[data-testid="pdf-zoom-viewport"]'))?.scrollTop > previous,
@@ -255,6 +248,26 @@ try {
   assert.equal(await ordinaryParagraph.evaluate(element => document.activeElement === element), false, 'Done did not dismiss editing');
   await page.getByRole('button', { name: 'Undo added element change' }).click();
   assert.equal(await ordinaryParagraph.innerText(), 'This is QA content for tool verification.', 'Undo did not restore the original paragraph');
+  await ordinaryParagraph.click();
+  await ordinaryParagraph.press('ControlOrMeta+A');
+  await page.keyboard.insertText('This is QA content for tool verification. More.');
+  const overflowHint = page.getByTestId('pdf-block-overflow');
+  await overflowHint.waitFor();
+  const hintGeometry = await overflowHint.evaluate(hint => {
+    const selection = getSelection();
+    const range = document.createRange();
+    range.setStart(selection.focusNode, selection.focusOffset);
+    range.collapse(true);
+    return { hint: hint.getBoundingClientRect().toJSON(), caret: range.getBoundingClientRect().toJSON(), width: innerWidth, height: innerHeight };
+  });
+  assert.ok(hintGeometry.hint.left >= 0 && hintGeometry.hint.right <= hintGeometry.width,
+    'the mobile overflow hint is clipped horizontally');
+  assert.ok(hintGeometry.hint.top >= 0 && hintGeometry.hint.bottom <= hintGeometry.height,
+    'the keyboard obscures the mobile overflow hint');
+  assert.ok(hintGeometry.hint.top >= hintGeometry.caret.bottom || hintGeometry.hint.bottom <= hintGeometry.caret.top,
+    'the overflow hint obscures the caret');
+  await page.getByRole('button', { name: 'Revert this paragraph' }).click();
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => document.activeElement?.blur());
   await page.waitForTimeout(200);
@@ -397,6 +410,7 @@ try {
       'one-finger vertical scrolling stays inside the zoomed PDF box',
       'touch focus zoom preserves the selected PDF point and native text selection',
       'keyboard and inspector leave the caret visible without changing PDF-relative position',
+      'overflow guidance stays readable above the keyboard without covering the caret',
       'Done retains existing-text changes and Undo restores them',
       'visible Next and Previous page controls render different PDF pages',
       'reconstructed paragraphs go inert while an insert is armed',

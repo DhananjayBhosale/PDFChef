@@ -6,11 +6,20 @@ const source = await PDFDocument.create();
 source.setTitle('Original title');
 source.setAuthor('Original author');
 source.setSubject('Original subject');
+source.setCreationDate(new Date('2020-01-02T00:00:00Z'));
+source.setModificationDate(new Date('2021-03-04T00:00:00Z'));
+source.catalog.set(PDFName.of('Metadata'), source.context.register(source.context.stream(
+  '<x:xmpmeta>AUDIT-PRIVATE-XMP-AUTHOR</x:xmpmeta>', { Type: 'Metadata', Subtype: 'XML' },
+)));
 const first = source.addPage();
+first.node.set(PDFName.of('Metadata'), source.context.register(source.context.stream(
+  '<x:xmpmeta>AUDIT-PRIVATE-PAGE-AUTHOR</x:xmpmeta>', { Type: 'Metadata', Subtype: 'XML' },
+)));
 first.drawText('Readable words on one line', { x: 40, y: 700 });
 const field = source.getForm().createTextField('Customer');
 field.setText('Ada');
 field.addToPage(first, { x: 40, y: 600, width: 180, height: 25 });
+field.acroField.getWidgets()[0].dict.set(PDFName.of('Subtype'), source.context.register(PDFName.of('Widget')));
 first.node.addAnnot(source.context.register(source.context.obj({
   Type: 'Annot', Subtype: 'Text', Rect: [40, 400, 60, 420], Contents: 'Remove this comment',
 })));
@@ -34,6 +43,8 @@ try {
     const metadata = await document.setPDFMetadata(file, { title: 'Replacement' }, { clearAll: true });
     const emptyTitle = await document.setPDFMetadata(file, { title: '' });
     const annotations = await document.removePDFAnnotations(file);
+    const hiddenInfo = await document.removePDFMetadata(file);
+    const sanitized = await document.sanitizePDF(file);
     const compressed = await pdfBrowser.compressPDFAdaptive(file, 'recommended', () => {}, false, undefined, false);
     const protectedBytes = await document.protectPDF(file, 'test-password');
     const encryptedRefusals = [];
@@ -46,9 +57,13 @@ try {
     try {
       const words = await pdfBrowser.getPageSelectableTextLines(opened, 0);
       extractedText = results.textFromSelectionTargets(words);
+      await pdfBrowser.getPageTextSignatures(file);
+      const stillOpen = await opened.getPage(2);
+      await stillOpen.getTextContent();
     } finally { await opened.destroy(); }
     return {
       metadata: Array.from(metadata), emptyTitle: Array.from(emptyTitle), annotations: Array.from(annotations),
+      hiddenInfo: Array.from(hiddenInfo), sanitized: Array.from(sanitized),
       compressed: Array.from(compressed.data), encryptedRefusals, extractedText,
     };
   }, Array.from(bytes));
@@ -65,7 +80,22 @@ try {
   assert.equal(cleaned.getForm().getTextField('Customer').getText(), 'Ada');
   const remainingAnnotations = cleaned.getPage(0).node.Annots();
   assert.equal(remainingAnnotations.size(), 1);
-  assert.equal(remainingAnnotations.lookup(0, PDFDict).get(PDFName.of('Subtype')), PDFName.of('Widget'));
+  assert.equal(remainingAnnotations.lookup(0, PDFDict).lookup(PDFName.of('Subtype')), PDFName.of('Widget'));
+  const commentContents = doc => doc.context.enumerateIndirectObjects().flatMap(([, object]) =>
+    object instanceof PDFDict ? [object.get(PDFName.of('Contents'))?.decodeText?.()] : []);
+  assert.ok(!commentContents(cleaned).includes('Remove this comment'), 'removed comments remain recoverable in unused objects');
+  for (const data of [result.hiddenInfo, result.sanitized]) {
+    assert.ok(!Buffer.from(data).includes('AUDIT-PRIVATE-XMP-AUTHOR'), 'removed author data remains in an unused XMP stream');
+    assert.ok(!Buffer.from(data).includes('AUDIT-PRIVATE-PAGE-AUTHOR'), 'page metadata still contains hidden author data');
+    const output = await read(data);
+    assert.equal(output.getCreationDate(), undefined, 'Remove hidden info must remove the original date');
+    assert.equal(output.getModificationDate(), undefined, 'Remove hidden info must not substitute a fake date');
+    assert.equal(output.getForm().getTextField('Customer').getText(), 'Ada');
+    const annotations = output.getPage(0).node.Annots();
+    assert.ok(annotations?.asArray().some(ref => output.context.lookup(ref, PDFDict).lookup(PDFName.of('Subtype')) === PDFName.of('Widget')),
+      'cleanup hid the preserved form field');
+  }
+  assert.ok(!commentContents(await read(result.sanitized)).includes('Remove this comment'));
   assert.ok(result.compressed.length < bytes.length, 'text-preserving optimization should shrink this unoptimized fixture');
   const compact = await read(result.compressed);
   assert.equal(compact.getPageCount(), source.getPageCount());
@@ -91,7 +121,7 @@ try {
     assert.ok((await summary.textContent()).includes('These pages need visual comparison'));
     assert.ok(!(await summary.textContent()).includes('100% match'));
   }
-  console.log(JSON.stringify({ status: 'PASS', checks: ['metadata clear then edit', 'explicit blank metadata', 'form widget preservation', 'selectable-text compression', 'encrypted transform refusal', 'readable extraction lines', 'desktop/mobile scan comparison UI'], originalBytes: bytes.length, compressedBytes: result.compressed.length }, null, 2));
+  console.log(JSON.stringify({ status: 'PASS', checks: ['metadata clear then edit', 'explicit blank metadata', 'removed metadata and comments absent from saved objects', 'dates removed rather than replaced', 'cleanup preserves visible form widgets and values', 'selectable-text compression', 'encrypted transform refusal', 'readable extraction lines', 'comparison leaves the active PDF readable', 'desktop/mobile scan comparison UI'], originalBytes: bytes.length, compressedBytes: result.compressed.length }, null, 2));
 } finally {
   await browser.close();
 }

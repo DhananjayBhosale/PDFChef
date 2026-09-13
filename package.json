@@ -45,7 +45,7 @@
     "test:unit": "node --experimental-strip-types --test tests/**/*.test.ts",
     "test:browser:edit-pdf:shared-forms": "node scripts/verify-native-text-shared-forms.mjs",
     "test:browser:geometry": "node scripts/verify-pdf-placement-geometry.mjs",
-    "test:browser:tools": "node scripts/verify-pdf-tool-correctness.mjs && node tests/browser/imagePdfIntegrity.mjs",
+    "test:browser:tools": "node scripts/verify-pdf-tool-correctness.mjs && node scripts/verify-pdf-tool-outputs.mjs && node tests/browser/imagePdfIntegrity.mjs",
     "test:browser:edit-pdf:handoff": "node scripts/verify-edit-pdf-handoff.mjs"
   },
   "dependencies": {

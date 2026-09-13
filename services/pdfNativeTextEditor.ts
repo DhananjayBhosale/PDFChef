@@ -352,6 +352,7 @@ const collectTextObjects = (
         topPointer,
       )) continue;
 
+      const matrix = readObjectMatrix(engine, object);
       const snapshot: PdfTextObjectSnapshot = {
         objectIndex,
         text: readTextObject(engine, object, textPage),
@@ -362,6 +363,10 @@ const collectTextObjects = (
           readFloat32(engine, topPointer),
         ],
         characters: [],
+        fontId: engine.FPDFTextObj_GetFont(object),
+        baseline: matrix && matrix[0] > 0 && matrix[3] > 0
+          && Math.abs(matrix[1]) < 0.0001 && Math.abs(matrix[2]) < 0.0001
+          ? [matrix[4], matrix[5]] : undefined,
       };
       objects.push(snapshot);
       objectByPointer.set(object, snapshot);

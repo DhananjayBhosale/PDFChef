@@ -84,7 +84,7 @@ export const PdfParagraphInspector: React.FC<Props> = ({
       // The reason is left out on purpose: it names a font encoding or a text object, which is not
       // something a reader can do anything about. The one thing they can do is on the end.
       ? 'This paragraph cannot be changed. Add a text box over it instead.'
-      : `This paragraph will be redrawn rather than typed over, so its lettering may sit a little differently. Finish editing to preview how it will be saved.${
+      : `This paragraph will be redrawn with a matching typeface. Your line breaks are kept; text will not wrap automatically.${
         overrun > 0
           ? ' It is now taller than the space it had, and what follows will not move down — shorten it, or make the text smaller, so the two do not overlap.'
           : ''

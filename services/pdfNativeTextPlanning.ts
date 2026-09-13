@@ -6,6 +6,9 @@ export interface PdfTextObjectSnapshot {
   bounds: PdfSpaceRect;
   characters: PdfTextCharacterSnapshot[];
   appearance?: NativePdfTextAppearance;
+  /** Engine-local font identity and upright baseline, used to match fragmented source runs. */
+  fontId?: number;
+  baseline?: [number, number];
 }
 
 export interface PdfTextCharacterSnapshot {
@@ -145,12 +148,15 @@ export const resolveNativePdfTextTarget = (
       character.start >= sourceRun.start && character.end <= sourceRun.end
     ));
     if (selectedCharacters.length === 0) return;
-    const exactCharacterRun = selectedCharacters[0].start === sourceRun.start
-      && selectedCharacters[selectedCharacters.length - 1].end === sourceRun.end
-      && selectedCharacters.every((character, index) => (
-        index === 0 || selectedCharacters[index - 1].end === character.start
-      ))
-      && selectedCharacters.map((character) => character.text).join('') === sourceText;
+    // PDFium can attach an inferred space to the object's text without attaching a character
+    // record to that object. Permit those whitespace-only holes; every visible glyph must match.
+    let cursor = sourceRun.start;
+    const exactCharacterRun = selectedCharacters.every((character) => {
+      if (character.start < cursor || sourceRun.text.slice(cursor, character.start).trim()
+        || sourceRun.text.slice(character.start, character.end) !== character.text) return false;
+      cursor = character.end;
+      return true;
+    }) && !sourceRun.text.slice(cursor, sourceRun.end).trim();
     if (!exactCharacterRun) return;
 
     const objectArea = Math.max(rectArea(bounds), 1e-6);
@@ -224,6 +230,78 @@ const expandDeletionGroups = (
   });
 };
 
+/**
+ * PDF.js can join separately positioned words or glyphs into one source item. Keep a fitting
+ * edit in those original objects instead of changing its font just because the engines disagree
+ * about where an item ends. This path requires an exact, unambiguous upright run in one font.
+ */
+const expandFragmentedRunEdit = (
+  objects: PdfTextObjectSnapshot[],
+  edit: PlannedNativePdfTextEdit,
+): PlannedNativePdfTextEdit[] | null => {
+  const source = edit.sourceRun;
+  if (!source || source.start !== 0 || source.end !== source.text.length
+    || source.text !== edit.sourceText || !source.pdfRect.every(Number.isFinite)) return null;
+  const rect = normalizedRect(source.pdfRect);
+  const fragments = objects.filter((object) => {
+    if (!object.text.trim() || !object.baseline || object.fontId === undefined) return false;
+    // PDF.js reports the advance box from the baseline upwards. Commas and other low ink can
+    // sit entirely below it, so use the actual baseline to identify the row, not glyph centres.
+    if (Math.abs(object.baseline[1] - rect[1]) > 0.5) return false;
+    const ink = object.characters.filter((character) => !character.generated && character.text.trim());
+    return ink.length > 0 && ink.every(({ bounds }) => {
+      const cx = (bounds[0] + bounds[2]) / 2;
+      return cx >= rect[0] && cx <= rect[2];
+    });
+  }).sort((a, b) => a.baseline![0] - b.baseline![0]);
+  if (fragments.length < 2 || fragments.some((object) => (
+    object.fontId !== fragments[0].fontId
+    || Math.abs(object.baseline![1] - fragments[0].baseline![1]) > 0.15
+  ))) return null;
+
+  let offset = 0;
+  const spans: Array<{ object: PdfTextObjectSnapshot; start: number; end: number }> = [];
+  for (const object of fragments) {
+    // Extractors can infer a trailing space as well as reporting a separate space object.
+    // Skip only spacing; every visible character still has to match in its original order.
+    while (/\s/.test(source.text[offset] ?? '') && offset < source.text.length) offset += 1;
+    const text = object.text.trimEnd();
+    if (!source.text.startsWith(text, offset)) return null;
+    spans.push({ object, start: offset, end: offset + text.length });
+    offset += text.length;
+  }
+  if (source.text.slice(offset).trim()) return null;
+
+  let prefix = 0;
+  while (prefix < source.text.length && source.text[prefix] === edit.replacementText[prefix]) prefix += 1;
+  let suffix = 0;
+  while (suffix < Math.min(source.text.length, edit.replacementText.length) - prefix
+    && source.text.at(-suffix - 1) === edit.replacementText.at(-suffix - 1)) suffix += 1;
+  let start = prefix;
+  let end = source.text.length - suffix;
+  // Rewrite an affected word together. Keeping a narrow replacement glyph in a wider glyph's
+  // old slot creates a gap that extractors mistake for a new space ("note" -> "t one").
+  // Other words and lines keep their own objects and positions.
+  while (start > 0 && !/\s/.test(source.text[start - 1])) start -= 1;
+  while (end < source.text.length && !/\s/.test(source.text[end])) end += 1;
+  const touched = spans.filter((span) => span.start < end && span.end > start);
+  if (!touched.length || start < touched[0].start || end > touched.at(-1)!.end) return null;
+  const first = touched[0];
+  const last = touched.at(-1)!;
+  const rebuilt = source.text.slice(first.start, start)
+    + edit.replacementText.slice(start, edit.replacementText.length - (source.text.length - end))
+    + last.object.text.slice(end - last.start);
+
+  return touched.flatMap(({ object }, index) => {
+    const replacement = index === 0 ? rebuilt : '';
+    if (replacement === object.text) return [];
+    return [{
+      sourceText: object.text, pdfRect: object.bounds, replacementText: replacement,
+      sourceRun: { text: object.text, start: 0, end: object.text.length, pdfRect: object.bounds },
+    }];
+  });
+};
+
 /** Build one replacement string per text object and reject overlapping edits. */
 export const planNativePdfTextEdits = (
   objects: PdfTextObjectSnapshot[],
@@ -231,7 +309,14 @@ export const planNativePdfTextEdits = (
 ):
   | { supported: true; changes: PlannedPdfTextObjectChange[] }
   | { supported: false; reason: string } => {
-  const resolved = edits.map((edit) => ({ edit, resolution: resolveNativePdfTextTarget(objects, edit) }));
+  const resolved = edits.flatMap((edit) => {
+    const resolution = resolveNativePdfTextTarget(objects, edit);
+    if (resolution.supported) return [{ edit, resolution }];
+    const fragments = expandFragmentedRunEdit(objects, edit);
+    return fragments?.length
+      ? fragments.map((fragment) => ({ edit: fragment, resolution: resolveNativePdfTextTarget(objects, fragment) }))
+      : [{ edit, resolution }];
+  });
   const unsupported = resolved.find(({ resolution }) => 'reason' in resolution);
   if (unsupported && 'reason' in unsupported.resolution) {
     return { supported: false, reason: unsupported.resolution.reason };

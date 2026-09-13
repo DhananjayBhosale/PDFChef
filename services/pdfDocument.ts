@@ -1,4 +1,5 @@
 import {
+  PDFArray,
   PDFCheckBox,
   PDFDict,
   PDFDocument,
@@ -6,12 +7,15 @@ import {
   PDFName,
   PDFOptionList,
   PDFRadioGroup,
+  PDFRef,
+  PDFStream,
   PDFTextField,
   rgb,
   degrees,
   StandardFonts,
 } from 'pdf-lib';
 import JSZip from 'jszip';
+import { copyPagesWithForms } from './pdfPageCopy';
 import type { PDFMetadata } from '../types';
 import type { PdfFormFieldValue } from './pdfBrowser';
 import { loadPDFDocument } from './pdfBrowser';
@@ -93,11 +97,12 @@ export const mergePDFs = async (files: File[], signal?: AbortSignal): Promise<Ui
     throwIfPdfJobAborted(signal);
     const pdf = await PDFDocument.load(arrayBuffer);
     throwIfPdfJobAborted(signal);
-    const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+    const copiedPages = await copyPagesWithForms(mergedPdf, pdf, pdf.getPageIndices());
     copiedPages.forEach((page) => mergedPdf.addPage(page));
     throwIfPdfJobAborted(signal);
   }
   await pdfJobCheckpoint(signal, true);
+  removeUnusedPdfObjects(mergedPdf);
   const bytes = await mergedPdf.save();
   await pdfJobCheckpoint(signal, true);
   return bytes;
@@ -243,7 +248,7 @@ export const splitPDFByPagesPerFile = async (
 
   if (totalParts <= 1) {
     const singlePdf = await PDFDocument.create();
-    const copiedPages = await singlePdf.copyPages(pdfDoc, exportIndices);
+    const copiedPages = await copyPagesWithForms(singlePdf, pdfDoc, exportIndices);
     await pdfJobCheckpoint(signal, true);
     for (let index = 0; index < copiedPages.length; index += 1) {
       throwIfPdfJobAborted(signal);
@@ -253,6 +258,7 @@ export const splitPDFByPagesPerFile = async (
       if ((index + 1) % 8 === 0) await pdfJobCheckpoint(signal, true);
     }
     await pdfJobCheckpoint(signal, true);
+    removeUnusedPdfObjects(singlePdf);
     const bytes = await singlePdf.save();
     await pdfJobCheckpoint(signal, true);
     return {
@@ -269,9 +275,10 @@ export const splitPDFByPagesPerFile = async (
     const partNumber = Math.floor(startIndex / sanitizedPagesPerFile) + 1;
     onProgress?.(partNumber, totalParts);
     const partPdf = await PDFDocument.create();
-    const copiedPages = await partPdf.copyPages(pdfDoc, chunk);
+    const copiedPages = await copyPagesWithForms(partPdf, pdfDoc, chunk);
     throwIfPdfJobAborted(signal);
     copiedPages.forEach((page) => partPdf.addPage(page));
+    removeUnusedPdfObjects(partPdf);
     const partBytes = await partPdf.save();
     throwIfPdfJobAborted(signal);
     zip.file(`part_${partNumber}_${buildPageExportLabel(chunk)}.pdf`, partBytes);
@@ -318,9 +325,10 @@ export const splitPDFByMaximumSize = async (
   const serialize = async (chunk: number[]) => {
     throwIfPdfJobAborted(signal);
     const candidate = await PDFDocument.create();
-    const pages = await candidate.copyPages(source, chunk);
+    const pages = await copyPagesWithForms(candidate, source, chunk);
     throwIfPdfJobAborted(signal);
     pages.forEach((page) => candidate.addPage(page));
+    removeUnusedPdfObjects(candidate);
     const bytes = await candidate.save();
     throwIfPdfJobAborted(signal);
     return bytes;
@@ -385,7 +393,7 @@ export const extractPages = async (
 
   const resolved = resolvePageSelection(pageIndices.map((index) => index + 1), totalPages, label);
   const newPdf = await PDFDocument.create();
-  const copiedPages = await newPdf.copyPages(pdfDoc, resolved);
+  const copiedPages = await copyPagesWithForms(newPdf, pdfDoc, resolved);
   await pdfJobCheckpoint(signal, true);
   for (let index = 0; index < copiedPages.length; index += 1) {
     throwIfPdfJobAborted(signal);
@@ -393,6 +401,7 @@ export const extractPages = async (
     if ((index + 1) % 8 === 0) await pdfJobCheckpoint(signal, true);
   }
   await pdfJobCheckpoint(signal, true);
+  removeUnusedPdfObjects(newPdf);
   const bytes = await newPdf.save();
   await pdfJobCheckpoint(signal, true);
   return bytes;
@@ -426,8 +435,9 @@ export const deletePagesFromPDF = async (file: File, pageIndicesToDelete: number
 
   const keptIndices = remainingPageIndices(totalPages, new Set(deleteIndices));
   const newPdf = await PDFDocument.create();
-  const copiedPages = await newPdf.copyPages(pdfDoc, keptIndices);
+  const copiedPages = await copyPagesWithForms(newPdf, pdfDoc, keptIndices);
   copiedPages.forEach((page) => newPdf.addPage(page));
+  removeUnusedPdfObjects(newPdf);
   return newPdf.save();
 };
 
@@ -445,8 +455,9 @@ export const reorderPDFPages = async (file: File, pageOrderIndices: number[]): P
 
   const order = resolvePageOrder(pageOrderIndices.map((index) => index + 1), totalPages);
   const newPdf = await PDFDocument.create();
-  const copiedPages = await newPdf.copyPages(pdfDoc, order);
+  const copiedPages = await copyPagesWithForms(newPdf, pdfDoc, order);
   copiedPages.forEach((page) => newPdf.addPage(page));
+  removeUnusedPdfObjects(newPdf);
   return newPdf.save();
 };
 
@@ -668,48 +679,85 @@ export const repairPDF = async (file: File): Promise<Uint8Array> => {
 };
 
 const clearPDFMetadataAndCatalogActions = (pdfDoc: PDFDocument) => {
-  const cleanedDate = new Date(0);
-
   pdfDoc.setTitle('');
   pdfDoc.setAuthor('');
   pdfDoc.setSubject('');
   pdfDoc.setKeywords([]);
   pdfDoc.setCreator('');
   pdfDoc.setProducer('');
-  pdfDoc.setCreationDate(cleanedDate);
-  pdfDoc.setModificationDate(cleanedDate);
+  const info = pdfDoc.context.lookup(pdfDoc.context.trailerInfo.Info, PDFDict);
+  info.delete(PDFName.of('CreationDate'));
+  info.delete(PDFName.of('ModDate'));
 
   const catalog = pdfDoc.catalog;
   catalog.delete(PDFName.of('Metadata'));
   catalog.delete(PDFName.of('ViewerPreferences'));
   catalog.delete(PDFName.of('OpenAction'));
   catalog.delete(PDFName.of('AA'));
+  // XMP can belong to a page or an image/form XObject as well as the catalog.
+  // Check the target type so an ordinary resource named "Metadata" is preserved.
+  for (const [, object] of pdfDoc.context.enumerateIndirectObjects()) {
+    const dictionary = object instanceof PDFStream ? object.dict : object;
+    if (!(dictionary instanceof PDFDict)) continue;
+    const metadata = pdfDoc.context.lookup(dictionary.get(PDFName.of('Metadata')));
+    if (metadata instanceof PDFStream && (
+      metadata.dict.lookup(PDFName.of('Type')) === PDFName.of('Metadata') ||
+      metadata.dict.lookup(PDFName.of('Subtype')) === PDFName.of('XML')
+    )) dictionary.delete(PDFName.of('Metadata'));
+  }
 };
 
-export const removePDFMetadata = async (file: File): Promise<Uint8Array> => {
-  const arrayBuffer = await readFileAsArrayBuffer(file);
-  const pdfDoc = await PDFDocument.load(arrayBuffer);
-
-  clearPDFMetadataAndCatalogActions(pdfDoc);
-
-  return pdfDoc.save();
-};
-
-export const removePDFAnnotations = async (file: File): Promise<Uint8Array> => {
-  const arrayBuffer = await readFileAsArrayBuffer(file);
-  const pdfDoc = await PDFDocument.load(arrayBuffer);
-
+const removeCommentAnnotations = (pdfDoc: PDFDocument) => {
   for (const page of pdfDoc.getPages()) {
     const annotations = page.node.Annots();
     if (annotations) {
       for (let index = annotations.size() - 1; index >= 0; index -= 1) {
         const annotation = annotations.lookup(index, PDFDict);
-        if (annotation.get(PDFName.of('Subtype')) !== PDFName.of('Widget')) annotations.remove(index);
+        if (annotation.lookup(PDFName.of('Subtype')) !== PDFName.of('Widget')) annotations.remove(index);
       }
     }
     page.node.delete(PDFName.of('AA'));
   }
+};
 
+/** pdf-lib otherwise serializes detached objects, leaving removed private data recoverable. */
+const removeUnusedPdfObjects = (pdfDoc: PDFDocument) => {
+  const pending: unknown[] = Object.values(pdfDoc.context.trailerInfo);
+  const visited = new Set<unknown>();
+  const referenced = new Set<string>();
+  while (pending.length) {
+    const object = pending.pop();
+    if (!object || visited.has(object)) continue;
+    visited.add(object);
+    if (object instanceof PDFRef) {
+      referenced.add(object.toString());
+      pending.push(pdfDoc.context.lookup(object));
+    } else if (object instanceof PDFDict) {
+      pending.push(...object.values());
+    } else if (object instanceof PDFArray) {
+      pending.push(...object.asArray());
+    } else if (object instanceof PDFStream) {
+      pending.push(object.dict);
+    }
+  }
+  for (const [reference] of pdfDoc.context.enumerateIndirectObjects()) {
+    if (!referenced.has(reference.toString())) pdfDoc.context.delete(reference);
+  }
+};
+
+export const removePDFMetadata = async (file: File): Promise<Uint8Array> => {
+  const arrayBuffer = await readFileAsArrayBuffer(file);
+  const pdfDoc = await PDFDocument.load(arrayBuffer, { updateMetadata: false });
+  clearPDFMetadataAndCatalogActions(pdfDoc);
+  removeUnusedPdfObjects(pdfDoc);
+  return pdfDoc.save();
+};
+
+export const removePDFAnnotations = async (file: File): Promise<Uint8Array> => {
+  const arrayBuffer = await readFileAsArrayBuffer(file);
+  const pdfDoc = await PDFDocument.load(arrayBuffer, { updateMetadata: false });
+  removeCommentAnnotations(pdfDoc);
+  removeUnusedPdfObjects(pdfDoc);
   return pdfDoc.save();
 };
 
@@ -719,14 +767,12 @@ export const sanitizePDF = async (file: File): Promise<Uint8Array> => {
     updateMetadata: false,
   });
 
-  for (const page of pdfDoc.getPages()) {
-    page.node.delete(PDFName.of('Annots'));
-    page.node.delete(PDFName.of('AA'));
-  }
+  removeCommentAnnotations(pdfDoc);
 
   // Loading a saved intermediate document makes pdf-lib stamp a new Producer/ModDate. Clear
   // metadata after every structural mutation and save once so sanitize stays metadata-free.
   clearPDFMetadataAndCatalogActions(pdfDoc);
+  removeUnusedPdfObjects(pdfDoc);
 
   return pdfDoc.save();
 };
@@ -759,12 +805,17 @@ export const cropPDFMargins = async (file: File, options: CropBoxOptions): Promi
     // start at 0,0 (common from imposition and scanner software) was trimmed
     // against the wrong corner.
     const box = page.getCropBox();
-    const left = box.width * (margins.left / 100);
-    const bottom = box.height * (margins.bottom / 100);
-    const right = box.width * (margins.right / 100);
-    const top = box.height * (margins.top / 100);
-    const cropWidth = Math.max(36, box.width - left - right);
-    const cropHeight = Math.max(36, box.height - top - bottom);
+    // The controls name visible edges; a clockwise quarter turn maps visible top to PDF left.
+    const edges = [margins.top, margins.right, margins.bottom, margins.left];
+    const turns = normalizePageRotation(page.getRotation().angle) / 90;
+    const [topMargin, rightMargin, bottomMargin, leftMargin] = edges.map((_, index) => edges[(index + turns) % 4]);
+    const left = box.width * (leftMargin / 100);
+    const bottom = box.height * (bottomMargin / 100);
+    const right = box.width * (rightMargin / 100);
+    const top = box.height * (topMargin / 100);
+    // Each margin is bounded to 40%, so at least 20% always remains.
+    const cropWidth = box.width - left - right;
+    const cropHeight = box.height - top - bottom;
 
     page.setCropBox(box.x + left, box.y + bottom, cropWidth, cropHeight);
   }
@@ -891,8 +942,9 @@ export const removeBlankPagesFromPDF = async (
   }
 
   const outputPdf = await PDFDocument.create();
-  const copiedPages = await outputPdf.copyPages(sourcePdf, keptIndices);
+  const copiedPages = await copyPagesWithForms(outputPdf, sourcePdf, keptIndices);
   copiedPages.forEach((page) => outputPdf.addPage(page));
+  removeUnusedPdfObjects(outputPdf);
 
   return {
     bytes: await outputPdf.save(),
@@ -970,10 +1022,12 @@ export interface ParagraphReflowEdit {
   /** True when the area is a single colour, so a vector fill reproduces it exactly. */
   backgroundFlat: boolean;
   /**
-   * The wrapped paragraph, one entry per line, each a list of stretches with the face they are
+   * The explicit paragraph rows, one entry per line, each a list of stretches with the face they are
    * drawn in. A paragraph that opens with a bold lead-in stays that way through the redraw.
    */
   lines: Array<Array<{ text: string; face: ParagraphFace }>>;
+  /** Original PDF origins, relative to the paragraph box, shared with the editing preview. */
+  lineOrigins?: Array<{ x?: number; y: number }>;
   fontSize: number;
   lineHeight: number;
   align: 'left' | 'center' | 'right' | 'justify';
@@ -1209,12 +1263,14 @@ export const savePDFWithAnnotations = async (
       const width = edit.width * visualSize.width;
       const height = edit.height * visualSize.height;
 
-      if (edit.backgroundFlat || !edit.backgroundImage) {
+      // Successful text-object deletion already exposes the original background. Painting a
+      // rectangle or image over it would hide or rasterise table rules and other vector artwork.
+      if (edit.runDeletions.length === 0 && (edit.backgroundFlat || !edit.backgroundImage)) {
         // A uniform background reproduces exactly as a filled rectangle, so the page keeps its
         // vectors instead of gaining a resampled image of itself.
         const patch = visualRectangleToPdf(geometry, visualX, visualY, width, height);
         page.drawRectangle({ ...patch, color: hexToRgb(edit.backgroundColor) });
-      } else {
+      } else if (edit.runDeletions.length === 0 && edit.backgroundImage) {
         const background = await pdfDoc.embedPng(edit.backgroundImage);
         const center = visualPointToPdf(geometry, visualX + width / 2, visualY + height / 2);
         const origin = rotatedBoxOrigin(center.x, center.y, width, height, geometry.rotation);
@@ -1233,6 +1289,7 @@ export const savePDFWithAnnotations = async (
         fontSize: edit.fontSize,
         lineHeight: edit.lineHeight,
         align: edit.align,
+        lineOrigins: edit.lineOrigins,
       });
       for (const piece of positioned) {
         // Space advances are already in the layout; empty ink needs no PDF text object.
