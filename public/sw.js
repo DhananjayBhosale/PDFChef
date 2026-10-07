@@ -6,6 +6,7 @@ const APP_SHELL = [
   '/pdf-chef-logo-exact.webp',
 ];
 const PRECACHE_ASSETS = /*__PDF_CHEF_PRECACHE__*/ [];
+const isHtmlResponse = (response) => (response.headers.get('content-type') || '').toLowerCase().includes('text/html');
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll([...new Set([...APP_SHELL, ...PRECACHE_ASSETS])])));
@@ -42,13 +43,16 @@ self.addEventListener('fetch', (event) => {
     caches.match(request, { ignoreVary: true }).then((cached) => {
       // Precached WASM and OCR model fetches have an empty request destination, so any exact
       // cache hit must win before applying the runtime-cache allowlist.
-      if (cached) return cached;
+      if (cached && !isHtmlResponse(cached)) return cached;
       const cacheable = ['script', 'style', 'font', 'worker', 'image'].includes(request.destination)
         || url.pathname.startsWith('/assets/')
         || url.pathname.startsWith('/vendor/tesseract/');
       if (!cacheable) return fetch(request);
       const refreshed = fetch(request)
         .then((response) => {
+          // Missing static files can receive the SPA HTML fallback. Never persist or
+          // serve that fallback as a script, font, image or PDF runtime asset.
+          if (isHtmlResponse(response)) return Response.error();
           if (response.ok) event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone())));
           return response;
         })

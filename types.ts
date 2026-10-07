@@ -5,6 +5,9 @@ export interface PDFFile {
   file: File;
   name: string;
   size: number;
+  /** Preview outputs from metered iOS jobs cannot be exported or handed to tools. */
+  provenance?: 'imported' | 'retained' | 'preview';
+  previewOnly?: boolean;
   previewUrl?: string;
   pageCount?: number;
 }

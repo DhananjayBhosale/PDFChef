@@ -1,3 +1,4 @@
+import { t } from '../services/i18n/core.ts';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style as StatusBarStyle } from '@capacitor/status-bar';
@@ -36,10 +37,10 @@ export const THEME_MARKER_KEY = 'pdfchef.appearance.android-theme-write.v1';
 const THEME_MARKER_MAXIMUM_LENGTH = 96;
 
 export const TEXT_SCALE_LABELS: Record<TextScale, string> = {
-  small: 'Compact',
-  default: 'Default',
-  large: 'Large',
-  larger: 'Largest',
+  get small() { return t("use-appearance.compact.994526"); },
+  get default() { return t("use-appearance.default.21b111"); },
+  get large() { return t("use-appearance.large.ab8054"); },
+  get larger() { return t("use-appearance.largest.5511a4"); },
 };
 
 const isTheme = (value: unknown): value is ThemePreference =>
@@ -487,6 +488,6 @@ export const AppearanceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
 export const useAppearance = (): AppearanceValue => {
   const value = useContext(AppearanceContext);
-  if (!value) throw new Error('useAppearance must be used inside AppearanceProvider.');
+  if (!value) throw new Error(t("use-appearance.useappearance.must.be.used.inside.appearanceprovider.32cf45"));
   return value;
 };

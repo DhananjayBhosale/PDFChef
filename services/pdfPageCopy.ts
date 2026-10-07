@@ -1,3 +1,5 @@
+import { LocalizedError } from './i18n/errors.ts';
+import { t } from './i18n/core.ts';
 import {
   PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFObjectCopier,
   PDFPage, PDFPageLeaf, PDFRef, PDFString,
@@ -25,7 +27,7 @@ export const copyPagesWithForms = async (
   const sourceForm = source.catalog.lookupMaybe(name('AcroForm'), PDFDict);
   if (!sourceForm) return destination.copyPages(source, indices);
   if (sourceForm.has(name('XFA'))) {
-    throw new Error('This PDF uses XFA forms. Export a standard PDF copy before rearranging its pages.');
+    throw new LocalizedError("pdf-page-copy.this.pdf.uses.xfa.forms.export.a.f940e0");
   }
 
   await source.flush();
@@ -33,7 +35,7 @@ export const copyPagesWithForms = async (
   const pages = indices.map(index => {
     const reference = copier.copy(source.getPage(index).ref);
     const node = destination.context.lookup(reference);
-    if (!(node instanceof PDFPageLeaf)) throw new Error('A selected PDF page could not be copied.');
+    if (!(node instanceof PDFPageLeaf)) throw new LocalizedError("pdf-page-copy.a.selected.pdf.page.could.not.be.02cd4a");
     return PDFPage.of(node, reference, destination);
   });
   const widgets = new Set<PDFDict>();

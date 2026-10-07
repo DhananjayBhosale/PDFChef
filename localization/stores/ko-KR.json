@@ -1,0 +1,52 @@
+{
+  "appLocale": "ko-KR",
+  "appleLocale": "ko",
+  "googleLocale": "ko-KR",
+  "apple": {
+    "name": "PDF Chef",
+    "subtitle": "PDF 편집·병합·압축",
+    "promotionalText": "기기에서 PDF를 읽고 편집하고 정리하세요. 파일을 병합하고 페이지를 관리하며 자필 서명을 추가할 수 있습니다.",
+    "description": "PDF Chef를 사용하면 기기에서 PDF를 읽고 편집, 병합, 분할, 압축 및 서명할 수 있습니다.\n\n페이지를 정리하고, 텍스트와 이미지를 추가하고, 자필 서명을 넣고, 워터마크나 페이지 번호를 추가하며, 비밀번호로 PDF를 보호하세요. 지원되는 이미지와 문서를 변환하고 텍스트를 추출할 수 있습니다. 결과는 원본 파일과 선택한 도구에 따라 달라집니다.\n\n일반적인 PDF 처리는 기기에서 실행됩니다. 처리를 위해 사용자의 문서가 PDF Chef 서버로 업로드되지 않습니다. 오프라인 도구는 에셋이 로드된 후에도 계속 사용할 수 있습니다.\n\nPDF Chef는 계정이 필요하지 않습니다. 공유하거나 내보내기 전에 결과를 검토하세요.\n\niOS에서는 매 7일 롤링 허용 기간 동안 첫 5개의 성공적인 작업에 대해 저장, 공유 및 내보내기가 가능한 전체 작업이 제공됩니다. 이 기간은 첫 번째 성공적인 작업부터 시작됩니다. 5개의 작업 후에도 처리 및 미리보기는 계속 이용할 수 있지만, 허용량이 재설정될 때까지 저장, 공유 및 내보내기에는 Pro가 필요합니다.\n\nPro Monthly는 취소할 때까지 자동으로 갱신됩니다. Pro Lifetime은 구독이 아닌 일회성 구매입니다. 두 옵션 모두 Apple 가족 공유를 지원합니다. 가격 및 구매 세부 정보는 구매 전 앱에 표시됩니다. 설정에서 구매 내역을 복원할 수 있습니다.\n\nTerms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+    "whatsNew": "버전 {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Monthly",
+      "description": "전체 내보내기. 취소할 때까지 갱신."
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Lifetime",
+      "description": "전체 내보내기. 일회성 구매."
+    },
+    "screenshot": {
+      "1": "한곳에서 사용하는 PDF 도구",
+      "2": "텍스트 편집 및 이미지 추가",
+      "3": "파일 병합 및 페이지 정리",
+      "4": "저장 전 미리보기",
+      "5": "자필 서명 추가",
+      "6": "기기에서 직접 작업"
+    },
+    "keywords": "분할,스캔,서명,변환,리더,워터마크,비밀번호,잠금해제"
+  },
+  "google": {
+    "name": "PDF Chef",
+    "shortDescription": "기기에서 PDF를 편집, 병합, 압축 및 서명하세요.",
+    "fullDescription": "PDF Chef를 사용하면 기기에서 PDF를 읽고 편집, 병합, 분할, 압축 및 서명할 수 있습니다.\n\n페이지를 정리하고, 텍스트와 이미지를 추가하고, 자필 서명을 넣고, 워터마크나 페이지 번호를 추가하며, 비밀번호로 PDF를 보호하세요. 지원되는 이미지와 문서를 변환하고 텍스트를 추출할 수 있습니다. 결과는 원본 파일과 선택한 도구에 따라 달라집니다.\n\n일반적인 PDF 처리는 기기에서 실행됩니다. 처리를 위해 사용자의 문서가 PDF Chef 서버로 업로드되지 않습니다. 오프라인 도구는 에셋이 로드된 후에도 계속 사용할 수 있습니다.\n\nPDF Chef는 계정이 필요하지 않습니다. 공유하거나 내보내기 전에 결과를 검토하세요.",
+    "whatsNew": "버전 {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Monthly",
+      "description": "모든 결과를 저장, 공유 및 내보내기. 취소할 때까지 매월 자동 갱신됩니다.",
+      "benefit": "모든 결과 저장 및 공유"
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Lifetime",
+      "description": "일회성 구매로 모든 결과를 저장, 공유 및 내보내기."
+    },
+    "screenshot": {
+      "1": "한곳에서 사용하는 PDF 도구",
+      "2": "텍스트 편집 및 이미지 추가",
+      "3": "파일 병합 및 페이지 정리",
+      "4": "저장 전 미리보기",
+      "5": "자필 서명 추가",
+      "6": "기기에서 직접 작업"
+    }
+  }
+}

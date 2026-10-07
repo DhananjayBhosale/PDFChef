@@ -1,15 +1,24 @@
-import React, { Suspense, useEffect, useMemo } from 'react';
+import { t } from './services/i18n/core';
+import { useI18n } from './services/i18n/react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AppShell } from './components/Layout/AppShell';
 import { NativeBackHandler } from './components/Layout/NativeBackHandler';
 import { AndroidIncomingPdfHandler } from './components/Layout/AndroidIncomingPdfHandler';
+import { IosIncomingPdfHandler } from './components/Layout/IosIncomingPdfHandler';
 import { Dashboard } from './components/Tools/Dashboard';
 import { RouteSEO } from './components/SEO/RouteSEO';
 import { OpenedPdfProvider } from './hooks/useOpenedPdf';
+import { FileDropProvider } from './hooks/useFileDrop';
+import { MonetizationProvider } from './hooks/useMonetization';
 import { AppearanceProvider } from './hooks/useAppearance';
 import { WorkspacePlatformProvider, type WorkspacePlatform } from './hooks/useWorkspaceRuntime';
 import { OutputCenter } from './components/UI/OutputCenter';
+import { ProPaywall } from './components/UI/ProPaywall';
 import { Onboarding } from './components/UI/Onboarding';
+import { MobileAppWelcome } from './components/UI/MobileAppWelcome';
+import { isMobileAppWelcomeRoute, mobileAppWelcomeDismissedKey, smartphonePlatform } from './services/mobileAppWelcome';
 import { getWorkspaceSettings, rememberToolUse } from './services/workspace';
 
 const MergePDF = React.lazy(() => import('./components/Tools/MergePDF').then((module) => ({ default: module.MergePDF })));
@@ -29,6 +38,7 @@ const FlattenPDF = React.lazy(() => import('./components/Tools/FlattenPDF').then
 const OCRPDF = React.lazy(() => import('./components/Tools/OCRPDF').then((module) => ({ default: module.OCRPDF })));
 const EditPDF = React.lazy(() => import('./components/Tools/EditPDF').then((module) => ({ default: module.EditPDF })));
 const SignPDF = React.lazy(() => import('./components/Tools/SignPDF').then((module) => ({ default: module.SignPDF })));
+const VerifySignaturesPDF = React.lazy(() => import('./components/Tools/VerifySignaturesPDF').then((module) => ({ default: module.VerifySignaturesPDF })));
 const ComparePDF = React.lazy(() => import('./components/Tools/ComparePDF').then((module) => ({ default: module.ComparePDF })));
 const WatermarkPDF = React.lazy(() => import('./components/Tools/WatermarkPDF').then((module) => ({ default: module.WatermarkPDF })));
 const PageNumbersPDF = React.lazy(() => import('./components/Tools/PageNumbersPDF').then((module) => ({ default: module.PageNumbersPDF })));
@@ -56,16 +66,16 @@ const RecentPage = React.lazy(() => import('./components/Pages/RecentPage').then
 const SettingsPage = React.lazy(() => import('./components/Pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 const HelpPage = React.lazy(() => import('./components/Pages/HelpPage').then((module) => ({ default: module.HelpPage })));
 
-const PageLoader = () => (
+const PageLoader = () => { useI18n(); return (
   <div role="status" aria-live="polite" aria-busy="true" className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8">
-    <span className="sr-only">Opening the tool</span>
+    <span className="sr-only">{t("app.opening.the.tool.51992c")}</span>
     <div aria-hidden className="space-y-3">
       <div className="h-7 w-1/2 rounded-[var(--radius-control)] bg-[var(--surface-sunken)]" />
       <div className="h-4 w-3/4 rounded-[var(--radius-pill)] bg-[var(--surface-sunken)]" />
       <div className="h-40 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)]" />
     </div>
   </div>
-);
+); };
 
 const AppRoutes = () => {
   const location = useLocation();
@@ -88,6 +98,7 @@ const AppRoutes = () => {
             <Route path="/make-pdf" element={<MakePDF />} />
             <Route path="/make-fillable" element={<MakeFillable />} />
             <Route path="/sign" element={<SignPDF />} />
+            <Route path="/verify-signatures" element={<VerifySignaturesPDF />} />
             <Route path="/delete-pages" element={<DeletePages />} />
             <Route path="/reorder" element={<ReorderPDF />} />
             <Route path="/rotate" element={<RotatePDF />} />
@@ -144,11 +155,23 @@ const LegacyHashRedirect: React.FC = () => {
 };
 
 const AppContent = () => {
+  useI18n();
   const location = useLocation();
+  const [welcomePlatform, setWelcomePlatform] = useState(() => {
+    try {
+      if (window.sessionStorage.getItem(mobileAppWelcomeDismissedKey) === 'true') return null;
+    } catch { /* Continuing still works when browser storage is unavailable. */ }
+    return smartphonePlatform(navigator.userAgent, Capacitor.getPlatform(), `${window.location.protocol}//${window.location.host}`);
+  });
+  const showMobileAppWelcome = welcomePlatform && isMobileAppWelcomeRoute(location.pathname);
+  const continueToWebsite = () => {
+    try { window.sessionStorage.setItem(mobileAppWelcomeDismissedKey, 'true'); } catch { /* Keep the in-memory choice. */ }
+    setWelcomePlatform(null);
+  };
 
   useEffect(() => {
-    rememberToolUse(location.pathname);
-  }, [location.pathname]);
+    if (!showMobileAppWelcome) rememberToolUse(location.pathname);
+  }, [location.pathname, showMobileAppWelcome]);
 
   useEffect(() => {
     const applyFont = () => {
@@ -163,19 +186,25 @@ const AppContent = () => {
     <>
       <RouteSEO />
       <LegacyHashRedirect />
-      <NativeBackHandler />
-      <AndroidIncomingPdfHandler />
-      <a
-        href="#main"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[200] focus:rounded-[var(--radius-control)] focus:bg-[var(--surface-raised)] focus:px-4 focus:py-2 focus:font-semibold"
-      >
-        Skip to content
-      </a>
-      <AppShell>
-        <AppRoutes />
-      </AppShell>
-      <OutputCenter />
-      <Onboarding />
+      {showMobileAppWelcome ? (
+        <MobileAppWelcome platform={welcomePlatform} onContinue={continueToWebsite} />
+      ) : (
+        <>
+          <NativeBackHandler />
+          <AndroidIncomingPdfHandler />
+          <IosIncomingPdfHandler />
+          <a
+            href="#main"
+            className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[200] focus:rounded-[var(--radius-control)] focus:bg-[var(--surface-raised)] focus:px-4 focus:py-2 focus:font-semibold"
+          >{t("app.skip.to.content.ac576a")}</a>
+          <AppShell>
+            <AppRoutes />
+          </AppShell>
+          <OutputCenter />
+          <ProPaywall />
+          <Onboarding />
+        </>
+      )}
     </>
   );
 };
@@ -196,15 +225,19 @@ export interface AppRootProps {
   platform?: WorkspacePlatform;
 }
 
-const AppProviders: React.FC<AppRootProps> = ({ platform }) => (
+const AppProviders: React.FC<AppRootProps> = ({ platform }) => { return (
     <AppearanceProvider>
       <WorkspacePlatformProvider platform={platform}>
-        <OpenedPdfProvider>
-          <AppContent />
-        </OpenedPdfProvider>
+        <MonetizationProvider>
+          <OpenedPdfProvider>
+            <FileDropProvider>
+              <AppContent />
+            </FileDropProvider>
+          </OpenedPdfProvider>
+        </MonetizationProvider>
       </WorkspacePlatformProvider>
     </AppearanceProvider>
-);
+); };
 
 /** The whole application, with the platform seam exposed. */
 export const AppRoot: React.FC<AppRootProps> = ({ platform }) => {
@@ -217,6 +250,6 @@ export const AppRoot: React.FC<AppRootProps> = ({ platform }) => {
 };
 
 /** Default entry point: browser fallback, no adapter injected. */
-const App: React.FC = () => <AppRoot />;
+const App: React.FC = () => { return <AppRoot />; };
 
 export default App;

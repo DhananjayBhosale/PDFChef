@@ -48,7 +48,8 @@ test('only bounded durable PDFs are native eligible; transient and oversized inp
   assert.equal(service.isEligible(document({ ref: 'a1_7' as DurableDocumentRef })), true);
   assert.equal(service.isEligible(document({ ref: 'blob:transient' as DurableDocumentRef })), false);
   assert.equal(service.isEligible(document({ mimeType: 'image/jpeg' })), false);
-  assert.equal(service.isEligible(document({ sizeBytes: 128 * 1024 * 1024 + 1 })), false);
+  assert.equal(service.isEligible(document({ sizeBytes: 250 * 1024 * 1024 })), true);
+  assert.equal(service.isEligible(document({ sizeBytes: 256 * 1024 * 1024 + 1 })), false);
 });
 
 test('availability delegates to strict AndroidDocuments native discovery', () => {
@@ -84,6 +85,26 @@ test('open is safe when destructured and native receives the exact bounded publi
   const { open } = service;
   assert.deepEqual(await open(document()), { action: 'closed' });
   assert.deepEqual(calls, [{ ref: ownedRef, displayName: 'Scan.pdf' }]);
+});
+
+test('signature tool opens the same private reader with only the allowlisted initial action', async () => {
+  const bridge = native();
+  const calls: unknown[] = [];
+  bridge.openReader = async options => {
+    calls.push(options);
+    return { action: 'closed' };
+  };
+  const service = createAndroidPdfReaderService(new AndroidDocumentsClient(bridge));
+  assert.equal(service.supportsSignatureVerification, true);
+  assert.deepEqual(
+    await service.open(document(), { initialAction: 'verify-signatures' }),
+    { action: 'closed' },
+  );
+  assert.deepEqual(calls, [{
+    ref: ownedRef,
+    displayName: 'Scan.pdf',
+    initialAction: 'verify-signatures',
+  }]);
 });
 
 test('unsafe, malformed Unicode, dot, and oversized UTF-8 names use the fixed fallback', async () => {

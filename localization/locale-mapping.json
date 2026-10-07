@@ -1,0 +1,194 @@
+[
+  {
+    "app": "en-US",
+    "name": "English (United States)",
+    "apple": "en-US",
+    "google": "en-US",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "en-GB",
+    "name": "English (United Kingdom)",
+    "apple": "en-GB",
+    "google": "en-GB",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "en-CA",
+    "name": "English (Canada)",
+    "apple": "en-CA",
+    "google": "en-CA",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "fr-CA",
+    "name": "Français (Canada)",
+    "apple": "fr-CA",
+    "google": "fr-CA",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "en-AU",
+    "name": "English (Australia)",
+    "apple": "en-AU",
+    "google": "en-AU",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "de-DE",
+    "name": "Deutsch",
+    "apple": "de-DE",
+    "google": "de-DE",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "fr-FR",
+    "name": "Français (France)",
+    "apple": "fr-FR",
+    "google": "fr-FR",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "ja-JP",
+    "name": "日本語",
+    "apple": "ja",
+    "google": "ja-JP",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "pt-BR",
+    "name": "Português (Brasil)",
+    "apple": "pt-BR",
+    "google": "pt-BR",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "ko-KR",
+    "name": "한국어",
+    "apple": "ko",
+    "google": "ko-KR",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "es-ES",
+    "name": "Español (España)",
+    "apple": "es-ES",
+    "google": "es-ES",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "zh-Hans",
+    "name": "简体中文",
+    "apple": "zh-Hans",
+    "google": "zh-CN",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "it-IT",
+    "name": "Italiano",
+    "apple": "it",
+    "google": "it-IT",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "nl-NL",
+    "name": "Nederlands",
+    "apple": "nl-NL",
+    "google": "nl-NL",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "pt-PT",
+    "name": "Português (Portugal)",
+    "apple": "pt-PT",
+    "google": "pt-PT",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "zh-Hant",
+    "name": "繁體中文",
+    "apple": "zh-Hant",
+    "google": "zh-TW",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "hi-IN",
+    "name": "हिन्दी",
+    "apple": "hi",
+    "google": "hi-IN",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "pl-PL",
+    "name": "Polski",
+    "apple": "pl",
+    "google": "pl-PL",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "id-ID",
+    "name": "Bahasa Indonesia",
+    "apple": "id",
+    "google": "id",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "es-419",
+    "name": "Español (Latinoamérica)",
+    "apple": "es-MX",
+    "google": "es-419",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "ar-SA",
+    "name": "العربية",
+    "apple": "ar-SA",
+    "google": "ar",
+    "direction": "rtl",
+    "fallback": "en-US"
+  },
+  {
+    "app": "tr-TR",
+    "name": "Türkçe",
+    "apple": "tr",
+    "google": "tr-TR",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "sv-SE",
+    "name": "Svenska",
+    "apple": "sv",
+    "google": "sv-SE",
+    "direction": "ltr",
+    "fallback": "en-US"
+  },
+  {
+    "app": "da-DK",
+    "name": "Dansk",
+    "apple": "da",
+    "google": "da-DK",
+    "direction": "ltr",
+    "fallback": "en-US"
+  }
+]

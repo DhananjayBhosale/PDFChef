@@ -25,7 +25,7 @@ test('T911: compact onboarding component bytes remain frozen', async () => {
   const onboarding = await source('components/UI/Onboarding.tsx');
   assert.equal(
     createHash('sha256').update(onboarding).digest('hex'),
-    '73e46529fb19b41528599b4ac254edde7799d4142c5d333a9b324c8fff92a1f3',
+    'b959300d8876ea49310af0d9216ede9d52b70ed22fe2abe4692b407cfb52d218',
   );
 });
 

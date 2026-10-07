@@ -1,3 +1,5 @@
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 
 import React, { useEffect, useId, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -15,6 +17,7 @@ interface PDFPreviewModalProps {
 }
 
 export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageIndex, pageLabel, onClose }) => {
+  useI18n();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [pdfDoc, setPdfDoc] = useState<any | null>(null);
   const [currentPageIndex, setCurrentPageIndex] = useState(pageIndex);
@@ -115,7 +118,7 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
       } catch (err) {
         console.error(err);
         if (active) {
-          setError('Failed to load PDF.');
+          setError(t("pdfpreview-modal.failed.to.load.pdf.bc21e7"));
         }
       }
     })();
@@ -153,7 +156,7 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
       } catch (err) {
         console.error(err);
         if (active) {
-          setError('Failed to render preview.');
+          setError(t("pdfpreview-modal.failed.to.render.preview.aeade0"));
         }
       } finally {
         if (active) setLoading(false);
@@ -219,13 +222,11 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
         {/* Header */}
         <div className="z-10 flex flex-col gap-2 border-b border-paper-600 bg-slate-900 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
           <div className="flex items-start justify-between gap-2">
-            <h3 id={titleId} className="min-w-0 text-base font-bold text-white sm:text-lg">
-              {pageLabel} • Page {currentPageIndex + 1}{totalPages > 0 ? ` of ${totalPages}` : ''}
-            </h3>
+            <h3 id={titleId} className="min-w-0 text-base font-bold text-white sm:text-lg">{t("pdfpreview-modal.message.c6b830d338", { v0: pageLabel, v1: currentPageIndex + 1, v2: totalPages > 0 ? t("pdfpreview-modal.of.42f297", { v0: totalPages }) : '' })}</h3>
             <button
               onClick={onClose}
-              className="chef-pressable chef-target -mr-1 grid shrink-0 place-items-center rounded-lg text-paper-300 hover:bg-slate-800 hover:text-white sm:hidden"
-              aria-label="Close preview"
+              className="chef-pressable chef-target -me-1 grid shrink-0 place-items-center rounded-lg text-paper-300 hover:bg-slate-800 hover:text-white sm:hidden"
+              aria-label={t("pdfpreview-modal.close.preview.7d8ab3")}
             >
               <X aria-hidden size={22} />
             </button>
@@ -235,24 +236,24 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
               onClick={() => setCurrentPageIndex((value) => Math.max(0, value - 1))}
               disabled={currentPageIndex <= 0}
               className="chef-pressable chef-target grid place-items-center text-paper-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-55"
-              aria-label="Previous page"
+              aria-label={t("pdfpreview-modal.previous.page.1208ec")}
             >
-              <ArrowLeft aria-hidden size={18} />
+              <ArrowLeft aria-hidden size={18} className="rtl:rotate-180" />
             </button>
             <button
               onClick={() => setCurrentPageIndex((value) => Math.min(Math.max(0, totalPages - 1), value + 1))}
               disabled={currentPageIndex >= Math.max(0, totalPages - 1)}
               className="chef-pressable chef-target grid place-items-center text-paper-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-55"
-              aria-label="Next page"
+              aria-label={t("pdfpreview-modal.next.page.c08ac7")}
             >
-              <ArrowRight aria-hidden size={18} />
+              <ArrowRight aria-hidden size={18} className="rtl:rotate-180" />
             </button>
             <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={5} />
             <div className="mx-2 hidden h-6 w-px bg-paper-600 sm:block" />
             <button
               onClick={onClose}
               className="chef-pressable chef-target hidden place-items-center rounded-lg text-paper-300 transition-colors hover:bg-slate-800 hover:text-white sm:grid"
-              aria-label="Close preview"
+              aria-label={t("pdfpreview-modal.close.preview.7d8ab3")}
             >
               <X aria-hidden size={24} />
             </button>
@@ -267,7 +268,7 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
           {loading ? (
             <div className="flex flex-col items-center gap-3 text-paper-400">
               <Loader2 className="animate-spin" size={40} />
-              <p>Rendering high-quality preview...</p>
+              <p>{t("pdfpreview-modal.rendering.high.quality.preview.916fc2")}</p>
             </div>
           ) : error ? (
             <div className="text-danger-300 font-medium bg-rose-900/20 px-6 py-4 rounded-xl border border-danger-500">
@@ -291,10 +292,8 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
             </div>
           ) : null}
           {zoom > 1 && isPanning && (
-            <div className="absolute left-4 top-4 flex items-center gap-1 rounded-full bg-slate-950/80 px-2 py-1 text-xs text-white">
-              <Move size={12} />
-              Dragging
-            </div>
+            <div className="absolute start-4 top-4 flex items-center gap-1 rounded-full bg-slate-950/80 px-2 py-1 text-xs text-white">
+              <Move size={12} />{t("pdfpreview-modal.dragging.26d17c")}</div>
           )}
         </div>
 

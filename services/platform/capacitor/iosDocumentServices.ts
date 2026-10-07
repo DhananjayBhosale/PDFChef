@@ -1,3 +1,5 @@
+import { LocalizedError } from '../../i18n/errors.ts';
+import { t } from '../../i18n/core.ts';
 import type {
   ApplicationMetadata,
   DurableDocumentRef,
@@ -12,10 +14,11 @@ import type {
   DocumentStorageService,
   HapticsService,
   ImportedDocument,
+  PdfOpenHandoff,
+  PdfOpenHandoffService,
   PendingImportDeliveryService,
   OutputDeliveryHandler,
   OutputDeliveryRequest,
-  OutputDeliveryResult,
   PdfSignatureVerificationService,
   RecentRepository,
   SettingsRepository,
@@ -37,6 +40,10 @@ import {
   type LegacyWorkspaceMigrationJournal,
   type LegacyWorkspaceSource,
 } from './legacyWorkspaceMigration.ts';
+import {
+  createIOSPdfReaderService,
+  type IOSPdfReaderNativeResult,
+} from './iosPdfReader.ts';
 
 export const IOS_PICKER_MIME_TYPES = [
   'application/pdf',
@@ -47,7 +54,6 @@ export const IOS_PICKER_MIME_TYPES = [
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ] as const;
 
-const FALLBACK_DOCUMENT_NAME = 'Untitled document';
 const FALLBACK_MIME_TYPE = 'application/octet-stream';
 
 export interface IOSDocumentBridge {
@@ -67,11 +73,15 @@ export interface IOSDocumentBridge {
   startPendingImportDelivery(
     consume: (imports: readonly ImportedDocument[]) => Promise<void> | void,
   ): Promise<() => Promise<void>>;
-  pickDocuments(acceptedMimeTypes: readonly string[]): Promise<readonly ImportedDocument[]>;
+  pickDocuments(
+    acceptedMimeTypes: readonly string[],
+    maximumItems: number,
+  ): Promise<readonly ImportedDocument[]>;
   exportDocument(ref: DurableDocumentRef, name: string | null, mimeType: string | null): Promise<void>;
   shareDocument(ref: DurableDocumentRef, name: string | null, mimeType: string | null): Promise<void>;
   signatureVerificationAvailable?(): Promise<boolean>;
   presentSignatureReport?(ref: DurableDocumentRef, name: string | null): Promise<void>;
+  openReader(ref: DurableDocumentRef, displayName: string): Promise<IOSPdfReaderNativeResult>;
   signalHaptic(signal: string): Promise<void>;
   getApplicationMetadata(): Promise<ApplicationMetadata>;
 }
@@ -159,6 +169,52 @@ export const createIOSWorkspacePlatform = (
   const transientRefs = new Set<DurableDocumentRef>();
   const reopenedDocuments = new WeakMap<File, StoredDocument>();
   let signatureVerificationAvailable = false;
+  const pdfReader = createIOSPdfReaderService(bridge, {
+    isSignatureVerificationAvailable: () => signatureVerificationAvailable,
+  });
+  const queuedPdfHandoffs: PdfOpenHandoff[] = [];
+  let pdfHandoffConsumer: ((handoff: PdfOpenHandoff) => Promise<void> | void) | null = null;
+  let pdfHandoffDelivery = Promise.resolve();
+
+  const deliverPdfHandoff = async (handoff: PdfOpenHandoff): Promise<void> => {
+    const consume = pdfHandoffConsumer;
+    if (!consume) {
+      queuedPdfHandoffs.push(handoff);
+      return;
+    }
+    try {
+      await consume(handoff);
+    } catch (error) {
+      // Keep the document for the next consumer rather than losing it.
+      queuedPdfHandoffs.push(handoff);
+      throw error;
+    }
+  };
+
+  const publishPdfHandoff = (handoff: PdfOpenHandoff): Promise<void> => {
+    if (!pdfHandoffConsumer) {
+      queuedPdfHandoffs.push(handoff);
+      return Promise.resolve();
+    }
+    // Deliveries stay in order, but one failed continuation must not stall every
+    // later document: each delivery starts from the previous one's settlement.
+    const delivery = pdfHandoffDelivery.catch(() => undefined).then(() => deliverPdfHandoff(handoff));
+    pdfHandoffDelivery = delivery;
+    return delivery;
+  };
+
+  const pdfOpenHandoffs: PdfOpenHandoffService = {
+    async start(consume) {
+      pdfHandoffConsumer = consume;
+      // The whole backlog joins the delivery chain before anything is awaited, so a document
+      // published meanwhile arrives after it. One that fails again is re-queued; the rest still arrive.
+      const buffered = queuedPdfHandoffs.splice(0).map(handoff => publishPdfHandoff(handoff).catch(() => undefined));
+      await Promise.all(buffered);
+      return async () => {
+        if (pdfHandoffConsumer === consume) pdfHandoffConsumer = null;
+      };
+    },
+  };
 
   const records = {
     async list(): Promise<readonly RecentRecord[]> {
@@ -234,7 +290,10 @@ export const createIOSWorkspacePlatform = (
   };
 
   const documentImport: DocumentImportService = {
-    importDocuments: options => bridge.pickDocuments(options?.acceptedMimeTypes ?? IOS_PICKER_MIME_TYPES),
+    importDocuments: options => bridge.pickDocuments(
+      options?.acceptedMimeTypes ?? IOS_PICKER_MIME_TYPES,
+      options?.maximumItems ?? 100,
+    ),
     // Peek only. Acknowledgement belongs to pendingImports.start after its consumer succeeds.
     takePendingImports: () => bridge.takePendingImports(),
   };
@@ -271,28 +330,49 @@ export const createIOSWorkspacePlatform = (
   const pendingImportRegistration = pendingImports.start(async imports => {
     for (const imported of imports) {
       const document = imported.document;
-      await recent.save(freshEntry(
+      const entry = freshEntry(
         document,
         `import-${document.ref}`,
         document.retainedAt ?? now(),
-      ));
+      );
+      await recent.save(entry);
+      const record = { entry, document, available: true };
+      if (pdfReader.isEligible(document)) {
+        try {
+          const result = await pdfReader.open(document);
+          if (result.action === 'tool') {
+            await publishPdfHandoff({ record, toolPath: result.toolPath }).catch(() => undefined);
+          }
+          continue;
+        } catch {
+          // A native launch failure falls back to the existing web reader.
+        }
+      }
+      // A failed continuation is re-queued for retry and must not skip later imports.
+      await publishPdfHandoff({ record, toolPath: '/view' }).catch(() => undefined);
     }
   });
   let stopPendingImports: (() => Promise<void>) | null = null;
-  const initialized = pendingImportRegistration.then(async stop => {
-    stopPendingImports = stop;
+  let pendingImportFailure: { readonly error: unknown } | null = null;
+  const pendingImportReady = pendingImportRegistration
+    .then(stop => { stopPendingImports = stop; })
+    .catch(error => { pendingImportFailure = { error }; });
+  const signatureCapabilityReady = (async () => {
     try {
       signatureVerificationAvailable = await bridge.signatureVerificationAvailable?.() ?? false;
     } catch {
       // Older native packages do not expose this method. Their reader remains unchanged.
       signatureVerificationAvailable = false;
     }
+  })();
+  const initialized = Promise.all([pendingImportReady, signatureCapabilityReady]).then(async () => {
     await migrateLegacyWorkspace({
       source: options.legacyWorkspaceSource ?? new IndexedDbLegacyWorkspaceSource(),
       journal: options.legacyWorkspaceJournal ?? new LocalStorageLegacyWorkspaceMigrationJournal(),
       bridge,
       recent,
     });
+    if (pendingImportFailure) throw pendingImportFailure.error;
   });
 
   const deleteTransient = async (document: StoredDocument): Promise<void> => {
@@ -319,57 +399,36 @@ export const createIOSWorkspacePlatform = (
       const document = reopenedDocuments.get(file);
       const present = bridge.presentSignatureReport;
       if (!signatureVerificationAvailable || !document || !present) {
-        throw new Error('Signature details are unavailable for this PDF.');
+        throw new LocalizedError("ios-document-services.error.6bf1b5338a");
       }
       await present.call(bridge, document.ref, document.name ?? file.name);
     },
   };
 
   const deliverOutput: OutputDeliveryHandler = async request => {
-    if (!request.keepLocalHistory && !request.autoDownload) return;
+    // iOS has no silent external download destination. Presenting a Files picker
+    // here blocks the completed-result actions behind a second modal every time a
+    // job finishes. Keep the durable copy when requested, then let OutputCenter's
+    // explicit Download and Share actions own native presentation.
+    if (!request.keepLocalHistory) return { externallyExported: false };
 
     const document = await bridge.retain(
       request.blob.stream(),
-      {
-        ...documentMetadata(request.name, request.mimeType),
-        ...(!request.keepLocalHistory ? { transient: true } : {}),
-      },
+      documentMetadata(request.name, request.mimeType),
     );
 
-    if (request.keepLocalHistory) {
-      let persistenceFailure: unknown;
-      let exportIssue: OutputDeliveryResult['exportIssue'] | undefined;
-      try {
-        await recent.save(outputEntry(document, request, document.retainedAt ?? now()));
-      } catch (error) {
-        // Keep the retained file. records.list can reconstruct its metadata on
-        // the next successful read rather than losing a completed operation.
-        persistenceFailure = error;
-      }
-      if (request.autoDownload) {
-        try {
-          await bridge.exportDocument(document.ref, request.name, request.mimeType);
-        } catch (error) {
-          // The durable save succeeded; report the optional export separately so
-          // the interface can offer a retry without treating the document as lost.
-          exportIssue = error instanceof Error && error.name === 'AbortError' ? 'cancelled' : 'failed';
-        }
-      }
-      if (persistenceFailure !== undefined) throw persistenceFailure;
-      return exportIssue ? { exportIssue } : undefined;
-    }
-
-    transientRefs.add(document.ref);
-    let exportFailure: unknown;
+    const entry = outputEntry(document, request, document.retainedAt ?? now());
     try {
-      await bridge.exportDocument(document.ref, request.name, request.mimeType);
+      await recent.save(entry);
     } catch (error) {
-      exportFailure = error;
+      // Keep the retained file. records.list can reconstruct its metadata on
+      // the next successful read rather than losing a completed operation.
+      throw error;
     }
-    await deleteTransient(document);
-    // Never delete the last retained copy and report success. The caller keeps
-    // its editor state dirty and may retry after either failure or cancellation.
-    if (exportFailure !== undefined) throw exportFailure;
+    return {
+      externallyExported: false,
+      recentRecord: { entry, document, available: true },
+    };
   };
 
   let uninstallOutputDelivery = () => {};
@@ -393,6 +452,7 @@ export const createIOSWorkspacePlatform = (
       persistentRename: true,
       durableDocuments: true,
       separateClearActions: true,
+      automaticExternalExport: false,
     },
     records,
     documentImport,
@@ -404,26 +464,28 @@ export const createIOSWorkspacePlatform = (
     applicationMetadata: {
       getApplicationMetadata: () => bridge.getApplicationMetadata(),
     },
+    pdfReader,
+    pdfOpenHandoffs,
     pdfSignatureVerification,
     save: (record, name) => {
-      if (!record.document || !record.available) throw new Error('The retained document is unavailable.');
+      if (!record.document || !record.available) throw new LocalizedError("ios-document-services.error.402cf723fd");
       return bridge.exportDocument(record.document.ref, name, record.document.mimeType);
     },
     share: (record, name) => {
-      if (!record.document || !record.available) throw new Error('The retained document is unavailable.');
+      if (!record.document || !record.available) throw new LocalizedError("ios-document-services.error.402cf723fd");
       return bridge.shareDocument(record.document.ref, name, record.document.mimeType);
     },
     async reopen(record): Promise<File> {
-      if (!record.document || !record.available) throw new Error('The retained document is unavailable.');
+      if (!record.document || !record.available) throw new LocalizedError("ios-document-services.error.402cf723fd");
       const parts = await readAll(bridge.open(record.document.ref));
-      const file = new File(parts, record.entry.name || record.document.name || FALLBACK_DOCUMENT_NAME, {
+      const file = new File(parts, record.entry.name || record.document.name || t("use-workspace-runtime.untitled.document.9f6d7c"), {
         type: record.entry.mimeType || record.document.mimeType || FALLBACK_MIME_TYPE,
       });
       reopenedDocuments.set(file, record.document);
       return file;
     },
     async rename(record, name): Promise<void> {
-      if (!record.document || !record.available) throw new Error('The retained document is unavailable.');
+      if (!record.document || !record.available) throw new LocalizedError("ios-document-services.error.402cf723fd");
       await bridge.rename(record.document.ref, name);
       try {
         await recent.save({ ...record.entry, name });
@@ -443,6 +505,13 @@ export const createIOSWorkspacePlatform = (
       } finally {
         await deleteTransient(document);
       }
+    },
+    async keepFresh(result): Promise<void> {
+      const document = await bridge.retain(
+        result.blob.stream(),
+        documentMetadata(result.name, result.mimeType || result.blob.type || null),
+      );
+      await recent.save(freshEntry(document, `output-${document.ref}`, document.retainedAt ?? now()));
     },
     async shareFresh(result): Promise<void> {
       const document = await retainFresh(result);

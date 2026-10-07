@@ -1,3 +1,6 @@
+import english from './i18n/en-US.ts';
+import { LocalizedError } from './i18n/errors.ts';
+import { t } from './i18n/core.ts';
 import {
   PDFArray,
   PDFCheckBox,
@@ -32,6 +35,12 @@ import {
 } from './pdfEditorGeometry';
 import type { PdfSpaceRect } from './pdfNativeTextPlanning';
 import { layoutParagraphLines, paragraphStandardFontKey } from './pdfParagraphLayout';
+import { embeddedPdfFont, type EmbeddedPdfFontId } from './pdfEmbeddedFonts';
+import {
+  DevanagariPdfWriter,
+  measureDevanagariText,
+  type DevanagariFontId,
+} from './pdfDevanagari';
 import {
   DELETE_ALL_PAGES_MESSAGE,
   DELETE_PAGES_TOO_LARGE_MESSAGE,
@@ -74,7 +83,7 @@ const pageCountCache = new WeakMap<File, Promise<number>>();
 const throwIfPdfJobAborted = (signal?: AbortSignal) => {
   if (!signal?.aborted) return;
   if (signal.reason !== undefined) throw signal.reason;
-  const error = new Error('PDF operation cancelled.');
+  const error = new LocalizedError("pdf-document.pdf.operation.cancelled.0255bc");
   error.name = 'AbortError';
   throw error;
 };
@@ -120,7 +129,7 @@ export const createPDFFromImages = async (
 
     if (file.type === 'image/jpeg') image = await pdfDoc.embedJpg(arrayBuffer);
     else if (file.type === 'image/png') image = await pdfDoc.embedPng(arrayBuffer);
-    else throw new Error('This image format cannot be included in the PDF.');
+    else throw new LocalizedError("pdf-document.this.image.format.cannot.be.included.in.493031");
 
     const pageWidth = 595.28;
     const pageHeight = 841.89;
@@ -169,7 +178,7 @@ export const createPDFFromLayout = async (pages: PDFPageLayout[]): Promise<Uint8
       const arrayBuffer = await readFileAsArrayBuffer(file);
       if (file.type === 'image/jpeg') return pdfDoc.embedJpg(arrayBuffer);
       if (file.type === 'image/png') return pdfDoc.embedPng(arrayBuffer);
-      throw new Error(`Unsupported image type: ${file.type}`);
+      throw new LocalizedError("pdf-document.unsupported.image.type.3e9279", { v0: file.type });
     })();
 
     imageCache.set(file, promise);
@@ -236,7 +245,7 @@ export const splitPDFByPagesPerFile = async (
   throwIfPdfJobAborted(signal);
   const totalPages = pdfDoc.getPageCount();
   if (totalPages === 0) {
-    throw new Error(NO_PAGES_MESSAGE);
+    throw new LocalizedError("android-parity.selected.pdf.has.no.pages.3882f9");
   }
 
   const exportIndices = resolveOptionalPageSelection(
@@ -307,7 +316,7 @@ export const splitPDFByMaximumSize = async (
   await pdfJobCheckpoint(signal);
   const maximumBytes = Math.floor(maximumSizeMb * 1024 * 1024);
   if (!Number.isFinite(maximumBytes) || maximumBytes < 1024 * 1024) {
-    throw new Error('Maximum split size must be at least 1 MB.');
+    throw new LocalizedError("pdf-document.maximum.split.size.must.be.at.least.c94100");
   }
 
   const sourceBytes = await readFileAsArrayBuffer(file);
@@ -315,7 +324,7 @@ export const splitPDFByMaximumSize = async (
   const source = await PDFDocument.load(sourceBytes);
   throwIfPdfJobAborted(signal);
   const totalPages = source.getPageCount();
-  if (!totalPages) throw new Error(NO_PAGES_MESSAGE);
+  if (!totalPages) throw new LocalizedError("android-parity.selected.pdf.has.no.pages.3882f9");
   const indices = resolveOptionalPageSelection(
     selectedPageIndices.map((index) => index + 1),
     totalPages,
@@ -349,12 +358,12 @@ export const splitPDFByMaximumSize = async (
       parts.push({ indices: current, bytes: currentBytes ?? await serialize(current) });
       const singleBytes = await serialize([pageIndex]);
       if (singleBytes.byteLength > maximumBytes) {
-        throw new Error(`Page ${pageIndex + 1} exceeds the ${maximumSizeMb} MB limit on its own. Compress first, then split again.`);
+        throw new LocalizedError("pdf-document.page.exceeds.the.mb.limit.on.its.16eb2d", { v0: pageIndex + 1, v1: maximumSizeMb });
       }
       current = [pageIndex];
       currentBytes = singleBytes;
     } else {
-      throw new Error(`Page ${pageIndex + 1} exceeds the ${maximumSizeMb} MB limit on its own. Compress first, then split again.`);
+      throw new LocalizedError("pdf-document.page.exceeds.the.mb.limit.on.its.16eb2d", { v0: pageIndex + 1, v1: maximumSizeMb });
     }
     onProgress?.(position + 1, indices.length);
   }
@@ -388,7 +397,7 @@ export const extractPages = async (
   throwIfPdfJobAborted(signal);
   const totalPages = pdfDoc.getPageCount();
   if (totalPages === 0) {
-    throw new Error(NO_PAGES_MESSAGE);
+    throw new LocalizedError("android-parity.selected.pdf.has.no.pages.3882f9");
   }
 
   const resolved = resolvePageSelection(pageIndices.map((index) => index + 1), totalPages, label);
@@ -414,14 +423,14 @@ export const extractPages = async (
  */
 export const deletePagesFromPDF = async (file: File, pageIndicesToDelete: number[]): Promise<Uint8Array> => {
   if (file.size > MAX_DELETE_PAGES_INPUT_BYTES) {
-    throw new Error(DELETE_PAGES_TOO_LARGE_MESSAGE);
+    throw new LocalizedError("android-parity.this.pdf.is.too.big.to.remove.b67882");
   }
 
   const arrayBuffer = await readFileAsArrayBuffer(file);
   const pdfDoc = await PDFDocument.load(arrayBuffer);
   const totalPages = pdfDoc.getPageCount();
   if (totalPages === 0) {
-    throw new Error(NO_PAGES_MESSAGE);
+    throw new LocalizedError("android-parity.selected.pdf.has.no.pages.3882f9");
   }
 
   const deleteIndices = resolvePageSelection(
@@ -430,7 +439,7 @@ export const deletePagesFromPDF = async (file: File, pageIndicesToDelete: number
     'Pages to delete',
   );
   if (deleteIndices.length >= totalPages) {
-    throw new Error(DELETE_ALL_PAGES_MESSAGE);
+    throw new LocalizedError("android-parity.you.cannot.delete.all.pages.58dee9");
   }
 
   const keptIndices = remainingPageIndices(totalPages, new Set(deleteIndices));
@@ -450,7 +459,7 @@ export const reorderPDFPages = async (file: File, pageOrderIndices: number[]): P
   const pdfDoc = await PDFDocument.load(arrayBuffer);
   const totalPages = pdfDoc.getPageCount();
   if (totalPages === 0) {
-    throw new Error(NO_PAGES_MESSAGE);
+    throw new LocalizedError("android-parity.selected.pdf.has.no.pages.3882f9");
   }
 
   const order = resolvePageOrder(pageOrderIndices.map((index) => index + 1), totalPages);
@@ -480,7 +489,7 @@ export const rotateSpecificPages = async (
   const sourcePdf = await PDFDocument.load(arrayBuffer);
   const totalPages = sourcePdf.getPageCount();
   if (totalPages === 0) {
-    throw new Error(NO_PAGES_MESSAGE);
+    throw new LocalizedError("android-parity.selected.pdf.has.no.pages.3882f9");
   }
 
   const requested = new Map<number, number>();
@@ -562,12 +571,12 @@ export const rotatePDF = async (file: File, rotation: number): Promise<Uint8Arra
 export const protectPDF = async (file: File, password: string): Promise<Uint8Array> => {
   const exactPassword = password;
   if (!exactPassword || !/\S/.test(exactPassword)) {
-    throw new Error(PASSWORD_REQUIRED_MESSAGE);
+    throw new LocalizedError("android-parity.password.is.required.to.protect.a.pdf.5153a4");
   }
   // The Android processor enforces the same floor, so a 3-character password is rejected on both
   // surfaces rather than producing a file whose protection is theatre.
   if (exactPassword.length < MIN_PROTECT_PASSWORD_LENGTH) {
-    throw new Error(PASSWORD_TOO_SHORT_MESSAGE);
+    throw new LocalizedError("android-parity.password.must.be.at.least.4.characters.cf116c");
   }
 
   const input = new Uint8Array(await readFileAsArrayBuffer(file));
@@ -660,7 +669,7 @@ export const flattenPDF = async (file: File): Promise<Uint8Array> => {
   const arrayBuffer = await readFileAsArrayBuffer(file);
   const pdfDoc = await PDFDocument.load(arrayBuffer);
   if (pdfDoc.getPageCount() === 0) {
-    throw new Error(NO_PAGES_MESSAGE);
+    throw new LocalizedError("android-parity.selected.pdf.has.no.pages.3882f9");
   }
 
   const hasAcroForm = pdfDoc.catalog.lookup(PDFName.of('AcroForm')) !== undefined;
@@ -674,7 +683,7 @@ export const flattenPDF = async (file: File): Promise<Uint8Array> => {
 export const repairPDF = async (file: File): Promise<Uint8Array> => {
   const arrayBuffer = await readFileAsArrayBuffer(file);
   const pdfDoc = await PDFDocument.load(arrayBuffer);
-  if (pdfDoc.getPageCount() === 0) throw new Error(NO_PAGES_MESSAGE);
+  if (pdfDoc.getPageCount() === 0) throw new LocalizedError("android-parity.selected.pdf.has.no.pages.3882f9");
   return pdfDoc.save({ useObjectStreams: false });
 };
 
@@ -892,7 +901,7 @@ const isPageBlank = async (pdfDoc: any, pageIndex: number, threshold: number) =>
 
   const context = canvas.getContext('2d', { willReadFrequently: true });
   if (!context) {
-    throw new Error('Canvas context failed');
+    throw new LocalizedError("pdf-document.canvas.context.failed.0fc40a");
   }
 
   context.fillStyle = '#ffffff';
@@ -938,7 +947,7 @@ export const removeBlankPagesFromPDF = async (
   }
 
   if (keptIndices.length === 0) {
-    throw new Error('All pages look blank. No output was created.');
+    throw new LocalizedError("pdf-document.all.pages.look.blank.no.output.was.7f5ae1");
   }
 
   const outputPdf = await PDFDocument.create();
@@ -955,12 +964,12 @@ export const removeBlankPagesFromPDF = async (
 export const unlockPDF = async (file: File, password: string): Promise<Uint8Array> => {
   const exactPassword = password;
   if (!exactPassword) {
-    throw new Error(UNLOCK_PASSWORD_REQUIRED_MESSAGE);
+    throw new LocalizedError("android-parity.password.is.required.to.unlock.the.pdf.be2e2e");
   }
 
   const input = new Uint8Array(await readFileAsArrayBuffer(file));
   return decryptPdf(input, exactPassword).catch(() => {
-    throw new Error(UNLOCK_FAILED_MESSAGE);
+    throw new LocalizedError("android-parity.unable.to.unlock.pdf.check.password.and.5aefc8");
   });
 };
 
@@ -1009,6 +1018,7 @@ export interface ParagraphDirectEdit {
  */
 export interface ParagraphReflowEdit {
   mode: 'reflow';
+  script?: 'devanagari';
   pageIndex: number;
   /** Paragraph box as fractions of the visual page. */
   x: number;
@@ -1025,7 +1035,7 @@ export interface ParagraphReflowEdit {
    * The explicit paragraph rows, one entry per line, each a list of stretches with the face they are
    * drawn in. A paragraph that opens with a bold lead-in stays that way through the redraw.
    */
-  lines: Array<Array<{ text: string; face: ParagraphFace }>>;
+  lines: Array<Array<{ text: string; face: ParagraphFace; fontSize?: number }>>;
   /** Original PDF origins, relative to the paragraph box, shared with the editing preview. */
   lineOrigins?: Array<{ x?: number; y: number }>;
   fontSize: number;
@@ -1037,24 +1047,24 @@ export interface ParagraphReflowEdit {
 /**
  * One typeface a redrawn paragraph needs.
  *
- * Always one of the standard faces. The document's own program is deliberately not re-embedded:
- * what PDF.js exposes is a transcoded copy built for the browser, not the file's original font,
- * and drawing Unicode text through it produced wrong advances and unreachable spaces — text ran
- * off the page and characters were lost. A metric-compatible standard face is a visible change,
- * which the editor states, rather than a silent one.
+ * Latin redraws reuse usable original fonts, falling back to PDF standard faces. Devanagari uses
+ * a shaped TrueType face, taking the original font stream when usable and a bundled face otherwise. PDF.js's
+ * browser copy of a font is never used as an export font because its metrics can differ.
  */
 export interface ParagraphFace {
   /** Stable key so the same face is embedded once per document. */
   key: string;
-  family: 'Helvetica' | 'TimesRoman' | 'Courier';
+  family: 'Helvetica' | 'TimesRoman' | 'Courier' | DevanagariFontId;
   bold: boolean;
   italic: boolean;
+  /** Original font program used by a Latin redraw when it covers the edited text. */
+  embeddedFontId?: EmbeddedPdfFontId;
 }
 
 export type ParagraphSaveEdit = ParagraphDirectEdit | ParagraphReflowEdit;
 
 /** Shown when a document's own permissions forbid writing it back. */
-export const PDF_EDIT_PERMISSION_MESSAGE = 'This PDF is password-protected against changes, so it cannot be saved. Remove the password with the Unlock PDF tool first.';
+export const PDF_EDIT_PERMISSION_MESSAGE = english["error.pdfEditPermission"];
 
 export const savePDFWithAnnotations = async (
   file: File,
@@ -1102,15 +1112,16 @@ export const savePDFWithAnnotations = async (
     // the paragraph and is left in the file. One third of a line is the usual depth of a descender
     // and stays well clear of the next paragraph's ink.
     const lineHeight = Math.max(...rects.map((rect) => Math.abs(rect[3] - rect[1])));
-    const descender = Math.max(1, lineHeight * 0.34);
+    const descender = Math.max(1, lineHeight * (edit.script === 'devanagari' ? 0.5 : 0.34));
     return [{
       pageIndex: edit.pageIndex,
       pdfRect: [
-        Math.min(...rects.map((rect) => Math.min(rect[0], rect[2]))),
+        Math.min(...rects.map((rect) => Math.min(rect[0], rect[2]))) - (edit.script === 'devanagari' ? 1 : 0),
         Math.min(...rects.map((rect) => Math.min(rect[1], rect[3]))) - descender,
-        Math.max(...rects.map((rect) => Math.max(rect[0], rect[2]))),
-        Math.max(...rects.map((rect) => Math.max(rect[1], rect[3]))),
+        Math.max(...rects.map((rect) => Math.max(rect[0], rect[2]))) + (edit.script === 'devanagari' ? 1 : 0),
+        Math.max(...rects.map((rect) => Math.max(rect[1], rect[3]))) + (edit.script === 'devanagari' ? Math.max(1, lineHeight * 0.15) : 0),
       ] as PdfSpaceRect,
+      sourceTexts: edit.script === 'devanagari' ? edit.runDeletions.map((run) => run.sourceText) : undefined,
     }];
   });
   if (nativeEdits.length > 0 || clearances.length > 0) {
@@ -1129,7 +1140,7 @@ export const savePDFWithAnnotations = async (
       if (cleared.uncleared > 0) {
         // Text that reaches outside the repainted area is left where it is, so say so rather than
         // letting the save claim the paragraph's originals are gone.
-        throw new Error('Direct text edit failed: some original text crossed the paragraph edge and could not be removed.');
+        throw new LocalizedError("pdf-document.direct.text.edit.failed.some.original.text.0b7352");
       }
     }
   }
@@ -1148,11 +1159,13 @@ export const savePDFWithAnnotations = async (
     // edits perfectly well on screen and then cannot be written, so the reason has to be named
     // here rather than reported as an unexplained failure.
     if (/encrypted/i.test(error instanceof Error ? error.message : '')) {
-      throw new Error(PDF_EDIT_PERMISSION_MESSAGE);
+      throw new LocalizedError("error.pdfEditPermission");
     }
     throw error;
   }
   const pages = pdfDoc.getPages();
+  const devanagariWriter = reflowParagraphEdits.some((edit) => edit.script === 'devanagari')
+    ? new DevanagariPdfWriter(pdfDoc) : null;
   const fonts = {
     Helvetica: await pdfDoc.embedFont(StandardFonts.Helvetica),
     HelveticaBold: await pdfDoc.embedFont(StandardFonts.HelveticaBold),
@@ -1245,6 +1258,7 @@ export const savePDFWithAnnotations = async (
   }
 
   const visualTextRuns: Array<{ pageIndex: number; text: string; x: number; y: number }> = [];
+  const embeddedParagraphFonts = new Map<EmbeddedPdfFontId, Awaited<ReturnType<typeof pdfDoc.embedFont>>>();
   if (reflowParagraphEdits.length > 0) {
     for (const edit of reflowParagraphEdits) {
       if (edit.pageIndex < 0 || edit.pageIndex >= pages.length) continue;
@@ -1290,7 +1304,25 @@ export const savePDFWithAnnotations = async (
         lineHeight: edit.lineHeight,
         align: edit.align,
         lineOrigins: edit.lineOrigins,
+        measure: edit.script === 'devanagari'
+          ? (text, face, size) => measureDevanagariText(text, face.family as DevanagariFontId, size)
+          : undefined,
+        normalizeText: edit.script === 'devanagari' ? (text) => text.replace(/\t/g, '    ') : undefined,
       });
+      if (edit.script === 'devanagari' && devanagariWriter) {
+        for (let lineIndex = 0; lineIndex < edit.lines.length; lineIndex += 1) {
+          const pieces = positioned.filter((piece) => piece.lineIndex === lineIndex).map((piece) => {
+            const point = visualPointToPdf(geometry, visualX + piece.x, visualY + piece.y);
+            return {
+              text: piece.text, fontId: piece.face.family as DevanagariFontId,
+              italic: piece.face.italic,
+              x: point.x, y: point.y, width: piece.width, fontSize: piece.fontSize,
+            };
+          });
+          await devanagariWriter.drawLine(page, pieces, edit.fontSize, color, geometry.rotation);
+        }
+        continue;
+      }
       for (const piece of positioned) {
         // Space advances are already in the layout; empty ink needs no PDF text object.
         if (!piece.text.trim()) continue;
@@ -1300,11 +1332,25 @@ export const savePDFWithAnnotations = async (
         if (edit.runDeletions.length > 0 && piece.text.trim()) {
           visualTextRuns.push({ pageIndex: edit.pageIndex, text: piece.text, x: point.x, y: point.y });
         }
+        let font = fonts[paragraphStandardFontKey(piece.face)];
+        if (piece.face.embeddedFontId) {
+          const id = piece.face.embeddedFontId;
+          let originalFont = embeddedParagraphFonts.get(id);
+          if (!originalFont) {
+            const original = embeddedPdfFont(id);
+            if (!original) throw new Error('The document font is not loaded');
+            const module = await import('@pdf-lib/fontkit');
+            pdfDoc.registerFontkit((module as any).default ?? module);
+            originalFont = await pdfDoc.embedFont(original.bytes, { subset: true });
+            embeddedParagraphFonts.set(id, originalFont);
+          }
+          font = originalFont;
+        }
         page.drawText(piece.text, {
           x: point.x,
           y: point.y,
-          size: edit.fontSize,
-          font: fonts[paragraphStandardFontKey(piece.face)],
+          size: piece.fontSize,
+          font,
           color,
           rotate: degrees(geometry.rotation),
         });
@@ -1487,6 +1533,7 @@ export const savePDFWithAnnotations = async (
     });
   }
 
+  devanagariWriter?.finish();
   const output = await pdfDoc.save();
   if (visualTextRuns.length > 0) {
     const { verifyPdfTextRunsFitWithinPage } = await import('./pdfNativeTextEditor');
@@ -1574,7 +1621,7 @@ export const addWatermarkToPDF = async (file: File, options: WatermarkOptions): 
   const pdfDoc = await PDFDocument.load(arrayBuffer);
   const pages = pdfDoc.getPages();
   if (pages.length === 0) {
-    throw new Error(NO_PAGES_MESSAGE);
+    throw new LocalizedError("android-parity.selected.pdf.has.no.pages.3882f9");
   }
 
   const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -1644,7 +1691,7 @@ export const addPageNumbersToPDF = async (file: File, options: PageNumberOptions
   const pages = pdfDoc.getPages();
   const totalPages = pages.length;
   if (totalPages === 0) {
-    throw new Error(NO_PAGES_MESSAGE);
+    throw new LocalizedError("android-parity.selected.pdf.has.no.pages.3882f9");
   }
 
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);

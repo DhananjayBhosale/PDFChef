@@ -1,3 +1,7 @@
+import { localizeError } from '../../services/i18n/errors.ts';
+import english from '../../services/i18n/en-US.ts';
+import { t, getLocale, formatNumber } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
@@ -19,6 +23,25 @@ import {
 } from '../../services/pdfDocument';
 import { getPageTextBlocks, resolvePageFonts, type PageTextBlocks } from '../../services/pdfBlockExtraction';
 import { layoutParagraphLines, paragraphLineOrigins } from '../../services/pdfParagraphLayout';
+import {
+  documentEmbeddedFontsReady,
+  embeddedPdfFont,
+  loadDocumentEmbeddedFonts,
+  matchingSimpleEmbeddedPdfFont,
+  releaseDocumentEmbeddedFonts,
+} from '../../services/pdfEmbeddedFonts';
+import {
+  canShapeDevanagari,
+  devanagariCssFamily,
+  devanagariFontsReady,
+  documentDevanagariFontsReady,
+  hasDevanagari,
+  loadDevanagariFonts,
+  loadDocumentDevanagariFonts,
+  measureDevanagariText,
+  selectDevanagariFont,
+  type DevanagariFontId,
+} from '../../services/pdfDevanagari';
 import type { PdfTextBlock } from '../../services/pdfTextBlocks';
 import {
   blockStyledSegments,
@@ -69,7 +92,11 @@ import { PDF_TEXT_OVERFLOW_MESSAGE } from '../../services/pdfTextEditSafety';
 import { pdfPageFromScrollBoundary } from '../../services/pdfZoomGesture';
 import { releaseNativePdfTextDocument } from '../../services/pdfNativeTextEditor';
 
-const DISCARD_EDITS_MESSAGE = 'Discard your unsaved edits?';
+const elementAction = (kind: EditorElement['type'], action: 'add' | 'place' | 'properties' | 'selected') => t(`editor.${kind}.${action}`);
+const elementAnnouncement = (kind: EditorElement['type'], selected: boolean, page: number) =>
+  t(`editor.${kind}.${selected ? 'selectedAria' : 'aria'}`, { page });
+
+const DISCARD_EDITS_MESSAGE = english["edit-pdf.discard.your.unsaved.edits.1575c6"];
 const editorCssFontFamily = (fontFamily: string | undefined) => (
   fontFamily === 'TimesRoman'
     ? 'Times New Roman'
@@ -163,14 +190,14 @@ const describeBlockedParagraphs = (
   const pages = [...new Set(blocked.map(({ block }) => block.pageIndex + 1))]
     .sort((first, second) => first - second);
   const where = pages.length === 1
-    ? `on page ${pages[0]}`
+    ? t("edit-pdf.on.page.4378c3", { v0: pages[0] })
     : pages.length <= 4
-      ? `on pages ${pages.slice(0, -1).join(', ')} and ${pages[pages.length - 1]}`
-      : `on ${pages.length} pages, starting at page ${pages[0]}`;
+      ? t("edit-pdf.on.pages.and.6b90f7", { v0: pages.slice(0, -1).join(', '), v1: pages[pages.length - 1] })
+      : t("edit-pdf.on.pages.starting.at.page.19e0f0", { v0: pages.length, v1: pages[0] });
 
   return blocked.length === 1
-    ? `This paragraph ${where} cannot be changed. Add a text box over it instead.`
-    : `${blocked.length.toLocaleString()} paragraphs ${where} cannot be changed. Add text boxes over them instead.`;
+    ? t("edit-pdf.this.paragraph.cannot.be.changed.add.a.7395b4", { v0: where })
+    : t("edit-pdf.paragraphs.cannot.be.changed.add.text.boxes.8c54bf", { v0: blocked.length.toLocaleString(getLocale()), v1: where });
 };
 
 /** A refusal the editor chose to make, rather than a fault: an answer, not an error. */
@@ -228,6 +255,7 @@ const PDFPage: React.FC<{
   onBlockChange: (blockId: string, text: string) => void;
   onBeginBlockChange: (blockId: string) => void;
   insertMode: 'text' | 'shape' | null;
+  placementLabel: string;
   zoom: number;
 }> = ({
   pageIndex,
@@ -253,8 +281,10 @@ const PDFPage: React.FC<{
   onBlockChange,
   onBeginBlockChange,
   insertMode,
+  placementLabel,
   zoom,
 }) => {
+  useI18n();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
@@ -380,6 +410,7 @@ const PDFPage: React.FC<{
     <div 
       ref={pageRef}
       data-pdf-page={pageIndex}
+      dir="ltr"
       role="group"
       className="relative mx-auto shrink-0 bg-white shadow-lg"
       style={{ width: scaledW, height: scaledH }} // Helper wrapper for layout flow
@@ -390,7 +421,7 @@ const PDFPage: React.FC<{
           y: Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)),
         });
       }}
-      aria-label={`Page ${pageIndex + 1} of ${pageCount}`}
+      aria-label={t("edit-pdf.page.of.477c22", { v0: pageIndex + 1, v1: pageCount })}
     >
       <div 
         ref={containerRef}
@@ -436,6 +467,27 @@ const PDFPage: React.FC<{
             onUpdate={onUpdate} onDelete={onDelete} onBeginChange={onBeginElementChange}
           />
         ))}
+        {insertMode && (
+          <button
+            type="button"
+            data-testid="pdf-placement-target"
+            aria-label={placementLabel}
+            className="absolute inset-0 z-[500] h-full w-full cursor-crosshair border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent-rest)]"
+            style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (event.detail === 0) {
+                onPagePress({ x: 0.1, y: 0.1 });
+                return;
+              }
+              const bounds = event.currentTarget.getBoundingClientRect();
+              onPagePress({
+                x: Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)),
+                y: Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)),
+              });
+            }}
+          />
+        )}
       </div>
     </div>
   );
@@ -523,6 +575,7 @@ const PDFFormFieldControl: React.FC<{
   onChange: (value: PdfFormFieldValue) => void;
   onActivate: () => void;
 }> = ({ field, hitArea, value, onChange, onActivate }) => {
+  useI18n();
   const rawFontSize = Math.max(11, Math.min(16, field.height * 0.55));
   /**
    * Ratio that lifts this field's *computed* font size to the 16px iOS insists on.
@@ -653,7 +706,7 @@ const PDFFormFieldControl: React.FC<{
         }}
         className={`absolute rounded border border-paper-500 shadow-sm outline-none focus:border-[var(--accent-rest)] focus:ring-2 focus:ring-[var(--focus-ring)] ${hit.className}`}
       >
-        {field.kind === 'select' && <option value="">Select...</option>}
+        {field.kind === 'select' && <option value="">{t("edit-pdf.select.1339bd")}</option>}
         {field.options?.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -700,6 +753,7 @@ const PDFFormFieldControl: React.FC<{
 
 // Re-implementing simplified ResizableElement
 const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpdate, onDelete, onBeginChange, containerRef, displayScale }) => {
+  useI18n();
   const [editMode, setEditMode] = useState<'drag' | 'resize' | null>(null);
   const origin = useRef({ clientX: 0, clientY: 0, x: 0, y: 0, width: 0.2, height: 0.1 });
   const gestureChanged = useRef(false);
@@ -854,7 +908,7 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
       role="group"
       tabIndex={0}
       data-testid="editor-element"
-      aria-label={`${isSelected ? 'Selected ' : ''}${element.type} on page ${element.pageIndex + 1}. Press Enter to select${isSelected ? element.type === 'text' ? ', edit in the text field, use arrow keys to move, or Delete to remove' : ', use arrow keys to move, or Delete to remove' : ''}.`}
+      aria-label={elementAnnouncement(element.type, isSelected, element.pageIndex + 1)}
       className={`absolute z-[300] outline-none focus-visible:ring-2 focus-visible:ring-ink-500 ${isSelected && element.type === 'text' ? 'touch-auto cursor-text' : 'touch-none cursor-move'} ${selectionClass}`}
       style={{ left: `${element.x*100}%`, top: `${element.y*100}%`, width: `${width * 100}%`, height: `${height * 100}%`, position: 'absolute', transform: element.type === 'line' || element.type === 'arrow' ? undefined : `rotate(${element.rotation || 0}deg)`, transformOrigin: 'center' }}
       onPointerDown={handleStart}
@@ -866,9 +920,9 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
          <textarea
            ref={inlineTextEditorRef}
            data-testid="inline-text-editor"
-           aria-label={`Edit text on page ${element.pageIndex + 1}`}
+           aria-label={t("edit-pdf.edit.text.on.page.4a02ed", { v0: element.pageIndex + 1 })}
            value={element.content}
-           placeholder="Text"
+           placeholder={t("edit-pdf.text.71988c")}
            rows={1}
            spellCheck={false}
            autoCorrect="off"
@@ -918,17 +972,17 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
              whiteSpace: 'pre-wrap',
            }}
          >
-           {element.content || 'Text'}
+           {element.content || t("edit-pdf.text.71988c")}
          </div>
       ) : (
          element.type === 'image'
-           ? <img src={element.content} alt="Added PDF graphic" className="h-full w-full object-contain pointer-events-none" />
+           ? <img src={element.content} alt={t("edit-pdf.added.pdf.graphic.f492bb")} className="h-full w-full object-contain pointer-events-none" />
            : shapePreview
       )}
       {isSelected && (
         <button
           type="button"
-          aria-label="Resize selected element with arrow keys"
+          aria-label={t("edit-pdf.resize.selected.element.with.arrow.keys.2e1370")}
           onPointerDown={handleResizeStart}
           onKeyDown={handleResizeKeyDown}
           className="absolute -bottom-[22px] -right-[22px] flex h-11 w-11 cursor-nwse-resize items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ink-500"
@@ -942,6 +996,7 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
 };
 
 export const EditPDF: React.FC = () => {
+  const { locale } = useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [elements, setElements] = useState<EditorElement[]>([]);
@@ -962,6 +1017,9 @@ export const EditPDF: React.FC = () => {
   const blockColorsRef = useRef<Record<string, BlockColors>>({});
   const blockIndexRef = useRef<Map<string, PdfTextBlock>>(new Map());
   const [blocksVersion, setBlocksVersion] = useState(0);
+  const [devanagariFontsVersion, setDevanagariFontsVersion] = useState(0);
+  const [embeddedFontsVersion, setEmbeddedFontsVersion] = useState(0);
+  const [devanagariFontError, setDevanagariFontError] = useState(false);
   const [pagesWithoutText, setPagesWithoutText] = useState<number[]>([]);
   const [findOpen, setFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState('');
@@ -1003,7 +1061,10 @@ export const EditPDF: React.FC = () => {
   useEffect(() => () => {
     documentGeneration.current += 1;
     const activeFile = activeNativeFileRef.current;
-    if (activeFile) void releaseNativePdfTextDocument(activeFile);
+    if (activeFile) {
+      void releaseNativePdfTextDocument(activeFile);
+      releaseDocumentEmbeddedFonts(activeFile);
+    }
   }, []);
   const setPdfZoomViewport = usePdfPinchZoom({ zoom, setZoom: setExactZoom, max: EDITOR_MAX_ZOOM });
   const bindPdfZoomViewport = useCallback((viewport: HTMLDivElement | null) => {
@@ -1140,7 +1201,10 @@ export const EditPDF: React.FC = () => {
     const nextFile = files[0];
     const generation = ++documentGeneration.current;
     replacingSourceIds.current.clear();
-    if (file?.file) void releaseNativePdfTextDocument(file.file);
+    if (file?.file) {
+      void releaseNativePdfTextDocument(file.file);
+      releaseDocumentEmbeddedFonts(file.file);
+    }
     setPdfDoc(null);
     replaceElements([]);
     replaceBlockEdits({});
@@ -1162,7 +1226,7 @@ export const EditPDF: React.FC = () => {
     redoStack.current = [];
     setHistoryVersion((value) => value + 1);
     setFile(null);
-    setStatus({ isProcessing: true, progress: 10, message: 'Opening this PDF locally…' });
+    setStatus({ isProcessing: true, progress: 10, message: t("edit-pdf.opening.this.pdf.locally.dec628") });
     let doc: any = null;
     try {
       doc = await loadEditablePDFDocument(nextFile);
@@ -1189,7 +1253,7 @@ export const EditPDF: React.FC = () => {
         setStatus((current) => (current.error || current.isProcessing ? current : {
           isProcessing: false,
           progress: 0,
-          message: 'This PDF allows reading but not changes, so an edited version cannot be written. Remove the password with the Unlock PDF tool first, then edit the result.',
+          message: t("edit-pdf.this.pdf.allows.reading.but.not.changes.e84779"),
         }));
       }).catch(() => {
         // A document that will not report its permissions is treated as an ordinary one; the save
@@ -1225,10 +1289,10 @@ export const EditPDF: React.FC = () => {
         // The library's own wording is a diagnostic, not an instruction. Say what the reader can
         // do about it, and name the tool that does it.
         error: encrypted
-          ? 'This PDF is password protected, so its text cannot be read for editing. Remove the password with the Unlock PDF tool first, then open the result here.'
+          ? t("edit-pdf.this.pdf.is.password.protected.so.its.61949e")
           : damaged
-            ? 'This file could not be read as a PDF. It may be damaged or incomplete; the Repair PDF tool can sometimes recover one.'
-            : reason || 'Unable to open this PDF.',
+            ? t("edit-pdf.this.file.could.not.be.read.as.bba069")
+            : reason || t("edit-pdf.unable.to.open.this.pdf.9c2826"),
       });
     }
   };
@@ -1315,6 +1379,12 @@ export const EditPDF: React.FC = () => {
     commitElements((current) => [...current, newEl]);
     setSelectedId(newEl.id);
     setInsertMode(null);
+  };
+
+  const toggleInsertMode = (mode: 'text' | 'shape') => {
+    setActiveBlockId(null);
+    setSelectedId(null);
+    setInsertMode((current) => current === mode ? null : mode);
   };
 
   const handlePagePress = ({ x, y }: { x: number; y: number }) => {
@@ -1604,7 +1674,7 @@ export const EditPDF: React.FC = () => {
     setStatus({
       isProcessing: false,
       progress: 0,
-      message: `Replaced ${total.toLocaleString()} ${total === 1 ? 'match' : 'matches'} across ${updates.length.toLocaleString()} ${updates.length === 1 ? 'paragraph' : 'paragraphs'}. Review them before saving.`,
+      message: updates.length === 1 ? t('editor.replaced.singleParagraph', { count: total }) : t('editor.replaced.multipleParagraphs', { count: total, paragraphCount: updates.length }),
     });
   }, [blockSegments, commitBlockSegments, findCaseSensitive, findMatches, findQuery, findReplacement]);
 
@@ -1626,6 +1696,7 @@ export const EditPDF: React.FC = () => {
       blockId,
       pageIndex: block.pageIndex,
       text: block.text,
+      segments: blockStyledSegments(block),
       color: colors?.ink,
       patchColor: colors?.paper ?? '#ffffff',
       patchFlat: colors?.flat ?? false,
@@ -1639,7 +1710,7 @@ export const EditPDF: React.FC = () => {
     if (!selectedFile) return;
     const generation = documentGeneration.current;
     if (!['image/png', 'image/jpeg'].includes(selectedFile.type)) {
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Choose a PNG or JPEG image.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("edit-pdf.choose.a.png.or.jpeg.image.e86113") });
       return;
     }
     try {
@@ -1649,20 +1720,21 @@ export const EditPDF: React.FC = () => {
       const content = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
-        reader.onerror = () => reject(new Error('This picture could not be read. Try a JPG or PNG instead.'));
+        reader.onerror = () => reject(new Error(t("edit-pdf.this.picture.could.not.be.read.try.65070d")));
         reader.readAsDataURL(normalizedFile);
       });
       if (generation !== documentGeneration.current) return;
-      if (!content) throw new Error('This picture could not be read. Try a JPG or PNG instead.');
+      if (!content) throw new Error(t("edit-pdf.this.picture.could.not.be.read.try.65070d"));
       const newEl: EditorElement = {
         id: uuidv4(), type: 'image', pageIndex: targetPageIndex,
         x: 0.1, y: 0.1, width: 0.28, height: 0.2, content,
       };
       commitElements((current) => [...current, newEl]);
       setSelectedId(newEl.id);
+      setInsertMode(null);
     } catch (error) {
       if (generation !== documentGeneration.current) return;
-      setStatus({ isProcessing: false, progress: 0, message: '', error: error instanceof Error ? error.message : 'This picture could not be read. Try a JPG or PNG instead.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: error instanceof Error ? error.message : t("edit-pdf.this.picture.could.not.be.read.try.65070d") });
     }
   };
 
@@ -1684,14 +1756,17 @@ export const EditPDF: React.FC = () => {
     setFormValues((prev) => ({ ...prev, [fieldName]: value }));
 
   const confirmDiscardEdits = useCallback(
-    () => !hasUnsavedEdits || window.confirm(DISCARD_EDITS_MESSAGE),
+    () => !hasUnsavedEdits || window.confirm(t("edit-pdf.discard.your.unsaved.edits.1575c6")),
     [hasUnsavedEdits],
   );
 
   const closeEditor = useCallback(() => {
     if (!confirmDiscardEdits()) return;
 
-    if (file?.file) void releaseNativePdfTextDocument(file.file);
+    if (file?.file) {
+      void releaseNativePdfTextDocument(file.file);
+      releaseDocumentEmbeddedFonts(file.file);
+    }
     documentGeneration.current += 1;
     replacingSourceIds.current.clear();
     setPdfDoc(null);
@@ -1777,15 +1852,16 @@ export const EditPDF: React.FC = () => {
   }, [confirmDiscardEdits, navigationBlocker]);
 
   useEffect(() => {
-    if (!isImmersiveEditor) return undefined;
+    if (!isImmersiveEditor && !insertMode) return undefined;
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
-      closeEditor();
+      if (insertMode) setInsertMode(null);
+      else closeEditor();
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [closeEditor, isImmersiveEditor]);
+  }, [closeEditor, insertMode, isImmersiveEditor]);
 
   /**
    * Work out, for each edited paragraph, whether the PDF's own text objects can express the change
@@ -1801,9 +1877,33 @@ export const EditPDF: React.FC = () => {
   const [settledBlockEdits, setSettledBlockEdits] = useState<Record<string, BlockEditState>>({});
 
   useEffect(() => {
+    if (!file?.file || (!activeBlockId && Object.keys(blockEdits).length === 0)
+      || documentEmbeddedFontsReady(file.file)) return;
+    let active = true;
+    void loadDocumentEmbeddedFonts(file.file).then(() => {
+      if (active) setEmbeddedFontsVersion(version => version + 1);
+    });
+    return () => { active = false; };
+  }, [file?.file, activeBlockId, blockEdits]);
+
+  useEffect(() => {
     const timer = window.setTimeout(() => setSettledBlockEdits(blockEdits), PLAN_SETTLE_MS);
     return () => window.clearTimeout(timer);
   }, [blockEdits]);
+
+  useEffect(() => {
+    const encountered = [...pageTextRef.current.values()].some((page) =>
+      page.blocks.some((block) => hasDevanagari(block.text)))
+      || (Object.values(blockEdits) as BlockEditState[]).some((edit) => hasDevanagari(edit.text));
+    if (!encountered || !file?.file || (devanagariFontsReady() && documentDevanagariFontsReady(file.file))) return;
+    let active = true;
+    void Promise.all([loadDevanagariFonts(), loadDocumentDevanagariFonts(file.file)]).then(() => {
+      if (active) { setDevanagariFontError(false); setDevanagariFontsVersion((version) => version + 1); }
+    }).catch(() => {
+      if (active) setDevanagariFontError(true);
+    });
+    return () => { active = false; };
+  }, [blocksVersion, blockEdits, file?.file]);
 
   const buildParagraphPlans = useCallback((edits: Record<string, BlockEditState>) => {
     return (Object.values(edits) as BlockEditState[]).map((edit) => {
@@ -1836,11 +1936,26 @@ export const EditPDF: React.FC = () => {
         || (edit.fontSize !== undefined && edit.fontSize !== block.fontSize)
         || (edit.color !== undefined && edit.color !== blockColorsRef.current[edit.blockId]?.ink);
       const rotated = Math.abs(block.angle) > 0.02;
-      const planned: BlockEditPlan = restyled
+      const devanagari = hasDevanagari(block.text) || hasDevanagari(edit.text);
+      const preserveOriginal = !edit.fontOverride?.klass
+        && edit.fontOverride?.bold == null && edit.fontOverride?.italic == null;
+      const lines = edit.segments ?? edit.text.split('\n').map((line) => [{ text: line, fontKey: block.fontKey }]);
+      const embeddedFor = (fontKey: string, text: string) => preserveOriginal
+        ? matchingSimpleEmbeddedPdfFont(file?.file, pageText?.fonts.get(fontKey)?.psName, text) : null;
+      const devanagariId = selectDevanagariFont(
+        file?.file, descriptor?.psName, edit.text,
+        edit.fontOverride?.klass ?? font?.klass ?? 'sans-serif', edit.fontOverride?.bold ?? descriptor?.bold ?? false,
+        preserveOriginal,
+      );
+      const planned: BlockEditPlan = devanagari
+        ? rotated
+          ? { mode: 'blocked', reason: t("edit-pdf.rotated.or.skewed.text.cannot.be.redrawn.14e7bb") }
+          : { mode: 'reflow', reason: 'Devanagari text needs shaped font export' }
+        : restyled
         // Restyling changes every glyph on the line, which no in-place text rewrite can express.
         ? rotated
-          ? { mode: 'blocked', reason: 'rotated or skewed text cannot be restyled, because redrawing it would not follow its baseline' }
-          : { mode: 'reflow', reason: 'the paragraph’s typeface, size or colour was changed' }
+          ? { mode: 'blocked', reason: t("edit-pdf.rotated.or.skewed.text.cannot.be.restyled.258b98") }
+          : { mode: 'reflow', reason: t("edit-pdf.the.paragraph.s.typeface.size.or.colour.35605c") }
         : planBlockEdit(block, edit.text, {
           measure: (text: string, fontSize: number, fontKey: string) =>
             measureTextWidth(text, runFont(fontKey).resolved, fontSize),
@@ -1855,10 +1970,21 @@ export const EditPDF: React.FC = () => {
       const original = new Set(block.text);
       const introduced = [...new Set(edit.text)].filter((character) => !original.has(character)).join('');
       const plan = planned;
-      // Redraw export uses standard PDF fonts, even when the overlay can use an embedded face.
-      // Check the edited result, including newly typed characters and excluding removed ones.
-      const unencodable = plan.mode === 'reflow'
-        ? unencodableCharacters(edit.text, FALLBACK_RESOLVED_FONT)
+      if (devanagari && (!devanagariFontsReady() || !canShapeDevanagari(edit.text, devanagariId))) {
+        return {
+          edit, block,
+          plan: { mode: 'blocked' as const, reason: devanagariFontError
+            ? 'The Devanagari fonts could not be loaded.'
+            : !devanagariFontsReady()
+              ? 'Loading Devanagari fonts…'
+              : 'The selected Devanagari font cannot draw part of this paragraph.' },
+          font, descriptor, reflow: null,
+        };
+      }
+      // A usable original font can draw characters the standard fallback cannot encode.
+      const unencodable = devanagari ? [] : plan.mode === 'reflow'
+        ? lines.flatMap(line => line.flatMap(segment => embeddedFor(segment.fontKey, segment.text)
+          ? [] : unencodableCharacters(segment.text, FALLBACK_RESOLVED_FONT)))
         : unencodableCharacters(introduced, font ?? FALLBACK_RESOLVED_FONT, descriptor);
       if (unencodable.length > 0) {
         // A character the reader typed is their choice to change. One that was already in the
@@ -1870,8 +1996,8 @@ export const EditPDF: React.FC = () => {
           plan: {
             mode: 'blocked' as const,
             reason: typed.length > 0
-              ? `no font available here can draw ${describeCharacters(typed)}`
-              : `this paragraph contains ${describeCharacters(unencodable)}, which only the PDF's own font can draw — so it can be shortened or replaced in place, but not made longer`,
+              ? t("edit-pdf.no.font.available.here.can.draw.324959", { v0: describeCharacters(typed) })
+              : t("edit-pdf.this.paragraph.contains.which.only.the.pdf.6a8392", { v0: describeCharacters(unencodable) }),
           },
           font,
           descriptor,
@@ -1882,27 +2008,51 @@ export const EditPDF: React.FC = () => {
       if (plan.mode !== 'reflow') return { edit, block, plan, font, descriptor, reflow: null };
       const resolvedPlan: BlockEditPlan = plan;
 
-      const resolved = font ?? FALLBACK_RESOLVED_FONT;
+      const resolved = devanagari ? {
+        mode: devanagariId.startsWith('Embedded') ? 'embedded' as const : 'substituted' as const,
+        cssFamily: devanagariCssFamily(devanagariId),
+        cssWeight: '400', cssStyle: 'normal',
+        klass: font?.klass ?? 'sans-serif' as const,
+        reason: devanagariId.startsWith('Embedded') ? null : devanagariId.startsWith('Martel') ? 'Martel' : 'Mukta',
+        missingGlyphs: [],
+      } : font ?? FALLBACK_RESOLVED_FONT;
       const fontSize = edit.fontSize ?? block.fontSize;
       const lineHeight = Math.max(fontSize, block.leading * (fontSize / block.fontSize));
-      // A restyled paragraph is deliberately one face throughout; otherwise each stretch keeps the
-      // face it was drawn in, so a bold lead-in survives the redraw.
-      const faceFor = (fontKey: string) => (restyled || !fontKey
+      // Colour and size changes still keep each run's original typeface.
+      const faceFor = (fontKey: string) => (!preserveOriginal || !fontKey
         ? { descriptor, resolved }
         : runFont(fontKey));
-      const toFace = (fontKey: string): ParagraphFace => {
+      const toFace = (fontKey: string, text = edit.text): ParagraphFace => {
         const face = faceFor(fontKey);
+        if (devanagari) return {
+          key: fontKey || block.fontKey,
+          family: selectDevanagariFont(
+            file?.file, face.descriptor?.psName, edit.text,
+            edit.fontOverride?.klass ?? face.resolved.klass,
+            edit.fontOverride?.bold ?? face.descriptor?.bold ?? false,
+            preserveOriginal,
+          ),
+          bold: edit.fontOverride?.bold ?? face.descriptor?.bold ?? false,
+          italic: edit.fontOverride?.italic ?? face.descriptor?.italic ?? false,
+        };
         return {
           key: fontKey || block.fontKey,
           family: face.resolved.klass === 'serif' ? 'TimesRoman'
             : face.resolved.klass === 'monospace' ? 'Courier' : 'Helvetica',
           bold: edit.fontOverride?.bold ?? face.descriptor?.bold ?? face.resolved.cssWeight === '700',
           italic: edit.fontOverride?.italic ?? face.descriptor?.italic ?? face.resolved.cssStyle === 'italic',
+          embeddedFontId: embeddedFor(fontKey, text) ?? undefined,
         };
       };
       // A redraw changes how the PDF stores the text, not where its line breaks belong.
       // Use the same explicit rows as contentEditable, even when a line exceeds its old width.
-      const lines = edit.segments ?? edit.text.split('\n').map((line) => [{ text: line, fontKey: block.fontKey }]);
+      if (devanagari && lines.some((line) => line.some((segment) =>
+        !canShapeDevanagari(segment.text, toFace(segment.fontKey).family as DevanagariFontId)))) {
+        return {
+          edit, block, plan: { mode: 'blocked' as const, reason: 'No available Devanagari font can draw this paragraph.' },
+          font: resolved, descriptor, reflow: null,
+        };
+      }
       const lineOrigins = paragraphLineOrigins(block, lines.length, fontSize);
       const height = lines.length === block.lines.length && fontSize === block.fontSize
         ? block.height
@@ -1921,13 +2071,13 @@ export const EditPDF: React.FC = () => {
         edit,
         block,
         plan: resolvedPlan,
-        font,
+        font: devanagari ? resolved : font,
         descriptor,
-        reflow: { resolved, faceFor, toFace, fontSize, lineHeight, lines, lineOrigins, height, overrun: Math.max(0, height - available) },
+        reflow: { resolved, faceFor, toFace, fontSize, lineHeight, lines, lineOrigins, height, overrun: Math.max(0, height - available), devanagari },
       };
     }).filter((entry): entry is NonNullable<typeof entry> => entry !== null)
       .filter((entry) => entry.plan.mode !== 'unchanged');
-  }, []);
+  }, [devanagariFontError, file?.file, embeddedFontsVersion]);
 
   /**
    * Fetch a paragraph's background only when something will actually draw it.
@@ -1969,7 +2119,7 @@ export const EditPDF: React.FC = () => {
       void blocksVersion;
       return buildParagraphPlans(settledBlockEdits);
     },
-    [blocksVersion, buildParagraphPlans, settledBlockEdits],
+    [blocksVersion, buildParagraphPlans, settledBlockEdits, locale, devanagariFontsVersion],
   );
 
   const blockPreviews = useMemo(() => {
@@ -1979,18 +2129,26 @@ export const EditPDF: React.FC = () => {
       const width = Math.max(block.width, block.measure);
       if (reflow) {
         const lines = reflow.lines.map((line) => line.map((segment) => ({
-          text: segment.text, face: reflow.toFace(segment.fontKey),
+          text: segment.text, face: reflow.toFace(segment.fontKey, segment.text),
+          fontSize: (segment.fontSize ?? block.fontSize) * reflow.fontSize / block.fontSize,
         })));
         previews[block.id] = {
           text: edit.text, reflow: true, width, height: reflow.height,
           pieces: layoutParagraphLines(lines, {
             width, fontSize: reflow.fontSize, lineHeight: reflow.lineHeight, align: block.align,
             lineOrigins: reflow.lineOrigins,
-          }).map((piece) => ({ ...piece, fontSize: reflow.fontSize, font: {
+            measure: reflow.devanagari
+              ? (text, face, size) => measureDevanagariText(text, face.family as DevanagariFontId, size)
+              : undefined,
+            normalizeText: reflow.devanagari ? (text) => text.replace(/\t/g, '    ') : undefined,
+          }).map((piece) => ({ ...piece, font: {
             ...FALLBACK_RESOLVED_FONT,
-            cssFamily: piece.face.family === 'TimesRoman' ? '"Times New Roman", Times, serif'
+            cssFamily: piece.face.embeddedFontId ? `"${embeddedPdfFont(piece.face.embeddedFontId)?.cssFamily ?? 'sans-serif'}", sans-serif`
+              : reflow.devanagari ? devanagariCssFamily(piece.face.family as DevanagariFontId)
+              : piece.face.family === 'TimesRoman' ? '"Times New Roman", Times, serif'
               : piece.face.family === 'Courier' ? '"Courier New", Courier, monospace' : 'Arial, Helvetica, sans-serif',
-            cssWeight: piece.face.bold ? '700' : '400', cssStyle: piece.face.italic ? 'italic' : 'normal',
+            cssWeight: reflow.devanagari || piece.face.embeddedFontId ? '400' : piece.face.bold ? '700' : '400',
+            cssStyle: piece.face.embeddedFontId ? 'normal' : piece.face.italic ? 'italic' : 'normal',
           } })),
         };
       } else if (plan.mode === 'direct') {
@@ -2094,11 +2252,27 @@ export const EditPDF: React.FC = () => {
       const pageWidth = pageText?.pageWidth ?? block.left + block.measure;
       const pageHeight = pageText?.pageHeight ?? block.top + block.height;
       const resolved = reflow?.resolved ?? FALLBACK_RESOLVED_FONT;
+      const devanagari = reflow?.devanagari ?? false;
       const fontSize = reflow?.fontSize ?? edit.fontSize ?? block.fontSize;
       const lineHeight = reflow?.lineHeight ?? Math.max(fontSize, block.leading);
-      const faceFor = reflow?.faceFor ?? (() => ({ descriptor, resolved }));
-      const toFace = (fontKey: string): ParagraphFace => {
+      const faceFor = reflow?.faceFor ?? ((fontKey: string) => {
+        const runDescriptor = pageText?.fonts.get(fontKey) ?? descriptor;
+        return { descriptor: runDescriptor, resolved: runDescriptor
+          ? resolveFont(runDescriptor, edit.text, edit.fontOverride) : resolved };
+      });
+      const toFace = (fontKey: string, text: string): ParagraphFace => {
         const face = faceFor(fontKey);
+        if (devanagari) return {
+          key: `${fontKey || block.fontKey}:devanagari`,
+          family: selectDevanagariFont(
+            file?.file, face.descriptor?.psName, edit.text,
+            edit.fontOverride?.klass ?? face.resolved.klass,
+            edit.fontOverride?.bold ?? face.descriptor?.bold ?? false,
+            !edit.fontOverride?.klass && edit.fontOverride?.bold == null && edit.fontOverride?.italic == null,
+          ),
+          bold: edit.fontOverride?.bold ?? face.descriptor?.bold ?? false,
+          italic: edit.fontOverride?.italic ?? face.descriptor?.italic ?? false,
+        };
         return {
           key: `${fontKey || block.fontKey}:${face.resolved.mode}:${face.resolved.klass}:${face.resolved.cssWeight}:${face.resolved.cssStyle}`,
           family: face.resolved.klass === 'serif'
@@ -2111,14 +2285,20 @@ export const EditPDF: React.FC = () => {
           // no extra weight, so the CSS weight is 'normal' on text that is plainly bold.
           bold: edit.fontOverride?.bold ?? face.descriptor?.bold ?? face.resolved.cssWeight === '700',
           italic: edit.fontOverride?.italic ?? face.descriptor?.italic ?? face.resolved.cssStyle === 'italic',
+          embeddedFontId: !edit.fontOverride?.klass && edit.fontOverride?.bold == null && edit.fontOverride?.italic == null
+            ? matchingSimpleEmbeddedPdfFont(file?.file, face.descriptor?.psName, text) ?? undefined : undefined,
         };
       };
       const segments = reflow?.lines ?? edit.segments
         ?? edit.text.split('\n').map((line) => [{ text: line, fontKey: block.fontKey }]);
-      const lines = segments.map((line) => line.map((segment) => ({ text: segment.text, face: toFace(segment.fontKey) })));
+      const lines = segments.map((line) => line.map((segment) => ({
+        text: segment.text, face: toFace(segment.fontKey, segment.text),
+        fontSize: (segment.fontSize ?? block.fontSize) * fontSize / block.fontSize,
+      })));
 
       return [{
         mode: 'reflow' as const,
+        script: devanagari ? 'devanagari' as const : undefined,
         pageIndex: block.pageIndex,
         x: block.left / pageWidth,
         y: block.top / pageHeight,
@@ -2157,7 +2337,7 @@ export const EditPDF: React.FC = () => {
     const savingElements = elementsRef.current;
     const savingFormValues = formValues;
     const savingBlockEdits = blockEditsRef.current;
-    setStatus({ isProcessing: true, progress: 20, message: 'Saving PDF edits locally…' });
+    setStatus({ isProcessing: true, progress: 20, message: t("edit-pdf.saving.pdf.edits.locally.3dbf9d") });
     try {
       let bytes: Uint8Array;
       /** Set when even the redraw could not remove the originals, so the old words remain. */
@@ -2166,6 +2346,12 @@ export const EditPDF: React.FC = () => {
       let fallbackReason = '';
       // Planned from the live edits rather than the settled ones: a save can arrive inside the
       // window where the last keystroke has not been planned yet.
+      const needsDevanagari = (Object.values(savingBlockEdits) as BlockEditState[]).some((edit) =>
+        hasDevanagari(edit.text) || hasDevanagari(blockIndexRef.current.get(edit.blockId)?.text ?? ''));
+      if (needsDevanagari) await Promise.all([loadDevanagariFonts(), loadDocumentDevanagariFonts(file.file)]);
+      if (generation !== documentGeneration.current) return;
+      if (Object.keys(savingBlockEdits).length > 0) await loadDocumentEmbeddedFonts(file.file);
+      if (generation !== documentGeneration.current) return;
       let plans = buildParagraphPlans(savingBlockEdits);
 
       // In-place edits also need the actual font's glyph coverage. Replace-all can touch pages
@@ -2179,7 +2365,7 @@ export const EditPDF: React.FC = () => {
         setStatus({
           isProcessing: true,
           progress: 30,
-          message: `Reading the fonts on ${pagesNeedingFonts.length} ${pagesNeedingFonts.length === 1 ? 'page' : 'pages'}…`,
+          message: t("edit-pdf.reading.the.fonts.on.77f2bf", { count: pagesNeedingFonts.length }),
         });
         let upgraded = false;
         for (const pageIndex of pagesNeedingFonts as number[]) {
@@ -2204,7 +2390,7 @@ export const EditPDF: React.FC = () => {
       // that path explicitly awaits requestBlockPatch; pending previews need not delay Save.
       if (savablePlans.some((entry) => entry.plan.mode === 'reflow')) {
         if (patchQueueRef.current.length > 0 || patchDrainingRef.current) {
-          setStatus({ isProcessing: true, progress: 15, message: 'Getting the page ready…' });
+          setStatus({ isProcessing: true, progress: 15, message: t("edit-pdf.getting.the.page.ready.3d8730") });
           while (patchQueueRef.current.length > 0 || patchDrainingRef.current) {
             await new Promise((resolve) => window.setTimeout(resolve, 60));
             if (generation !== documentGeneration.current) return;
@@ -2242,7 +2428,7 @@ export const EditPDF: React.FC = () => {
         const directPlans = savablePlans.filter((entry) => entry.plan.mode === 'direct');
         const stubborn = new Set<string>();
         if (directPlans.length > 1 && directPlans.length <= MAX_REWRITE_ISOLATION_ATTEMPTS) {
-          setStatus({ isProcessing: true, progress: 45, message: 'Working out which paragraphs can still be rewritten…' });
+          setStatus({ isProcessing: true, progress: 45, message: t("edit-pdf.working.out.which.paragraphs.can.still.be.b63bec") });
           for (const entry of directPlans) {
             if (generation !== documentGeneration.current) return;
             try {
@@ -2256,15 +2442,20 @@ export const EditPDF: React.FC = () => {
           directPlans.forEach((entry) => stubborn.add(entry.edit.blockId));
         }
 
-        // Only the paragraphs that will actually be redrawn have to be drawable by a standard face.
+        // Check the faces that will actually redraw each stretch, including original fonts.
         const willRedraw = savablePlans.filter(
           (entry) => entry.plan.mode !== 'direct' || stubborn.has(entry.edit.blockId),
         );
         willRedraw.forEach((entry) => {
-          const characters = unencodableCharacters(
-            entry.edit.text,
-            FALLBACK_RESOLVED_FONT,
-          );
+          const keepsFace = !entry.edit.fontOverride?.klass
+            && entry.edit.fontOverride?.bold == null && entry.edit.fontOverride?.italic == null;
+          const segments = entry.reflow?.lines ?? entry.edit.segments
+            ?? entry.edit.text.split('\n').map(text => [{ text, fontKey: entry.block.fontKey }]);
+          const characters = entry.reflow?.devanagari ? [] : segments.flatMap(line => line.flatMap(segment => {
+            const face = pageTextRef.current.get(entry.block.pageIndex)?.fonts.get(segment.fontKey);
+            return keepsFace && matchingSimpleEmbeddedPdfFont(file.file, face?.psName, segment.text)
+              ? [] : unencodableCharacters(segment.text, FALLBACK_RESOLVED_FONT);
+          }));
           const rotated = Math.abs(entry.block.angle) > 0.02;
           if (characters.length === 0 && !rotated) return;
           redrawable.delete(entry);
@@ -2273,15 +2464,15 @@ export const EditPDF: React.FC = () => {
             plan: {
               mode: 'blocked',
               reason: rotated
-                ? 'rotated or skewed text cannot be redrawn'
-                : `it contains ${describeCharacters(characters)}, which only this PDF's own font can draw`,
+                ? t("edit-pdf.rotated.or.skewed.text.cannot.be.redrawn.14e7bb")
+                : t("edit-pdf.it.contains.which.only.this.pdf.s.a5b6c7", { v0: describeCharacters(characters) }),
             },
           });
         });
         if (redrawable.size === 0) {
           throw refusal(describeBlockedParagraphs(blockedPlans));
         }
-        setStatus({ isProcessing: true, progress: 60, message: 'Redrawing the edited paragraphs instead…' });
+        setStatus({ isProcessing: true, progress: 60, message: t("edit-pdf.redrawing.the.edited.paragraphs.instead.6f9592") });
         try {
           // Removing the originals first is what keeps the file honest, and it usually still works
           // even when rewriting them in place did not. Paragraphs whose rewrite held on its own
@@ -2296,6 +2487,9 @@ export const EditPDF: React.FC = () => {
           if (!(deletionError instanceof Error) || !deletionError.message.startsWith('Direct text edit failed:')) {
             throw deletionError;
           }
+          // Repainting cannot erase searchable Hindi text. Keep the edit unsaved if its original
+          // PDF objects cannot be removed, instead of exporting both old and new wording.
+          if ([...redrawable].some((entry) => entry.reflow?.devanagari)) throw deletionError;
           redrawReason = deletionError.message.replace(/^Direct text edit failed:\s*/, '');
           // eslint-disable-next-line no-console
           console.warn('Original text could not be removed before redrawing:', redrawReason);
@@ -2313,8 +2507,16 @@ export const EditPDF: React.FC = () => {
         }
       }
       if (generation !== documentGeneration.current) return;
-      await deliverBlob(new Blob([bytes], { type: 'application/pdf' }), `edited-${file.name}`);
+      const delivery = await deliverBlob(new Blob([bytes], { type: 'application/pdf' }), `edited-${file.name}`);
       if (generation !== documentGeneration.current) return;
+      if (delivery.status === 'preview') {
+        setStatus({
+          isProcessing: false,
+          progress: 100,
+          message: t("edit-pdf.edited.pdf.preview.ready.unlock.to.save.3b563b"),
+        });
+        return;
+      }
       // Anything that was not written stays dirty, so the leave-guard still protects it and the
       // notice still points at it. Marking the whole document clean would quietly discard it.
       const skipped = new Set(blockedPlans.map((entry) => entry.edit.blockId));
@@ -2327,20 +2529,20 @@ export const EditPDF: React.FC = () => {
         isProcessing: false,
         progress: 100,
         message: blockedPlans.length > 0
-          ? `Edited PDF ready, with ${(plans.length - blockedPlans.length).toLocaleString()} of ${plans.length.toLocaleString()} edited paragraphs written. ${describeBlockedParagraphs(blockedPlans)} Your edits to ${blockedPlans.length === 1 ? 'it' : 'them'} are still here.${redrawReason ? ' Old wording remains underneath the redrawn paragraphs and can still be found by search. Check before sharing anything private.' : ''}`
+          ? t("edit-pdf.edited.pdf.ready.with.of.edited.paragraphs.cab23a", { v0: (plans.length - blockedPlans.length).toLocaleString(getLocale()), v1: plans.length.toLocaleString(getLocale()), v2: describeBlockedParagraphs(blockedPlans), v4: redrawReason ? t("edit-pdf.old.wording.remains.underneath.the.redrawn.paragraphs.80765c") : '', count: blockedPlans.length })
           : redrawReason
           // The internal reason is left out of both of these. It names the part of the PDF that
           // would not cooperate, which tells the reader nothing they can act on; what they need is
           // what it means for the file in their hands. The reason is logged for support instead.
-          ? `Edited PDF ready — but your old wording is still in the file underneath the new text, where a search could find it. Check it before sharing anything private.`
+          ? t("edit-pdf.edited.pdf.ready.but.your.old.wording.8cfe80")
           : fallbackReason
-          ? `Edited PDF ready. The paragraphs you changed were redrawn, so their lettering may sit a little differently from the rest of the page. Your old wording has been removed. Have a look before you share it.`
-          : 'Edited PDF ready. Review it before sharing.',
+          ? t("edit-pdf.edited.pdf.ready.the.paragraphs.you.changed.9cebe8")
+          : t("edit-pdf.edited.pdf.ready.review.it.before.sharing.0b2900"),
       });
     } catch (error) {
       if (generation !== documentGeneration.current) return;
       if (error instanceof Error && error.name === 'AbortError') {
-        setStatus({ isProcessing: false, progress: 0, message: 'Save cancelled. Your edits are still here.' });
+        setStatus({ isProcessing: false, progress: 0, message: t("edit-pdf.save.cancelled.your.edits.are.still.here.433678") });
         return;
       }
       const message = error instanceof Error ? error.message : '';
@@ -2357,10 +2559,10 @@ export const EditPDF: React.FC = () => {
           || message === PDF_TEXT_OVERFLOW_MESSAGE
           || message === PDF_EDIT_PERMISSION_MESSAGE
           || message.startsWith('Visual fallback is unavailable')
-          ? message
+          ? error instanceof Error ? localizeError(error) : message
           : message.startsWith('Direct text edit failed:')
-          ? `${message} Your edits are still here.`
-          : 'Unable to save the edited PDF. Your edits are still here so you can try again.',
+          ? t("edit-pdf.your.edits.are.still.here.1314a7", { v0: error instanceof Error ? localizeError(error) : message })
+          : t("edit-pdf.unable.to.save.the.edited.pdf.your.5e2dde"),
       });
     } finally {
       saveInProgress.current = false;
@@ -2398,9 +2600,12 @@ export const EditPDF: React.FC = () => {
   const scannedNotice = pagesWithoutText.includes(targetPageIndex) ? (
     <div role="status" className={compactViewport ? 'mx-auto mb-2 max-w-md' : 'mb-2'}>
       <StatusLine tone="caution">
-        Page {targetPageIndex + 1} is a picture, so its words cannot be edited. Add a text box over
-        it instead, or use <Link to="/ocr" className="font-bold underline">Extract Text</Link> first
-        to read the words off it.
+        {t('editor.scan.useOcr', { page: targetPageIndex + 1, tool: '\uFFFC' }).split('\uFFFC').map((part, index) => (
+          <React.Fragment key={index}>
+            {index > 0 && <Link to="/ocr" className="font-bold underline">{t('edit-pdf.extract.text.9ab592')}</Link>}
+            {part}
+          </React.Fragment>
+        ))}
       </StatusLine>
     </div>
   ) : null;
@@ -2410,9 +2615,7 @@ export const EditPDF: React.FC = () => {
   const blockedNotice = blockedParagraphs.length > 0 ? (
     <div role="status" className={compactViewport ? 'mx-auto mb-2 max-w-md' : 'mb-2'}>
       <StatusLine tone="caution">
-        <span className="block">
-          {describeBlockedParagraphs(blockedParagraphs)} Your other edits will still be saved.
-        </span>
+        <span className="block">{t("edit-pdf.message.a37626224a", { v0: describeBlockedParagraphs(blockedParagraphs) })}</span>
         <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
           <button
             type="button"
@@ -2420,16 +2623,14 @@ export const EditPDF: React.FC = () => {
             className="chef-pressable chef-hit-y inline-flex h-9 items-center rounded-[var(--radius-control)] border border-[var(--border-strong)] px-2.5 text-xs font-bold text-[var(--text-primary)]"
           >
             {blockedParagraphs.length === 1
-              ? 'Show it'
-              : `Show ${(blockedReviewIndex % blockedParagraphs.length) + 1} of ${blockedParagraphs.length}`}
+              ? t("edit-pdf.show.it.74484e")
+              : t("edit-pdf.show.of.8e14d1", { v0: (blockedReviewIndex % blockedParagraphs.length) + 1, v1: blockedParagraphs.length })}
           </button>
           <button
             type="button"
             onClick={revertBlockedParagraphs}
             className="chef-pressable chef-hit-y inline-flex h-9 items-center rounded-[var(--radius-control)] px-2.5 text-xs font-bold text-[var(--status-danger-text)]"
-          >
-            Revert {blockedParagraphs.length === 1 ? 'it' : `these ${blockedParagraphs.length}`}
-          </button>
+          >{t('editor.revertBlocked', { count: blockedParagraphs.length })}</button>
         </span>
       </StatusLine>
     </div>
@@ -2459,24 +2660,28 @@ export const EditPDF: React.FC = () => {
 
   if (isImmersiveEditor) {
     const selectedTypeLabel = selectedElement
-      ? selectedElement.type.charAt(0).toUpperCase() + selectedElement.type.slice(1)
+      ? {
+        text: t('edit-pdf.text.71988c'), image: t('edit-pdf.image.1aa4cb'),
+        rectangle: t('edit-pdf.rectangle.030699'), ellipse: t('edit-pdf.ellipse.cb1ee8'),
+        line: t('edit-pdf.line.d7852c'), arrow: t('edit-pdf.arrow.05800e'),
+      }[selectedElement.type]
       : '';
     const selectedInspector = selectedElement ? (
-      <section aria-label={`Selected ${selectedElement.type} properties`} className="mx-auto mb-2 max-w-md rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-2 shadow-lg">
+      <section aria-label={elementAction(selectedElement.type, 'properties')} className="mx-auto mb-2 max-w-md rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-2 shadow-lg">
         <div className="custom-scrollbar flex items-end gap-2 overflow-x-auto pb-1">
           <div className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
             <span className="block uppercase tracking-[0.12em]">{selectedTypeLabel}</span>
-            <button type="button" onClick={() => deleteElement(selectedElement.id)} className="chef-pressable chef-target mt-1 inline-flex h-10 items-center gap-1 rounded-[var(--radius-control)] px-2 text-xs font-bold text-[var(--status-danger-text)]"><Trash2 aria-hidden size={15} /> Delete</button>
+            <button type="button" onClick={() => deleteElement(selectedElement.id)} className="chef-pressable chef-target mt-1 inline-flex h-10 items-center gap-1 rounded-[var(--radius-control)] px-2 text-xs font-bold text-[var(--status-danger-text)]"><Trash2 aria-hidden size={15} />{t("edit-pdf.delete.3534d6")}</button>
           </div>
-          {selectedElement.type === 'text' && <label className="w-44 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">Text<input value={selectedElement.content} onChange={(event) => updateInspectorText(selectedElement.id, event.currentTarget.value)} onBlur={finishInspectorTextChange} className="mt-1 h-10 w-full rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-rest)]" /></label>}
-          {selectedElement.type !== 'image' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">Colour<input type="color" value={selectedElement.color || '#2563eb'} onChange={(event) => commitElementUpdate(selectedElement.id, { color: event.target.value })} className="mt-1 block h-10 w-12 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-transparent p-1" /></label>}
-          {selectedElement.type === 'text' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">Font<select value={selectedElement.fontFamily || 'Helvetica'} onChange={(event) => commitElementUpdate(selectedElement.id, { fontFamily: event.target.value })} className="mt-1 block h-10 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]"><option value="Helvetica">Helvetica</option><option value="TimesRoman">Times</option><option value="Courier">Courier</option></select></label>}
-          {selectedElement.type === 'text' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">Size<input type="number" min={8} max={72} value={selectedElement.fontSize || 16} onChange={(event) => commitElementUpdate(selectedElement.id, { fontSize: normalizeInspectorFontSize(selectedElement, event.target.value) })} className="mt-1 block h-10 w-16 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]" /></label>}
-          {(selectedElement.type === 'rectangle' || selectedElement.type === 'ellipse') && <label className="flex h-10 shrink-0 items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-2 text-xs font-semibold text-[var(--text-secondary)]"><input type="checkbox" checked={Boolean(selectedElement.fillColor && selectedElement.fillColor !== 'transparent')} onChange={(event) => commitElementUpdate(selectedElement.id, { fillColor: event.target.checked ? '#93c5fd' : 'transparent' })} className="h-5 w-5" /> Fill</label>}
-          {(selectedElement.type === 'rectangle' || selectedElement.type === 'ellipse') && selectedElement.fillColor !== 'transparent' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">Fill<input type="color" value={selectedElement.fillColor || '#93c5fd'} onChange={(event) => commitElementUpdate(selectedElement.id, { fillColor: event.target.value })} className="mt-1 block h-10 w-12 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-transparent p-1" /></label>}
-          {selectedElement.type !== 'text' && selectedElement.type !== 'image' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">Stroke<input type="number" min={1} max={16} value={selectedElement.strokeWidth || 2} onChange={(event) => commitElementUpdate(selectedElement.id, { strokeWidth: Math.max(1, Math.min(16, Number(event.target.value) || 2)) })} className="mt-1 block h-10 w-16 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]" /></label>}
-          {selectedElement.type !== 'line' && selectedElement.type !== 'arrow' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">Rotate<input type="number" min={-180} max={180} value={selectedElement.rotation || 0} onChange={(event) => commitElementUpdate(selectedElement.id, { rotation: Math.max(-180, Math.min(180, Number(event.target.value) || 0)) })} className="mt-1 block h-10 w-16 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]" /></label>}
-            <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">Page<select value={selectedElement.pageIndex} onChange={(event) => { const nextPage = Number(event.target.value); commitElementUpdate(selectedElement.id, { pageIndex: nextPage }); goToPage(nextPage); }} className="mt-1 block h-10 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]">{Array.from({ length: pageCount }, (_, index) => <option key={index} value={index}>{index + 1}</option>)}</select></label>
+          {selectedElement.type === 'text' && <label className="w-44 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.text.71988c")}<input value={selectedElement.content} onChange={(event) => updateInspectorText(selectedElement.id, event.currentTarget.value)} onBlur={finishInspectorTextChange} className="mt-1 h-10 w-full rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-rest)]" /></label>}
+          {selectedElement.type !== 'image' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.colour.3a9dfa")}<input type="color" value={selectedElement.color || '#2563eb'} onChange={(event) => commitElementUpdate(selectedElement.id, { color: event.target.value })} className="mt-1 block h-10 w-12 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-transparent p-1" /></label>}
+          {selectedElement.type === 'text' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.font.64d0b3")}<select value={selectedElement.fontFamily || 'Helvetica'} onChange={(event) => commitElementUpdate(selectedElement.id, { fontFamily: event.target.value })} className="mt-1 block h-10 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]"><option value="Helvetica">{t("edit-pdf.helvetica.447688")}</option><option value="TimesRoman">{t("edit-pdf.times.0c0fd3")}</option><option value="Courier">{t("edit-pdf.courier.bbc5df")}</option></select></label>}
+          {selectedElement.type === 'text' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.size.1af851")}<input type="number" min={8} max={72} value={selectedElement.fontSize || 16} onChange={(event) => commitElementUpdate(selectedElement.id, { fontSize: normalizeInspectorFontSize(selectedElement, event.target.value) })} className="mt-1 block h-10 w-16 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]" /></label>}
+          {(selectedElement.type === 'rectangle' || selectedElement.type === 'ellipse') && <label className="flex h-10 shrink-0 items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-2 text-xs font-semibold text-[var(--text-secondary)]"><input type="checkbox" checked={Boolean(selectedElement.fillColor && selectedElement.fillColor !== 'transparent')} onChange={(event) => commitElementUpdate(selectedElement.id, { fillColor: event.target.checked ? '#93c5fd' : 'transparent' })} className="h-5 w-5" />{t("edit-pdf.fill.c9fa1d")}</label>}
+          {(selectedElement.type === 'rectangle' || selectedElement.type === 'ellipse') && selectedElement.fillColor !== 'transparent' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.fill.033955")}<input type="color" value={selectedElement.fillColor || '#93c5fd'} onChange={(event) => commitElementUpdate(selectedElement.id, { fillColor: event.target.value })} className="mt-1 block h-10 w-12 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-transparent p-1" /></label>}
+          {selectedElement.type !== 'text' && selectedElement.type !== 'image' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.stroke.1582a1")}<input type="number" min={1} max={16} value={selectedElement.strokeWidth || 2} onChange={(event) => commitElementUpdate(selectedElement.id, { strokeWidth: Math.max(1, Math.min(16, Number(event.target.value) || 2)) })} className="mt-1 block h-10 w-16 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]" /></label>}
+          {selectedElement.type !== 'line' && selectedElement.type !== 'arrow' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.rotate.c3613b")}<input type="number" min={-180} max={180} value={selectedElement.rotation || 0} onChange={(event) => commitElementUpdate(selectedElement.id, { rotation: Math.max(-180, Math.min(180, Number(event.target.value) || 0)) })} className="mt-1 block h-10 w-16 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]" /></label>}
+            <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.page.0a30a8")}<select value={selectedElement.pageIndex} onChange={(event) => { const nextPage = Number(event.target.value); commitElementUpdate(selectedElement.id, { pageIndex: nextPage }); goToPage(nextPage); }} className="mt-1 block h-10 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]">{Array.from({ length: pageCount }, (_, index) => <option key={index} value={index}>{formatNumber(index + 1)}</option>)}</select></label>
         </div>
       </section>
     ) : null;
@@ -2502,26 +2707,26 @@ export const EditPDF: React.FC = () => {
             <button
               type="button"
               onClick={closeEditor}
-              aria-label="Close editor"
+              aria-label={t("edit-pdf.close.editor.bd0b7b")}
               className="chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)]"
             >
               <X aria-hidden size={21} />
             </button>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <h1 className="truncate text-base font-bold text-[var(--text-primary)]">Edit PDF</h1>
+                <h1 className="truncate text-base font-bold text-[var(--text-primary)]">{t("edit-pdf.edit.pdf.0e484d")}</h1>
                 {/* The badge is the first thing to go when the bar runs out of room. It tells the
                     reader something useful but nothing urgent, and the width it frees is what keeps
                     the word "Save" on the one control they must be able to find. */}
-                <Badge tone="caution" className="shrink-0 max-[400px]:hidden">Beta</Badge>
+                <Badge tone="caution" className="shrink-0 max-[400px]:hidden">{t("edit-pdf.beta.703390")}</Badge>
               </div>
             </div>
-            <button type="button" onClick={() => setFindOpen((open) => !open)} aria-pressed={findOpen} aria-label="Find and replace" className={`chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] ${findOpen ? 'bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'text-[var(--text-secondary)]'}`}><Search aria-hidden size={19} /></button>
-            <button type="button" onClick={undo} disabled={undoStack.current.length === 0} aria-label="Undo added element change" className="chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><Undo2 aria-hidden size={19} /></button>
-            <button type="button" onClick={redo} disabled={redoStack.current.length === 0} aria-label="Redo added element change" className="chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><Redo2 aria-hidden size={19} /></button>
-            <button type="button" onClick={handleSave} disabled={status.isProcessing} aria-label="Save" className="chef-pressable chef-target inline-flex shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-3 text-sm font-bold text-[var(--text-on-accent)] disabled:opacity-55"><Save aria-hidden size={17} />{/* Always spelled out. This is the one action in the editor that
+            <button type="button" onClick={() => setFindOpen((open) => !open)} aria-pressed={findOpen} aria-label={t("edit-pdf.find.and.replace.9898ad")} className={`chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] ${findOpen ? 'bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'text-[var(--text-secondary)]'}`}><Search aria-hidden size={19} /></button>
+            <button type="button" onClick={undo} disabled={undoStack.current.length === 0} aria-label={t("edit-pdf.undo.added.element.change.d99d56")} className="chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><Undo2 aria-hidden size={19} /></button>
+            <button type="button" onClick={redo} disabled={redoStack.current.length === 0} aria-label={t("edit-pdf.redo.added.element.change.2c6d7a")} className="chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><Redo2 aria-hidden size={19} /></button>
+            <button type="button" onClick={handleSave} disabled={status.isProcessing} aria-label={t("edit-pdf.save.1509f5")} className="chef-pressable chef-target inline-flex shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-3 text-sm font-bold text-[var(--text-on-accent)] disabled:opacity-55"><Save aria-hidden size={17} />{/* Always spelled out. This is the one action in the editor that
                 cannot be discovered by trying it, and a lone disk glyph is exactly the icon a reader
-                who did not grow up with it has to guess at. The title beside it truncates instead. */}<span>Save</span></button>
+                who did not grow up with it has to guess at. The title beside it truncates instead. */}<span>{t("edit-pdf.save.1509f5")}</span></button>
           </div>
         </header>
 
@@ -2535,21 +2740,19 @@ export const EditPDF: React.FC = () => {
           )}
 
           {fillableFieldCount > 0 && (
-            <p className="mb-2 px-1 text-xs font-medium text-[var(--text-secondary)]">
-              Form values are not included in Undo.
-            </p>
+            <p className="mb-2 px-1 text-xs font-medium text-[var(--text-secondary)]">{t("edit-pdf.form.values.are.not.included.in.undo.aaad15")}</p>
           )}
 
-          <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-1 rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-0.5">
-              <button type="button" onClick={() => goToPage(targetPageIndex - 1)} disabled={targetPageIndex === 0} aria-label="Previous page" className="chef-pressable chef-hit-y grid h-9 w-touch place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><ChevronLeft aria-hidden size={19} /></button>
+              <button type="button" onClick={() => goToPage(targetPageIndex - 1)} disabled={targetPageIndex === 0} aria-label={t("edit-pdf.previous.page.1208ec")} className="chef-pressable chef-hit-y grid h-9 w-touch place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><ChevronLeft aria-hidden size={19} className="rtl:rotate-180" /></button>
               <label className="flex h-9 items-center gap-1 px-1 text-xs font-semibold text-[var(--text-primary)]">
-                <span className="sr-only">Page</span>
-                <select value={targetPageIndex} onChange={(event) => goToPage(Number(event.target.value))} aria-label="Current editor page" className="h-9 bg-transparent tabular outline-none">
-                  {Array.from({ length: pageCount }, (_, index) => <option key={index} value={index}>{index + 1} of {pageCount}</option>)}
+                <span className="sr-only">{t("edit-pdf.page.0a30a8")}</span>
+                <select value={targetPageIndex} onChange={(event) => goToPage(Number(event.target.value))} aria-label={t("edit-pdf.current.editor.page.7fc923")} className="h-9 bg-transparent tabular outline-none">
+                  {Array.from({ length: pageCount }, (_, index) => <option key={index} value={index}>{t("edit-pdf.message.ef59ff32b8", { v0: index + 1, v1: pageCount })}</option>)}
                 </select>
               </label>
-              <button type="button" onClick={() => goToPage(targetPageIndex + 1)} disabled={targetPageIndex >= pageCount - 1} aria-label="Next page" className="chef-pressable chef-hit-y grid h-9 w-touch place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><ChevronRight aria-hidden size={19} /></button>
+              <button type="button" onClick={() => goToPage(targetPageIndex + 1)} disabled={targetPageIndex >= pageCount - 1} aria-label={t("edit-pdf.next.page.c08ac7")} className="chef-pressable chef-hit-y grid h-9 w-touch place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><ChevronRight aria-hidden size={19} className="rtl:rotate-180" /></button>
             </div>
             <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} />
           </div>
@@ -2587,6 +2790,7 @@ export const EditPDF: React.FC = () => {
                 onBlockChange={handleBlockChange}
                 onBeginBlockChange={handleBeginBlockChange}
                 insertMode={insertMode}
+                placementLabel={elementAction(insertMode === 'text' ? 'text' : shapeKind, 'place')}
                 zoom={zoom}
               />
             </div>
@@ -2608,34 +2812,32 @@ export const EditPDF: React.FC = () => {
           {paragraphInspector(true)}
           {selectedInspector}
           {insertMode && (
-            <div aria-live="polite" className="mx-auto mb-1 max-w-md text-center text-xs font-semibold text-[var(--accent-text)]">
-              Tap the page to place {insertMode === 'text' ? 'text' : `a ${shapeKind}`}.
-            </div>
+            <div aria-live="polite" className="mx-auto mb-1 max-w-md text-center text-xs font-semibold text-[var(--accent-text)]">{elementAction(insertMode === 'text' ? 'text' : shapeKind, 'place')}</div>
           )}
-          <div role="toolbar" aria-label="Add content" className="mx-auto grid max-w-md grid-cols-[1fr_1fr_1fr_minmax(6.5rem,1.25fr)] gap-1">
+          <div role="toolbar" aria-label={t("edit-pdf.add.content.006e1f")} className="mx-auto grid max-w-md grid-cols-[1fr_1fr_1fr_minmax(6.5rem,1.25fr)] gap-1">
             <button
               type="button"
               aria-pressed={insertMode === 'text'}
               onClick={(event) => {
                 if (event.detail === 0) addText();
-                else setInsertMode((current) => current === 'text' ? null : 'text');
+                else toggleInsertMode('text');
               }}
               className={`chef-pressable chef-target flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-[var(--radius-control)] text-xs font-bold ${insertMode === 'text' ? 'bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'text-[var(--text-secondary)]'}`}
-            ><Type aria-hidden size={19} /><span>Text</span></button>
-            <button type="button" onClick={() => imageInputRef.current?.click()} className="chef-pressable chef-target flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-[var(--radius-control)] text-xs font-bold text-[var(--text-secondary)]"><ImagePlus aria-hidden size={19} /><span>Image</span></button>
+            ><Type aria-hidden size={19} /><span>{t("edit-pdf.text.71988c")}</span></button>
+            <button type="button" onClick={() => { setInsertMode(null); imageInputRef.current?.click(); }} className="chef-pressable chef-target flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-[var(--radius-control)] text-xs font-bold text-[var(--text-secondary)]"><ImagePlus aria-hidden size={19} /><span>{t("edit-pdf.image.1aa4cb")}</span></button>
             <button
               type="button"
               aria-pressed={insertMode === 'shape'}
               onClick={(event) => {
                 if (event.detail === 0) addShape();
-                else setInsertMode((current) => current === 'shape' ? null : 'shape');
+                else toggleInsertMode('shape');
               }}
               className={`chef-pressable chef-target flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-[var(--radius-control)] text-xs font-bold ${insertMode === 'shape' ? 'bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'text-[var(--text-secondary)]'}`}
-            ><Shapes aria-hidden size={19} /><span>Shape</span></button>
+            ><Shapes aria-hidden size={19} /><span>{t("edit-pdf.shape.e0e492")}</span></button>
             <label className="flex min-h-11 min-w-0 items-center rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-2">
-              <span className="sr-only">Shape type</span>
-              <select value={shapeKind} onChange={(event) => { setShapeKind(event.target.value as EditorElement['type']); setInsertMode('shape'); }} aria-label="Shape type" className="h-10 min-w-0 w-full bg-transparent text-xs font-semibold text-[var(--text-primary)] outline-none">
-                <option value="rectangle">Rectangle</option><option value="ellipse">Ellipse</option><option value="line">Line</option><option value="arrow">Arrow</option>
+              <span className="sr-only">{t("edit-pdf.shape.type.78d36b")}</span>
+              <select value={shapeKind} onChange={(event) => { setShapeKind(event.target.value as EditorElement['type']); setActiveBlockId(null); setSelectedId(null); setInsertMode('shape'); }} aria-label={t("edit-pdf.shape.type.78d36b")} className="h-10 min-w-0 w-full bg-transparent text-xs font-semibold text-[var(--text-primary)] outline-none">
+                <option value="rectangle">{t("edit-pdf.rectangle.030699")}</option><option value="ellipse">{t("edit-pdf.ellipse.cb1ee8")}</option><option value="line">{t("edit-pdf.line.d7852c")}</option><option value="arrow">{t("edit-pdf.arrow.05800e")}</option>
               </select>
             </label>
           </div>
@@ -2649,61 +2851,60 @@ export const EditPDF: React.FC = () => {
     <div className={`mx-auto w-full max-w-6xl px-4 py-4 sm:py-6 ${file ? '' : 'chef-tool-landing-centered'}`}>
        <div className="mb-3 flex flex-col gap-2">
           <div>
-            <h1 className="text-2xl font-bold">Edit PDF <Badge tone="caution" className="align-middle">Beta</Badge></h1>
+            <h1 className="text-2xl font-bold">{t("edit-pdf.edit.pdf.e089a9")}<Badge tone="caution" className="align-middle">{t("edit-pdf.beta.703390")}</Badge></h1>
             {/* Kept: this is a beta editor and the export is what gets shared. */}
-            <p className="mt-1 text-sm font-medium text-[var(--status-caution-text)]">Review the result before sharing.</p>
+            <p className="mt-1 text-sm font-medium text-[var(--status-caution-text)]">{t("edit-pdf.review.the.result.before.sharing.83dca8")}</p>
           </div>
           {file && (
-             <div role="toolbar" aria-label="PDF editor tools" className="flex flex-wrap items-center gap-2 rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-2">
-                <button type="button" onClick={() => goToPage(targetPageIndex - 1)} disabled={targetPageIndex === 0} aria-label="Previous page" className="chef-hit-y chef-pressable flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-strong)] text-[var(--text-secondary)] disabled:opacity-55"><ChevronLeft size={20} /></button>
-                <label className="flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-3 text-sm font-semibold text-[var(--text-primary)]">
-                  Page
-                  <select value={targetPageIndex} onChange={(event) => goToPage(Number(event.target.value))} aria-label="Current editor page" className="min-h-11 bg-transparent outline-none">
-                    {Array.from({ length: pageCount }, (_, index) => <option key={index} value={index}>{index + 1} of {pageCount}</option>)}
+             <div role="toolbar" aria-label={t("edit-pdf.pdf.editor.tools.f127be")} className="flex flex-wrap items-center gap-2 rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-2">
+                <button type="button" onClick={() => goToPage(targetPageIndex - 1)} disabled={targetPageIndex === 0} aria-label={t("edit-pdf.previous.page.1208ec")} className="chef-hit-y chef-pressable flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-strong)] text-[var(--text-secondary)] disabled:opacity-55"><ChevronLeft size={20} className="rtl:rotate-180" /></button>
+                <label className="flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-3 text-sm font-semibold text-[var(--text-primary)]">{t("edit-pdf.page.0a30a8")}<select value={targetPageIndex} onChange={(event) => goToPage(Number(event.target.value))} aria-label={t("edit-pdf.current.editor.page.7fc923")} className="min-h-11 bg-transparent outline-none">
+                    {Array.from({ length: pageCount }, (_, index) => <option key={index} value={index}>{t("edit-pdf.message.ef59ff32b8", { v0: index + 1, v1: pageCount })}</option>)}
                   </select>
                 </label>
-                <button type="button" onClick={() => goToPage(targetPageIndex + 1)} disabled={targetPageIndex >= pageCount - 1} aria-label="Next page" className="chef-hit-y chef-pressable flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-strong)] text-[var(--text-secondary)] disabled:opacity-55"><ChevronRight size={20} /></button>
+                <button type="button" onClick={() => goToPage(targetPageIndex + 1)} disabled={targetPageIndex >= pageCount - 1} aria-label={t("edit-pdf.next.page.c08ac7")} className="chef-hit-y chef-pressable flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-strong)] text-[var(--text-secondary)] disabled:opacity-55"><ChevronRight size={20} className="rtl:rotate-180" /></button>
                 <span className="mx-1 hidden h-7 w-px bg-[var(--border-hairline)] sm:block" aria-hidden="true" />
-                <button type="button" onClick={undo} disabled={undoStack.current.length === 0} aria-label="Undo added element change" className="chef-hit-y chef-pressable flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] text-[var(--text-secondary)] disabled:opacity-55"><Undo2 size={18} /></button>
-                <button type="button" onClick={redo} disabled={redoStack.current.length === 0} aria-label="Redo added element change" className="chef-hit-y chef-pressable flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] text-[var(--text-secondary)] disabled:opacity-55"><Redo2 size={18} /></button>
-                <button type="button" onClick={() => setFindOpen((open) => !open)} aria-pressed={findOpen} className={`chef-hit-y chef-pressable flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border px-4 font-bold ${findOpen ? 'border-[var(--accent-rest)] bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'border-[var(--border-strong)] text-[var(--text-primary)] hover:border-[var(--accent-rest)]'}`}><Search size={18}/> Find</button>
-                <button type="button" onClick={() => addText()} className="chef-hit-y chef-pressable flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-4 font-bold text-[var(--text-primary)] hover:border-[var(--accent-rest)]"><Type size={18}/> Text</button>
-                <button type="button" onClick={() => imageInputRef.current?.click()} className="chef-hit-y chef-pressable flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-4 font-bold text-[var(--text-primary)] hover:border-[var(--accent-rest)]"><ImagePlus size={18}/> Image</button>
+                <button type="button" onClick={undo} disabled={undoStack.current.length === 0} aria-label={t("edit-pdf.undo.added.element.change.d99d56")} className="chef-hit-y chef-pressable flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] text-[var(--text-secondary)] disabled:opacity-55"><Undo2 size={18} /></button>
+                <button type="button" onClick={redo} disabled={redoStack.current.length === 0} aria-label={t("edit-pdf.redo.added.element.change.2c6d7a")} className="chef-hit-y chef-pressable flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] text-[var(--text-secondary)] disabled:opacity-55"><Redo2 size={18} /></button>
+                <button type="button" onClick={() => setFindOpen((open) => !open)} aria-pressed={findOpen} className={`chef-hit-y chef-pressable flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border px-4 font-bold ${findOpen ? 'border-[var(--accent-rest)] bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'border-[var(--border-strong)] text-[var(--text-primary)] hover:border-[var(--accent-rest)]'}`}><Search size={18}/>{t("edit-pdf.find.0684d7")}</button>
+                <button type="button" aria-pressed={insertMode === 'text'} onClick={(event) => { if (event.detail === 0) addText(); else toggleInsertMode('text'); }} className={`chef-hit-y chef-pressable flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border px-4 font-bold ${insertMode === 'text' ? 'border-[var(--accent-rest)] bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'border-[var(--border-strong)] text-[var(--text-primary)] hover:border-[var(--accent-rest)]'}`}><Type size={18}/>{t("edit-pdf.text.d0bd6e")}</button>
+                <button type="button" onClick={() => { setInsertMode(null); imageInputRef.current?.click(); }} className="chef-hit-y chef-pressable flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-4 font-bold text-[var(--text-primary)] hover:border-[var(--accent-rest)]"><ImagePlus size={18}/>{t("edit-pdf.image.246731")}</button>
                 <input ref={imageInputRef} type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" className="hidden" onChange={(event) => { void addImage(event.target.files?.[0]); event.currentTarget.value = ''; }} />
                 <div className="flex min-h-11 flex-wrap overflow-hidden rounded-[var(--radius-control)] border border-[var(--border-strong)]">
-                  <select value={shapeKind} onChange={(event) => setShapeKind(event.target.value as EditorElement['type'])} aria-label="Shape type" className="min-h-11 border-0 bg-[var(--surface-raised)] px-2 text-sm font-semibold text-[var(--text-primary)] outline-none">
-                    <option value="rectangle">Rectangle</option><option value="ellipse">Ellipse</option><option value="line">Line</option><option value="arrow">Arrow</option>
+                  <select value={shapeKind} onChange={(event) => setShapeKind(event.target.value as EditorElement['type'])} aria-label={t("edit-pdf.shape.type.78d36b")} className="min-h-11 border-0 bg-[var(--surface-raised)] px-2 text-sm font-semibold text-[var(--text-primary)] outline-none">
+                    <option value="rectangle">{t("edit-pdf.rectangle.030699")}</option><option value="ellipse">{t("edit-pdf.ellipse.cb1ee8")}</option><option value="line">{t("edit-pdf.line.d7852c")}</option><option value="arrow">{t("edit-pdf.arrow.05800e")}</option>
                   </select>
-                  <button type="button" onClick={() => addShape()} aria-label={`Add ${shapeKind}`} className="chef-hit-y chef-pressable flex min-h-11 items-center gap-1 border-l border-[var(--border-strong)] px-3 font-bold text-[var(--text-primary)]"><Shapes size={18}/> Add</button>
+                  <button type="button" onClick={() => addShape()} aria-label={elementAction(shapeKind, 'add')} className="chef-hit-y chef-pressable flex min-h-11 items-center gap-1 border-l border-[var(--border-strong)] px-3 font-bold text-[var(--text-primary)]"><Shapes size={18}/>{t("edit-pdf.add.0d40dd")}</button>
                 </div>
-                <button type="button" onClick={handleSave} disabled={status.isProcessing} className="chef-hit-y chef-pressable flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-6 font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] disabled:opacity-55"><Save size={18}/> Save</button>
+                <button type="button" onClick={handleSave} disabled={status.isProcessing} className="chef-hit-y chef-pressable flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-6 font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] disabled:opacity-55"><Save size={18}/>{t("edit-pdf.save.52453d")}</button>
              </div>
+          )}
+          {insertMode && (
+            <p role="status" className="px-2 py-1 text-sm font-semibold text-[var(--accent-text)]">{elementAction(insertMode === 'text' ? 'text' : shapeKind, 'place')}</p>
           )}
           {findBar}
           {scannedNotice}
           {blockedNotice}
           {paragraphInspector(false)}
           {selectedElement && (
-            <div role="region" aria-label={`Selected ${selectedElement.type} properties`} className="rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] px-3 py-2">
+            <div role="region" aria-label={elementAction(selectedElement.type, 'properties')} className="rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] px-3 py-2">
               <div className="flex flex-wrap items-end gap-2">
-                <span className="pb-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-[var(--text-secondary)]">Selected {selectedElement.type}</span>
-                {selectedElement.type === 'text' && <label className="min-w-0 flex-1 basis-[220px] text-xs font-semibold text-[var(--text-secondary)]">Text<input value={selectedElement.content} onChange={(event) => updateInspectorText(selectedElement.id, event.currentTarget.value)} onBlur={finishInspectorTextChange} className="mt-1 h-11 w-full rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-rest)] focus:shadow-[inset_0_0_0_1px_var(--accent-rest)]" /></label>}
-                {selectedElement.type !== 'image' && <label className="text-xs font-semibold text-[var(--text-secondary)]">Colour<input type="color" value={selectedElement.color || '#2563eb'} onChange={(event) => commitElementUpdate(selectedElement.id, { color: event.target.value })} className="mt-1 block h-11 w-12 rounded border border-[var(--border-strong)] bg-transparent p-1" /></label>}
-                {selectedElement.type === 'text' && <label className="text-xs font-semibold text-[var(--text-secondary)]">Font<select value={selectedElement.fontFamily || 'Helvetica'} onChange={(event) => commitElementUpdate(selectedElement.id, { fontFamily: event.target.value })} className="mt-1 block h-11 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]"><option value="Helvetica">Helvetica</option><option value="TimesRoman">Times</option><option value="Courier">Courier</option></select></label>}
-                {selectedElement.type === 'text' && <label className="text-xs font-semibold text-[var(--text-secondary)]">Size<input type="number" min={8} max={72} value={selectedElement.fontSize || 16} onChange={(event) => commitElementUpdate(selectedElement.id, { fontSize: normalizeInspectorFontSize(selectedElement, event.target.value) })} className="mt-1 block h-11 w-20 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]" /></label>}
-                {(selectedElement.type === 'rectangle' || selectedElement.type === 'ellipse') && <label className="flex min-h-11 items-center gap-2 text-xs font-semibold text-[var(--text-secondary)]"><input type="checkbox" checked={Boolean(selectedElement.fillColor && selectedElement.fillColor !== 'transparent')} onChange={(event) => commitElementUpdate(selectedElement.id, { fillColor: event.target.checked ? '#93c5fd' : 'transparent' })} className="h-5 w-5" /> Fill</label>}
-                {(selectedElement.type === 'rectangle' || selectedElement.type === 'ellipse') && selectedElement.fillColor !== 'transparent' && <label className="text-xs font-semibold text-[var(--text-secondary)]">Fill colour<input type="color" value={selectedElement.fillColor || '#93c5fd'} onChange={(event) => commitElementUpdate(selectedElement.id, { fillColor: event.target.value })} className="mt-1 block h-11 w-12 rounded border border-[var(--border-strong)] bg-transparent p-1" /></label>}
-                {selectedElement.type !== 'text' && selectedElement.type !== 'image' && <label className="text-xs font-semibold text-[var(--text-secondary)]">Stroke<input type="number" min={1} max={16} value={selectedElement.strokeWidth || 2} onChange={(event) => commitElementUpdate(selectedElement.id, { strokeWidth: Math.max(1, Math.min(16, Number(event.target.value) || 2)) })} className="mt-1 block h-11 w-20 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]" /></label>}
-                {selectedElement.type !== 'line' && selectedElement.type !== 'arrow' && <label className="text-xs font-semibold text-[var(--text-secondary)]">Rotate<input type="number" min={-180} max={180} value={selectedElement.rotation || 0} onChange={(event) => commitElementUpdate(selectedElement.id, { rotation: Math.max(-180, Math.min(180, Number(event.target.value) || 0)) })} className="mt-1 block h-11 w-20 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]" /></label>}
-                  <label className="text-xs font-semibold text-[var(--text-secondary)]">Page<select value={selectedElement.pageIndex} onChange={(event) => { const nextPage = Number(event.target.value); commitElementUpdate(selectedElement.id, { pageIndex: nextPage }); goToPage(nextPage); }} className="mt-1 block h-11 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]">{Array.from({ length: pageCount }, (_, index) => <option key={index} value={index}>{index + 1}</option>)}</select></label>
-                <button type="button" onClick={() => deleteElement(selectedElement.id)} className="chef-hit-y chef-pressable inline-flex min-h-11 items-center gap-1 rounded-[var(--radius-control)] border border-[var(--status-danger-text)] px-3 text-sm font-bold text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)]"><Trash2 size={16}/> Delete</button>
+                <span className="pb-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-[var(--text-secondary)]">{elementAction(selectedElement.type, 'selected')}</span>
+                {selectedElement.type === 'text' && <label className="min-w-0 flex-1 basis-[220px] text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.text.71988c")}<input value={selectedElement.content} onChange={(event) => updateInspectorText(selectedElement.id, event.currentTarget.value)} onBlur={finishInspectorTextChange} className="mt-1 h-11 w-full rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-rest)] focus:shadow-[inset_0_0_0_1px_var(--accent-rest)]" /></label>}
+                {selectedElement.type !== 'image' && <label className="text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.colour.3a9dfa")}<input type="color" value={selectedElement.color || '#2563eb'} onChange={(event) => commitElementUpdate(selectedElement.id, { color: event.target.value })} className="mt-1 block h-11 w-12 rounded border border-[var(--border-strong)] bg-transparent p-1" /></label>}
+                {selectedElement.type === 'text' && <label className="text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.font.64d0b3")}<select value={selectedElement.fontFamily || 'Helvetica'} onChange={(event) => commitElementUpdate(selectedElement.id, { fontFamily: event.target.value })} className="mt-1 block h-11 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]"><option value="Helvetica">{t("edit-pdf.helvetica.447688")}</option><option value="TimesRoman">{t("edit-pdf.times.0c0fd3")}</option><option value="Courier">{t("edit-pdf.courier.bbc5df")}</option></select></label>}
+                {selectedElement.type === 'text' && <label className="text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.size.1af851")}<input type="number" min={8} max={72} value={selectedElement.fontSize || 16} onChange={(event) => commitElementUpdate(selectedElement.id, { fontSize: normalizeInspectorFontSize(selectedElement, event.target.value) })} className="mt-1 block h-11 w-20 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]" /></label>}
+                {(selectedElement.type === 'rectangle' || selectedElement.type === 'ellipse') && <label className="flex min-h-11 items-center gap-2 text-xs font-semibold text-[var(--text-secondary)]"><input type="checkbox" checked={Boolean(selectedElement.fillColor && selectedElement.fillColor !== 'transparent')} onChange={(event) => commitElementUpdate(selectedElement.id, { fillColor: event.target.checked ? '#93c5fd' : 'transparent' })} className="h-5 w-5" />{t("edit-pdf.fill.c9fa1d")}</label>}
+                {(selectedElement.type === 'rectangle' || selectedElement.type === 'ellipse') && selectedElement.fillColor !== 'transparent' && <label className="text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.fill.colour.1c2981")}<input type="color" value={selectedElement.fillColor || '#93c5fd'} onChange={(event) => commitElementUpdate(selectedElement.id, { fillColor: event.target.value })} className="mt-1 block h-11 w-12 rounded border border-[var(--border-strong)] bg-transparent p-1" /></label>}
+                {selectedElement.type !== 'text' && selectedElement.type !== 'image' && <label className="text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.stroke.1582a1")}<input type="number" min={1} max={16} value={selectedElement.strokeWidth || 2} onChange={(event) => commitElementUpdate(selectedElement.id, { strokeWidth: Math.max(1, Math.min(16, Number(event.target.value) || 2)) })} className="mt-1 block h-11 w-20 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]" /></label>}
+                {selectedElement.type !== 'line' && selectedElement.type !== 'arrow' && <label className="text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.rotate.c3613b")}<input type="number" min={-180} max={180} value={selectedElement.rotation || 0} onChange={(event) => commitElementUpdate(selectedElement.id, { rotation: Math.max(-180, Math.min(180, Number(event.target.value) || 0)) })} className="mt-1 block h-11 w-20 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]" /></label>}
+                  <label className="text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.page.0a30a8")}<select value={selectedElement.pageIndex} onChange={(event) => { const nextPage = Number(event.target.value); commitElementUpdate(selectedElement.id, { pageIndex: nextPage }); goToPage(nextPage); }} className="mt-1 block h-11 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]">{Array.from({ length: pageCount }, (_, index) => <option key={index} value={index}>{formatNumber(index + 1)}</option>)}</select></label>
+                <button type="button" onClick={() => deleteElement(selectedElement.id)} className="chef-hit-y chef-pressable inline-flex min-h-11 items-center gap-1 rounded-[var(--radius-control)] border border-[var(--status-danger-text)] px-3 text-sm font-bold text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)]"><Trash2 size={16}/>{t("edit-pdf.delete.3534d6")}</button>
               </div>
             </div>
           )}
           {file && fillableFieldCount > 0 && (
-            <p className="px-1 text-xs font-medium text-[var(--text-secondary)]">
-              Form values are not included in Undo.
-            </p>
+            <p className="px-1 text-xs font-medium text-[var(--text-secondary)]">{t("edit-pdf.form.values.are.not.included.in.undo.aaad15")}</p>
           )}
           {file && (status.message || status.error) && (
             <div aria-live="polite" role={status.error ? 'alert' : 'status'}>
@@ -2717,7 +2918,7 @@ export const EditPDF: React.FC = () => {
        <AnimatePresence mode="wait">
           {!file ? (
              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mx-auto w-full max-w-xl">
-                <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label="Choose a PDF to edit" />
+                <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("edit-pdf.choose.a.pdf.to.edit.8d2720")} />
              </motion.div>
           ) : (
              <div className="relative overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)]">
@@ -2739,7 +2940,7 @@ export const EditPDF: React.FC = () => {
                           selectedId={selectedId} onSelect={setSelectedId}
                           onUpdate={updateElement} onBeginElementChange={rememberSnapshot} onDelete={deleteElement}
                           onFormValueChange={updateFormValue}
-                          onPagePress={() => setSelectedId(null)}
+                          onPagePress={handlePagePress}
                           blockEdits={blockEdits}
                           blockPreviews={blockPreviews}
                           activeBlockId={activeBlockId}
@@ -2749,7 +2950,8 @@ export const EditPDF: React.FC = () => {
                           onActivateBlock={handleActivateBlock}
                           onBlockChange={handleBlockChange}
                           onBeginBlockChange={handleBeginBlockChange}
-                          insertMode={null}
+                          insertMode={insertMode}
+                          placementLabel={elementAction(insertMode === 'text' ? 'text' : shapeKind, 'place')}
                           zoom={zoom}
                       />
                 </div>

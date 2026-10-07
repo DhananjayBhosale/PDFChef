@@ -227,6 +227,8 @@ export const planBlockEdit = (
 export interface StyledSegment {
   text: string;
   fontKey: string;
+  /** Original point size, retained when the paragraph needs a redraw. */
+  fontSize?: number;
 }
 
 /**
@@ -261,10 +263,10 @@ export const wrapStyledText = (
       width = 0;
     };
 
-    const push = (text: string, fontKey: string, advance: number) => {
+    const push = (text: string, segment: StyledSegment, advance: number) => {
       const last = current[current.length - 1];
-      if (last && last.fontKey === fontKey) last.text += text;
-      else current.push({ text, fontKey });
+      if (last && last.fontKey === segment.fontKey && last.fontSize === segment.fontSize) last.text += text;
+      else current.push({ ...segment, text });
       width += advance;
     };
 
@@ -283,13 +285,13 @@ export const wrapStyledText = (
           for (const character of piece) {
             const candidate = chunk + character;
             if (chunk && measure(candidate, segment.fontKey) > maxWidth) {
-              push(chunk, segment.fontKey, measure(chunk, segment.fontKey));
+              push(chunk, segment, measure(chunk, segment.fontKey));
               finish();
               chunk = character;
             } else chunk = candidate;
           }
-          if (chunk) push(chunk, segment.fontKey, measure(chunk, segment.fontKey));
-        } else push(piece, segment.fontKey, advance);
+          if (chunk) push(chunk, segment, measure(chunk, segment.fontKey));
+        } else push(piece, segment, advance);
       });
     });
 
@@ -364,11 +366,11 @@ export const replaceInStyledLines = (
     if (matches.length === 0) return line;
 
     const rebuilt: StyledSegment[] = [];
-    const push = (text: string, fontKey: string) => {
+    const push = (text: string, segment: StyledSegment) => {
       if (!text) return;
       const last = rebuilt[rebuilt.length - 1];
-      if (last && last.fontKey === fontKey) last.text += text;
-      else rebuilt.push({ text, fontKey });
+      if (last && last.fontKey === segment.fontKey && last.fontSize === segment.fontSize) last.text += text;
+      else rebuilt.push({ ...segment, text });
     };
 
     let cursor = 0;
@@ -381,8 +383,8 @@ export const replaceInStyledLines = (
       while (pending < matches.length && matches[pending].start < segmentEnd) {
         const match = matches[pending];
         if (match.start >= segmentStart) {
-          push(segment.text.slice(offset, match.start - segmentStart), segment.fontKey);
-          push(replacement, segment.fontKey);
+          push(segment.text.slice(offset, match.start - segmentStart), segment);
+          push(replacement, segment);
           replaced += 1;
         }
         // A match may run past this segment; drop only the part that lies inside it.
@@ -391,7 +393,7 @@ export const replaceInStyledLines = (
         pending += 1;
       }
 
-      push(segment.text.slice(offset), segment.fontKey);
+      push(segment.text.slice(offset), segment);
       cursor = segmentEnd;
     });
 
@@ -403,4 +405,4 @@ export const replaceInStyledLines = (
 
 /** The paragraph's runs as styled segments, for a paragraph nobody has edited yet. */
 export const blockStyledSegments = (block: PdfTextBlock): StyledSegment[][] =>
-  block.lines.map((line) => line.runs.map((run) => ({ text: run.text, fontKey: run.fontKey })));
+  block.lines.map((line) => line.runs.map((run) => ({ text: run.text, fontKey: run.fontKey, fontSize: run.fontSize })));

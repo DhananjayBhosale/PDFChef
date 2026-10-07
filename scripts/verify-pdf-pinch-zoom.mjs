@@ -99,6 +99,84 @@ const verifySurface = async ({ route, label, mobile }) => {
   }
 };
 
+const verifyCompressionPreview = async mobile => {
+  const context = await browser.newContext({
+    viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 },
+    hasTouch: mobile,
+    isMobile: mobile,
+  });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('console', message => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  page.on('pageerror', error => errors.push(error.message));
+  await page.addInitScript(() => {
+    localStorage.setItem('pdfchef.workspace.settings.v1', JSON.stringify({
+      autoDownload: false,
+      keepLocalHistory: false,
+      confirmLargeJobs: false,
+      largeFileWarningMb: 80,
+      onboardingComplete: true,
+      interfaceFont: 'inter',
+    }));
+  });
+
+  try {
+    await page.goto(`${baseUrl}/compress`);
+    await page.locator('input[type=file]').setInputFiles(fixture);
+    await page.getByRole('button', { name: 'Preview' }).click();
+    const dialog = page.getByRole('dialog');
+    const original = page.getByTestId('compression-original-preview');
+    const compressed = page.getByTestId('compression-compressed-preview');
+    await dialog.locator('img').first().waitFor({ state: 'visible', timeout: 60_000 });
+    assert.equal(await original.evaluate(element => getComputedStyle(element).touchAction), 'none');
+    assert.equal(await compressed.evaluate(element => getComputedStyle(element).touchAction), 'none');
+
+    const zoom = async pane => Number(await pane.getAttribute('data-preview-zoom'));
+    const results = [];
+    for (const [name, pane] of [['Original', original], ['Compressed', compressed]]) {
+      const bounds = await pane.boundingBox();
+      assert.ok(bounds, `${name} preview has no bounds`);
+      const x = bounds.x + bounds.width / 2;
+      const y = bounds.y + bounds.height / 2;
+      const changeZoom = async (direction, startGap, endGap) => {
+        if (!mobile) {
+          await pane.dispatchEvent('wheel', { ctrlKey: true, deltaY: direction === 'in' ? -20 : 20, clientX: x, clientY: y });
+          return;
+        }
+        const cdp = await context.newCDPSession(page);
+        await cdp.send('Input.dispatchTouchEvent', {
+          type: 'touchStart',
+          touchPoints: [{ x: x - startGap, y }, { x: x + startGap, y }],
+        });
+        await cdp.send('Input.dispatchTouchEvent', {
+          type: 'touchMove',
+          touchPoints: [{ x: x - endGap, y }, { x: x + endGap, y }],
+        });
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await cdp.detach();
+      };
+
+      const before = await zoom(pane);
+      await changeZoom('in', 30, 70);
+      await page.waitForFunction(previous => Number(document.querySelector('[data-testid="compression-original-preview"]')?.getAttribute('data-preview-zoom')) > previous, before);
+      const afterIn = await zoom(pane);
+      assert.ok(afterIn > before, `${name} preview did not zoom in`);
+      assert.equal(await zoom(original), await zoom(compressed), 'Comparison panes must stay in sync');
+      await changeZoom('out', 70, 30);
+      await page.waitForFunction(previous => Number(document.querySelector('[data-testid="compression-original-preview"]')?.getAttribute('data-preview-zoom')) < previous, afterIn);
+      const afterOut = await zoom(pane);
+      assert.ok(afterOut < afterIn, `${name} preview did not zoom out`);
+      results.push({ pane: name, before, afterIn, afterOut });
+    }
+    assert.deepEqual(errors, [], 'Compression preview emitted browser errors');
+    return { surface: `Compression preview ${mobile ? 'mobile' : 'desktop'}`, input: mobile ? 'two-touch pinch' : 'Mac trackpad pinch', results };
+  } finally {
+    await context.close();
+  }
+};
+
 try {
   const results = [];
   for (const surface of [
@@ -109,6 +187,8 @@ try {
   ]) {
     results.push(await verifySurface(surface));
   }
+  results.push(await verifyCompressionPreview(false));
+  results.push(await verifyCompressionPreview(true));
   console.log(JSON.stringify({ status: 'PASS', results }, null, 2));
 } finally {
   await browser.close();

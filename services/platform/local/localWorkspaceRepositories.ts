@@ -1,3 +1,4 @@
+import { LocalizedError } from '../../i18n/errors.ts';
 import type {
   DurableDocumentRef,
   RecentEntry,
@@ -17,7 +18,7 @@ export const WORKSPACE_RECENT_KEY = 'pdf-chef:recent:v1';
 
 const storageOrThrow = (): LocalStringStorage => {
   if (typeof localStorage === 'undefined') {
-    throw new Error('Local workspace storage is unavailable in this environment.');
+    throw new LocalizedError("local-workspace-repositories.error.c39eaed9bd");
   }
   return localStorage;
 };

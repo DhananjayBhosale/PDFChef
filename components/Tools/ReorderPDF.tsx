@@ -1,3 +1,6 @@
+import { localizeError } from '../../services/i18n/errors.ts';
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FileUpload } from '../UI/FileUpload';
@@ -32,6 +35,7 @@ interface Slot {
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 export const ReorderPDF: React.FC = () => {
+  useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
   const [items, setItems] = useState<PageItem[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
@@ -89,7 +93,7 @@ export const ReorderPDF: React.FC = () => {
         .catch((error) => {
           if (cancelled) return;
           console.error(error);
-          setPreviewError(error instanceof Error ? error.message : 'The pages could not be shown. Choose another file, or run Repair PDF on it first.');
+          setPreviewError(error instanceof Error ? localizeError(error) : t("reorder-pdf.the.pages.could.not.be.shown.choose.9884e4"));
           setLoadingPreviews(false);
         });
     } else {
@@ -319,7 +323,7 @@ export const ReorderPDF: React.FC = () => {
 
   const handleSave = async () => {
     if (!file) return;
-    setStatus({ isProcessing: true, progress: 10, message: 'Reordering pages...' });
+    setStatus({ isProcessing: true, progress: 10, message: t("reorder-pdf.reordering.pages.c557d2") });
     try {
       const newOrderIndices = items.map(p => p.originalIndex);
       const pdfBytes = await reorderPDFPages(file.file, newOrderIndices);
@@ -327,13 +331,13 @@ export const ReorderPDF: React.FC = () => {
         new Blob([pdfBytes], { type: 'application/pdf' }),
         androidExportFileName('reorder_pages', file.name, 'pdf'),
       );
-      setStatus({ isProcessing: false, progress: 100, message: 'Reordered PDF ready.' });
+      setStatus({ isProcessing: false, progress: 100, message: t("reorder-pdf.reordered.pdf.ready.cef728") });
     } catch (error) {
       setStatus({
         isProcessing: false,
         progress: 0,
         message: '',
-        error: error instanceof Error ? error.message : 'The reordered PDF could not be saved. Try again, or run Repair PDF on this file first.',
+        error: error instanceof Error ? localizeError(error) : t("reorder-pdf.the.reordered.pdf.could.not.be.saved.cd973c"),
       });
     }
   };
@@ -343,12 +347,12 @@ export const ReorderPDF: React.FC = () => {
 
   return (
     <ToolShell width="list" centered={!file} className="select-none">
-      <ToolHeader title="Reorder Pages" />
+      <ToolHeader title={t("reorder-pdf.reorder.pages.522c7c")} />
 
       <AnimatePresence mode="wait">
         {!file ? (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="max-w-xl mx-auto">
-             <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label="Choose a PDF to reorder" />
+             <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("reorder-pdf.choose.a.pdf.to.reorder.df841c")} />
           </motion.div>
         ) : (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-3">
@@ -357,7 +361,7 @@ export const ReorderPDF: React.FC = () => {
                 <button
                   onClick={() => setFile(null)}
                   className="chef-pressable chef-target -ml-1 flex shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)]"
-                  aria-label="Choose another PDF"
+                  aria-label={t("reorder-pdf.choose.another.pdf.9434e3")}
                 >
                   <History aria-hidden size={18} />
                 </button>
@@ -365,16 +369,16 @@ export const ReorderPDF: React.FC = () => {
               </div>
 
               <ToolChoiceRow
-                label="Order history"
+                label={t("reorder-pdf.order.history.928f4f")}
                 choices={[
-                  { key: 'undo', label: 'Undo', ariaLabel: 'Undo page reorder', icon: <Undo2 aria-hidden size={18} className="shrink-0" />, onClick: handleUndo, disabled: historyIndex <= 0 },
-                  { key: 'redo', label: 'Redo', ariaLabel: 'Redo page reorder', icon: <Redo2 aria-hidden size={18} className="shrink-0" />, onClick: handleRedo, disabled: historyIndex >= history.length - 1 },
-                  { key: 'reset', label: 'Reset', ariaLabel: 'Reset to the original page order', icon: <RotateCcw aria-hidden size={18} className="shrink-0" />, onClick: resetOrder, disabled: !hasOrderChanges },
+                  { key: 'undo', label: t("reorder-pdf.undo.a8283a"), ariaLabel: t("reorder-pdf.undo.page.reorder.0459c0"), icon: <Undo2 aria-hidden size={18} className="shrink-0" />, onClick: handleUndo, disabled: historyIndex <= 0 },
+                  { key: 'redo', label: t("reorder-pdf.redo.742739"), ariaLabel: t("reorder-pdf.redo.page.reorder.77e544"), icon: <Redo2 aria-hidden size={18} className="shrink-0" />, onClick: handleRedo, disabled: historyIndex >= history.length - 1 },
+                  { key: 'reset', label: t("reorder-pdf.reset.daee76"), ariaLabel: t("reorder-pdf.reset.to.the.original.page.order.471087"), icon: <RotateCcw aria-hidden size={18} className="shrink-0" />, onClick: resetOrder, disabled: !hasOrderChanges },
                 ]}
               />
 
               <ToolSelectionBar
-                summary={`${items.length} page${items.length === 1 ? '' : 's'} · ${hasOrderChanges ? 'order changed' : 'original order'}`}
+                summary={t(hasOrderChanges ? 'reorder.changed' : 'reorder.original', { count: items.length })}
                 actions={[]}
               />
             </ToolPanel>
@@ -386,9 +390,7 @@ export const ReorderPDF: React.FC = () => {
               disabled={loadingPreviews || items.length === 0}
               icon={<Save aria-hidden size={18} />}
               onClick={() => void handleSave()}
-            >
-              Save reordered PDF
-            </Button>
+            >{t("reorder-pdf.save.reordered.pdf.b8306f")}</Button>
 
             {/* List Container - Vertical Stack */}
             <div
@@ -399,13 +401,13 @@ export const ReorderPDF: React.FC = () => {
                {loadingPreviews ? (
                  <div className="flex flex-col items-center justify-center gap-2 py-6 text-[var(--text-tertiary)]">
                    <Loader2 aria-hidden className="animate-spin" size={24} />
-                   <p className="text-sm">Generating page previews...</p>
+                   <p className="text-sm">{t("reorder-pdf.generating.page.previews.83467f")}</p>
                  </div>
                ) : previewError ? (
                  <div className="flex flex-col items-center gap-2 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] px-4 py-4 text-center">
-                   <p className="font-semibold text-[var(--status-danger-text)]">The pages could not be shown. Choose another file, or run Repair PDF on it first.</p>
+                   <p className="font-semibold text-[var(--status-danger-text)]">{t("reorder-pdf.the.pages.could.not.be.shown.choose.9884e4")}</p>
                    <p className="max-w-measure text-sm text-[var(--text-secondary)]">{previewError}</p>
-                   <Button tone="secondary" onClick={() => setFile(null)}>Choose another PDF</Button>
+                   <Button tone="secondary" onClick={() => setFile(null)}>{t("reorder-pdf.choose.another.pdf.9434e3")}</Button>
                  </div>
                ) : (
                  items.map((item, i) => (
@@ -424,7 +426,7 @@ export const ReorderPDF: React.FC = () => {
                         onPointerDown={(e) => handlePointerDown(e, item.id)}
                         className="chef-target flex shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--surface-sunken)] active:cursor-grabbing"
                         style={{ touchAction: 'none' }}
-                        aria-label={`Drag page ${item.originalIndex + 1}`}
+                        aria-label={t("reorder-pdf.drag.page.8b847a", { v0: item.originalIndex + 1 })}
                       >
                         <GripVertical aria-hidden size={18} />
                       </button>
@@ -435,8 +437,8 @@ export const ReorderPDF: React.FC = () => {
                       <button
                         type="button"
                         onPointerDown={(e) => e.stopPropagation()} // CRITICAL: Prevent Drag
-                        onClick={() => setPreviewTarget({ index: item.originalIndex, label: `Page ${item.originalIndex + 1}` })}
-                        aria-label={`Preview page ${item.originalIndex + 1}`}
+                        onClick={() => setPreviewTarget({ index: item.originalIndex, label: t("reorder-pdf.page.c140ba", { v0: item.originalIndex + 1 }) })}
+                        aria-label={t("reorder-pdf.preview.page.ffb7e0", { v0: item.originalIndex + 1 })}
                         className="relative h-14 w-11 shrink-0 overflow-hidden rounded-[var(--radius-control)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)]"
                       >
                         <img src={item.url} alt="" className="h-full w-full object-contain" />
@@ -445,16 +447,14 @@ export const ReorderPDF: React.FC = () => {
                         </span>
                       </button>
 
-                      <p className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--text-primary)]">
-                        Page {item.originalIndex + 1}
-                      </p>
+                      <p className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--text-primary)]">{t("reorder-pdf.message.c140ba4857", { v0: item.originalIndex + 1 })}</p>
 
                       <button
                         type="button"
                         onClick={() => moveItem(i, i - 1)}
                         disabled={i === 0}
                         className="chef-target flex shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:text-[var(--text-tertiary)] disabled:opacity-35"
-                        aria-label={`Move page ${item.originalIndex + 1} up`}
+                        aria-label={t("reorder-pdf.move.page.up.79624d", { v0: item.originalIndex + 1 })}
                       >
                         <ChevronUp aria-hidden size={18} />
                       </button>
@@ -463,7 +463,7 @@ export const ReorderPDF: React.FC = () => {
                         onClick={() => moveItem(i, i + 1)}
                         disabled={i === items.length - 1}
                         className="chef-target flex shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:text-[var(--text-tertiary)] disabled:opacity-35"
-                        aria-label={`Move page ${item.originalIndex + 1} down`}
+                        aria-label={t("reorder-pdf.move.page.down.9e61e2", { v0: item.originalIndex + 1 })}
                       >
                         <ChevronDown aria-hidden size={18} />
                       </button>
@@ -491,7 +491,7 @@ export const ReorderPDF: React.FC = () => {
                 <img src={activeItem.url} alt="" className="w-full h-full object-contain" />
              </div>
              <div className="min-w-0">
-                <div className="text-sm font-semibold text-[var(--text-primary)]">Page {activeItem.originalIndex + 1}</div>
+                <div className="text-sm font-semibold text-[var(--text-primary)]">{t("reorder-pdf.message.c140ba4857", { v0: activeItem.originalIndex + 1 })}</div>
              </div>
           </div>
         </div>,

@@ -1,0 +1,52 @@
+{
+  "appLocale": "tr-TR",
+  "appleLocale": "tr",
+  "googleLocale": "tr-TR",
+  "apple": {
+    "name": "PDF Chef",
+    "subtitle": "Düzenle, birleştir, sıkıştır",
+    "promotionalText": "Cihazınızda PDF okuyun, düzenleyin ve organize edin. Dosyaları birleştirin, sayfaları yönetin ve el yazısı imza ekleyin.",
+    "description": "PDF Chef; cihazınızda PDF okumanıza, düzenlemenize, birleştirmenize, bölmenize, sıkıştırmanıza ve imzalamanıza yardımcı olur.\n\nSayfaları düzenleyin, metin ve görsel ekleyin, el yazısı imza yerleştirin, filigran veya sayfa numaraları ekleyin ve PDF'leri parolayla koruyun. Desteklenen görselleri ve belgeleri dönüştürün ve metin ayıklayın. Sonuçlar kaynak dosyaya ve seçilen araca bağlıdır.\n\nNormal PDF işleme işlemleri cihazınızda gerçekleşir. Belgeleriniz işlenmek üzere bir PDF Chef sunucusuna yüklenmez. Çevrimdışı araçlar, gerekli kaynakları yüklendikten sonra kullanılabilir durumda kalır.\n\nPDF Chef hesap gerektirmez. Paylaşmadan veya dışa aktarmadan önce sonucunuzu inceleyin.\n\niOS'te, her kayan yedi günlük kullanım hakkı dönemindeki ilk beş başarılı işlem; kaydedebileceğiniz, paylaşabileceğiniz ve dışa aktarabileceğiniz eksiksiz işlemlerdir. Dönem, ilk başarılı işlemle başlar. Beş işlemden sonra işleme ve önizleme kullanılabilir kalır; ancak kaydetme, paylaşma ve dışa aktarma, hak yenilenene kadar Pro gerektirir.\n\nPro Aylık, iptal edilene kadar otomatik olarak yenilenir. Pro Ömür Boyu tek seferlik bir satın almadır, abonelik değildir. Her iki seçenek de Apple Aile Paylaşımı'nı destekler. Fiyatlar ve satın alma ayrıntıları satın almadan önce uygulamada görünür. Satın alımları Ayarlar'dan geri yükleyin.\n\nTerms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+    "whatsNew": "Sürüm {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Aylık",
+      "description": "Tam dışa aktarma. İptale kadar yenilenir."
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Ömür Boyu",
+      "description": "Tam dışa aktarma. Tek seferlik satın alma."
+    },
+    "screenshot": {
+      "1": "PDF araçlarınız tek bir yerde",
+      "2": "Metin düzenleyin ve görsel ekleyin",
+      "3": "Dosyaları birleştirin ve sayfaları düzenleyin",
+      "4": "Kaydetmeden önce önizleyin",
+      "5": "El yazısı imzanızı ekleyin",
+      "6": "Cihazınızda çalışın"
+    },
+    "keywords": "böl,tara,imzala,dönüştür,okuyucu,filigran,parola,kilidi aç,döndür,metin çıkar"
+  },
+  "google": {
+    "name": "PDF Chef",
+    "shortDescription": "Cihazınızda PDF düzenleyin, birleştirin, sıkıştırın ve imzalayın.",
+    "fullDescription": "PDF Chef; cihazınızda PDF okumanıza, düzenlemenize, birleştirmenize, bölmenize, sıkıştırmanıza ve imzalamanıza yardımcı olur.\n\nSayfaları düzenleyin, metin ve görsel ekleyin, el yazısı imza yerleştirin, filigran veya sayfa numaraları ekleyin ve PDF'leri parolayla koruyun. Desteklenen görselleri ve belgeleri dönüştürün ve metin ayıklayın. Sonuçlar kaynak dosyaya ve seçilen araca bağlıdır.\n\nNormal PDF işleme işlemleri cihazınızda gerçekleşir. Belgeleriniz işlenmek üzere bir PDF Chef sunucusuna yüklenmez. Çevrimdışı araçlar, gerekli kaynakları yüklendikten sonra kullanılabilir durumda kalır.\n\nPDF Chef hesap gerektirmez. Paylaşmadan veya dışa aktarmadan önce sonucunuzu inceleyin.",
+    "whatsNew": "Sürüm {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Aylık",
+      "description": "Her sonucu kaydedin, paylaşın ve dışa aktarın. İptal edilene kadar her ay yenilenir.",
+      "benefit": "Her sonucu kaydedin ve paylaşın"
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Ömür Boyu",
+      "description": "Tek seferlik satın almayla her sonucu kaydedin, paylaşın ve dışa aktarın."
+    },
+    "screenshot": {
+      "1": "PDF araçlarınız tek bir yerde",
+      "2": "Metin düzenleyin ve görsel ekleyin",
+      "3": "Dosyaları birleştirin ve sayfaları düzenleyin",
+      "4": "Kaydetmeden önce önizleyin",
+      "5": "El yazısı imzanızı ekleyin",
+      "6": "Cihazınızda çalışın"
+    }
+  }
+}

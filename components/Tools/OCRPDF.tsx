@@ -1,3 +1,8 @@
+import { formatPercent } from '../../services/i18n/core.ts';
+import { LocalizedError, localizeError } from '../../services/i18n/errors.ts';
+import english from '../../services/i18n/en-US.ts';
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
@@ -15,14 +20,15 @@ import { NO_EXTRACTABLE_TEXT_MESSAGE } from '../../services/docxExport';
 import { textFromSelectionTargets } from '../../services/pdfToolResults';
 import { shouldWarnForFiles } from '../../services/workspace';
 import { useOpenedPdf, type OpenedPdfRouteState } from '../../hooks/useOpenedPdf';
+import { useMonetization, type JobAccessGrant } from '../../hooks/useMonetization';
 
 /**
  * Written by a page that found nothing. It is a placeholder for the on-screen preview only and
  * must never reach the exported .txt — see `EMPTY_PAGE_PLACEHOLDERS` below.
  */
-const NO_TEXT_LAYER_PLACEHOLDER = 'This page has no words stored in it — it looks like a picture or a scan. Switch to Scanned pages above to read the words off it.';
-const NO_OCR_TEXT_PLACEHOLDER = 'No words could be read from this page. If the scan is faint or crooked, try a clearer copy.';
-const EMPTY_PAGE_PLACEHOLDERS = new Set([NO_TEXT_LAYER_PLACEHOLDER, NO_OCR_TEXT_PLACEHOLDER]);
+const NO_TEXT_LAYER_PLACEHOLDER = english["ocrpdf.this.page.has.no.words.stored.in.e875a3"];
+const NO_OCR_TEXT_PLACEHOLDER = english["ocrpdf.no.words.could.be.read.from.this.8ce507"];
+const EMPTY_PAGE_PLACEHOLDERS = new Set<string>([NO_TEXT_LAYER_PLACEHOLDER, NO_OCR_TEXT_PLACEHOLDER]);
 
 type ExtractionMode = 'text-layer' | 'ocr';
 
@@ -153,15 +159,19 @@ const buildOcrSelectionLines = (
 };
 
 export const OCRPDF: React.FC = () => {
+  useI18n();
   const location = useLocation();
   const { openedPdf, takeProtectedPdfPassword } = useOpenedPdf();
   const [file, setFile] = useState<PDFFile | null>(null);
   const [pageResults, setPageResults] = useState<OCRPageResult[]>([]);
   const [resultMeta, setResultMeta] = useState<OCRResultMeta | null>(null);
+  const extractionOperationIdRef = useRef<string | null>(null);
+  const extractionGrantRef = useRef<JobAccessGrant | null>(null);
+  const { completeJob, runWithExportAccess } = useMonetization();
   const [pageFilter, setPageFilter] = useState('all');
   const [mode, setMode] = useState<ExtractionMode>('text-layer');
   const [ocrMaxPages, setOcrMaxPages] = useState('5');
-  const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
+  const [status, setStatus] = useState<ProcessingStatus & { noticeKind?: 'cancelled' | 'copied' }>({ isProcessing: false, progress: 0, message: '' });
   const pageResultsRef = useRef<OCRPageResult[]>([]);
   const activeRunRef = useRef(0);
   const activeWorkerRef = useRef<OCRWorker | null>(null);
@@ -193,6 +203,8 @@ export const OCRPDF: React.FC = () => {
 
   const clearExtraction = () => {
     invalidateActiveRun();
+    extractionOperationIdRef.current = null;
+    extractionGrantRef.current = null;
     replacePageResults([]);
     setResultMeta(null);
     setPageFilter('all');
@@ -234,18 +246,18 @@ export const OCRPDF: React.FC = () => {
     const pdfDoc = protectedPassword === null
       ? await loadPDFDocument(inputFile)
       : await loadProtectedPDFDocument(inputFile, protectedPassword);
-    if (activeRunRef.current !== runId) throw new DOMException('Operation cancelled.', 'AbortError');
+    if (activeRunRef.current !== runId) throw new DOMException(t("ocrpdf.operation.cancelled.386cf3"), 'AbortError');
     const totalPages = pdfDoc.numPages || 0;
-    if (totalPages < 1) throw new Error('Selected PDF has no pages.');
+    if (totalPages < 1) throw new Error(t("ocrpdf.selected.pdf.has.no.pages.3882f9"));
     const nextResults: OCRPageResult[] = [];
 
     try {
       for (let pageIndex = 0; pageIndex < totalPages; pageIndex += 1) {
-        if (activeRunRef.current !== runId) throw new DOMException('Operation cancelled.', 'AbortError');
+        if (activeRunRef.current !== runId) throw new DOMException(t("ocrpdf.operation.cancelled.386cf3"), 'AbortError');
         setStatus({
           isProcessing: true,
           progress: Math.max(5, Math.round(5 + (pageIndex / totalPages) * 90)),
-          message: `Reading page ${pageIndex + 1} of ${totalPages}…`,
+          message: t("ocrpdf.reading.page.of.71ef9b", { v0: pageIndex + 1, v1: totalPages }),
         });
 
         const [preview, textLines] = await Promise.all([
@@ -254,7 +266,7 @@ export const OCRPDF: React.FC = () => {
         ]);
         if (activeRunRef.current !== runId) {
           if (preview?.url) revokeObjectUrl(preview.url);
-          throw new DOMException('Operation cancelled.', 'AbortError');
+          throw new DOMException(t("ocrpdf.operation.cancelled.386cf3"), 'AbortError');
         }
 
         const selectionLines = buildPdfSelectionLines(pageIndex + 1, textLines);
@@ -276,7 +288,7 @@ export const OCRPDF: React.FC = () => {
 
     if (activeRunRef.current !== runId) {
       revokePageResults(nextResults);
-      throw new DOMException('Operation cancelled.', 'AbortError');
+      throw new DOMException(t("ocrpdf.operation.cancelled.386cf3"), 'AbortError');
     }
     replacePageResults(nextResults);
     setResultMeta({ processedPages: totalPages, totalPages });
@@ -286,9 +298,9 @@ export const OCRPDF: React.FC = () => {
     const pdfDoc = protectedPassword === null
       ? await loadPDFDocument(inputFile)
       : await loadProtectedPDFDocument(inputFile, protectedPassword);
-    if (activeRunRef.current !== runId) throw new DOMException('Operation cancelled.', 'AbortError');
+    if (activeRunRef.current !== runId) throw new DOMException(t("ocrpdf.operation.cancelled.386cf3"), 'AbortError');
     const totalPages = pdfDoc.numPages || 0;
-    if (totalPages < 1) throw new Error('Selected PDF has no pages.');
+    if (totalPages < 1) throw new Error(t("ocrpdf.selected.pdf.has.no.pages.3882f9"));
     const limit = Math.max(1, Math.min(totalPages, Number(ocrMaxPages) || 1));
     const worker = await createWorker('eng', OEM.LSTM_ONLY, {
       workerPath: `${LOCAL_OCR_ROOT}/worker.min.js`,
@@ -299,26 +311,26 @@ export const OCRPDF: React.FC = () => {
     });
     if (activeRunRef.current !== runId) {
       await worker.terminate();
-      throw new DOMException('Operation cancelled.', 'AbortError');
+      throw new DOMException(t("ocrpdf.operation.cancelled.386cf3"), 'AbortError');
     }
     activeWorkerRef.current = worker;
     const nextResults: OCRPageResult[] = [];
 
     try {
       for (let pageIndex = 0; pageIndex < limit; pageIndex += 1) {
-        if (activeRunRef.current !== runId) throw new DOMException('Operation cancelled.', 'AbortError');
+        if (activeRunRef.current !== runId) throw new DOMException(t("ocrpdf.operation.cancelled.386cf3"), 'AbortError');
         setStatus({
           isProcessing: true,
           progress: Math.max(5, Math.round(5 + (pageIndex / limit) * 90)),
-          message: `Running OCR on page ${pageIndex + 1} of ${limit}…`,
+          message: t("ocrpdf.running.ocr.on.page.of.108941", { v0: pageIndex + 1, v1: limit }),
         });
 
         const rendered = await renderPageAsImage(pdfDoc, pageIndex, OCR_RENDER_CONFIG);
 
         try {
-          if (activeRunRef.current !== runId) throw new DOMException('Operation cancelled.', 'AbortError');
+          if (activeRunRef.current !== runId) throw new DOMException(t("ocrpdf.operation.cancelled.386cf3"), 'AbortError');
           const result = await worker.recognize(rendered.objectUrl, {}, { text: true, blocks: true });
-          if (activeRunRef.current !== runId) throw new DOMException('Operation cancelled.', 'AbortError');
+          if (activeRunRef.current !== runId) throw new DOMException(t("ocrpdf.operation.cancelled.386cf3"), 'AbortError');
           const selectionLines = buildOcrSelectionLines(pageIndex + 1, result.data, rendered.width, rendered.height);
           const pageText = result.data.text?.trim() || textFromSelectionTargets(selectionLines) || NO_OCR_TEXT_PLACEHOLDER;
 
@@ -349,7 +361,7 @@ export const OCRPDF: React.FC = () => {
 
     if (activeRunRef.current !== runId) {
       revokePageResults(nextResults);
-      throw new DOMException('Operation cancelled.', 'AbortError');
+      throw new DOMException(t("ocrpdf.operation.cancelled.386cf3"), 'AbortError');
     }
     replacePageResults(nextResults);
     setResultMeta({ processedPages: limit, totalPages });
@@ -363,6 +375,9 @@ export const OCRPDF: React.FC = () => {
     const runId = activeRunRef.current + 1;
     activeRunRef.current = runId;
     const extractionMode = modeOverride ?? mode;
+    const operationId = uuidv4();
+    extractionOperationIdRef.current = operationId;
+    extractionGrantRef.current = null;
 
     replacePageResults([]);
     setResultMeta(null);
@@ -370,7 +385,7 @@ export const OCRPDF: React.FC = () => {
     setStatus({
       isProcessing: true,
       progress: 5,
-      message: extractionMode === 'ocr' ? 'Getting ready to read the pages on your device…' : 'Opening the PDF…',
+      message: extractionMode === 'ocr' ? t("ocrpdf.getting.ready.to.read.the.pages.on.ceb774") : t("ocrpdf.opening.the.pdf.c4c2f5"),
     });
 
     try {
@@ -381,7 +396,14 @@ export const OCRPDF: React.FC = () => {
       }
       if (activeRunRef.current !== runId) return;
 
-      setStatus({ isProcessing: false, progress: 100, message: 'Done. The words are below.' });
+      // The extraction result is already on screen at this point. If the native
+      // bridge cannot answer, keep that result visible but treat every export as
+      // a preview until access can be unlocked.
+      const grant = await completeJob(operationId).catch(() => 'preview-only' as const);
+      if (activeRunRef.current !== runId) return;
+      extractionGrantRef.current = grant;
+
+      setStatus({ isProcessing: false, progress: 100, message: t("ocrpdf.done.the.words.are.below.f67bb8") });
     } catch (error) {
       if (activeRunRef.current !== runId || isAbortError(error)) return;
       replacePageResults([]);
@@ -391,10 +413,10 @@ export const OCRPDF: React.FC = () => {
         progress: 0,
         message: '',
         error: extractionMode === 'ocr'
-          ? 'The words could not be read from this scan. Try fewer pages, or switch to Normal PDF if the file already has real words in it.'
-          : error instanceof Error && error.message
-            ? error.message
-            : 'The words could not be read from this PDF. If it is a scan, switch to Scanned pages above.',
+          ? t("ocrpdf.the.words.could.not.be.read.from.1c2bd4")
+          : error instanceof LocalizedError
+            ? localizeError(error)
+            : t("ocrpdf.the.words.could.not.be.read.from.f9fba8"),
       });
     }
   };
@@ -403,7 +425,7 @@ export const OCRPDF: React.FC = () => {
     if (files.length === 0) return;
     const selected = files[0];
     if (!isPdfFile(selected)) {
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Choose a PDF file.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("ocrpdf.choose.a.pdf.file.c2a7df") });
       return;
     }
     const routeState = location.state as OpenedPdfRouteState | null;
@@ -419,7 +441,7 @@ export const OCRPDF: React.FC = () => {
 
     if (
       shouldWarnForFiles([selected]) &&
-      !window.confirm('This is a large PDF and may use substantial browser memory. Continue?')
+      !window.confirm(t("ocrpdf.this.is.a.large.pdf.and.may.848eab"))
     ) {
       protectedPasswordRef.current = null;
       return;
@@ -438,18 +460,34 @@ export const OCRPDF: React.FC = () => {
 
   const cancelExtraction = () => {
     invalidateActiveRun();
+    extractionOperationIdRef.current = null;
+    extractionGrantRef.current = null;
     replacePageResults([]);
     setResultMeta(null);
     setPageFilter('all');
-    setStatus({ isProcessing: false, progress: 0, message: 'Extraction cancelled. Nothing was saved.' });
+    setStatus({ isProcessing: false, progress: 0, noticeKind: 'cancelled', message: t("ocrpdf.extraction.cancelled.nothing.was.saved.bacf02") });
   };
 
   const copyTextToClipboard = async (content: string, successMessage: string) => {
+    const copy = async () => {
+      try {
+        await navigator.clipboard.writeText(content);
+        setStatus({ isProcessing: false, progress: 100, noticeKind: 'copied', message: successMessage });
+      } catch {
+        setStatus({ isProcessing: false, progress: 0, message: '', error: t('ocr.clipboardFailed') });
+      }
+    };
+    if (extractionGrantRef.current !== 'preview-only') {
+      await copy();
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(content);
-      setStatus({ isProcessing: false, progress: 100, message: successMessage });
+      const access = await runWithExportAccess(copy);
+      if (access.status === 'blocked') {
+        setStatus({ isProcessing: false, progress: 100, message: t("ocrpdf.preview.ready.unlock.to.copy.the.extracted.f9b7af") });
+      }
     } catch {
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Clipboard copy failed' });
+      setStatus({ isProcessing: false, progress: 100, message: t("ocrpdf.preview.ready.unlock.to.copy.the.extracted.f9b7af") });
     }
   };
 
@@ -475,25 +513,41 @@ export const OCRPDF: React.FC = () => {
     [pageResults],
   );
 
-  const downloadExtractedText = () => {
+  const downloadExtractedText = async () => {
     if (!file || !hasExtractedText) return;
     const baseName = file.name.replace(/\.pdf$/i, '') || 'extracted-text';
-    const suffix = mode === 'ocr' ? ' (OCR text)' : ' (text)';
-    downloadBlob(new Blob([exportText], { type: 'text/plain;charset=utf-8' }), `${baseName}${suffix}.txt`, 'text/plain');
-    setStatus({ isProcessing: false, progress: 100, message: 'Text file ready.' });
+    const suffix = mode === 'ocr' ? t("ocrpdf.ocr.text.5120f8") : ' (text)';
+    const operationId = extractionOperationIdRef.current;
+    if (!operationId) return;
+    const download = async () => {
+      downloadBlob(new Blob([exportText], { type: 'text/plain;charset=utf-8' }), `${baseName}${suffix}.txt`, 'text/plain', { operationId });
+      setStatus({ isProcessing: false, progress: 100, message: t("ocrpdf.text.file.ready.8917e3") });
+    };
+    if (extractionGrantRef.current !== 'preview-only') {
+      await download();
+      return;
+    }
+    try {
+      const access = await runWithExportAccess(download);
+      if (access.status === 'blocked') {
+        setStatus({ isProcessing: false, progress: 100, message: t("ocrpdf.preview.ready.unlock.to.save.the.extracted.e7b174") });
+      }
+    } catch {
+      setStatus({ isProcessing: false, progress: 100, message: t("ocrpdf.preview.ready.unlock.to.save.the.extracted.e7b174") });
+    }
   };
 
   const processedSummary = resultMeta
     ? resultMeta.processedPages < resultMeta.totalPages
-      ? `Showing ${resultMeta.processedPages} of ${resultMeta.totalPages} pages. Increase the OCR page limit to process more.`
-      : `Showing ${resultMeta.processedPages} page${resultMeta.processedPages === 1 ? '' : 's'}.`
+      ? t("ocrpdf.showing.of.pages.increase.the.ocr.page.947d19", { v0: resultMeta.processedPages, v1: resultMeta.totalPages })
+      : t("ocrpdf.showing.page.c19f4d", { count: resultMeta.processedPages })
     : '';
 
   return (
     <ToolShell width="full" centered={!file}>
       {/* The mode strip below names both paths and says what each one costs, so
           the title needs no gloss. */}
-      <ToolHeader title="Extract Text" />
+      <ToolHeader title={t("ocrpdf.extract.text.9ab592")} />
 
       <AnimatePresence mode="wait">
         {!file ? (
@@ -510,20 +564,20 @@ export const OCRPDF: React.FC = () => {
             <FileUpload
               onFilesSelected={handleFilesSelected}
               accept=".pdf,application/pdf"
-              label={mode === 'ocr' ? 'Choose a scanned PDF' : 'Choose a PDF'}
+              label={mode === 'ocr' ? t("ocrpdf.choose.a.scanned.pdf.cf38d5") : t("ocrpdf.choose.a.pdf.3ba70f")}
             />
             <div className="rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-secondary)]">How should we read this PDF?</div>
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-secondary)]">{t("ocrpdf.how.should.we.read.this.pdf.593a93")}</div>
               {/* The product's one segmented control: a raised chip on a sunken
                   track, with arrow-key radiogroup semantics. The pair of flat
                   accent-filled buttons this replaced read as a status block
                   rather than as a choice. */}
               <SegmentedControl
-                label="How should we read this PDF?"
+                label={t("ocrpdf.how.should.we.read.this.pdf.593a93")}
                 value={mode}
                 options={[
-                  { value: 'text-layer', label: 'Normal PDF' },
-                  { value: 'ocr', label: 'Scanned pages' },
+                  { value: 'text-layer', label: t("ocrpdf.normal.pdf.d68bc0") },
+                  { value: 'ocr', label: t("ocrpdf.scanned.pages.5e7ba2") },
                 ]}
                 onChange={setMode}
               />
@@ -531,13 +585,13 @@ export const OCRPDF: React.FC = () => {
               {/* Kept: each mode fails in a way the label does not show. */}
               <p className="type-footnote mt-2 text-[var(--text-secondary)]">
                 {mode === 'text-layer'
-                  ? 'Fast. Works when the PDF already carries real words. A scan gives nothing back.'
-                  : 'Slower. Reads the words off a picture of the page. English only, and it does make mistakes, so read it over.'}
+                  ? t("ocrpdf.fast.works.when.the.pdf.already.carries.030add")
+                  : t("ocrpdf.slower.reads.the.words.off.a.picture.9cb859")}
               </p>
 
               {mode === 'ocr' && (
                 <div className="mt-2.5">
-                  <label htmlFor="ocr-page-limit" className="mb-1 block type-footnote font-semibold text-[var(--text-secondary)]">How many pages to read</label>
+                  <label htmlFor="ocr-page-limit" className="mb-1 block type-footnote font-semibold text-[var(--text-secondary)]">{t("ocrpdf.how.many.pages.to.read.36331f")}</label>
                   <input
                     id="ocr-page-limit"
                     value={ocrMaxPages}
@@ -565,11 +619,11 @@ export const OCRPDF: React.FC = () => {
                 onClick={status.isProcessing ? cancelExtraction : clearExtraction}
                 className="chef-target chef-pressable rounded-[var(--radius-control)] px-2 text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-sunken)] hover:text-[var(--text-primary)]"
               >
-                <span className="flex items-center gap-2"><ArrowLeft aria-hidden size={16} /> {status.isProcessing ? 'Cancel extraction' : 'Extract another'}</span>
+                <span className="flex items-center gap-2"><ArrowLeft aria-hidden size={16} className="rtl:rotate-180" /> {status.isProcessing ? t("ocrpdf.cancel.extraction.8f2c87") : t("ocrpdf.extract.another.e104f8")}</span>
               </button>
-              <div className="min-w-0 text-right">
+              <div className="min-w-0 text-end">
                 <div className="inline-flex rounded-full bg-[var(--surface-sunken)] px-2 py-1 text-xs font-semibold text-[var(--text-secondary)]">
-                  {mode === 'ocr' ? 'Scanned pages' : 'Normal PDF'}
+                  {mode === 'ocr' ? t("ocrpdf.scanned.pages.5e7ba2") : t("ocrpdf.normal.pdf.d68bc0")}
                 </div>
                 <p className="mt-1 max-w-[12rem] truncate text-xs text-[var(--text-tertiary)]">{file.name}</p>
               </div>
@@ -581,12 +635,12 @@ export const OCRPDF: React.FC = () => {
                   <Loader2 aria-hidden className="shrink-0 animate-spin" size={26} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-3 text-sm font-semibold">
-                      <span>{status.message || 'Extracting text…'}</span>
-                      <span className="tabular-nums">{status.progress}%</span>
+                      <span>{status.message || t("ocrpdf.extracting.text.c3e98c")}</span>
+                      <span className="tabular-nums">{formatPercent(status.progress)}</span>
                     </div>
                     <div
                       role="progressbar"
-                      aria-label="Text extraction progress"
+                      aria-label={t("ocrpdf.text.extraction.progress.4a7d2e")}
                       aria-valuemin={0}
                       aria-valuemax={100}
                       aria-valuenow={status.progress}
@@ -600,13 +654,11 @@ export const OCRPDF: React.FC = () => {
                   type="button"
                   onClick={cancelExtraction}
                   className="chef-target chef-pressable mt-3 w-full rounded-[var(--radius-control)] border border-current px-4 text-sm font-semibold hover:bg-[var(--surface-raised)] sm:w-auto"
-                >
-                  Cancel
-                </button>
+                >{t("ocrpdf.cancel.19766e")}</button>
               </div>
             ) : (
               <>
-                {pageResults.length === 0 && (status.error || status.message.includes('cancelled')) && (
+                {pageResults.length === 0 && (status.error || status.noticeKind === 'cancelled') && (
                   <div
                     role={status.error ? 'alert' : 'status'}
                     className={`rounded-[var(--radius-panel)] border p-3 text-sm ${
@@ -615,23 +667,19 @@ export const OCRPDF: React.FC = () => {
                         : 'border-[var(--border-hairline)] bg-[var(--surface-sunken)] text-[var(--text-body)]'
                     }`}
                   >
-                    <p className="font-bold">{status.error ? 'Extraction failed' : 'Extraction cancelled'}</p>
+                    <p className="font-bold">{status.error ? t("ocrpdf.extraction.failed.ed874a") : t("ocrpdf.extraction.cancelled.ea6842")}</p>
                     <p className="mt-1 leading-relaxed">{status.error || status.message}</p>
                     <div className="mt-4 grid gap-2 sm:flex">
                       <button
                         type="button"
                         onClick={() => void runExtraction(file)}
                         className="chef-target chef-pressable rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 font-semibold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)]"
-                      >
-                        Try again
-                      </button>
+                      >{t("ocrpdf.try.again.d8b839")}</button>
                       <button
                         type="button"
                         onClick={clearExtraction}
                         className="chef-target chef-pressable rounded-[var(--radius-control)] border border-[var(--border-strong)] px-4 font-semibold hover:border-[var(--accent-rest)]"
-                      >
-                        Choose another
-                      </button>
+                      >{t("ocrpdf.choose.another.8a2bca")}</button>
                     </div>
                   </div>
                 )}
@@ -639,7 +687,7 @@ export const OCRPDF: React.FC = () => {
                 {pageResults.length > 0 && (
                   <div className="flex flex-wrap items-center justify-between gap-2.5">
                     <div className="min-w-0">
-                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-secondary)]">Results</div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-secondary)]">{t("ocrpdf.results.219c4a")}</div>
                       <p className="mt-0.5 text-sm text-[var(--text-secondary)]">
                         {processedSummary}
                       </p>
@@ -648,17 +696,15 @@ export const OCRPDF: React.FC = () => {
                     <div className="grid w-full gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
                       {pageResults.length > 1 && (
                         <label className="flex items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-3 py-1 text-sm text-[var(--text-secondary)]">
-                          <span>Jump to page</span>
+                          <span>{t("ocrpdf.jump.to.page.d35c8c")}</span>
                           <select
                             value={pageFilter}
                             onChange={(event) => setPageFilter(event.target.value)}
                             className="bg-transparent font-medium outline-none"
                           >
-                            <option value="all">All pages</option>
+                            <option value="all">{t("ocrpdf.all.pages.903542")}</option>
                             {pageResults.map((page) => (
-                              <option key={page.pageNumber} value={String(page.pageNumber)}>
-                                Page {page.pageNumber}
-                              </option>
+                              <option key={page.pageNumber} value={String(page.pageNumber)}>{t("ocrpdf.message.c140ba4857", { v0: page.pageNumber })}</option>
                             ))}
                           </select>
                         </label>
@@ -668,19 +714,17 @@ export const OCRPDF: React.FC = () => {
                         <>
                           <button
                             type="button"
-                            onClick={() => copyTextToClipboard(exportText, 'Copied all extracted text')}
+                            onClick={() => copyTextToClipboard(exportText, t("ocrpdf.copied.all.extracted.text.0c13a8"))}
                             className="chef-target chef-pressable flex items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-quiet)] px-4 font-medium text-[var(--accent-on-quiet)] transition-colors"
                           >
-                            <Copy aria-hidden size={18} /> Copy all
-                          </button>
+                            <Copy aria-hidden size={18} />{t("ocrpdf.copy.all.64f07c")}</button>
 
                           <button
                             type="button"
                             onClick={downloadExtractedText}
                             className="chef-target chef-pressable flex items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-4 font-medium text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]"
                           >
-                            <Download aria-hidden size={18} /> Download .txt
-                          </button>
+                            <Download aria-hidden size={18} />{t("ocrpdf.download.txt.c300e5")}</button>
                         </>
                       )}
                     </div>
@@ -696,12 +740,10 @@ export const OCRPDF: React.FC = () => {
                           type="button"
                           onClick={switchToOcr}
                           className="chef-target chef-pressable inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 font-semibold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] sm:w-auto"
-                        >
-                          Use OCR on this PDF
-                        </button>
+                        >{t("ocrpdf.use.ocr.on.this.pdf.ae24db")}</button>
                       </div>
                     ) : (
-                      'OCR did not detect readable English text in these page images. Try clearer pages or a smaller page range.'
+                      t("ocrpdf.ocr.did.not.detect.readable.english.text.03435f")
                     )}
                   </div>
                 )}
@@ -724,21 +766,21 @@ export const OCRPDF: React.FC = () => {
 
                       <div className="min-w-0">
                         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                          <h2 className="text-lg font-semibold text-[var(--text-primary)]">Page {page.pageNumber}</h2>
+                          <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t("ocrpdf.message.c140ba4857", { v0: page.pageNumber })}</h2>
 
                           {pageHasExtractedText(page) && (
                             <button
                               type="button"
-                              onClick={() => copyTextToClipboard(page.text, `Copied page ${page.pageNumber} text`)}
+                              onClick={() => copyTextToClipboard(page.text, t("ocrpdf.copied.page.text.7fbe3c", { v0: page.pageNumber }))}
                               className="chef-target chef-pressable flex items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-3 text-sm font-medium text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]"
                             >
-                              <Copy aria-hidden size={18} /> Copy page
-                            </button>
+                              <Copy aria-hidden size={18} />{t("ocrpdf.copy.page.b89db0")}</button>
                           )}
                         </div>
 
                         <pre className="chef-scroller max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-[var(--radius-field)] bg-[var(--surface-sunken)] p-3 text-sm text-[var(--text-body)]">
-                          {page.text}
+                          {page.text === NO_TEXT_LAYER_PLACEHOLDER ? t("ocrpdf.this.page.has.no.words.stored.in.e875a3")
+                            : page.text === NO_OCR_TEXT_PLACEHOLDER ? t("ocrpdf.no.words.could.be.read.from.this.8ce507") : page.text}
                         </pre>
                       </div>
                     </motion.article>
@@ -747,7 +789,7 @@ export const OCRPDF: React.FC = () => {
               </>
             )}
 
-            {(status.message === 'Copied all extracted text' || status.message.startsWith('Copied page')) && (
+            {status.noticeKind === 'copied' && (
               <div
                 role="status"
                 aria-live="polite"

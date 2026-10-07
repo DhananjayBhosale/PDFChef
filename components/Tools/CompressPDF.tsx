@@ -1,3 +1,8 @@
+import { formatPercent } from '../../services/i18n/core.ts';
+import { formatBytes as formatSize, sanitizeFilenameStem, splitFilename } from '../UI/format';
+import { localizeError } from '../../services/i18n/errors.ts';
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { FileUpload } from '../UI/FileUpload';
 import { PDFFile, ProcessingStatus } from '../../types';
@@ -24,18 +29,14 @@ const sliderForDPI = (dpi: number, isTextHeavy: boolean): number => {
 const PRESET_DPI = { Low: 72, Medium: 144, High: 200 } as const;
 type PresetName = keyof typeof PRESET_DPI;
 
-const qualityLabel = (dpi: number): PresetName => (dpi < 110 ? 'Low' : dpi < 175 ? 'Medium' : 'High');
+const qualityLabel = (dpi: number): string => (dpi < 110 ? t("compress-pdf.low.f793de") : dpi < 175 ? t("compress-pdf.medium.8e588c") : t("compress-pdf.high.c4ebc6"));
 
-const formatSize = (bytes: number) => {
-  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${bytes} B`;
-};
 
 /** One finished-but-unsaved result, held in memory until it is kept or dropped. */
 interface TrialResult {
   id: string;
   name: string;
+  outputStem: string;
   originalSize: number;
   blob: Blob;
   /** The compressed copy was not smaller, so the original is what would be kept. */
@@ -43,6 +44,7 @@ interface TrialResult {
 }
 
 export const CompressPDF: React.FC = () => {
+  useI18n();
   const [files, setFiles] = useState<PDFFile[]>([]);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const [uploadWarning, setUploadWarning] = useState<string | null>(null);
@@ -127,12 +129,12 @@ export const CompressPDF: React.FC = () => {
     const skippedCount = selected.length - pdfFiles.length;
 
     if (pdfFiles.length === 0) {
-      setUploadWarning('Only PDF files are supported.');
+      setUploadWarning(t("compress-pdf.only.pdf.files.are.supported.87db25"));
       return;
     }
 
     setUploadWarning(skippedCount > 0
-      ? `${skippedCount} ${skippedCount === 1 ? 'file was' : 'files were'} skipped. Only PDF files are supported.`
+      ? t("compress-pdf.skipped.only.pdf.files.are.supported.ec7ff0", { count: skippedCount })
       : null
     );
 
@@ -227,7 +229,7 @@ export const CompressPDF: React.FC = () => {
     if (files.length === 0) return;
 
     const effectiveConfig = customConfig ?? config;
-    setStatus({ isProcessing: true, progress: 5, message: 'Compressing…' });
+    setStatus({ isProcessing: true, progress: 5, message: t("compress-pdf.compressing.b5a754") });
 
     try {
       const { compressPDFAdaptive } = await import('../../services/pdfBrowser');
@@ -263,6 +265,7 @@ export const CompressPDF: React.FC = () => {
         results.push({
           id: selectedFile.id,
           name: selectedFile.name,
+          outputStem: sanitizeFilenameStem(`compressed-${splitFilename(selectedFile.name).stem}`),
           originalSize: selectedFile.size,
           blob: new Blob([resultObj.data], { type: 'application/pdf' }),
           skipped,
@@ -273,25 +276,25 @@ export const CompressPDF: React.FC = () => {
       setStatus({ isProcessing: false, progress: 100, message: '' });
     } catch (error) {
       console.error(error);
-      const detail = error instanceof Error ? error.message : '';
+      const detail = error instanceof Error ? localizeError(error) : '';
       const message = /password|encrypted/i.test(detail)
-        ? 'This PDF is encrypted. Unlock it first.'
-        : 'Compression failed. Your original was not changed.';
+        ? t("compress-pdf.this.pdf.is.encrypted.unlock.it.first.7621b1")
+        : t("compress-pdf.compression.failed.your.original.was.not.changed.b7e5e0");
       setStatus({ isProcessing: false, progress: 0, message: '', error: message });
     }
   };
 
   /** Keep it: the only point at which anything is written. */
   const keepTrial = () => {
-    if (!trial) return;
+    if (!trial || trial.some(result => !result.skipped && !result.outputStem.trim())) return;
     for (const result of trial) {
       if (result.skipped) continue;
       recordSavings(result.originalSize, result.blob.size);
-      downloadBlob(result.blob, `compressed-${result.name}`);
+      downloadBlob(result.blob, `${result.outputStem.trim()}.pdf`);
     }
     setTrial(null);
     setFiles([]);
-    setStatus({ isProcessing: false, progress: 0, message: 'Saved' });
+    setStatus({ isProcessing: false, progress: 0, message: t("compress-pdf.saved.b5c120") });
   };
 
   /** Drop it. Nothing was ever written, so there is nothing to clean up. */
@@ -310,7 +313,7 @@ export const CompressPDF: React.FC = () => {
     : 0;
   const hasResults = Boolean(trial);
   const isSkipped = Boolean(trial && trial.every((result) => result.skipped));
-  const fileCountLabel = files.length === 1 ? '1 PDF' : `${files.length} PDFs`;
+  const fileCountLabel = t('format.pdfCount', { count: files.length });
   const processingProgress = Number.isFinite(status.progress)
     ? Math.max(0, Math.min(100, status.progress))
     : 0;
@@ -328,14 +331,14 @@ export const CompressPDF: React.FC = () => {
       <StatusToast status={status} />
 
       <div className="mb-3 sm:mb-6">
-        <h1 className="text-3xl font-bold text-[var(--text-primary)]">Compress PDF</h1>
-        <p className="mt-1 text-[var(--text-secondary)]">Make the file smaller, and see how it will look first.</p>
+        <h1 className="text-3xl font-bold text-[var(--text-primary)]">{t("compress-pdf.compress.pdf.932c3c")}</h1>
+        <p className="mt-1 text-[var(--text-secondary)]">{t("compress-pdf.make.the.file.smaller.and.see.how.ce9f74")}</p>
       </div>
 
       <AnimatePresence mode="wait">
         {files.length === 0 ? (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf,application/pdf" multiple label="Choose PDFs to compress" />
+            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf,application/pdf" multiple label={t("compress-pdf.choose.pdfs.to.compress.8399ff")} />
             {uploadWarning && (
               <div className="mt-3 flex items-start gap-2 rounded-[var(--radius-field)] border border-[var(--status-caution-text)] bg-[var(--status-caution-quiet)] px-3 py-2.5 text-sm font-medium text-[var(--status-caution-text)]">
                 <AlertTriangle aria-hidden size={18} className="mt-0.5 shrink-0" />
@@ -359,25 +362,25 @@ export const CompressPDF: React.FC = () => {
               >
                 <div className={`mb-2 flex items-center gap-2 font-bold ${isSkipped ? 'text-[var(--status-caution-text)]' : 'text-[var(--status-success-text)]'}`}>
                   {isSkipped ? <ShieldAlert size={18} /> : <CheckCircle2 size={18} />}
-                  {isSkipped ? 'Already as small as it gets' : 'Ready to save'}
+                  {isSkipped ? t("compress-pdf.already.as.small.as.it.gets.c4d3a1") : t("compress-pdf.ready.to.save.255249")}
                 </div>
 
                 {isSkipped ? (
-                  <p className="text-sm text-[var(--text-body)]">Compressing this file would have made it bigger, so it was left alone. Your original is unchanged.</p>
+                  <p className="text-sm text-[var(--text-body)]">{t("compress-pdf.compressing.this.file.would.have.made.it.346a00")}</p>
                 ) : (
                   <div className="flex items-center justify-between text-sm">
                     <div>
-                      <div className="type-caption text-[var(--text-tertiary)]">Original</div>
+                      <div className="type-caption text-[var(--text-tertiary)]">{t("compress-pdf.original.88d759")}</div>
                       <div className="tabular text-[var(--text-body)] line-through">{formatSize(trialOriginalTotal)}</div>
                     </div>
                     <div className="flex flex-col items-center px-4">
-                      <ArrowRight aria-hidden size={18} className="text-[var(--text-tertiary)]" />
+                      <ArrowRight aria-hidden size={18} className="rtl:rotate-180 text-[var(--text-tertiary)]" />
                       <span className="mt-1 rounded-[var(--radius-pill)] bg-[var(--status-success-quiet)] px-2 py-0.5 text-xs font-bold text-[var(--status-success-text)]">
-                        -{totalReduction}%
+                        {formatPercent(-totalReduction)}
                       </span>
                     </div>
-                    <div className="text-right">
-                      <div className="type-caption text-[var(--status-success-text)]">Compressed</div>
+                    <div className="text-end">
+                      <div className="type-caption text-[var(--status-success-text)]">{t("compress-pdf.compressed.e2d1ca")}</div>
                       <div className="tabular text-xl font-bold text-[var(--status-success-text)]">{formatSize(trialCompressedTotal)}</div>
                     </div>
                   </div>
@@ -385,23 +388,41 @@ export const CompressPDF: React.FC = () => {
 
                 {/* The file exists but is still only in memory. This is where it
                     is either written or dropped. */}
+                {!isSkipped && trial?.filter(result => !result.skipped).map(result => (
+                  <label key={result.id} className="mb-2 block text-sm font-medium text-[var(--text-body)]">
+                    <span>{t("output-center.file.name.3efed3")}{trial.length > 1 ? ` · ${result.name}` : ''}</span>
+                    <span className="mt-1 flex items-center rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] focus-within:ring-2 focus-within:ring-[var(--focus-ring)]">
+                      <input
+                        className="min-w-0 flex-1 bg-transparent px-3 py-2 text-[var(--text-primary)] outline-none"
+                        value={result.outputStem}
+                        maxLength={200}
+                        aria-describedby={`compress-extension-${result.id}`}
+                        autoComplete="off"
+                        spellCheck={false}
+                        onChange={event => setTrial(current => current?.map(item => item.id === result.id
+                          ? { ...item, outputStem: sanitizeFilenameStem(event.target.value) }
+                          : item) ?? null)}
+                      />
+                      <span id={`compress-extension-${result.id}`} className="pe-3 text-[var(--text-secondary)]">.pdf</span>
+                    </span>
+                  </label>
+                ))}
                 <div className="mt-3 flex flex-row gap-2">
                   {!isSkipped && (
                     <button
                       type="button"
                       onClick={keepTrial}
-                      className="chef-target chef-pressable flex flex-1 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 text-sm font-bold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)]"
+                      disabled={trial?.some(result => !result.skipped && !result.outputStem.trim())}
+                      className="chef-target chef-pressable flex flex-1 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 text-sm font-bold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-55"
                     >
-                      <CheckCircle2 aria-hidden size={18} /> Save
-                    </button>
+                      <CheckCircle2 aria-hidden size={18} />{t("compress-pdf.save.52453d")}</button>
                   )}
                   <button
                     type="button"
                     onClick={discardTrial}
                     className="chef-target chef-pressable flex flex-1 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-4 text-sm font-bold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]"
                   >
-                    <Trash2 aria-hidden size={18} /> Discard
-                  </button>
+                    <Trash2 aria-hidden size={18} />{t("compress-pdf.discard.cdbc8d")}</button>
                 </div>
               </div>
             )}
@@ -416,7 +437,7 @@ export const CompressPDF: React.FC = () => {
                     <div className="min-w-0">
                       <h2 className="text-sm font-semibold text-[var(--text-primary)]">{fileCountLabel}</h2>
                       <div className="type-caption tabular text-[var(--text-tertiary)]">
-                        {analysis.done ? formatSize(totalOriginalSize) : <span className="animate-pulse">Analysing…</span>}
+                        {analysis.done ? formatSize(totalOriginalSize) : <span className="animate-pulse">{t("compress-pdf.analysing.095f29")}</span>}
                       </div>
                     </div>
                   </div>
@@ -424,9 +445,7 @@ export const CompressPDF: React.FC = () => {
                     type="button"
                     onClick={reset}
                     className="chef-target ml-auto shrink-0 rounded-[var(--radius-control)] border border-[var(--status-danger-text)] px-3 text-sm font-semibold text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)]"
-                  >
-                    Clear
-                  </button>
+                  >{t("compress-pdf.clear.83b12c")}</button>
                 </div>
 
                 {files.length > 1 && (
@@ -439,7 +458,7 @@ export const CompressPDF: React.FC = () => {
                           type="button"
                           onClick={() => setFiles((current) => current.filter((file) => file.id !== selectedFile.id))}
                           className="chef-target inline-flex shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)]"
-                          aria-label={`Remove ${selectedFile.name}`}
+                          aria-label={t("compress-pdf.remove.9fc927", { v0: selectedFile.name })}
                         >
                           <X size={16} />
                         </button>
@@ -455,12 +474,9 @@ export const CompressPDF: React.FC = () => {
                   </div>
                 )}
 
-                {/* Quality only exists while pages are being re-rendered. Keeping
-                    the text means nothing here applies, so none of it is shown. */}
-                {!keepText && (
-                  <div className="mb-3">
+                <div className="mb-3">
                     <div className="mb-2 flex items-baseline justify-between gap-2">
-                      <h2 className="text-sm font-bold text-[var(--text-body)]">Quality</h2>
+                      <h2 className="text-sm font-bold text-[var(--text-body)]">{t("compress-pdf.quality.1b2c08")}</h2>
                       {/* The label alone. DPI is the one number that predicts
                           readability, and it is shown in the preview, where its
                           effect is actually visible. */}
@@ -470,25 +486,25 @@ export const CompressPDF: React.FC = () => {
                     </div>
 
                     <div className="rounded-[var(--radius-field)] border border-[var(--border-hairline)] p-3">
-                      <div className="mb-3 flex items-end justify-between gap-3">
+                      {!keepText && <div className="mb-3 flex items-end justify-between gap-3">
                         <div>
-                          <div className="type-caption text-[var(--text-tertiary)]">Actual</div>
+                          <div className="type-caption text-[var(--text-tertiary)]">{t("compress-pdf.actual.c40642")}</div>
                           <div className="tabular font-semibold text-[var(--text-body)]">{formatSize(totalOriginalSize)}</div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <div className="text-right">
-                            <div className="type-caption text-[var(--text-tertiary)]">Estimated</div>
+                          <div className="text-end">
+                            <div className="type-caption text-[var(--text-tertiary)]">{t("compress-pdf.estimated.b77459")}</div>
                             <div className={`tabular text-xl font-bold text-[var(--text-primary)] ${measuring ? 'opacity-60' : ''}`}>
-                              {measuredEstimate ? `~${formatSize(measuredEstimate)}` : '—'}
+                              {measuredEstimate ? t("compress-pdf..24577b", { v0: formatSize(measuredEstimate) }) : '—'}
                             </div>
                           </div>
                           {measuredEstimate ? (
                             <span className="rounded-[var(--radius-pill)] bg-[var(--accent-quiet)] px-2 py-0.5 text-xs font-bold text-[var(--accent-on-quiet)]">
-                              -{estimatedReduction}%
+                              {formatPercent(-estimatedReduction)}
                             </span>
                           ) : null}
                         </div>
-                      </div>
+                      </div>}
 
                       <ChefSlider
                         min={0}
@@ -496,7 +512,7 @@ export const CompressPDF: React.FC = () => {
                         step={1}
                         value={quality}
                         onChange={setQuality}
-                        ariaLabel="Compression quality"
+                        ariaLabel={t("compress-pdf.compression.quality.4038b0")}
                       />
 
                       <div className="mt-3 grid grid-cols-3 gap-2">
@@ -507,35 +523,33 @@ export const CompressPDF: React.FC = () => {
                             onClick={() => setQuality(preset.stop)}
                             disabled={status.isProcessing}
                             aria-pressed={preset.selected}
-                            className={`chef-pressable rounded-[var(--radius-control)] border px-2 py-2 text-left transition-colors disabled:opacity-55 ${
+                            className={`chef-pressable rounded-[var(--radius-control)] border px-2 py-2 text-start transition-colors disabled:opacity-55 ${
                               preset.selected
                                 ? 'border-[var(--accent-rest)] bg-[var(--accent-quiet)]'
                                 : 'border-[var(--border-strong)] hover:border-[var(--accent-rest)]'
                             }`}
                           >
                             <span className={`block text-sm font-semibold ${preset.selected ? 'text-[var(--accent-on-quiet)]' : 'text-[var(--text-primary)]'}`}>
-                              {preset.name}
+                              {qualityLabel(PRESET_DPI[preset.name])}
                             </span>
-                            <span className="tabular type-caption block text-[var(--text-secondary)]">
-                              {preset.size ? `~${formatSize(preset.size)}` : '…'}
-                            </span>
+                            {!keepText && <span className="tabular type-caption block text-[var(--text-secondary)]">
+                              {preset.size ? t("compress-pdf..24577b", { v0: formatSize(preset.size) }) : '…'}
+                            </span>}
                           </button>
                         ))}
                       </div>
                     </div>
                   </div>
-                )}
 
-                {/* The one lossy consequence in this tool, as one label. What it
-                    actually looks like is a tap away in the preview. */}
+                {/* Selectable text and forms remain in place while eligible embedded
+                    photos use the same quality setting. */}
                 <div className="mb-3">
                   <Switch
-                    label="Keep text selectable"
+                    label={t("compress-pdf.keep.text.selectable.89e827")}
                     checked={keepText}
                     disabled={status.isProcessing}
                     onChange={setKeepText}
                   />
-                  {keepText && <p className="type-caption mt-2 text-[var(--text-secondary)]">Optimizes the PDF structure while keeping text and pictures intact. Files that are already optimized may not get smaller.</p>}
                 </div>
               </>
             )}
@@ -565,8 +579,7 @@ export const CompressPDF: React.FC = () => {
                       disabled={!analysis.done || status.isProcessing}
                       className="chef-target chef-pressable flex items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-4 text-sm font-bold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)] disabled:opacity-55 sm:w-40"
                     >
-                      <Eye aria-hidden size={18} /> Preview
-                    </button>
+                      <Eye aria-hidden size={18} />{t("compress-pdf.preview.74b76f")}</button>
                   )}
 
                   <button
@@ -580,7 +593,7 @@ export const CompressPDF: React.FC = () => {
                     ) : (
                       <Layers aria-hidden size={18} />
                     )}
-                    <span>Compress</span>
+                    <span>{t("compress-pdf.compress.033fc0")}</span>
                   </button>
                 </div>
               ) : null}

@@ -121,7 +121,7 @@ export const InlineOptionRow: React.FC<{
   <div className={cx('flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 py-2.5', className)}>
     <div className="min-w-0">
       <span className="text-sm font-semibold text-[var(--text-primary)]">{label}</span>
-      {hint ? <span className="type-caption ml-2 text-[var(--text-tertiary)]">{hint}</span> : null}
+      {hint ? <span className="type-caption ms-2 text-[var(--text-tertiary)]">{hint}</span> : null}
     </div>
     <div className="min-w-0 shrink-0">{children}</div>
   </div>

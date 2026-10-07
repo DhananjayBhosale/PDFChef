@@ -8,7 +8,7 @@ import test from 'node:test';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const dist = resolve(root, 'dist');
-const DEPLOYMENT_CONTROL_URLS = new Set(['/_headers', '/_redirects']);
+const DEPLOYMENT_CONTROL_URLS = new Set(['/_headers', '/_redirects', '/_routes.json']);
 const walk = (directory: string): string[] => readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
   if (entry.name === '.DS_Store') return [];
   const path = resolve(directory, entry.name);

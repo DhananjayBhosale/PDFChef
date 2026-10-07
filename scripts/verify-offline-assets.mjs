@@ -48,7 +48,7 @@ const hasMagic = (bytes, magic) => magic.every((value, index) => bytes[index] ==
 
 const indexPath = resolve(dist, 'index.html');
 const serviceWorkerPath = resolve(dist, 'sw.js');
-const DEPLOYMENT_CONTROL_FILES = new Set(['_headers', '_redirects']);
+const DEPLOYMENT_CONTROL_FILES = new Set(['_headers', '_redirects', '_routes.json']);
 await requireFile(indexPath, 'dist/index.html');
 await requireFile(serviceWorkerPath, 'dist/sw.js');
 

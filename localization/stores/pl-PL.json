@@ -1,0 +1,52 @@
+{
+  "appLocale": "pl-PL",
+  "appleLocale": "pl",
+  "googleLocale": "pl-PL",
+  "apple": {
+    "name": "PDF Chef",
+    "subtitle": "Edytuj, łącz i kompresuj PDF",
+    "promotionalText": "Czytaj, edytuj i organizuj pliki PDF na swoim urządzeniu. Łącz pliki, zarządzaj stronami i dodawaj odręczny podpis.",
+    "description": "PDF Chef pomaga czytać, edytować, łączyć, dzielić, kompresować i podpisywać pliki PDF na Twoim urządzeniu.\n\nOrganizuj strony, dodawaj tekst i obrazy, umieszczaj odręczny podpis, dodawaj znaki wodne lub numerację stron oraz chroń pliki PDF hasłem. Konwertuj obsługiwane obrazy i dokumenty oraz wyodrębniaj tekst. Wyniki zależą od pliku źródłowego i wybranego narzędzia.\n\nStandardowe przetwarzanie plików PDF odbywa się na Twoim urządzeniu. Twoje dokumenty nie są przesyłane na serwer PDF Chef w celu przetwarzania. Narzędzia offline pozostają dostępne po załadowaniu ich zasobów.\n\nPDF Chef nie wymaga konta. Sprawdź wynik przed jego udostępnieniem lub wyeksportowaniem.\n\nW systemie iOS pierwszych pięć udanych zadań w każdym kroczącym siedmiodniowym okresie limitu to pełne zadania, które możesz zapisać, udostępnić i wyeksportować. Okres ten rozpoczyna się od pierwszego udanego zadania. Po pięciu zadaniach przetwarzanie i podgląd pozostają dostępne, lecz zapisywanie, udostępnianie i eksportowanie wymagają wersji Pro do czasu zresetowania limitu.\n\nPro Monthly odnawia się automatycznie do momentu anulowania. Pro Lifetime to zakup jednorazowy, a nie subskrypcja. Obie opcje obsługują Apple Family Sharing. Ceny i szczegóły zakupu wyświetlają się w aplikacji przed zakupem. Zakupy można przywrócić w Ustawieniach.\n\nTerms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+    "whatsNew": "Wersja {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Monthly",
+      "description": "Pełny eksport. Odnawia się do anulowania."
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Lifetime",
+      "description": "Pełny eksport. Zakup jednorazowy."
+    },
+    "screenshot": {
+      "1": "Narzędzia PDF w jednym miejscu",
+      "2": "Edytuj tekst i dodawaj obrazy",
+      "3": "Łącz pliki i organizuj strony",
+      "4": "Podgląd przed zapisaniem",
+      "5": "Dodaj swój odręczny podpis",
+      "6": "Pracuj na swoim urządzeniu"
+    },
+    "keywords": "dzielenie,skanowanie,podpis,konwersja,czytnik,znak wodny,hasło,odblokowanie"
+  },
+  "google": {
+    "name": "PDF Chef",
+    "shortDescription": "Edytuj, łącz, kompresuj i podpisuj pliki PDF na swoim urządzeniu.",
+    "fullDescription": "PDF Chef pomaga czytać, edytować, łączyć, dzielić, kompresować i podpisywać pliki PDF na Twoim urządzeniu.\n\nOrganizuj strony, dodawaj tekst i obrazy, umieszczaj odręczny podpis, dodawaj znaki wodne lub numerację stron oraz chroń pliki PDF hasłem. Konwertuj obsługiwane obrazy i dokumenty oraz wyodrębniaj tekst. Wyniki zależą od pliku źródłowego i wybranego narzędzia.\n\nStandardowe przetwarzanie plików PDF odbywa się na Twoim urządzeniu. Twoje dokumenty nie są przesyłane na serwer PDF Chef w celu przetwarzania. Narzędzia offline pozostają dostępne po załadowaniu ich zasobów.\n\nPDF Chef nie wymaga konta. Sprawdź wynik przed jego udostępnieniem lub wyeksportowaniem.",
+    "whatsNew": "Wersja {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Monthly",
+      "description": "Zapisuj, udostępniaj i eksportuj każdy wynik. Odnawia się co miesiąc do momentu anulowania.",
+      "benefit": "Zapisuj i udostępniaj każdy wynik"
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Lifetime",
+      "description": "Zapisuj, udostępniaj i eksportuj każdy wynik w ramach jednorazowego zakupu."
+    },
+    "screenshot": {
+      "1": "Narzędzia PDF w jednym miejscu",
+      "2": "Edytuj tekst i dodawaj obrazy",
+      "3": "Łącz pliki i organizuj strony",
+      "4": "Podgląd przed zapisaniem",
+      "5": "Dodaj swój odręczny podpis",
+      "6": "Pracuj na swoim urządzeniu"
+    }
+  }
+}

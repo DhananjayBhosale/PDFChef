@@ -1,0 +1,52 @@
+{
+  "appLocale": "fr-FR",
+  "appleLocale": "fr-FR",
+  "googleLocale": "fr-FR",
+  "apple": {
+    "name": "PDF Chef",
+    "subtitle": "Éditer, fusionner, compresser",
+    "promotionalText": "Lisez, modifiez et organisez des PDF sur votre appareil. Fusionnez des fichiers, gérez les pages et ajoutez une signature manuscrite.",
+    "description": "PDF Chef vous aide à lire, modifier, fusionner, diviser, compresser et signer des PDF sur votre appareil.\n\nOrganisez les pages, ajoutez du texte et des images, apposez une signature manuscrite, ajoutez des filigranes ou des numéros de page, et protégez vos PDF avec un mot de passe. Convertissez les images et documents pris en charge, et extrayez du texte. Les résultats dépendent du fichier source et de l'outil sélectionné.\n\nLe traitement normal des PDF s'effectue sur votre appareil. Vos documents ne sont pas envoyés sur un serveur PDF Chef pour leur traitement. Les outils hors ligne restent disponibles après le chargement de leurs ressources.\n\nPDF Chef ne nécessite aucun compte. Vérifiez votre résultat avant de le partager ou de l'exporter.\n\nSur iOS, les cinq premières tâches réussies de chaque période de quota glissante de sept jours sont des tâches complètes que vous pouvez enregistrer, partager et exporter. La période commence avec la première tâche réussie. Après cinq tâches, le traitement et l'aperçu restent disponibles, mais l'enregistrement, le partage et l'exportation nécessitent Pro jusqu'à la réinitialisation du quota.\n\nPro Mensuel se renouvelle automatiquement jusqu'à annulation. Pro À vie est un achat unique, pas un abonnement. Les deux options prennent en charge le partage familial Apple. Les prix et les détails d'achat s'affichent dans l'application avant l'achat. Restaurez les achats depuis les Réglages.\n\nTerms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+    "whatsNew": "Version {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Mensuel",
+      "description": "Exports complets. Renouvelé sauf annulation."
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro À vie",
+      "description": "Exports complets. Achat unique."
+    },
+    "screenshot": {
+      "1": "Tous vos outils PDF au même endroit",
+      "2": "Modifiez le texte et ajoutez des images",
+      "3": "Fusionnez des fichiers et organisez les pages",
+      "4": "Prévisualisez avant d'enregistrer",
+      "5": "Ajoutez votre signature manuscrite",
+      "6": "Travaillez sur votre appareil"
+    },
+    "keywords": "diviser,scanner,signer,convertir,lecteur,filigrane,mot de passe,déverrouiller"
+  },
+  "google": {
+    "name": "PDF Chef",
+    "shortDescription": "Modifiez, fusionnez, compressez et signez des PDF sur votre appareil.",
+    "fullDescription": "PDF Chef vous aide à lire, modifier, fusionner, diviser, compresser et signer des PDF sur votre appareil.\n\nOrganisez les pages, ajoutez du texte et des images, apposez une signature manuscrite, ajoutez des filigranes ou des numéros de page, et protégez vos PDF avec un mot de passe. Convertissez les images et documents pris en charge, et extrayez du texte. Les résultats dépendent du fichier source et de l'outil sélectionné.\n\nLe traitement normal des PDF s'effectue sur votre appareil. Vos documents ne sont pas envoyés sur un serveur PDF Chef pour leur traitement. Les outils hors ligne restent disponibles après le chargement de leurs ressources.\n\nPDF Chef ne nécessite aucun compte. Vérifiez votre résultat avant de le partager ou de l'exporter.",
+    "whatsNew": "Version {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Mensuel",
+      "description": "Enregistrez, partagez et exportez chaque résultat. Renouvelé chaque mois jusqu'à annulation.",
+      "benefit": "Enregistrez et partagez chaque résultat"
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro À vie",
+      "description": "Enregistrez, partagez et exportez chaque résultat avec un achat unique."
+    },
+    "screenshot": {
+      "1": "Tous vos outils PDF au même endroit",
+      "2": "Modifiez le texte et ajoutez des images",
+      "3": "Fusionnez des fichiers et organisez les pages",
+      "4": "Prévisualisez avant d'enregistrer",
+      "5": "Ajoutez votre signature manuscrite",
+      "6": "Travaillez sur votre appareil"
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import { downloadBlob } from '../../services/pdfShared.ts';
+import { downloadBlob, type OutputReadyRecord } from '../../services/pdfShared.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type {
@@ -509,8 +509,9 @@ test('T907: each unavailable native fact stays unadvertised independently', () =
 test('direct picker mapping is consumed before the full batch is acknowledged', async () => {
   const calls: string[] = [];
   const plugin = native();
-  plugin.pickDocuments = async () => {
+  plugin.pickDocuments = async options => {
     calls.push('pick');
+    assert.equal(options.maximumItems, 1);
     return { status: 'accepted', batchRef, items: [pendingItem] };
   };
   plugin.acknowledgePendingImports = async ({ refs }) => {
@@ -521,6 +522,7 @@ test('direct picker mapping is consumed before the full batch is acknowledged', 
   const platform = createAndroidWorkspacePlatform(base(), new AndroidDocumentsClient(plugin));
   const imports = await platform.documentImport!.importDocuments({
     acceptedMimeTypes: ['application/pdf'],
+    maximumItems: 1,
   });
   assert.deepEqual(calls, ['pick', 'ack']);
   assert.equal(imports[0].document.ref, ref);
@@ -788,9 +790,10 @@ const outputHarness = () => {
   const chunks: Uint8Array[] = [];
   const transientFlags: boolean[] = [];
   let mimeType = 'application/pdf';
+  let displayName: string | null = null;
   let owned = false;
   plugin.beginWrite = async options => {
-    calls.push('begin'); mimeType = options.mimeType;
+    calls.push('begin'); mimeType = options.mimeType; displayName = options.displayName ?? null;
     return { sessionRef: `w1_${'C'.repeat(22)}`, maximumChunkBytes: 524288 };
   };
   plugin.appendWrite = async ({ data }) => {
@@ -800,7 +803,7 @@ const outputHarness = () => {
   plugin.finishWrite = async options => {
     transientFlags.push(options.transient === true);
     calls.push('finish'); owned = true;
-    return { item: { ...pendingItem, mimeType, pending: false } };
+    return { item: { ...pendingItem, displayName, mimeType, pending: false } };
   };
   plugin.exportItem = async options => {
     calls.push(`export:${options.mimeType}`); return { status: 'completed' };
@@ -808,9 +811,13 @@ const outputHarness = () => {
   plugin.shareItem = async options => {
     calls.push(`share:${options.mimeType}`); return { status: 'completed' };
   };
+  plugin.renameItem = async options => {
+    calls.push(`rename:${options.displayName}`); displayName = options.displayName;
+    return { status: 'completed' };
+  };
   plugin.deleteOwned = async () => { calls.push('delete'); owned = false; return { deleted: true }; };
   plugin.abortWrite = async () => { calls.push('abort'); return { aborted: true }; };
-  plugin.listOwned = async () => ({ items: owned ? [{ ...pendingItem, mimeType, pending: false }] : [] });
+  plugin.listOwned = async () => ({ items: owned ? [{ ...pendingItem, displayName, mimeType, pending: false }] : [] });
   return { plugin, calls, chunks, transientFlags, platform: androidPlatform(plugin) };
 };
 
@@ -825,6 +832,14 @@ test('fresh Android save and share deliver all generated types through native st
     assert.deepEqual(await platform.records.list(), []);
     assert.deepEqual(transientFlags, [true, true]);
   }
+});
+
+test('fresh Android Save keeps a generated PDF in Recent without exporting it', async () => {
+  const { platform, calls, transientFlags } = outputHarness();
+  await platform.keepFresh!({ blob: new Blob(['output']), name: 'kept.pdf', mimeType: 'application/pdf' });
+  assert.deepEqual(calls, ['begin', 'finish']);
+  assert.deepEqual(transientFlags, [false]);
+  assert.equal((await platform.records.list()).length, 1);
 });
 
 test('fresh Android delivery preserves native failures and cleans up incomplete writes and staging', async () => {
@@ -855,22 +870,30 @@ test('Android automatic output delivery honors all history and download settings
     for (const keepLocalHistory of [false, true]) {
       for (const autoDownload of [false, true]) {
         const { calls, platform, transientFlags } = outputHarness();
-        let announced = false;
+        let announced: OutputReadyRecord | null = null;
         Object.defineProperty(globalThis, 'window', { configurable: true, value: {
           location: { pathname: '/compress' },
           localStorage: { getItem: () => JSON.stringify({ keepLocalHistory, autoDownload }) },
-          dispatchEvent: () => { announced = true; return true; },
+          dispatchEvent: (event: CustomEvent<OutputReadyRecord>) => {
+            announced = event.detail;
+            return true;
+          },
         } });
         downloadBlob(new Blob(['output']), 'result.pdf', 'application/pdf');
         for (let attempt = 0; attempt < 100 && !announced; attempt++) {
           await new Promise(resolve => setTimeout(resolve, 0));
         }
-        assert.equal(announced, true);
+        assert.ok(announced);
         assert.equal(calls.includes('begin'), keepLocalHistory || autoDownload);
         assert.equal(calls.includes('export:application/pdf'), autoDownload);
         assert.equal(calls.includes('delete'), !keepLocalHistory && autoDownload);
         assert.equal((await platform.records.list()).length, keepLocalHistory ? 1 : 0);
         assert.deepEqual(transientFlags, keepLocalHistory || autoDownload ? [!keepLocalHistory] : []);
+        assert.equal(Boolean(announced.recentRecord), keepLocalHistory);
+        if (announced.recentRecord) {
+          await platform.rename!(announced.recentRecord, 'Renamed result.pdf');
+          assert.equal(calls.includes('rename:Renamed result.pdf'), true);
+        }
       }
     }
   } finally {

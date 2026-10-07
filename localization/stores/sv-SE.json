@@ -1,0 +1,52 @@
+{
+  "appLocale": "sv-SE",
+  "appleLocale": "sv",
+  "googleLocale": "sv-SE",
+  "apple": {
+    "name": "PDF Chef",
+    "subtitle": "Redigera, slå ihop, komprimera",
+    "promotionalText": "Läs, redigera och organisera PDF-filer på din enhet. Sammanfoga filer, hantera sidor och lägg till en handskriven signatur.",
+    "description": "PDF Chef hjälper dig att läsa, redigera, sammanfoga, dela, komprimera och signera PDF-filer på din enhet.\n\nOrganisera sidor, lägg till text och bilder, placera en handskriven signatur, lägg till vattenstämplar eller sidnummer och skydda PDF-filer med ett lösenord. Konvertera bilder och dokument som stöds och extrahera text. Resultatet beror på källfilen och det valda verktyget.\n\nNormal PDF-bearbetning sker på din enhet. Dina dokument laddas inte upp till någon PDF Chef-server för bearbetning. Offlineverktyg förblir tillgängliga efter att deras resurser har lästs in.\n\nPDF Chef kräver inget konto. Granska ditt resultat innan du delar eller exporterar det.\n\nPå iOS är de första fem lyckade jobben under varje rullande sjudagarsperiod med kvot fullständiga jobb som du kan spara, dela och exportera. Perioden börjar med det första lyckade jobbet. Efter fem jobb förblir bearbetning och förhandsgranskning tillgängliga, men att spara, dela och exportera kräver Pro tills kvoten återställs.\n\nPro Månadsvis förnyas automatiskt tills det sägs upp. Pro Livstid är ett engångsköp, inte en prenumeration. Båda alternativen stöder Apple Familjedelning. Priser och köpinformation visas i appen innan du köper. Återställ köp i Inställningar.\n\nTerms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+    "whatsNew": "Version {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Månadsvis",
+      "description": "Full export. Förnyas tills det sägs upp."
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Livstid",
+      "description": "Full export. Engångsköp."
+    },
+    "screenshot": {
+      "1": "Dina PDF-verktyg på ett ställe",
+      "2": "Redigera text och lägg till bilder",
+      "3": "Sammanfoga filer och organisera sidor",
+      "4": "Förhandsgranska innan du sparar",
+      "5": "Lägg till din handskrivna signatur",
+      "6": "Arbeta på din enhet"
+    },
+    "keywords": "dela,skanna,signera,konvertera,läsare,vattenstämpel,lösenord,lås upp,rotera"
+  },
+  "google": {
+    "name": "PDF Chef",
+    "shortDescription": "Redigera, sammanfoga, komprimera och signera PDF-filer på din enhet.",
+    "fullDescription": "PDF Chef hjälper dig att läsa, redigera, sammanfoga, dela, komprimera och signera PDF-filer på din enhet.\n\nOrganisera sidor, lägg till text och bilder, placera en handskriven signatur, lägg till vattenstämplar eller sidnummer och skydda PDF-filer med ett lösenord. Konvertera bilder och dokument som stöds och extrahera text. Resultatet beror på källfilen och det valda verktyget.\n\nNormal PDF-bearbetning sker på din enhet. Dina dokument laddas inte upp till någon PDF Chef-server för bearbetning. Offlineverktyg förblir tillgängliga efter att deras resurser har lästs in.\n\nPDF Chef kräver inget konto. Granska ditt resultat innan du delar eller exporterar det.",
+    "whatsNew": "Version {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Månadsvis",
+      "description": "Spara, dela och exportera alla resultat. Förnyas månadsvis tills det sägs upp.",
+      "benefit": "Spara och dela alla resultat"
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Livstid",
+      "description": "Spara, dela och exportera alla resultat med ett engångsköp."
+    },
+    "screenshot": {
+      "1": "Dina PDF-verktyg på ett ställe",
+      "2": "Redigera text och lägg till bilder",
+      "3": "Sammanfoga filer och organisera sidor",
+      "4": "Förhandsgranska innan du sparar",
+      "5": "Lägg till din handskrivna signatur",
+      "6": "Arbeta på din enhet"
+    }
+  }
+}

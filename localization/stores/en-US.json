@@ -1,0 +1,52 @@
+{
+  "appLocale": "en-US",
+  "appleLocale": "en-US",
+  "googleLocale": "en-US",
+  "apple": {
+    "name": "PDF Chef",
+    "subtitle": "Edit, Merge & Compress PDFs",
+    "promotionalText": "Read, edit and organize PDFs on your device. Merge files, manage pages and add a handwritten signature.",
+    "description": "PDF Chef helps you read, edit, merge, split, compress and sign PDFs on your device.\n\nOrganize pages, add text and images, place a handwritten signature, add watermarks or page numbers, and protect PDFs with a password. Convert supported images and documents, and extract text. Results depend on the source file and the selected tool.\n\nNormal PDF processing runs on your device. Your documents are not uploaded to a PDF Chef server for processing. Offline tools remain available after their assets have loaded.\n\nPDF Chef does not require an account. Review your result before sharing or exporting it.\n\nOn iOS, the first five successful jobs in each rolling seven-day allowance period are complete jobs that you can save, share and export. The period starts with the first successful job. After five jobs, processing and preview remain available, but saving, sharing and exporting require Pro until the allowance resets.\n\nPro Monthly renews automatically until canceled. Pro Lifetime is a one-time purchase, not a subscription. Both options support Apple Family Sharing. Prices and purchase details appear in the app before you buy. Restore purchases from Settings.\n\nTerms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+    "whatsNew": "Version {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Monthly",
+      "description": "Full exports. Renews until canceled."
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Lifetime",
+      "description": "Full exports. One-time purchase."
+    },
+    "screenshot": {
+      "1": "Your PDF tools in one place",
+      "2": "Edit text and add images",
+      "3": "Merge files and organize pages",
+      "4": "Preview before you save",
+      "5": "Add your handwritten signature",
+      "6": "Work on your device"
+    },
+    "keywords": "split,scan,sign,convert,reader,watermark,password,unlock,rotate,extract,ocr,fill"
+  },
+  "google": {
+    "name": "PDF Chef",
+    "shortDescription": "Edit, merge, compress and sign PDFs on your device.",
+    "fullDescription": "PDF Chef helps you read, edit, merge, split, compress and sign PDFs on your device.\n\nOrganize pages, add text and images, place a handwritten signature, add watermarks or page numbers, and protect PDFs with a password. Convert supported images and documents, and extract text. Results depend on the source file and the selected tool.\n\nNormal PDF processing runs on your device. Your documents are not uploaded to a PDF Chef server for processing. Offline tools remain available after their assets have loaded.\n\nPDF Chef does not require an account. Review your result before sharing or exporting it.",
+    "whatsNew": "Version {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Monthly",
+      "description": "Save, share and export every result. Renews monthly until canceled.",
+      "benefit": "Save and share every result"
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Lifetime",
+      "description": "Save, share and export every result with a one-time purchase."
+    },
+    "screenshot": {
+      "1": "Your PDF tools in one place",
+      "2": "Edit text and add images",
+      "3": "Merge files and organize pages",
+      "4": "Preview before you save",
+      "5": "Add your handwritten signature",
+      "6": "Work on your device"
+    }
+  }
+}

@@ -1,3 +1,6 @@
+import { LocalizedError } from './i18n/errors.ts';
+import english from './i18n/en-US.ts';
+import { t } from './i18n/core.ts';
 /**
  * Browser ports of the Android app's option parsing, clamping and layout maths, so the same
  * input produces the same output on both surfaces.
@@ -71,15 +74,15 @@ export const resolvePageSelection = (
   totalPages: number,
   label: string,
 ): number[] => {
-  if (selectedPages.length === 0) throw new Error(`${label} must include at least one page.`);
+  if (selectedPages.length === 0) throw new LocalizedError("android-parity.must.include.at.least.one.page.7d294c", { v0: label });
   const resolved: number[] = [];
   for (const page of selectedPages) {
     if (!(page >= 1 && page <= totalPages)) {
-      throw new Error(`Page ${page} is out of range (1-${totalPages}).`);
+      throw new LocalizedError("android-parity.page.is.out.of.range.1.2ceeda", { v0: page, v1: totalPages });
     }
     if (!resolved.includes(page - 1)) resolved.push(page - 1);
   }
-  if (resolved.length === 0) throw new Error(`${label} must include at least one page.`);
+  if (resolved.length === 0) throw new LocalizedError("android-parity.must.include.at.least.one.page.7d294c", { v0: label });
   return resolved;
 };
 
@@ -97,18 +100,18 @@ export const resolveOptionalPageSelection = (
 
 /** `resolvePageOrder` in `processors/PdfToolProcessorSupport.kt`. Takes 1-based, returns 0-based. */
 export const resolvePageOrder = (pageOrder: number[], totalPages: number): number[] => {
-  if (pageOrder.length === 0) throw new Error('Page order is required. Example: 3,1,2');
+  if (pageOrder.length === 0) throw new LocalizedError("android-parity.page.order.is.required.example.3.1.2034af");
   const order = pageOrder.map((page) => {
     if (!(page >= 1 && page <= totalPages)) {
-      throw new Error(`Page ${page} is out of range (1-${totalPages}).`);
+      throw new LocalizedError("android-parity.page.is.out.of.range.1.2ceeda", { v0: page, v1: totalPages });
     }
     return page - 1;
   });
   if (order.length !== totalPages) {
-    throw new Error(`Order must include all pages exactly once (total ${totalPages} pages).`);
+    throw new LocalizedError("android-parity.order.must.include.all.pages.exactly.once.1b6db3", { v0: totalPages });
   }
   if (new Set(order).size !== totalPages) {
-    throw new Error('Duplicate pages found in order. Each page must appear once.');
+    throw new LocalizedError("android-parity.duplicate.pages.found.in.order.each.page.4ba5e3");
   }
   return order;
 };
@@ -416,12 +419,12 @@ export const resolvePageNumberRange = (
   const start = startPage ?? 1;
   const end = endPage ?? totalPages;
   if (!(start >= 1 && start <= totalPages)) {
-    throw new Error(`Start page ${start} is out of range (1-${totalPages}).`);
+    throw new LocalizedError("android-parity.start.page.is.out.of.range.1.dea5c9", { v0: start, v1: totalPages });
   }
   if (!(end >= 1 && end <= totalPages)) {
-    throw new Error(`End page ${end} is out of range (1-${totalPages}).`);
+    throw new LocalizedError("android-parity.end.page.is.out.of.range.1.927fe9", { v0: end, v1: totalPages });
   }
-  if (start > end) throw new Error('Start page must be less than or equal to end page.');
+  if (start > end) throw new LocalizedError("android-parity.start.page.must.be.less.than.or.28c57b");
   return { startPage: start, endPage: end };
 };
 
@@ -566,9 +569,9 @@ export const compressionQualityForLevel = (level: 'extreme' | 'recommended' | 'l
 /** `compressionQualityLabel`. */
 export const compressionQualityLabel = (quality: number): string => {
   const normalized = clamp(quality, 0, 1);
-  if (Math.abs(normalized - 0) <= 0.08) return 'Low';
-  if (Math.abs(normalized - 0.5) <= 0.08) return 'Medium';
-  if (Math.abs(normalized - 1) <= 0.08) return 'High';
+  if (Math.abs(normalized - 0) <= 0.08) return t("android-parity.low.f793de");
+  if (Math.abs(normalized - 0.5) <= 0.08) return t("android-parity.medium.8e588c");
+  if (Math.abs(normalized - 1) <= 0.08) return t("android-parity.high.c4ebc6");
   return normalized < 0.5 ? 'Low-Medium' : 'Medium-High';
 };
 
@@ -649,18 +652,18 @@ export const imageExportExtension = (mimeType: string): 'png' | 'webp' | 'jpg' =
 // ---------------------------------------------------------------------------
 
 /** `ProtectPdfToolProcessor`. */
-export const PASSWORD_REQUIRED_MESSAGE = 'Password is required to protect a PDF.';
-export const PASSWORD_TOO_SHORT_MESSAGE = 'Password must be at least 4 characters.';
+export const PASSWORD_REQUIRED_MESSAGE = english["android-parity.password.is.required.to.protect.a.pdf.5153a4"];
+export const PASSWORD_TOO_SHORT_MESSAGE = english["android-parity.password.must.be.at.least.4.characters.cf116c"];
 export const MIN_PROTECT_PASSWORD_LENGTH = 4;
 
 /** `UnlockPdfToolProcessor`. */
-export const UNLOCK_PASSWORD_REQUIRED_MESSAGE = 'Password is required to unlock the PDF.';
-export const UNLOCK_FAILED_MESSAGE = 'Unable to unlock PDF. Check password and try again.';
+export const UNLOCK_PASSWORD_REQUIRED_MESSAGE = english["android-parity.password.is.required.to.unlock.the.pdf.be2e2e"];
+export const UNLOCK_FAILED_MESSAGE = english["android-parity.unable.to.unlock.pdf.check.password.and.5aefc8"];
 
 /** `DeletePagesToolProcessor`. */
-export const DELETE_ALL_PAGES_MESSAGE = 'You cannot delete all pages.';
+export const DELETE_ALL_PAGES_MESSAGE = english["android-parity.you.cannot.delete.all.pages.58dee9"];
 export const MAX_DELETE_PAGES_INPUT_BYTES = 128 * 1024 * 1024;
 export const DELETE_PAGES_TOO_LARGE_MESSAGE =
-  'This PDF is too big to remove pages from on a phone. Try it on a computer, or split it into smaller files first.';
+  english["android-parity.this.pdf.is.too.big.to.remove.b67882"];
 
-export const NO_PAGES_MESSAGE = 'Selected PDF has no pages.';
+export const NO_PAGES_MESSAGE = english["android-parity.selected.pdf.has.no.pages.3882f9"];

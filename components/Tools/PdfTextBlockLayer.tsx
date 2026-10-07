@@ -1,6 +1,9 @@
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { planBlockEdit } from '../../services/pdfBlockEditPlanning';
+import { planBlockEdit, type StyledSegment } from '../../services/pdfBlockEditPlanning';
+export type { StyledSegment } from '../../services/pdfBlockEditPlanning';
 import type { PdfTextAlign, PdfTextBlock, PdfTextLine } from '../../services/pdfTextBlocks';
 import { capturePdfFocusAnchor, pdfCaretScroll, pdfFocusAnchorScroll, type PdfFocusAnchor } from '../../services/pdfEditingFocus';
 import { normalizeParagraphLineBreaks } from '../../services/pdfParagraphLayout';
@@ -132,7 +135,7 @@ export const useResolvedBlocks = (
         cssWeight: '400',
         cssStyle: 'normal',
         klass: 'sans-serif' as const,
-        reason: 'this run has no font information',
+        reason: t('font.missingInformation'),
         missingGlyphs: [],
       };
 
@@ -209,12 +212,6 @@ const readBlockText = (element: HTMLElement, allowNonBreakingSpace: boolean) => 
   return allowNonBreakingSpace ? text : text.replace(/\u00a0/g, ' ');
 };
 
-/** A stretch of paragraph text that is drawn with one face. */
-export interface StyledSegment {
-  text: string;
-  fontKey: string;
-}
-
 /**
  * Write a paragraph's runs into the editable, one span per run.
  *
@@ -241,6 +238,7 @@ const writeBlockContent = (
       const span = document.createElement('span');
       span.textContent = run.text;
       span.dataset.font = run.fontKey;
+      span.dataset.fontSize = String(run.fontSize);
       if (fits) {
         span.dataset.pdfLine = String(lineIndex);
         span.dataset.pdfRun = String(runIndex);
@@ -272,9 +270,10 @@ export const readStyledSegments = (
   element: HTMLElement,
   fallbackKey: string,
   allowNonBreakingSpace = true,
+  fallbackFontSize?: number,
 ): StyledSegment[][] => {
   const lines: StyledSegment[][] = [[]];
-  const append = (raw: string, fontKey: string) => {
+  const append = (raw: string, fontKey: string, fontSize?: number) => {
     const normalized = normalizeParagraphLineBreaks(raw);
     const text = allowNonBreakingSpace ? normalized : normalized.replace(/\u00a0/g, ' ');
     if (!text) return;
@@ -283,14 +282,14 @@ export const readStyledSegments = (
       if (!part) return;
       const current = lines[lines.length - 1];
       const last = current[current.length - 1];
-      if (last && last.fontKey === fontKey) last.text += part;
-      else current.push({ text: part, fontKey });
+      if (last && last.fontKey === fontKey && last.fontSize === fontSize) last.text += part;
+      else current.push({ text: part, fontKey, fontSize });
     });
   };
 
-  const walk = (node: Node, inheritedKey: string) => {
+  const walk = (node: Node, inheritedKey: string, inheritedSize?: number) => {
     if (node.nodeType === Node.TEXT_NODE) {
-      append(node.textContent ?? '', inheritedKey);
+      append(node.textContent ?? '', inheritedKey, inheritedSize);
       return;
     }
     if (!(node instanceof HTMLElement)) return;
@@ -299,10 +298,11 @@ export const readStyledSegments = (
       return;
     }
     const key = node.dataset.font || inheritedKey;
-    node.childNodes.forEach((child) => walk(child, key));
+    const size = Number(node.dataset.fontSize);
+    node.childNodes.forEach((child) => walk(child, key, size > 0 ? size : inheritedSize));
   };
 
-  element.childNodes.forEach((child) => walk(child, fallbackKey));
+  element.childNodes.forEach((child) => walk(child, fallbackKey, fallbackFontSize));
   // Remove exactly one caret sentinel, never the intentional blank lines before it.
   if (lines.length > 1 && lines[lines.length - 1].length === 0) lines.pop();
   return lines;
@@ -319,6 +319,7 @@ const BlockEditor: React.FC<{
   onChange: (blockId: string, text: string, segments: StyledSegment[][]) => void;
   onBeginChange: (blockId: string) => void;
 }> = ({ resolved, edit, preview, isActive, displayScale, enabled, onActivate, onChange, onBeginChange }) => {
+  useI18n();
   const { block, font, fontsByKey, runFits, overlayAlign, hitPadding, stackOrder } = resolved;
   const editableRef = useRef<HTMLDivElement>(null);
   const outlineRef = useRef<HTMLDivElement>(null);
@@ -411,7 +412,7 @@ const BlockEditor: React.FC<{
         .map((segments) => ({
           v: 0, u0: 0, u1: 0, fontSize: block.fontSize,
           runs: segments.map((segment) => ({
-            ...segment, fontSize: block.fontSize, u0: 0, u1: 0, itemIndex: -1,
+            ...segment, fontSize: segment.fontSize ?? block.fontSize, u0: 0, u1: 0, itemIndex: -1,
             charStart: 0, charEnd: segment.text.length,
           })),
           text: segments.map((segment) => segment.text).join(''),
@@ -425,7 +426,7 @@ const BlockEditor: React.FC<{
     }
     if (!externalChange) {
       // The discarded wrapper may have been the only record of an edited bold/italic run.
-      onChange(block.id, text, readStyledSegments(element, block.fontKey, block.text.includes('\u00a0')));
+      onChange(block.id, text, readStyledSegments(element, block.fontKey, block.text.includes('\u00a0'), block.fontSize));
     }
   }, [block, text, edit?.segments, composing, onChange]);
 
@@ -553,7 +554,7 @@ const BlockEditor: React.FC<{
     const keepsNonBreakingSpace = block.text.includes('\u00a0');
     const next = readBlockText(element, keepsNonBreakingSpace);
     committedText.current = next;
-    onChange(block.id, next, readStyledSegments(element, block.fontKey, keepsNonBreakingSpace));
+    onChange(block.id, next, readStyledSegments(element, block.fontKey, keepsNonBreakingSpace, block.fontSize));
   }, [block, onBeginChange, onChange]);
 
   return (
@@ -612,7 +613,7 @@ const BlockEditor: React.FC<{
         data-dirty={isDirty ? 'true' : 'false'}
         role="textbox"
         aria-multiline="true"
-        aria-label={`Paragraph on page ${block.pageIndex + 1}: ${block.text.slice(0, 80)}`}
+        aria-label={t("pdf-text-block-layer.paragraph.on.page.b6bd50", { v0: block.pageIndex + 1, v1: block.text.slice(0, 80) })}
         contentEditable={enabled ? 'plaintext-only' : false}
         suppressContentEditableWarning
         spellCheck={false}
@@ -701,9 +702,7 @@ const BlockEditor: React.FC<{
       )}
       {focused && extendsPastWidth && createPortal(
         <div ref={overflowRef} role="status" data-testid="pdf-block-overflow" className="fixed rounded bg-amber-50 px-2 py-1 text-sm text-amber-950"
-          style={{ zIndex: PARAGRAPH_ACTIVE_LAYER, visibility: 'hidden', pointerEvents: 'none' }}>
-          Text extends beyond its original space. Press Enter for a new line, or shorten it to avoid overlap.
-        </div>,
+          style={{ zIndex: PARAGRAPH_ACTIVE_LAYER, visibility: 'hidden', pointerEvents: 'none' }}>{t("pdf-text-block-layer.text.extends.beyond.its.original.space.press.a351d0")}</div>,
         document.body,
       )}
       {showPreview && currentPreview && (
@@ -741,6 +740,7 @@ export const PdfTextBlockLayer: React.FC<Props> = ({
   onChange,
   onBeginChange,
 }) => {
+  useI18n();
   const resolvedBlocks = useResolvedBlocks(blocks, fonts, edits, coarsePointer);
   const stacked = useMemo(() => {
     const byArea = [...resolvedBlocks].sort((first, second) => second.area - first.area);

@@ -1,0 +1,150 @@
+{
+  "checkedOn": "2026-09-25",
+  "method": "Localized high-intent terms based on current PDF-tool terminology and the app's measured storefront ranking baseline. Subtitle terms prioritize edit, merge, and compress; keyword fields avoid those duplicates and target distinct supported functions. These are relevance targets, not search-volume or ranking guarantees. No competitor names are used.",
+  "locales": {
+    "en-US": {
+      "keywords": "split,scan,sign,convert,reader,watermark,password,unlock,rotate,extract,ocr,fill",
+      "sources": [
+        "https://www.adobe.com/acrobat/online/merge-pdf.html"
+      ]
+    },
+    "de-DE": {
+      "keywords": "komprimieren,teilen,scannen,signieren,konvertieren,reader,wasserzeichen,passwort",
+      "sources": [
+        "https://helpx.adobe.com/de/acrobat/web/edit-pdfs/organize-documents/combine-files.html"
+      ]
+    },
+    "fr-FR": {
+      "keywords": "diviser,scanner,signer,convertir,lecteur,filigrane,mot de passe,déverrouiller",
+      "sources": [
+        "https://www.adobe.com/fr/acrobat/online/merge-pdf.html"
+      ]
+    },
+    "fr-CA": {
+      "keywords": "diviser,numériser,signer,convertir,lecteur,filigrane,mot de passe,déverrouiller",
+      "sources": [
+        "https://helpx.adobe.com/ca_fr/acrobat/desktop/edit-documents/combine-files/combine-files.html"
+      ]
+    },
+    "ja-JP": {
+      "keywords": "分割,スキャン,署名,変換,閲覧,透かし,パスワード,解除",
+      "sources": [
+        "https://www.adobe.com/jp/acrobat/online/merge-pdf.html"
+      ]
+    },
+    "zh-Hans": {
+      "keywords": "拆分,扫描,签名,转换,阅读,水印,密码,解锁,旋转,提取",
+      "sources": [
+        "https://helpx.adobe.com/cn/acrobat/web/edit-pdfs/organize-documents/combine-files.html"
+      ]
+    },
+    "zh-Hant": {
+      "keywords": "分割,掃描,簽名,轉換,閱讀,浮水印,密碼,解鎖,旋轉,擷取",
+      "sources": [
+        "https://www.adobe.com/tw/acrobat/online/merge-pdf.html"
+      ]
+    },
+    "pt-BR": {
+      "keywords": "dividir,digitalizar,assinar,converter,leitor,marca d'água,senha,desbloquear,girar",
+      "sources": [
+        "https://helpx.adobe.com/br/acrobat/web/edit-pdfs/organize-documents/combine-files.html"
+      ]
+    },
+    "pt-PT": {
+      "keywords": "dividir,digitalizar,assinar,converter,leitor,marca de água,palavra-passe,desbloquear",
+      "sources": [
+        "https://www.adobe.com/pt/acrobat/online/merge-pdf.html"
+      ]
+    },
+    "ko-KR": {
+      "keywords": "분할,스캔,서명,변환,리더,워터마크,비밀번호,잠금해제",
+      "sources": [
+        "https://www.adobe.com/kr/acrobat/online.html"
+      ]
+    },
+    "es-ES": {
+      "keywords": "dividir,escanear,firmar,convertir,lector,marca de agua,contraseña,desbloquear,rotar",
+      "sources": [
+        "https://www.adobe.com/es/acrobat/online/merge-pdf.html"
+      ]
+    },
+    "es-419": {
+      "keywords": "dividir,escanear,firmar,convertir,lector,marca de agua,contraseña,desbloquear,rotar",
+      "sources": [
+        "https://blog.adobe.com/es/publish/2023/01/18/facilita-el-trabajo-en-equipo-al-combinar-archivos-pdf"
+      ]
+    },
+    "it-IT": {
+      "keywords": "dividere,scansionare,firmare,convertire,lettore,filigrana,password,sbloccare,ruotare",
+      "sources": [
+        "https://helpx.adobe.com/it/acrobat/web/edit-pdfs/organize-documents/combine-files.html"
+      ]
+    },
+    "nl-NL": {
+      "keywords": "splitsen,scannen,ondertekenen,converteren,lezer,watermerk,wachtwoord,ontgrendelen",
+      "sources": [
+        "https://www.adobe.com/nl/acrobat/online/merge-pdf.html"
+      ]
+    },
+    "hi-IN": {
+      "keywords": "split,scan,sign,convert,reader,watermark,password,unlock,rotate,ocr",
+      "sources": [
+        "https://www.ilovepdf.com/hi"
+      ]
+    },
+    "pl-PL": {
+      "keywords": "dzielenie,skanowanie,podpis,konwersja,czytnik,znak wodny,hasło,odblokowanie",
+      "sources": [
+        "https://www.adobe.com/pl/acrobat/online/compress-pdf.html"
+      ]
+    },
+    "id-ID": {
+      "keywords": "pisahkan,pindai,tanda tangan,konversi,pembaca,tanda air,kata sandi,buka kunci",
+      "sources": [
+        "https://www.adobe.com/id_id/acrobat/online/merge-pdf.html"
+      ]
+    },
+    "ar-SA": {
+      "keywords": "تقسيم,مسح,توقيع,تحويل,قارئ,حماية,فتح",
+      "sources": [
+        "https://www.adobe.com/sa_ar/acrobat/online/merge-pdf.html"
+      ]
+    },
+    "tr-TR": {
+      "keywords": "böl,tara,imzala,dönüştür,okuyucu,filigran,parola,kilidi aç,döndür,metin çıkar",
+      "sources": [
+        "https://www.adobe.com/tr/acrobat/online/merge-pdf.html"
+      ]
+    },
+    "sv-SE": {
+      "keywords": "dela,skanna,signera,konvertera,läsare,vattenstämpel,lösenord,lås upp,rotera",
+      "sources": [
+        "https://www.adobe.com/se/acrobat/how-to/merge-combine-pdf-files-online.html"
+      ]
+    },
+    "da-DK": {
+      "keywords": "opdel,scan,underskriv,konverter,læser,vandmærke,adgangskode,roter,udtræk",
+      "sources": [
+        "https://helpx.adobe.com/dk/acrobat/web/edit-pdfs/organize-documents/combine-files.html"
+      ]
+    },
+    "en-GB": {
+      "keywords": "split,scan,sign,convert,reader,watermark,password,unlock,rotate,extract,ocr,fill",
+      "sources": [
+        "https://www.adobe.com/acrobat/online/merge-pdf.html"
+      ]
+    },
+    "en-CA": {
+      "keywords": "split,scan,sign,convert,reader,watermark,password,unlock,rotate,extract,ocr,fill",
+      "sources": [
+        "https://www.adobe.com/acrobat/online/merge-pdf.html"
+      ]
+    },
+    "en-AU": {
+      "keywords": "split,scan,sign,convert,reader,watermark,password,unlock,rotate,extract,ocr,fill",
+      "sources": [
+        "https://www.adobe.com/acrobat/online/merge-pdf.html"
+      ]
+    }
+  }
+}

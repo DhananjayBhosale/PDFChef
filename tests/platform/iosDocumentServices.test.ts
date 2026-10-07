@@ -56,10 +56,12 @@ class FakeBridge implements IOSDocumentBridge {
   signaturePresentations: Array<{ ref: DurableDocumentRef; name: string | null }> = [];
   signatureAvailable = true;
   picked: readonly ImportedDocument[] = [];
+  pickerRequests: Array<{ acceptedMimeTypes: readonly string[]; maximumItems: number }> = [];
   pending: readonly ImportedDocument[] = [];
   retained = document('FRESH');
   exportError: Error | null = null;
   shareError: Error | null = null;
+  pendingDeliveryError: Error | null = null;
   exportWait: Promise<void> | null = null;
   retainCalls: Array<{
     bytes: Uint8Array;
@@ -111,10 +113,14 @@ class FakeBridge implements IOSDocumentBridge {
   async storageInformation(): Promise<StorageInformation> { return { retainedBytes: 8, availableBytes: 100, capacityBytes: 108 }; }
   async takePendingImports() { return this.pending; }
   async startPendingImportDelivery(consume: (imports: readonly ImportedDocument[]) => Promise<void> | void) {
+    if (this.pendingDeliveryError) throw this.pendingDeliveryError;
     await consume(this.pending);
     return async () => undefined;
   }
-  async pickDocuments() { return this.picked; }
+  async pickDocuments(acceptedMimeTypes: readonly string[], maximumItems: number) {
+    this.pickerRequests.push({ acceptedMimeTypes, maximumItems });
+    return this.picked;
+  }
   async exportDocument(value: DurableDocumentRef, name: string | null) {
     this.exports.push({ ref: value, name });
     if (this.exportWait) await this.exportWait;
@@ -128,6 +134,7 @@ class FakeBridge implements IOSDocumentBridge {
   async presentSignatureReport(value: DurableDocumentRef, name: string | null) {
     this.signaturePresentations.push({ ref: value, name });
   }
+  async openReader(): ReturnType<IOSDocumentBridge['openReader']> { return { action: 'closed' }; }
   async signalHaptic() {}
   async getApplicationMetadata(): Promise<ApplicationMetadata> { return { name: 'PDF Chef', version: '1.0', build: '1' }; }
 }
@@ -275,6 +282,17 @@ test('fresh save presents a transient retained copy and deletes it without creat
   assert.deepEqual(await recent.list(), []);
 });
 
+test('fresh iOS Save keeps a generated PDF in Recent without exporting it', async () => {
+  const { bridge, recent, platform } = harness();
+  await platform.keepFresh!({ blob: new Blob(['output']), name: 'kept.pdf', mimeType: 'application/pdf' });
+  assert.equal(bridge.retainCalls[0].metadata.transient, undefined);
+  assert.deepEqual(bridge.exports, []);
+  assert.deepEqual(bridge.deleted, []);
+  assert.equal(bridge.retainCalls[0].metadata.name, 'kept.pdf');
+  assert.equal((await recent.list()).length, 1);
+  assert.equal((await platform.records.list()).length, 1);
+});
+
 test('fresh export and share failures still delete transient retained documents', async () => {
   const first = harness();
   first.bridge.exportError = new Error('cancelled');
@@ -328,6 +346,7 @@ test('factory eagerly registers pending delivery and ready waits for initial per
 
 test('aggregate exposes native services and crash-safe pending delivery seam', async () => {
   const { bridge, platform } = harness();
+  assert.equal(platform.capabilities.automaticExternalExport, false);
   bridge.pending = [{ document: document('PENDING') }];
   const seen: string[] = [];
   await platform.pendingImports.start(imports => { seen.push(...imports.map(value => value.document.ref)); });
@@ -364,17 +383,60 @@ test('signature report accepts only the exact File reopened from a durable iOS P
   assert.deepEqual(bridge.signaturePresentations, [{ ref: signed.ref, name: signed.name }]);
 });
 
-test('installed output delivery covers the four settings states without double-retaining', async () => {
+test('iOS Tools signature action becomes available after native capability discovery', async () => {
+  const { bridge, platform } = harness();
+  const signed = document('TOOLS-SIGNED', 'tools-signed.pdf');
+  bridge.documents.set(signed.ref, signed);
+
+  await platform.ready;
+
+  assert.equal(platform.pdfReader?.supportsSignatureVerification, true);
+  assert.deepEqual(
+    await platform.pdfReader?.open(signed, { initialAction: 'verify-signatures' }),
+    { action: 'closed' },
+  );
+  assert.deepEqual(bridge.signaturePresentations, [{ ref: signed.ref, name: signed.name }]);
+});
+
+test('signature capability remains available when pending-import registration fails', async () => {
+  const storage = new MemoryStorage();
+  const bridge = new FakeBridge();
+  bridge.pendingDeliveryError = new Error('listener unavailable');
+  const platform = createIOSWorkspacePlatform({
+    bridge,
+    recent: new LocalRecentRepository(storage),
+    settings: new LocalSettingsRepository(storage),
+  });
+
+  await assert.rejects(platform.ready, /listener unavailable/);
+  assert.equal(platform.pdfReader?.supportsSignatureVerification, true);
+});
+
+test('iOS import preserves a one-document picker request for signature verification', async () => {
+  const { bridge, platform } = harness();
+  await platform.documentImport?.importDocuments({
+    acceptedMimeTypes: ['application/pdf'],
+    maximumItems: 1,
+  });
+
+  assert.deepEqual(bridge.pickerRequests, [{
+    acceptedMimeTypes: ['application/pdf'],
+    maximumItems: 1,
+  }]);
+});
+
+test('installed output delivery keeps history without automatically opening the iOS Files picker', async () => {
   const cases = [
-    { keepLocalHistory: true, autoDownload: true, retains: 1, records: 1, exports: 1, deletes: 0 },
+    { keepLocalHistory: true, autoDownload: true, retains: 1, records: 1, exports: 0, deletes: 0 },
     { keepLocalHistory: true, autoDownload: false, retains: 1, records: 1, exports: 0, deletes: 0 },
-    { keepLocalHistory: false, autoDownload: true, retains: 1, records: 0, exports: 1, deletes: 1 },
+    { keepLocalHistory: false, autoDownload: true, retains: 0, records: 0, exports: 0, deletes: 0 },
     { keepLocalHistory: false, autoDownload: false, retains: 0, records: 0, exports: 0, deletes: 0 },
   ] as const;
   const expectedBytes = new Uint8Array([0, 17, 128, 255]);
 
   for (const expected of cases) {
     const { bridge, recent, platform } = harness();
+    const outputs: OutputReadyRecord[] = [];
     await platform.ready;
     await withOutputSettings(expected, async () => {
       downloadBlob(
@@ -383,22 +445,22 @@ test('installed output delivery covers the four settings states without double-r
         'application/x-pdf-chef-test',
       );
       if (expected.retains > 0) await waitFor(() => bridge.retainCalls.length === expected.retains);
-      if (expected.exports > 0) await waitFor(() => bridge.exports.length === expected.exports);
-      if (expected.deletes > 0) await waitFor(() => bridge.deleted.length === expected.deletes);
       if (expected.records > 0) await waitFor(() => bridge.documents.size === 1);
-      await new Promise(resolve => setTimeout(resolve, 0));
-    });
+      await waitFor(() => outputs.length === 1);
+    }, output => outputs.push(output));
 
     assert.equal(bridge.retainCalls.length, expected.retains);
     assert.equal((await recent.list()).length, expected.records);
     assert.equal(bridge.exports.length, expected.exports);
     assert.equal(bridge.deleted.length, expected.deletes);
+    assert.equal(outputs[0].externallyExported, false);
+    assert.equal(outputs[0].deliveryIssue, undefined);
+    assert.equal(Boolean(outputs[0].recentRecord), expected.records > 0);
     if (expected.retains) {
       assert.deepEqual(bridge.retainCalls[0].bytes, expectedBytes);
       assert.deepEqual(bridge.retainCalls[0].metadata, {
         name: 'exact result.pdf',
         mimeType: 'application/x-pdf-chef-test',
-        ...(!expected.keepLocalHistory ? { transient: true } : {}),
       });
     }
     if (expected.records) {
@@ -413,87 +475,12 @@ test('installed output delivery covers the four settings states without double-r
         outputSizeBytes: bridge.retained.sizeBytes,
         spaceSavedBytes: null,
       }]);
+      await platform.rename!(outputs[0].recentRecord!, 'renamed result.pdf');
+      assert.equal((await recent.list())[0].name, 'renamed result.pdf');
+      assert.equal((await bridge.stat(bridge.retained.ref)).name, 'renamed result.pdf');
     }
-    if (expected.exports) {
-      assert.deepEqual(bridge.exports, [{ ref: bridge.retained.ref, name: 'exact result.pdf' }]);
-    }
     await platform.dispose();
   }
-});
-
-test('transient automatic exports reject after cleaning retained bytes on failure and cancellation', async () => {
-  for (const failure of [new Error('failed'), new DOMException('cancelled', 'AbortError')]) {
-    const { bridge, recent, platform } = harness();
-    bridge.exportError = failure;
-    await platform.ready;
-    await withOutputSettings({ keepLocalHistory: false, autoDownload: true }, async () => {
-      await assert.rejects(
-        deliverBlob(new Blob(['transient']), 'temporary.pdf', 'application/pdf'),
-        (error: unknown) => error === failure,
-      );
-    });
-
-    assert.equal(bridge.retainCalls.length, 1);
-    assert.deepEqual(bridge.deleted, [bridge.retained.ref]);
-    assert.deepEqual(await recent.list(), []);
-    await platform.dispose();
-  }
-});
-
-test('retained output stays saved and offers retry when automatic export fails or is cancelled', async () => {
-  for (const [failure, issue] of [
-    [new Error('presentation unavailable'), 'failed'],
-    [new DOMException('cancelled', 'AbortError'), 'cancelled'],
-  ] as const) {
-    const { bridge, recent, platform } = harness();
-    const outputs: OutputReadyRecord[] = [];
-    bridge.exportError = failure;
-    await platform.ready;
-    await withOutputSettings({ keepLocalHistory: true, autoDownload: true }, async () => {
-      await deliverBlob(new Blob(['retained']), 'retained.pdf', 'application/pdf');
-    }, output => outputs.push(output));
-
-    assert.equal((await recent.list()).length, 1);
-    assert.deepEqual(bridge.exports, [{ ref: bridge.retained.ref, name: 'retained.pdf' }]);
-    assert.deepEqual(bridge.deleted, []);
-    assert.equal(bridge.documents.has(bridge.retained.ref), true);
-    assert.equal(outputs.length, 1);
-    assert.equal(outputs[0].historyRetained, true);
-    assert.equal(outputs[0].deliveryIssue, issue);
-    assert.equal(await outputs[0].blob?.text(), 'retained');
-    await platform.dispose();
-  }
-});
-
-test('metadata persistence failure still rejects when optional export is cancelled', async () => {
-  const { bridge, recent, platform } = harness();
-  await platform.ready;
-  const failure = new Error('metadata unavailable');
-  recent.save = async () => { throw failure; };
-  bridge.exportError = new DOMException('cancelled', 'AbortError');
-  await withOutputSettings({ keepLocalHistory: true, autoDownload: true }, async () => {
-    await assert.rejects(deliverBlob(new Blob(['retained']), 'retained.pdf', 'application/pdf'),
-      (error: unknown) => error === failure);
-  });
-  assert.equal(bridge.documents.has(bridge.retained.ref), true);
-  assert.deepEqual(bridge.deleted, []);
-  await platform.dispose();
-});
-
-test('active transient output is excluded from clear reconciliation until presentation completes', async () => {
-  const { bridge, platform } = harness();
-  let release!: () => void;
-  bridge.exportWait = new Promise<void>(resolve => { release = resolve; });
-  await platform.ready;
-  await withOutputSettings({ keepLocalHistory: false, autoDownload: true }, async () => {
-    downloadBlob(new Blob(['transient']), 'temporary.pdf', 'application/pdf');
-    await waitFor(() => bridge.exports.length === 1);
-    await platform.records.clearRecords();
-    assert.deepEqual(bridge.deleted, []);
-    release();
-    await waitFor(() => bridge.deleted.length === 1);
-  });
-  await platform.dispose();
 });
 
 test('Recent persistence failure preserves a retained orphan for deterministic recovery', async () => {
@@ -511,15 +498,77 @@ test('Recent persistence failure preserves a retained orphan for deterministic r
   await withOutputSettings({ keepLocalHistory: true, autoDownload: true }, async () => {
     downloadBlob(new Blob(['recover']), 'recover.pdf', 'application/pdf');
     await waitFor(() => failureObserved);
-    await waitFor(() => bridge.exports.length === 1);
   });
 
   assert.equal(bridge.documents.has(bridge.retained.ref), true);
   assert.deepEqual(bridge.deleted, []);
-  assert.deepEqual(bridge.exports, [{ ref: bridge.retained.ref, name: 'recover.pdf' }]);
+  assert.deepEqual(bridge.exports, []);
   recent.save = save;
   const records = await platform.records.list();
   assert.equal(records[0].entry.id, `recovered-${bridge.retained.ref}`);
   assert.equal(records[0].document?.ref, bridge.retained.ref);
   await platform.dispose();
+});
+
+class InboxBridge extends FakeBridge {
+  deliver: ((imports: readonly ImportedDocument[]) => Promise<void> | void) | null = null;
+  override async startPendingImportDelivery(consume: (imports: readonly ImportedDocument[]) => Promise<void> | void) {
+    this.deliver = consume;
+    return async () => undefined;
+  }
+  override async openReader(): ReturnType<IOSDocumentBridge['openReader']> { return { action: 'tool', toolPath: '/merge' }; }
+}
+
+const inboxPlatform = async () => {
+  const storage = new MemoryStorage();
+  const bridge = new InboxBridge();
+  const platform = createIOSWorkspacePlatform({
+    bridge,
+    recent: new LocalRecentRepository(storage),
+    settings: new LocalSettingsRepository(storage),
+    now: () => 123,
+  });
+  await platform.ready;
+  return { bridge, handoffs: platform.pdfOpenHandoffs! };
+};
+
+test('a rejected Open-In continuation neither blocks later documents nor is lost', async () => {
+  const { bridge, handoffs } = await inboxPlatform();
+
+  const seen: string[] = [];
+  const stop = await handoffs.start(async ({ record }) => {
+    const opened = record.document?.ref ?? '';
+    if (opened === 'FAILS-ONCE') throw new Error('reopen failed');
+    seen.push(opened);
+  });
+  await bridge.deliver!([{ document: document('FAILS-ONCE') }]);
+  await bridge.deliver!([{ document: document('NEXT') }]);
+  assert.deepEqual(seen, ['NEXT'], 'a failed continuation must not stall the next document');
+
+  await stop();
+  const retried: string[] = [];
+  await handoffs.start(({ record }) => { retried.push(record.document?.ref ?? ''); });
+  assert.deepEqual(retried, ['FAILS-ONCE'], 'the failed document is kept for the next consumer');
+});
+
+test('Open-In documents recovered on start arrive before one opened meanwhile', async () => {
+  const { bridge, handoffs } = await inboxPlatform();
+  // With no consumer yet, both documents wait in the queue.
+  await bridge.deliver!([{ document: document('FIRST') }]);
+  await bridge.deliver!([{ document: document('SECOND') }]);
+
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const seen: string[] = [];
+  const started = handoffs.start(async ({ record }) => {
+    const opened = record.document?.ref ?? '';
+    if (opened === 'FIRST') await gate;
+    seen.push(opened);
+  });
+  const later = bridge.deliver!([{ document: document('LATER') }]);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  release();
+  await Promise.all([started, later]);
+
+  assert.deepEqual(seen, ['FIRST', 'SECOND', 'LATER']);
 });

@@ -3,6 +3,7 @@ import { readFileSync, rmSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test, { after, before } from 'node:test';
+import english from '../../services/i18n/en-US.ts';
 import type {
   AndroidLegacyThemeResolution,
   SharedAppearanceTheme,
@@ -556,9 +557,12 @@ test('theme feedback is fixed, plain, and free of anything from the device', () 
     settingsSource.indexOf('const THEME_SYNC_FEEDBACK'),
     settingsSource.indexOf('export const SettingsPage'),
   );
-  const messages = [...block.matchAll(/message: '([^']+)'/g)].map((match) => match[1]);
+  const keys = [...block.matchAll(/get message\(\) \{ return t\("([^"]+)"\); \}/g)].map((match) => match[1]);
+  const messages = keys.map((key) => english[key as keyof typeof english]);
   assert.equal(messages.length, 5);
   for (const message of messages) {
+    assert.equal(typeof message, 'string');
+    if (typeof message !== 'string') continue;
     assert.match(message, /[.…]$/);
     assert.doesNotMatch(message, /SYSTEM|DYNAMIC|LIGHT|DARK|localStorage|Error|null|undefined|\/|_/);
   }
@@ -571,8 +575,8 @@ test('theme feedback is fixed, plain, and free of anything from the device', () 
 
 test('the feedback is anchored in the Theme row, in flow, and announced politely', () => {
   const themeRow = settingsSource.slice(
-    settingsSource.indexOf('<Row label="Theme" stacked>'),
-    settingsSource.indexOf('<Row label="Text size" stacked>'),
+    settingsSource.indexOf('<Row label={t("settings-page.theme.efb52e")} stacked>'),
+    settingsSource.indexOf('<Row label={t("settings-page.text.size.d68761")} stacked>'),
   );
   assert.match(themeRow, /role="status" aria-live="polite"/);
   assert.match(themeRow, /<StatusLine tone=\{themeFeedback\.tone\}>/);

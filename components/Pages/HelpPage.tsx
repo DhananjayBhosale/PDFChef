@@ -1,3 +1,5 @@
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useMemo } from 'react';
 import { ChevronDown } from 'lucide-react';
 
@@ -19,75 +21,73 @@ interface HelpSection {
 
 const SECTIONS: HelpSection[] = [
   {
-    title: 'Privacy',
+    get title() { return t("help-page.privacy.54a57c"); },
     entries: [
       {
-        question: 'Are my files uploaded anywhere?',
-        answer:
-          'No. Every PDF tool here runs in your browser. Your files stay on your device and are never sent to a server.',
+        get question() { return t("help-page.are.my.files.uploaded.anywhere.7de2be"); },
+        get answer() { return t("help-page.no.pdf.chef.processes.documents.locally.on.9a3877"); },
       },
       {
-        question: 'Does it work offline?',
-        answer: 'Yes. Once the app has loaded, you can turn off your connection and keep working.',
+        get question() { return t("help-page.does.it.work.offline.78cd63"); },
+        get answer() { return t("help-page.yes.once.the.app.has.loaded.you.dfe0ec"); },
       },
       {
-        question: 'Is it free?',
-        answer: 'Yes. No accounts, no watermarks, no subscription.',
+        get question() { return t("help-page.is.it.free.7085af"); },
+        get answer() { return t("help-page.processing.is.unlimited.on.ios.the.first.90908e"); },
       },
     ],
   },
   {
-    title: 'Compress',
+    get title() { return t("help-page.compress.033fc0"); },
     entries: [
       {
-        question: 'Does compressing reduce quality?',
-        answer:
-          'Not by default. Pages and selectable text stay intact. Turning pages into images shrinks more but is lossy, and the preview shows you the result before you save.',
+        get question() { return t("help-page.does.compressing.reduce.quality.d4dbef"); },
+        get answer() { return t("help-page.not.by.default.pages.and.selectable.text.058c9f"); },
       },
       {
-        question: 'Why did nothing get smaller?',
-        answer: 'The PDF was already optimised. Your original is kept rather than replaced with a larger copy.',
+        get question() { return t("help-page.why.did.nothing.get.smaller.44c1a7"); },
+        get answer() { return t("help-page.the.pdf.was.already.optimised.your.original.223457"); },
       },
       {
-        question: 'Why do text-heavy PDFs shrink less?',
-        answer:
-          'Most of their size is text and fonts, which compress poorly. Images are where the savings are.',
+        get question() { return t("help-page.why.do.text.heavy.pdfs.shrink.less.78a1db"); },
+        get answer() { return t("help-page.most.of.their.size.is.text.and.807643"); },
       },
     ],
   },
   {
-    title: 'Merge and split',
+    get title() { return t("help-page.merge.and.split.96ed58"); },
     entries: [
       {
-        question: 'How many PDFs can I merge at once?',
-        answer: 'There is no fixed limit. 20–30 typical files work smoothly on most devices.',
+        get question() { return t("help-page.how.many.pdfs.can.i.merge.at.4c713a"); },
+        get answer() { return t("help-page.there.is.no.fixed.limit.20.30.b20788"); },
       },
       {
-        question: 'Can I pull out just a few pages?',
-        answer: 'Yes. Select the pages you want in Split and extract them into one new PDF.',
+        get question() { return t("help-page.can.i.pull.out.just.a.few.277367"); },
+        get answer() { return t("help-page.yes.select.the.pages.you.want.in.273280"); },
       },
       {
-        question: 'Is there a size limit?',
-        answer: 'No fixed limit. Very large documents depend on your device memory, because processing is local.',
+        get question() { return t("help-page.is.there.a.size.limit.3e263d"); },
+        get answer() { return t("help-page.no.fixed.limit.very.large.documents.depend.4a99dd"); },
       },
     ],
   },
   {
-    title: 'Devices',
+    get title() { return t("help-page.devices.4ba512"); },
     entries: [
       {
-        question: 'Which browsers and devices work?',
-        answer: 'Any modern browser on desktop or mobile, plus the Android and iOS apps.',
+        get question() { return t("help-page.which.browsers.and.devices.work.a421cc"); },
+        get answer() { return t("help-page.any.modern.browser.on.desktop.or.mobile.733cb2"); },
       },
       {
-        question: 'Where do my results go?',
-        answer: 'To Recent, where you can reopen, rename, share or save them.',
+        get question() { return t("help-page.where.do.my.results.go.fe9700"); },
+        get answer() { return t("help-page.successful.results.you.can.export.are.kept.db8b0a"); },
       },
     ],
   },
 ];
 
 const HelpRow: React.FC<{ entry: HelpEntry }> = ({ entry }) => {
+  useI18n();
   const [open, setOpen] = React.useState(false);
   const id = React.useId();
 
@@ -98,7 +98,7 @@ const HelpRow: React.FC<{ entry: HelpEntry }> = ({ entry }) => {
         aria-expanded={open}
         aria-controls={id}
         onClick={() => setOpen((current) => !current)}
-        className="chef-target chef-pressable-row flex w-full items-center justify-between gap-3 px-4 text-left"
+        className="chef-target chef-pressable-row flex w-full items-center justify-between gap-3 px-4 text-start"
       >
         <span className="min-w-0 font-semibold text-[var(--text-primary)]">{entry.question}</span>
         <ChevronDown
@@ -123,6 +123,7 @@ const HelpRow: React.FC<{ entry: HelpEntry }> = ({ entry }) => {
  * a second writer on the same DOM nodes, and the last effect to run would win.
  */
 export const HelpPage: React.FC = () => {
+  const { revision } = useI18n();
   const schema = useMemo(
     () => ({
       '@context': 'https://schema.org',
@@ -135,7 +136,7 @@ export const HelpPage: React.FC = () => {
         })),
       ),
     }),
-    [],
+    [revision],
   );
 
   /**
@@ -159,7 +160,7 @@ export const HelpPage: React.FC = () => {
   return (
     <>
       <div className="mx-auto w-full max-w-4xl px-4 py-4 pb-10 sm:py-10 md:px-8">
-        <h1 className="mb-2 text-3xl font-bold text-[var(--text-primary)]">Help</h1>
+        <h1 className="mb-2 text-3xl font-bold text-[var(--text-primary)]">{t("help-page.help.b79cac")}</h1>
         {SECTIONS.map((section) => (
           <section key={section.title} className="mt-5 first:mt-1">
             <h2 className="type-caption px-4 pb-1 uppercase tracking-[0.08em] text-[var(--text-tertiary)]">

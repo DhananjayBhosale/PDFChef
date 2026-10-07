@@ -9,6 +9,10 @@ import type {
   ImportedDocument,
   StorageInformation,
 } from '../contracts.ts';
+import {
+  IOS_PDF_READER_TOOL_PATHS,
+  type IOSPdfReaderNativeResult,
+} from './iosPdfReader.ts';
 
 export const PDF_CHEF_MAXIMUM_CHUNK_BYTES = 512 * 1024;
 
@@ -29,11 +33,12 @@ export interface PdfChefDocumentsNativePlugin {
   storageInformation(): Promise<unknown>;
   takePendingImports(): Promise<unknown>;
   acknowledgePendingImports(options: { refs: string[] }): Promise<unknown>;
-  pickDocuments(options: { acceptedMimeTypes: string[] }): Promise<unknown>;
+  pickDocuments(options: { acceptedMimeTypes: string[]; maximumItems: number }): Promise<unknown>;
   exportDocument(options: { ref: string; name?: string; mimeType?: string }): Promise<unknown>;
   shareDocument(options: { ref: string; name?: string; mimeType?: string }): Promise<unknown>;
   signatureVerificationAvailable(): Promise<unknown>;
   presentSignatureReport(options: { ref: string; name?: string }): Promise<unknown>;
+  openReader(options: { ref: string; displayName: string }): Promise<unknown>;
   signalHaptic(options: { signal: string }): Promise<unknown>;
   getApplicationMetadata(): Promise<unknown>;
   addListener(
@@ -341,9 +346,22 @@ export class PdfChefDocumentsBridge {
     return async () => listener.remove();
   }
 
-  async pickDocuments(acceptedMimeTypes: readonly string[]): Promise<readonly ImportedDocument[]> {
+  async pickDocuments(
+    acceptedMimeTypes: readonly string[],
+    maximumItems: number,
+  ): Promise<readonly ImportedDocument[]> {
     const checked = acceptedMimeTypes.map((value, index) => nonEmptyString(value, `acceptedMimeTypes[${index}]`));
-    return imports(await this.native.pickDocuments({ acceptedMimeTypes: checked }), 'pickDocuments result');
+    if (!Number.isSafeInteger(maximumItems) || maximumItems < 1 || maximumItems > 100) {
+      throw new TypeError('maximumItems must be an integer from 1 through 100');
+    }
+    const picked = imports(await this.native.pickDocuments({
+      acceptedMimeTypes: checked,
+      maximumItems,
+    }), 'pickDocuments result');
+    if (picked.length > maximumItems) {
+      throw new TypeError('pickDocuments result exceeds maximumItems');
+    }
+    return picked;
   }
 
   async exportDocument(ref: DurableDocumentRef, name: string | null, mimeType: string | null): Promise<void> {
@@ -386,6 +404,26 @@ export class PdfChefDocumentsBridge {
       throw new TypeError('presentSignatureReport result.completed must be boolean');
     }
     if (!payload.completed) throw new DOMException('Operation cancelled.', 'AbortError');
+  }
+
+  async openReader(ref: DurableDocumentRef, displayName: string): Promise<IOSPdfReaderNativeResult> {
+    const payload = object(await this.native.openReader({
+      ref: durableRef(ref, 'ref'),
+      displayName: nonEmptyString(displayName, 'displayName'),
+    }), 'openReader result');
+    if (payload.action === 'closed') return { action: 'closed' };
+    if (
+      payload.action === 'tool'
+      && typeof payload.toolPath === 'string'
+      && (IOS_PDF_READER_TOOL_PATHS as readonly string[]).includes(payload.toolPath)
+    ) {
+      return { action: 'tool', toolPath: payload.toolPath };
+    }
+    if (payload.action === 'batched') {
+      const partCount = finiteInteger(payload.partCount, 'openReader result.partCount');
+      if (partCount > 0 && partCount <= 64) return { action: 'batched', partCount };
+    }
+    throw new TypeError('openReader result is invalid');
   }
 
   async signalHaptic(signal: string): Promise<void> {

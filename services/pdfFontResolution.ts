@@ -1,3 +1,4 @@
+import { t } from './i18n/core.ts';
 /**
  * Font matching for the inline PDF text editor.
  *
@@ -50,8 +51,8 @@ export interface TextMetricFit {
   letterSpacing: number;
 }
 
-const SERIF = /times|roman|serif|georgia|garamond|palatino|baskerville|caslon|minion|cambria|constantia|charter|utopia|nimbusrom|liberationserif|dejavuserif|pt.?serif|source.?serif|noto.?serif|merriweather|lora|crimson/i;
-const SANS = /helvetica|arial|sans|verdana|tahoma|calibri|segoe|roboto|opensans|lato|montserrat|futura|gill|frutiger|univers|myriad|nimbussan|liberationsans|dejavusans|inter|poppins|nunito/i;
+const SERIF = /times|roman|serif|georgia|garamond|palatino|baskerville|caslon|minion|cambria|constantia|charter|utopia|nimbusrom|liberationserif|dejavuserif|pt.?serif|source.?serif|noto.?serif|merriweather|lora|crimson|martel/i;
+const SANS = /helvetica|arial|sans|verdana|tahoma|calibri|segoe|roboto|opensans|lato|montserrat|futura|gill|frutiger|univers|myriad|nimbussan|liberationsans|dejavusans|inter|poppins|nunito|mukta/i;
 const MONO = /mono|courier|consolas|menlo|inconsolata|cmtt|liberationmono|dejavusansmono|sourcecodepro|jetbrains|fira.?code/i;
 
 const FONT_FALLBACKS: Record<FontClass, string> = {
@@ -62,7 +63,7 @@ const FONT_FALLBACKS: Record<FontClass, string> = {
 
 /** Subset-prefixed PostScript names look like `ABCDEF+Times-Roman`. */
 export const prettyFontName = (descriptor: Pick<PdfFontDescriptor, 'psName'>) =>
-  descriptor.psName.replace(/^[A-Z]{6}\+/, '') || 'unnamed font';
+  descriptor.psName.replace(/^[A-Z]{6}\+/, '') || t('font.unnamed');
 
 export const classifyFont = (descriptor: Pick<PdfFontDescriptor, 'psName' | 'fallbackFamily'>): FontClass => {
   const name = descriptor.psName || '';
@@ -234,6 +235,12 @@ export const resolveFont = (
   const bold = override?.bold ?? descriptor.bold;
   const italic = override?.italic ?? descriptor.italic;
   const forced = Boolean(override?.klass || override?.bold != null || override?.italic != null);
+  const devanagari = /[\u0900-\u097f]/u.test(sampleText);
+  const fallbackFamily = devanagari
+    ? klass === 'serif'
+      ? `"PDF Chef Martel ${bold ? 'Bold' : 'Regular'}", "Noto Serif Devanagari", serif`
+      : `"PDF Chef Mukta ${bold ? 'Bold' : 'Regular'}", "Noto Sans Devanagari", sans-serif`
+    : FONT_FALLBACKS[klass];
   const coverage = checkGlyphCoverage(descriptor, sampleText);
   const loaded = browserLoadedFace(descriptor.loadedName);
 
@@ -247,7 +254,7 @@ export const resolveFont = (
   ) {
     return {
       mode: 'embedded',
-      cssFamily: `"${descriptor.loadedName}", ${FONT_FALLBACKS[klass]}`,
+      cssFamily: `"${descriptor.loadedName}", ${fallbackFamily}`,
       cssWeight: 'normal',
       cssStyle: 'normal',
       klass,
@@ -257,23 +264,23 @@ export const resolveFont = (
   }
 
   const reason = forced
-    ? 'font overridden for this paragraph'
+    ? t("pdf-font-resolution.font.overridden.for.this.paragraph.4e3f4b")
     : descriptor.resolution === 'pending'
-      ? 'this page’s own fonts have not been read yet'
+      ? t("pdf-font-resolution.this.page.s.own.fonts.have.not.c5ba51")
       : !descriptor.embedded
-      ? 'font is not embedded in this PDF'
+      ? t("pdf-font-resolution.font.is.not.embedded.in.this.pdf.432e1f")
       : descriptor.isType3
-        ? 'Type 3 font: its glyphs are drawing programs, not outlines'
+        ? t("pdf-font-resolution.type.3.font.its.glyphs.are.drawing.5db801")
         : !coverage.checked
-          ? 'font program could not be parsed'
+          ? t("pdf-font-resolution.font.program.could.not.be.parsed.fb1ba4")
           : !coverage.covered
-            ? `font is missing glyphs for ${coverage.missing.slice(0, 6).join(' ')}`
-            : 'the browser did not load this face';
+            ? t("pdf-font-resolution.font.is.missing.glyphs.for.6cf890", { v0: coverage.missing.slice(0, 6).join(' ') })
+            : t("pdf-font-resolution.the.browser.did.not.load.this.face.05d598");
 
   return {
     mode: 'substituted',
-    cssFamily: FONT_FALLBACKS[klass],
-    cssWeight: bold ? '700' : '400',
+    cssFamily: fallbackFamily,
+    cssWeight: devanagari ? '400' : bold ? '700' : '400',
     cssStyle: italic ? 'italic' : 'normal',
     klass,
     reason,
@@ -313,6 +320,8 @@ export const fitTextMetrics = (
   fontSizePx: number,
 ): TextMetricFit => {
   if (!(targetWidth > 0) || !(fontSizePx > 0) || !text) return { wordSpacing: 0, letterSpacing: 0 };
+  // CSS letter-spacing between Unicode code points can split a Devanagari syllable's marks.
+  if (/[\u0900-\u097f]/u.test(text)) return { wordSpacing: 0, letterSpacing: 0 };
   const measured = measureTextWidth(text, font, fontSizePx);
   const delta = targetWidth - measured;
   if (!Number.isFinite(delta) || Math.abs(delta) < 0.5) return { wordSpacing: 0, letterSpacing: 0 };

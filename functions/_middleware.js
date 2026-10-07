@@ -61,6 +61,11 @@ const routeMeta = {
     title: "Sign PDF - Add Signature Image | PDF Chef",
     description: "Draw or upload your signature, place it on pages, and export a signed PDF locally.",
   },
+  "/verify-signatures": {
+    noindex: true,
+    title: "Verify PDF Signatures | PDF Chef",
+    description: "Check PDF digital signatures, signer trust and certificate details offline on your device.",
+  },
   "/delete-pages": {
     title: "Delete PDF Pages - Remove Unwanted Pages | PDF Chef",
     description: "Select and remove PDF pages visually with thumbnail previews and instant export.",
@@ -91,7 +96,7 @@ const routeMeta = {
   },
   "/flatten": {
     title: "Flatten PDF Forms - Lock Form Fields | PDF Chef",
-    description: "Flatten form fields into static content to make documents non-editable.",
+    description: "Flatten PDF form fields into page content.",
   },
   "/compare": {
     title: "Compare PDF Files - Multi-page Comparison Report | PDF Chef",
@@ -147,15 +152,15 @@ const routeMeta = {
   },
   "/invoice": {
     title: "Free Invoice Maker - Create an Invoice PDF | PDF Chef",
-    description: "Make a professional invoice PDF in your browser. Add your logo, colour and tax, and nothing is uploaded.",
+    description: "Make a professional invoice PDF in your browser. Add your logo, color and tax, and nothing is uploaded.",
   },
   "/receipt": {
     title: "Free Receipt Maker - Create a Receipt PDF | PDF Chef",
-    description: "Make a receipt PDF that proves a payment was made. Add your logo and colour, entirely on your device.",
+    description: "Make a receipt PDF that proves a payment was made. Add your logo and color, entirely on your device.",
   },
   "/quote": {
     title: "Free Quote Maker - Create a Quote or Estimate PDF | PDF Chef",
-    description: "Make a quote or estimate PDF for a job. Add your logo, colour and tax, with nothing uploaded anywhere.",
+    description: "Make a quote or estimate PDF for a job. Add your logo, color and tax, with nothing uploaded anywhere.",
   },
   // A personal, device-local list. There is nothing here for a searcher, and
   // /history is the same screen under an older path.

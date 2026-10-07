@@ -1,3 +1,5 @@
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -238,6 +240,7 @@ export const ChefSliderField: React.FC<ChefSliderFieldProps> = ({
   disabled = false,
   className,
 }) => {
+  useI18n();
   const format = (next: number) => {
     const fixed = next.toFixed(decimals);
     return fixedDecimals ? fixed : fixed.replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
@@ -272,7 +275,7 @@ export const ChefSliderField: React.FC<ChefSliderFieldProps> = ({
             step={step}
             value={draft}
             disabled={disabled}
-            aria-label={`${ariaLabel} value`}
+            aria-label={t("chef-slider.value.71f9e8", { v0: ariaLabel })}
             onFocus={(event) => {
               editing.current = true;
               event.currentTarget.select();
@@ -286,9 +289,9 @@ export const ChefSliderField: React.FC<ChefSliderFieldProps> = ({
                 event.currentTarget.blur();
               }
             }}
-            className="tabular w-14 appearance-none bg-transparent text-right text-xs outline-none disabled:opacity-55"
+            className="tabular w-14 appearance-none bg-transparent text-end text-xs outline-none disabled:opacity-55"
           />
-          {suffix ? <span aria-hidden className="ml-0.5 text-xs">{suffix}</span> : null}
+          {suffix ? <span aria-hidden className="ms-0.5 text-xs">{suffix}</span> : null}
         </label>
       </div>
       <ChefSlider

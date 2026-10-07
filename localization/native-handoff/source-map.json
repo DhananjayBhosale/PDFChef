@@ -1,0 +1,560 @@
+{
+  "android.pdf_reader_back": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_back"
+  },
+  "android.pdf_reader_search": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_search"
+  },
+  "android.pdf_reader_share": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_share"
+  },
+  "android.pdf_reader_save": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_save"
+  },
+  "android.pdf_reader_tools": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_tools"
+  },
+  "android.pdf_reader_loading": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_loading"
+  },
+  "android.pdf_reader_page_unknown": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_page_unknown"
+  },
+  "android.pdf_reader_page_of": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_page_of"
+  },
+  "android.pdf_reader_error_title": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_error_title"
+  },
+  "android.pdf_reader_error_body": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_error_body"
+  },
+  "android.pdf_reader_retry": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_retry"
+  },
+  "android.pdf_reader_close": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_close"
+  },
+  "android.pdf_reader_share_failed": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_share_failed"
+  },
+  "android.pdf_reader_save_failed": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_save_failed"
+  },
+  "android.pdf_reader_saved": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_saved"
+  },
+  "android.pdf_reader_search_unavailable": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_search_unavailable"
+  },
+  "android.pdf_reader_tools_title": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_tools_title"
+  },
+  "android.pdf_reader_tools_body": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_tools_body"
+  },
+  "android.pdf_reader_tools_close": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_tools_close"
+  },
+  "android.pdf_reader_tool_row": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_tool_row"
+  },
+  "android.pdf_reader_password_title": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_password_title"
+  },
+  "android.pdf_reader_password_body": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_password_body"
+  },
+  "android.pdf_reader_password_incorrect": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_password_incorrect"
+  },
+  "android.pdf_reader_password_hint": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_password_hint"
+  },
+  "android.pdf_reader_password_description": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_password_description"
+  },
+  "android.pdf_reader_password_open": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_password_open"
+  },
+  "android.pdf_reader_verify_signatures": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_verify_signatures"
+  },
+  "android.pdf_reader_verify_signatures_description": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_verify_signatures_description"
+  },
+  "android.pdf_reader_signature_checking_title": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_checking_title"
+  },
+  "android.pdf_reader_signature_checking_body": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_checking_body"
+  },
+  "android.pdf_reader_signature_results_title": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_results_title"
+  },
+  "android.pdf_reader_signature_none": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_none"
+  },
+  "android.pdf_reader_signature_encrypted": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_encrypted"
+  },
+  "android.pdf_reader_signature_malformed": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_malformed"
+  },
+  "android.pdf_reader_signature_number": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_number"
+  },
+  "android.pdf_reader_signature_signer": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_signer"
+  },
+  "android.pdf_reader_signature_integrity": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_integrity"
+  },
+  "android.pdf_reader_signature_trust": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_trust"
+  },
+  "android.pdf_reader_signature_validity": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_validity"
+  },
+  "android.pdf_reader_signature_revocation": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_revocation"
+  },
+  "android.pdf_reader_signature_timestamp": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_timestamp"
+  },
+  "android.pdf_reader_signature_integrity_whole": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_integrity_whole"
+  },
+  "android.pdf_reader_signature_integrity_revision": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_integrity_revision"
+  },
+  "android.pdf_reader_signature_integrity_invalid": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_integrity_invalid"
+  },
+  "android.pdf_reader_signature_unsupported": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_unsupported"
+  },
+  "android.pdf_reader_signature_indeterminate": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_indeterminate"
+  },
+  "android.pdf_reader_signature_trusted": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_trusted"
+  },
+  "android.pdf_reader_signature_untrusted": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_untrusted"
+  },
+  "android.pdf_reader_signature_certificate_valid": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_certificate_valid"
+  },
+  "android.pdf_reader_signature_certificate_expired": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_certificate_expired"
+  },
+  "android.pdf_reader_signature_certificate_expired_on": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_certificate_expired_on"
+  },
+  "android.pdf_reader_signature_certificate_future": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_certificate_future"
+  },
+  "android.pdf_reader_signature_revocation_good": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_revocation_good"
+  },
+  "android.pdf_reader_signature_revocation_revoked": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_revocation_revoked"
+  },
+  "android.pdf_reader_signature_revocation_offline": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_revocation_offline"
+  },
+  "android.pdf_reader_signature_timestamp_valid": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_timestamp_valid"
+  },
+  "android.pdf_reader_signature_timestamp_invalid": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_timestamp_invalid"
+  },
+  "android.pdf_reader_signature_timestamp_absent": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_timestamp_absent"
+  },
+  "android.pdf_reader_signature_timestamp_unverified": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_timestamp_unverified"
+  },
+  "android.pdf_reader_signature_sha1_warning": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_sha1_warning"
+  },
+  "android.pdf_reader_signature_offline_note": {
+    "path": "android/app/src/main/res/values/pdf_reader_strings.xml",
+    "resource": "pdf_reader_signature_offline_note"
+  },
+  "ios.NSCameraUsageDescription": {
+    "path": "ios/App/App/Info.plist",
+    "resource": "NSCameraUsageDescription"
+  },
+  "ios.ce47f2d3b8": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "line": 35
+  },
+  "ios.b55dcc62d4": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "line": 52
+  },
+  "ios.fd19818dfb": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "line": 88
+  },
+  "ios.8a8b4bbde8": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "line": 94
+  },
+  "ios.02678d114a": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "line": 111
+  },
+  "ios.6d02efcade": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "line": 112
+  },
+  "ios.2cfeb1a226": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "line": 120
+  },
+  "ios.c2a6ad16c0": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "line": 125
+  },
+  "ios.908504cce9": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "line": 126
+  },
+  "ios.658a96e1b1": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "line": 127
+  },
+  "ios.56d74049d1": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "line": 129
+  },
+  "ios.a2f3e65705": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "line": 138
+  },
+  "ios.c614098b83": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "statusLabel": true
+  },
+  "ios.7dd16af437": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "statusLabel": true
+  },
+  "ios.978f31e626": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "statusLabel": true
+  },
+  "ios.3372d1ec53": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "statusLabel": true
+  },
+  "ios.5c19b2f989": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "statusLabel": true
+  },
+  "ios.96498ab937": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 61
+  },
+  "ios.f444b18c1f": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 180
+  },
+  "ios.047a16985e": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 103
+  },
+  "ios.5ac0a8d6a9": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 324
+  },
+  "ios.2f2bb03b94": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 119
+  },
+  "ios.c8bdc3242d": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 132
+  },
+  "ios.d4f922eb49": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 137
+  },
+  "ios.a448aecc11": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 141
+  },
+  "ios.2104a15c69": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 145
+  },
+  "ios.72bd78c1dd": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 152
+  },
+  "ios.71d7920fbb": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 153
+  },
+  "ios.9076399041": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 153
+  },
+  "ios.14cb1c6e7f": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 155
+  },
+  "ios.82a8426fa1": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 156
+  },
+  "ios.4d32b7db6f": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 157
+  },
+  "ios.347772ee82": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 159
+  },
+  "ios.48b89b63fc": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 170
+  },
+  "ios.ab6a6df21c": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 188
+  },
+  "ios.38449f2bd7": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 214
+  },
+  "ios.4beb6ce6a8": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 223
+  },
+  "ios.3bb8cdaf1f": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 229
+  },
+  "ios.9e6a520856": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 267
+  },
+  "ios.63517a2382": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 270
+  },
+  "ios.d52377a67a": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 277
+  },
+  "ios.9b66d98ecc": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 473
+  },
+  "ios.d765e7a66e": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 478
+  },
+  "ios.ab4e69efef": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 484
+  },
+  "ios.7bc5c4f6b4": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 488
+  },
+  "ios.a58ada2fe5": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 494
+  },
+  "ios.29aaf49593": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 497
+  },
+  "ios.f70c13b4ea": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 500
+  },
+  "ios.3aad569a9f": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 502
+  },
+  "ios.3a11a556ce": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 545
+  },
+  "ios.97a0696641": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 546
+  },
+  "ios.9b540850ca": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 547
+  },
+  "ios.bd7f9c0b0e": {
+    "path": "ios/App/App/PdfChefSignatureVerifier.swift",
+    "line": 548
+  },
+  "ios.f516220631": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "statusLabel": true
+  },
+  "ios.96c34a0719": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "statusLabel": true
+  },
+  "ios.639538c63b": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "statusLabel": true
+  },
+  "ios.424a2551d3": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "statusLabel": true
+  },
+  "ios.f6f738d043": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "statusLabel": true
+  },
+  "ios.d5db1eba72": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "statusLabel": true
+  },
+  "ios.54324658e2": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "statusLabel": true
+  },
+  "ios.signatureSectionTitle": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "line": 121,
+    "note": "Named placeholders must be bound in native localized formatting; do not translate user-provided values."
+  },
+  "ios.signatureAccessibilityValue": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "line": 188,
+    "note": "Named placeholders must be bound in native localized formatting; do not translate user-provided values."
+  },
+  "ios.revocation": {
+    "path": "ios/App/App/PdfChefSignatureReportViewController.swift",
+    "line": 130,
+    "note": "Named placeholders must be bound in native localized formatting; do not translate user-provided values."
+  },
+  "ios.productsUnavailable": {
+    "path": "ios/App/App/PdfChefPurchasesPlugin.swift",
+    "line": 56,
+    "note": "Named placeholders must be bound in native localized formatting; do not translate user-provided values."
+  },
+  "ios.purchaseFailed": {
+    "path": "ios/App/App/PdfChefPurchasesPlugin.swift",
+    "line": 120,
+    "note": "Named placeholders must be bound in native localized formatting; do not translate user-provided values."
+  },
+  "ios.restoreFailed": {
+    "path": "ios/App/App/PdfChefPurchasesPlugin.swift",
+    "line": 133,
+    "note": "Named placeholders must be bound in native localized formatting; do not translate user-provided values."
+  },
+  "ios.noActiveWindow": {
+    "path": "ios/App/App/PdfChefPurchasesPlugin.swift",
+    "line": 143,
+    "note": "Named placeholders must be bound in native localized formatting; do not translate user-provided values."
+  },
+  "ios.manageSubscriptionsFailed": {
+    "path": "ios/App/App/PdfChefPurchasesPlugin.swift",
+    "line": 151,
+    "note": "Named placeholders must be bound in native localized formatting; do not translate user-provided values."
+  },
+  "ios.documentReferenceInvalid": {
+    "path": "ios/App/App/PdfChefDocumentStore.swift",
+    "line": 14,
+    "note": "Named placeholders must be bound in native localized formatting; do not translate user-provided values."
+  },
+  "ios.writeSessionInvalid": {
+    "path": "ios/App/App/PdfChefDocumentStore.swift",
+    "line": 15,
+    "note": "Named placeholders must be bound in native localized formatting; do not translate user-provided values."
+  },
+  "ios.chunkTooLarge": {
+    "path": "ios/App/App/PdfChefDocumentStore.swift",
+    "line": 16,
+    "note": "Named placeholders must be bound in native localized formatting; do not translate user-provided values."
+  },
+  "ios.readOffsetInvalid": {
+    "path": "ios/App/App/PdfChefDocumentStore.swift",
+    "line": 17,
+    "note": "Named placeholders must be bound in native localized formatting; do not translate user-provided values."
+  },
+  "ios.documentMissing": {
+    "path": "ios/App/App/PdfChefDocumentStore.swift",
+    "line": 18,
+    "note": "Named placeholders must be bound in native localized formatting; do not translate user-provided values."
+  },
+  "ios.presentationNameInvalid": {
+    "path": "ios/App/App/PdfChefDocumentStore.swift",
+    "line": 19,
+    "note": "Named placeholders must be bound in native localized formatting; do not translate user-provided values."
+  }
+}

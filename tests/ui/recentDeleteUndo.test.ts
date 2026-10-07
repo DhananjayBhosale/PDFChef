@@ -270,9 +270,9 @@ test('a standing undo is one panel, not a strip with a loose control beneath it'
 
 test('the undo control keeps its visible label inside its accessible name', () => {
   const region = source.slice(source.indexOf('{undoOffered && pendingUndo ? ('), source.indexOf('{state.status ==='));
-  assert.match(region, /aria-label=\{`\$\{undoActionLabel\(pendingUndo\)\} for \$\{/);
+  assert.match(region, /aria-label=\{t\("recent-page\.for\.eca73a", \{ v0: undoActionLabel\(pendingUndo\), v1:/);
   assert.match(region, /\{undoActionLabel\(pendingUndo\)\}/);
-  assert.match(region, /pendingUndo\.name \?\? `\$\{pendingUndo\.receipts\.length\} results`/);
+  assert.match(region, /pendingUndo\.name \?\? t\("recent-page\.results\.a9c6d9", \{ v0: pendingUndo\.receipts\.length \}\)/);
 });
 
 /* -------------------------------------------------------- the wiring --- */
@@ -295,13 +295,13 @@ test('the mixed-selection confirmation states the scope without claiming browser
     source.indexOf('open={confirmDeleteSelected}'),
     source.indexOf('onCancel={() => setConfirmDeleteSelected(false)}'),
   );
-  assert.match(confirm, /'One of them cannot be undone\.'/);
-  assert.match(confirm, /of them cannot be undone\./);
+  assert.match(confirm, /t\("recent-page\.one\.of\.them\.cannot\.be\.undone\.9f0ace"\)/);
+  assert.match(confirm, /t\("recent-page\.of\.them\.cannot\.be\.undone\.c8e64b"/);
   // A permanent row can be a durable one whose file is gone, so no wording may
   // say where every one of them is kept.
   assert.doesNotMatch(confirm, /kept in this browser/);
-  assert.match(confirm, /This cannot be undone\./);
-  assert.match(confirm, /Frees \$\{formatBytes\(selectedBytes\)\}/);
+  assert.match(confirm, /t\("recent-page\.frees\.this\.cannot\.be\.undone\.5d87d1"/);
+  assert.match(confirm, /formatBytes\(selectedBytes\)/);
 });
 
 test('deletion is routed by per-row ability, and only the reversible path skips the confirmation', () => {
@@ -454,8 +454,8 @@ test('the actions a collection genuinely has are named by how many files they ac
   // Share exists only where the platform has a share sheet at all, so there is
   // no dead control and no sentence explaining one.
   assert.match(actions, /\{platform\.share && \(/);
-  assert.match(actions, /activeIsCollection \? collectionActionLabel\('Save', activeItems\) : 'Save a copy'/);
-  assert.match(actions, /activeIsCollection \? collectionActionLabel\('Share', activeItems\) : 'Share'/);
+  assert.match(actions, /activeIsCollection \? collectionActionLabel\('Save', activeItems\) : t\("recent-page\.save\.a\.copy\.2c2a76"\)/);
+  assert.match(actions, /activeIsCollection \? collectionActionLabel\('Share', activeItems\) : t\("recent-page\.share\.29887a"\)/);
 });
 
 test('a disabled control carries its reason in text, not in a hover title', () => {

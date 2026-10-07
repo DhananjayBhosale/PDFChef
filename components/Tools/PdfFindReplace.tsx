@@ -1,3 +1,5 @@
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useRef } from 'react';
 import { ArrowDown, ArrowUp, CaseSensitive, Replace, X } from 'lucide-react';
 
@@ -47,6 +49,7 @@ export const PdfFindReplace: React.FC<Props> = ({
   onReplaceAll,
   onClose,
 }) => {
+  useI18n();
   const queryRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -59,7 +62,7 @@ export const PdfFindReplace: React.FC<Props> = ({
   return (
     <section
       data-testid="pdf-find-replace"
-      aria-label="Find and replace"
+      aria-label={t("pdf-find-replace.find.and.replace.9898ad")}
       className={`rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-2 shadow-lg ${compact ? 'mx-auto mb-2 max-w-md' : 'mb-2'}`}
     >
       {/* On a phone the query field and the controls each get their own row: six touch targets and
@@ -70,8 +73,8 @@ export const PdfFindReplace: React.FC<Props> = ({
           ref={queryRef}
           type="search"
           value={query}
-          aria-label="Find in this PDF"
-          placeholder="Find in this PDF"
+          aria-label={t("pdf-find-replace.find.in.this.pdf.18ee4b")}
+          placeholder={t("pdf-find-replace.find.in.this.pdf.18ee4b")}
           enterKeyHint="search"
           autoCorrect="off"
           autoCapitalize="off"
@@ -90,7 +93,7 @@ export const PdfFindReplace: React.FC<Props> = ({
           className={fieldClass}
         />
         {compact && (
-          <button type="button" aria-label="Close find" onClick={onClose} className={iconClass}><X aria-hidden size={19} /></button>
+          <button type="button" aria-label={t("pdf-find-replace.close.find.eb903c")} onClick={onClose} className={iconClass}><X aria-hidden size={19} /></button>
         )}
         </div>
         <div className="flex items-center gap-1.5">
@@ -99,28 +102,28 @@ export const PdfFindReplace: React.FC<Props> = ({
           data-testid="pdf-find-count"
           className="tabular shrink-0 px-1 text-xs font-semibold text-[var(--text-secondary)]"
         >
-          {scanning ? 'Searching…' : query ? (matchCount > 0 ? `${activeMatch + 1} of ${matchCount}` : 'None') : ''}
+          {scanning ? t("pdf-find-replace.searching.c31723") : query ? (matchCount > 0 ? t("pdf-find-replace.of.ef59ff", { v0: activeMatch + 1, v1: matchCount }) : t("pdf-find-replace.none.dc937b")) : ''}
         </span>
         <span className="flex-1" />
         <button
           type="button"
-          aria-label="Match case"
+          aria-label={t("pdf-find-replace.match.case.619880")}
           aria-pressed={caseSensitive}
           onClick={() => onCaseSensitiveChange(!caseSensitive)}
           className={`${iconClass} ${caseSensitive ? 'bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : ''}`}
         ><CaseSensitive aria-hidden size={19} /></button>
-        <button type="button" aria-label="Previous match" disabled={matchCount === 0} onClick={() => onStep(-1)} className={iconClass}><ArrowUp aria-hidden size={19} /></button>
-        <button type="button" aria-label="Next match" disabled={matchCount === 0} onClick={() => onStep(1)} className={iconClass}><ArrowDown aria-hidden size={19} /></button>
+        <button type="button" aria-label={t("pdf-find-replace.previous.match.daa2f8")} disabled={matchCount === 0} onClick={() => onStep(-1)} className={iconClass}><ArrowUp aria-hidden size={19} /></button>
+        <button type="button" aria-label={t("pdf-find-replace.next.match.825e5a")} disabled={matchCount === 0} onClick={() => onStep(1)} className={iconClass}><ArrowDown aria-hidden size={19} /></button>
         <button
           type="button"
-          aria-label="Replace"
+          aria-label={t("pdf-find-replace.replace.95e154")}
           aria-pressed={showReplace}
           aria-expanded={showReplace}
           onClick={() => onShowReplaceChange(!showReplace)}
           className={`${iconClass} ${showReplace ? 'bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : ''}`}
         ><Replace aria-hidden size={19} /></button>
         {!compact && (
-          <button type="button" aria-label="Close find" onClick={onClose} className={iconClass}><X aria-hidden size={19} /></button>
+          <button type="button" aria-label={t("pdf-find-replace.close.find.eb903c")} onClick={onClose} className={iconClass}><X aria-hidden size={19} /></button>
         )}
         </div>
       </div>
@@ -130,8 +133,8 @@ export const PdfFindReplace: React.FC<Props> = ({
           <input
             type="text"
             value={replacement}
-            aria-label="Replace with"
-            placeholder="Replace with"
+            aria-label={t("pdf-find-replace.replace.with.8382d3")}
+            placeholder={t("pdf-find-replace.replace.with.8382d3")}
             autoCorrect="off"
             spellCheck={false}
             onChange={(event) => onReplacementChange(event.currentTarget.value)}
@@ -148,13 +151,13 @@ export const PdfFindReplace: React.FC<Props> = ({
             disabled={matchCount === 0}
             onClick={onReplaceOne}
             className="chef-pressable chef-hit-y h-11 shrink-0 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-3 text-xs font-bold text-[var(--text-primary)] disabled:opacity-45"
-          >Replace</button>
+          >{t("pdf-find-replace.replace.95e154")}</button>
           <button
             type="button"
             disabled={matchCount === 0}
             onClick={onReplaceAll}
             className="chef-pressable chef-hit-y h-11 shrink-0 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-3 text-xs font-bold text-[var(--text-on-accent)] disabled:opacity-45"
-          >All</button>
+          >{t("pdf-find-replace.all.a52ace")}</button>
         </div>
       )}
     </section>

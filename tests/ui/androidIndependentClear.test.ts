@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { withoutOutputPayload, type OutputRecord } from '../../services/workspace.ts';
+import english from '../../services/i18n/en-US.ts';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const recent = readFileSync(resolve(root, 'components/Pages/RecentPage.tsx'), 'utf8');
@@ -40,10 +41,11 @@ test('session payload clearing is one read-write cursor transaction', () => {
 });
 
 test('the frozen Recent surface keeps the two destructive choices distinct and non-undoable', () => {
-  assert.match(recent, /Delete files only/);
+  assert.equal(english["recent-page.delete.files.only.911496"], 'Delete files only');
+  assert.match(recent, /t\("recent-page\.delete\.files\.only\.911496"\)/);
   assert.match(recent, /mode === 'documents' \? platform\.records\.clearDocuments\(\) : platform\.records\.clearRecords\(\)/);
   assert.match(recent, /setPendingUndo\(null\)/);
-  assert.match(recent, /The list of what you made stays/);
-  assert.match(recent, /Files from the older Android app stay where they are/);
-  assert.match(recent, /This cannot be undone\./);
+  assert.equal(english["recent-page.the.list.of.what.you.made.stays.d6827e"], 'The list of what you made stays. ');
+  assert.equal(english["recent-page.files.from.the.older.android.app.stay.610916"], ' Files from the older Android app stay where they are.');
+  assert.match(recent, /t\("recent-page\.this\.cannot\.be\.undone\.copies\.you\.saved\.098cb0"/);
 });

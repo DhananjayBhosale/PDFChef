@@ -1,4 +1,7 @@
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useRef, useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertTriangle,
@@ -22,6 +25,8 @@ import { downloadBlob } from '../../services/pdfShared';
 import { androidExportFileName } from '../../services/androidParity';
 import { ProcessingStatus } from '../../types';
 import { compareExtractedPageText } from '../../services/pdfToolResults';
+import { createComparisonReport } from '../../services/comparisonReport.ts';
+import { useMonetization, type JobAccessGrant } from '../../hooks/useMonetization';
 
 interface PreviewState {
   left: string;
@@ -40,15 +45,6 @@ interface ComparisonResult {
   limitedToFirstFifty: boolean;
 }
 
-/** `SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)` in `ComparePdfToolProcessor`, in local time. */
-const formatGeneratedAt = (value: Date): string => {
-  const pad = (part: number) => String(part).padStart(2, '0');
-  return (
-    `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} ` +
-    `${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`
-  );
-};
-
 const revokePreview = (url?: string) => {
   if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
 };
@@ -56,6 +52,7 @@ const revokePreview = (url?: string) => {
 const emptyStatus = (): ProcessingStatus => ({ isProcessing: false, progress: 0, message: '' });
 
 export const ComparePDF: React.FC = () => {
+  useI18n();
   const [file1, setFile1] = useState<File | null>(null);
   const [file2, setFile2] = useState<File | null>(null);
   const [pdf1, setPdf1] = useState<any>(null);
@@ -69,6 +66,9 @@ export const ComparePDF: React.FC = () => {
   const [selectingSlot, setSelectingSlot] = useState<'left' | 'right' | null>(null);
   const [result, setResult] = useState<ComparisonResult | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>(emptyStatus);
+  const comparisonOperationIdRef = useRef<string | null>(null);
+  const comparisonGrantRef = useRef<JobAccessGrant | null>(null);
+  const { completeJob, runWithExportAccess } = useMonetization();
 
   const { zoom, zoomIn, zoomOut, resetZoom } = useZoom(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -120,7 +120,7 @@ export const ComparePDF: React.FC = () => {
       } catch (error) {
         console.error(error);
         if (active) {
-          setPreviewError('This page could not be shown for one of the files. You can still save the written summary below.');
+          setPreviewError(t("compare-pdf.this.page.could.not.be.shown.for.4435e1"));
         }
       } finally {
         if (active) setPreviewLoading(false);
@@ -138,13 +138,13 @@ export const ComparePDF: React.FC = () => {
   }, [zoom]);
 
   const handleFileSelection = async (slot: 'left' | 'right', file: File) => {
-    const label = slot === 'left' ? 'Document A' : 'Document B';
+    const label = slot === 'left' ? t("compare-pdf.document.a.e39e3d") : t("compare-pdf.document.b.80d6f4");
     setSelectingSlot(slot);
     setResult(null);
-    setStatus({ isProcessing: true, progress: 10, message: `Opening ${label} on this device…` });
+    setStatus({ isProcessing: true, progress: 10, message: t("compare-pdf.opening.on.this.device.c5898b", { v0: label }) });
     try {
       const nextDocument = await loadPDFDocument(file);
-      if (nextDocument.numPages < 1) throw new Error('The PDF has no pages.');
+      if (nextDocument.numPages < 1) throw new Error(t("compare-pdf.the.pdf.has.no.pages.264071"));
       if (slot === 'left') {
         setFile1(file);
         setPdf1(nextDocument);
@@ -159,8 +159,8 @@ export const ComparePDF: React.FC = () => {
         isProcessing: false,
         progress: 100,
         message: slot === 'left' && !file2 || slot === 'right' && !file1
-          ? `${label} ready.`
-          : 'Both PDFs are ready to compare.',
+          ? t("compare-pdf.ready.0f18e7", { v0: label })
+          : t("compare-pdf.both.pdfs.are.ready.to.compare.83c589"),
       });
     } catch (error) {
       console.error(error);
@@ -168,7 +168,7 @@ export const ComparePDF: React.FC = () => {
         isProcessing: false,
         progress: 0,
         message: '',
-        error: `${label} could not be opened. Choose a readable PDF and try again.`,
+        error: t("compare-pdf.could.not.be.opened.choose.a.readable.159d1d", { v0: label }),
       });
     } finally {
       setSelectingSlot(null);
@@ -214,15 +214,20 @@ export const ComparePDF: React.FC = () => {
     setPan({ x: 0, y: 0 });
     setPreviewError(null);
     setResult(null);
+    comparisonOperationIdRef.current = null;
+    comparisonGrantRef.current = null;
     setStatus(emptyStatus());
     resetZoom();
   };
 
   const handleExportReport = async () => {
     if (!file1 || !file2 || !pdf1 || !pdf2) return;
+    const operationId = uuidv4();
+    comparisonOperationIdRef.current = operationId;
+    comparisonGrantRef.current = null;
     setReportLoading(true);
     setResult(null);
-    setStatus({ isProcessing: true, progress: 10, message: 'Comparing the wording on your device…' });
+    setStatus({ isProcessing: true, progress: 10, message: t("compare-pdf.comparing.the.wording.on.your.device.4debd9") });
     try {
       const commonPages = Math.min(pdf1.numPages, pdf2.numPages);
       const maxPagesCompared = Math.min(commonPages, 50);
@@ -252,61 +257,32 @@ export const ComparePDF: React.FC = () => {
       const firstPageComparison = compareExtractedPageText(leftSignatures[0] || '', rightSignatures[0] || '');
       const firstPageTextEqual = firstPageComparison === 'unavailable' ? null : firstPageComparison === 'matches';
 
-      const mismatchDetails = differentPages.slice(0, 20).map((pageNumber) => {
-        const left = leftSignatures[pageNumber - 1] || '<empty>';
-        const right = rightSignatures[pageNumber - 1] || '<empty>';
-        return [
-          `Page ${pageNumber}`,
-          `A extracted text: ${left.slice(0, 180)}`,
-          `B extracted text: ${right.slice(0, 180)}`,
-        ].join('\n');
-      }).join('\n\n');
-
       const firstPageSignatureA = (leftSignatures[0] || '').replace(/\s+/g, ' ').trim().slice(0, 500);
       const firstPageSignatureB = (rightSignatures[0] || '').replace(/\s+/g, ' ').trim().slice(0, 500);
 
       // Text excerpts keep the report readable; equality uses the complete extracted text.
-      const report = [
-        'PDF Chef Compare Summary',
-        `Generated: ${formatGeneratedAt(new Date())}`,
-        '',
-        `File A: ${file1.name}`,
-        `Pages: ${pdf1.numPages}`,
-        `Size: ${file1.size} bytes`,
-        '',
-        `File B: ${file2.name}`,
-        `Pages: ${pdf2.numPages}`,
-        `Size: ${file2.size} bytes`,
-        '',
-        'Summary',
-        `- Page count equal: ${pdf1.numPages === pdf2.numPages}`,
-        `- First-page extracted text equal: ${firstPageTextEqual === null ? 'unavailable' : firstPageTextEqual}`,
-        '',
-        'First-page text signature A:',
-        firstPageSignatureA || '<empty>',
-        '',
-        'First-page text signature B:',
-        firstPageSignatureB || '<empty>',
-        '',
-        'Page-by-page wording detail',
-        '- What was compared: the wording only. Layout, pictures, fonts and comments were not compared.',
-        `- Pages compared: ${maxPagesCompared}`,
-        `- Pages where the wording matches: ${identicalPages.length}`,
-        `- Pages where the wording differs: ${differentPages.length}`,
-        `- Pages without extractable text in one or both files: ${unavailablePages.length}`,
-        `- Share of pages with extractable text where wording matches: ${matchRatio === null ? 'unavailable' : `${matchRatio}%`}`,
-        '- Pages without extractable text cannot establish a match. Compare scans and pictures visually.',
-        ...(maxPagesCompared < commonPages ? [`- Note: compared first ${maxPagesCompared} common pages only`] : []),
-        '',
-        'Pages with different extracted text:',
-        differentPages.length > 0 ? differentPages.join(', ') : '<none>',
-        '',
-        'Extracted-text details (truncated):',
-        mismatchDetails || '<none>',
-      ].join('\n');
+      const report = createComparisonReport({
+        generatedAt: new Date(),
+        fileA: { name: file1.name, pageCount: pdf1.numPages, sizeBytes: file1.size },
+        fileB: { name: file2.name, pageCount: pdf2.numPages, sizeBytes: file2.size },
+        pageCountEqual: pdf1.numPages === pdf2.numPages,
+        firstPageTextEqual,
+        firstPageSignatureA,
+        firstPageSignatureB,
+        pageSignaturesA: leftSignatures,
+        pageSignaturesB: rightSignatures,
+        pagesCompared: maxPagesCompared,
+        identicalPageCount: identicalPages.length,
+        differentPages,
+        unavailablePages,
+        matchRatio,
+        commonPages,
+      });
 
       const reportName = androidExportFileName('compare_summary', file1.name, 'txt');
-      downloadBlob(new Blob([report], { type: 'text/plain;charset=utf-8' }), reportName, 'text/plain');
+      const grant = await completeJob(operationId).catch(() => 'preview-only' as const);
+      if (comparisonOperationIdRef.current !== operationId) return;
+      comparisonGrantRef.current = grant;
       setResult({
         reportName,
         pagesCompared: maxPagesCompared,
@@ -318,10 +294,27 @@ export const ComparePDF: React.FC = () => {
         firstPageTextEqual,
         limitedToFirstFifty: maxPagesCompared < commonPages,
       });
+      const downloadReport = async () => {
+        downloadBlob(new Blob([report], { type: 'text/plain;charset=utf-8' }), reportName, 'text/plain', { operationId });
+      };
+      if (grant === 'preview-only') {
+        try {
+          const access = await runWithExportAccess(downloadReport);
+          if (access.status === 'blocked') {
+            setStatus({ isProcessing: false, progress: 100, message: t("compare-pdf.comparison.ready.as.a.preview.unlock.to.3a971e") });
+            return;
+          }
+        } catch {
+          setStatus({ isProcessing: false, progress: 100, message: t("compare-pdf.comparison.ready.as.a.preview.unlock.to.3a971e") });
+          return;
+        }
+      } else {
+        await downloadReport();
+      }
       setStatus({
         isProcessing: false,
         progress: 100,
-        message: 'Comparison summary created.',
+        message: t("compare-pdf.comparison.summary.created.9faa19"),
       });
     } catch (error) {
       console.error(error);
@@ -329,7 +322,7 @@ export const ComparePDF: React.FC = () => {
         isProcessing: false,
         progress: 0,
         message: '',
-        error: 'Unable to create the comparison report. Check both PDFs and try again.',
+        error: t("compare-pdf.unable.to.create.the.comparison.report.check.924d37"),
       });
     } finally {
       setReportLoading(false);
@@ -341,35 +334,31 @@ export const ComparePDF: React.FC = () => {
     // bottom pad this route added was a second, unpaid-for one.
     <ToolShell width="full" centered={!file1 && !file2}>
       <div className="mb-3">
-        <h1 className="text-3xl font-bold text-[var(--text-primary)]">Compare Summary</h1>
+        <h1 className="text-3xl font-bold text-[var(--text-primary)]">{t("compare-pdf.compare.summary.62ec42")}</h1>
         {/* Kept: the report is text-based, so a visually different PDF can still
             report as matching. Stated once, here. */}
-        <p className="mt-1 max-w-measure text-sm text-[var(--text-secondary)]">
-          The report compares page count and extracted text, not layout, images, fonts, or annotations.
-        </p>
+        <p className="mt-1 max-w-measure text-sm text-[var(--text-secondary)]">{t("compare-pdf.the.report.compares.page.count.and.extracted.c1f4a2")}</p>
         {file1 && file2 && (
           <div className="sticky top-[var(--size-nav-bar)] z-20 -mx-4 mt-3 flex flex-col gap-2 border-b border-[var(--border-hairline)] bg-[var(--surface-canvas)] px-4 py-2 sm:flex-row sm:flex-wrap sm:items-center">
             <div className="flex items-center justify-between gap-1 rounded-[var(--radius-pill)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-1 text-sm sm:justify-start">
               <button
                 type="button"
-                aria-label="Previous comparison page"
+                aria-label={t("compare-pdf.previous.comparison.page.472b4c")}
                 onClick={() => setPageIndex((value) => Math.max(0, value - 1))}
                 disabled={pageIndex === 0}
                 className="chef-pressable chef-target grid place-items-center rounded-full text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:opacity-55"
               >
-                <ArrowLeft aria-hidden size={18} />
+                <ArrowLeft aria-hidden size={18} className="rtl:rotate-180" />
               </button>
-              <span className="min-w-[7.5rem] text-center font-medium text-[var(--text-primary)]">
-                Page {pageIndex + 1} of {maxPageCount}
-              </span>
+              <span className="min-w-[7.5rem] text-center font-medium text-[var(--text-primary)]">{t("compare-pdf.message.477c22095a", { v0: pageIndex + 1, v1: maxPageCount })}</span>
               <button
                 type="button"
-                aria-label="Next comparison page"
+                aria-label={t("compare-pdf.next.comparison.page.ce0d56")}
                 onClick={() => setPageIndex((value) => Math.min(maxPageCount - 1, value + 1))}
                 disabled={pageIndex >= maxPageCount - 1}
                 className="chef-pressable chef-target grid place-items-center rounded-full text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:opacity-55"
               >
-                <ArrowRight aria-hidden size={18} />
+                <ArrowRight aria-hidden size={18} className="rtl:rotate-180" />
               </button>
             </div>
             <div className="scroll-mb-[calc(var(--size-tab-bar)+2rem)]">
@@ -385,28 +374,26 @@ export const ComparePDF: React.FC = () => {
           <motion.div key="selection" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
             <div className="grid gap-3 md:grid-cols-2">
               <section>
-                <h2 className="mb-1.5 text-sm font-semibold text-[var(--text-secondary)]">Document A</h2>
+                <h2 className="mb-1.5 text-sm font-semibold text-[var(--text-secondary)]">{t("compare-pdf.document.a.e39e3d")}</h2>
                 <FileUpload
                   onFilesSelected={(files) => files[0] && void handleFileSelection('left', files[0])}
                   accept=".pdf"
-                  label={file1 ? file1.name : 'Choose first PDF'}
+                  label={file1 ? file1.name : t("compare-pdf.choose.first.pdf.0434be")}
                 />
               </section>
               <section>
-                <h2 className="mb-1.5 text-sm font-semibold text-[var(--text-secondary)]">Document B</h2>
+                <h2 className="mb-1.5 text-sm font-semibold text-[var(--text-secondary)]">{t("compare-pdf.document.b.80d6f4")}</h2>
                 <FileUpload
                   onFilesSelected={(files) => files[0] && void handleFileSelection('right', files[0])}
                   accept=".pdf"
-                  label={file2 ? file2.name : 'Choose second PDF'}
+                  label={file2 ? file2.name : t("compare-pdf.choose.second.pdf.479128")}
                   allowOpenedPdf={false}
                 />
               </section>
             </div>
             {selectingSlot && (
               <p role="status" aria-live="polite" className="mt-3 flex items-center justify-center gap-2 text-sm font-medium text-[var(--text-secondary)]">
-                <Loader2 aria-hidden className="h-4 w-4 animate-spin text-[var(--accent-text)]" />
-                Opening {selectingSlot === 'left' ? 'Document A' : 'Document B'} on this device…
-              </p>
+                <Loader2 aria-hidden className="h-4 w-4 animate-spin text-[var(--accent-text)]" />{t("compare-pdf.message.c5898b3744", { v0: selectingSlot === 'left' ? t('compare.documentA') : t('compare.documentB') })}</p>
             )}
           </motion.div>
         ) : (
@@ -418,12 +405,8 @@ export const ComparePDF: React.FC = () => {
                 busy={reportLoading}
                 onClick={handleExportReport}
                 className="w-full sm:w-auto"
-              >
-                Save the summary
-              </Button>
-              <Button icon={<Undo2 aria-hidden size={18} />} onClick={reset} disabled={reportLoading} className="w-full sm:w-auto">
-                Choose different PDFs
-              </Button>
+              >{t("compare-pdf.save.the.summary.64af76")}</Button>
+              <Button icon={<Undo2 aria-hidden size={18} />} onClick={reset} disabled={reportLoading} className="w-full sm:w-auto">{t("compare-pdf.choose.different.pdfs.ad084f")}</Button>
             </div>
 
             {result && (
@@ -434,36 +417,36 @@ export const ComparePDF: React.FC = () => {
                 <div className="flex items-start gap-2">
                   <CheckCircle2 aria-hidden className="mt-0.5 h-5 w-5 shrink-0" />
                   <div className="min-w-0">
-                    <h2 className="font-semibold">Comparison summary ready</h2>
+                    <h2 className="font-semibold">{t("compare-pdf.comparison.summary.ready.a3f394")}</h2>
                     <p className="chef-filename mt-1 break-words text-sm">{result.reportName}</p>
                   </div>
                 </div>
                 <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-current/20 pt-3 sm:grid-cols-4">
                   <div>
-                    <dt className="text-xs font-medium">Page count</dt>
-                    <dd className="mt-0.5 font-semibold">{result.pageCountEqual ? 'Same' : 'Different'}</dd>
+                    <dt className="text-xs font-medium">{t("compare-pdf.page.count.2905c1")}</dt>
+                    <dd className="mt-0.5 font-semibold">{result.pageCountEqual ? t("compare-pdf.same.2a98b1") : t("compare-pdf.different.e9cdbd")}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs font-medium">First-page text</dt>
-                    <dd className="mt-0.5 font-semibold">{result.firstPageTextEqual === null ? 'Unavailable' : result.firstPageTextEqual ? 'Matches' : 'Differs'}</dd>
+                    <dt className="text-xs font-medium">{t("compare-pdf.first.page.text.c7e08a")}</dt>
+                    <dd className="mt-0.5 font-semibold">{result.firstPageTextEqual === null ? t("compare-pdf.unavailable.ca1844") : result.firstPageTextEqual ? t("compare-pdf.matches.98abff") : t("compare-pdf.differs.627bb3")}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs font-medium">Pages checked</dt>
+                    <dt className="text-xs font-medium">{t("compare-pdf.pages.checked.7f0722")}</dt>
                     <dd className="mt-0.5 font-semibold">{result.pagesCompared}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs font-medium">Wording that matches</dt>
-                    <dd className="mt-0.5 font-semibold">{result.matchRatio === null ? 'Unavailable' : `${result.matchRatio}% match`}</dd>
+                    <dt className="text-xs font-medium">{t("compare-pdf.wording.that.matches.83d290")}</dt>
+                    <dd className="mt-0.5 font-semibold">{result.matchRatio === null ? t("compare-pdf.unavailable.ca1844") : t("compare-pdf.match.9d6f0a", { v0: result.matchRatio })}</dd>
                   </div>
                 </dl>
                 <p className="type-footnote mt-2">
                   {result.differentPages.length === 0
                     ? result.identicalPageCount > 0
-                      ? 'Wording matches on the checked pages with extractable text. Pictures, layout and fonts are not compared.'
-                      : 'These pages need visual comparison. Inspect the previews for differences in pictures, layout and wording.'
-                    : `The wording differs on page${result.differentPages.length === 1 ? '' : 's'} ${result.differentPages.join(', ')}. Pictures, layout and fonts are not compared.`}
-                  {result.limitedToFirstFifty ? ' Only the first 50 common pages were checked.' : ''}
-                  {result.unavailablePages.length > 0 ? ` Text could not be compared on pages ${result.unavailablePages.join(', ')}. These pages are excluded from the match percentage; inspect them visually.` : ''}
+                      ? t("compare-pdf.wording.matches.on.the.checked.pages.with.dcb9c6")
+                      : t("compare-pdf.these.pages.need.visual.comparison.inspect.the.80af94")
+                    : t("compare-pdf.the.wording.differs.on.page.pictures.layout.ae9fa8", { v1: result.differentPages.join(', '), count: result.differentPages.length })}
+                  {result.limitedToFirstFifty ? t("compare-pdf.only.the.first.50.common.pages.were.f8becd") : ''}
+                  {result.unavailablePages.length > 0 ? t("compare-pdf.text.could.not.be.compared.on.pages.09f2e2", { v0: result.unavailablePages.join(', ') }) : ''}
                 </p>
               </section>
             )}
@@ -478,9 +461,7 @@ export const ComparePDF: React.FC = () => {
                   icon={<RefreshCw aria-hidden size={16} />}
                   onClick={() => setPreviewAttempt((value) => value + 1)}
                   className="shrink-0"
-                >
-                  Retry preview
-                </Button>
+                >{t("compare-pdf.retry.preview.ceba35")}</Button>
               </div>
             )}
 
@@ -499,13 +480,13 @@ export const ComparePDF: React.FC = () => {
                   >
                     {previewLoading && (
                       <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--surface-raised)]/80">
-                        <Loader2 aria-label={`Loading page ${pageIndex + 1} preview`} className="h-6 w-6 animate-spin text-[var(--accent-text)]" />
+                        <Loader2 aria-label={t("compare-pdf.loading.page.preview.73f2ff", { v0: pageIndex + 1 })} className="h-6 w-6 animate-spin text-[var(--accent-text)]" />
                       </div>
                     )}
                     {entry.src && (
                       <img
                         src={entry.src}
-                        alt={`Page ${pageIndex + 1} of ${entry.name}`}
+                        alt={t("compare-pdf.page.of.477c22", { v0: pageIndex + 1, v1: entry.name })}
                         draggable={false}
                         className="max-h-full max-w-full select-none object-contain shadow-[var(--elevation-raised)] will-change-transform"
                         style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
@@ -513,9 +494,7 @@ export const ComparePDF: React.FC = () => {
                     )}
                     {zoom > 1 && isPanning && (
                       <div className="absolute left-2 top-2 flex items-center gap-1 rounded-[var(--radius-pill)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-2 py-1 text-xs font-semibold text-[var(--text-primary)]">
-                        <Move aria-hidden size={12} />
-                        Synced pan
-                      </div>
+                        <Move aria-hidden size={12} />{t("compare-pdf.synced.pan.5774cd")}</div>
                     )}
                   </div>
                 </figure>

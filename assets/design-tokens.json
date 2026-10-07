@@ -143,7 +143,7 @@
   },
   "typography": {
     "family": {
-      "ui": "\"Inter Variable\", \"Inter\", -apple-system, BlinkMacSystemFont, \"SF Pro Text\", system-ui, \"Segoe UI\", sans-serif",
+      "ui": "\"Inter Variable\", \"Inter\", -apple-system, BlinkMacSystemFont, \"SF Pro Text\", system-ui, \"Segoe UI\", \"Noto Sans Arabic\", \"Geeza Pro\", \"Noto Sans Devanagari\", \"Kohinoor Devanagari\", \"Nirmala UI\", sans-serif",
       "system": "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", system-ui, \"Segoe UI\", Roboto, sans-serif",
       "numeric": "\"Inter Variable\", -apple-system, system-ui, sans-serif"
     },

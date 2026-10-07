@@ -1,3 +1,5 @@
+import { LocalizedError } from './i18n/errors.ts';
+import { t } from './i18n/core.ts';
 import { PDFDocument, StandardFonts, degrees, rgb } from 'pdf-lib';
 import { readFileAsArrayBuffer } from './pdfShared';
 import { getPdfPageVisualGeometry } from './pdfPageGeometry';
@@ -31,7 +33,7 @@ const loadImage = (source: string) => new Promise<HTMLImageElement>((resolve, re
   const image = new Image();
   image.decoding = 'async';
   image.onload = () => resolve(image);
-  image.onerror = () => reject(new Error('This page could not be checked for boxes to type into. Try another page, or draw the boxes yourself.'));
+  image.onerror = () => reject(new LocalizedError("fillable-forms.this.page.could.not.be.checked.for.00b0bd"));
   image.src = source;
 });
 
@@ -145,10 +147,10 @@ const fieldName = (raw: string, index: number, used: Set<string>) => {
 };
 
 export const createFillablePdf = async (file: File, placements: FillableFieldPlacement[]): Promise<Uint8Array> => {
-  if (!placements.length) throw new Error('Add at least one form field before exporting.');
+  if (!placements.length) throw new LocalizedError("fillable-forms.add.at.least.one.form.field.before.74ff59");
   const pdf = await PDFDocument.load(await readFileAsArrayBuffer(file));
   const pages = pdf.getPages();
-  if (!pages.length) throw new Error('Selected PDF has no pages.');
+  if (!pages.length) throw new LocalizedError("fillable-forms.selected.pdf.has.no.pages.3882f9");
   const form = pdf.getForm();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const used = new Set(form.getFields().map((field) => field.getName()));

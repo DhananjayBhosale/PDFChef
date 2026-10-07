@@ -1,3 +1,6 @@
+import { localizeError } from '../../services/i18n/errors.ts';
+import { t, formatNumber } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
@@ -62,6 +65,7 @@ const WatermarkPreviewSurface: React.FC<{
   opacity,
   onPointerDown,
 }) => {
+  useI18n();
   return (
     <div
       ref={containerRef}
@@ -72,9 +76,9 @@ const WatermarkPreviewSurface: React.FC<{
       onPointerDown={onPointerDown}
     >
       {imageUrl ? (
-        <img src={imageUrl} alt="Watermark preview" className="h-full w-full object-contain" draggable={false} />
+        <img src={imageUrl} alt={t("watermark-pdf.watermark.preview.bb6d55")} className="h-full w-full object-contain" draggable={false} />
       ) : (
-        <div className="flex h-full items-center justify-center text-xs text-[var(--text-tertiary)]">No preview</div>
+        <div className="flex h-full items-center justify-center text-xs text-[var(--text-tertiary)]">{t("watermark-pdf.no.preview.4b8bac")}</div>
       )}
 
       {layout && (
@@ -100,6 +104,7 @@ const WatermarkPreviewSurface: React.FC<{
 };
 
 export const WatermarkPDF: React.FC = () => {
+  useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
   const [previewFont, setPreviewFont] = useState<PDFFont | null>(null);
   const [text, setText] = useState(DEFAULT_WATERMARK_TEXT);
@@ -189,7 +194,7 @@ export const WatermarkPDF: React.FC = () => {
 
   const handleFilesSelected = (files: File[]) => {
     if (files.length === 0 || !isPdfFile(files[0])) {
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Choose a PDF file to watermark.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("watermark-pdf.choose.a.pdf.file.to.watermark.e31cf9") });
       return;
     }
     const selected = files[0];
@@ -207,7 +212,7 @@ export const WatermarkPDF: React.FC = () => {
 
   const handleApplyWatermark = async () => {
     if (!file || !sanitizeWatermarkText(text)) return;
-    setStatus({ isProcessing: true, progress: 10, message: 'Applying watermark...' });
+    setStatus({ isProcessing: true, progress: 10, message: t("watermark-pdf.applying.watermark.339c47") });
     try {
       const bytes = await addWatermarkToPDF(file.file, {
         text,
@@ -223,14 +228,14 @@ export const WatermarkPDF: React.FC = () => {
       setStatus({
         isProcessing: false,
         progress: 100,
-        message: `Watermarked copy ready: ${outputName}.`,
+        message: t("watermark-pdf.watermarked.copy.ready.2cb9a8", { v0: outputName }),
       });
     } catch (error) {
       setStatus({
         isProcessing: false,
         progress: 0,
         message: '',
-        error: error instanceof Error ? error.message : 'Failed to add watermark',
+        error: error instanceof Error ? localizeError(error) : t("watermark-pdf.failed.to.add.watermark.dade5d"),
       });
     }
   };
@@ -288,7 +293,7 @@ export const WatermarkPDF: React.FC = () => {
             isProcessing: false,
             progress: 0,
             message: '',
-            error: 'The preview could not be shown. You can still add the watermark, or choose another file.',
+            error: t("watermark-pdf.the.preview.could.not.be.shown.you.bc2975"),
           });
         }
       } finally {
@@ -372,26 +377,24 @@ export const WatermarkPDF: React.FC = () => {
         />
       </div>
 
-      <p className="tabular mt-1.5 text-right text-xs text-[var(--text-secondary)]">
-        X {(xPercent * 100).toFixed(1)}% • Y {(yPercent * 100).toFixed(1)}%
-      </p>
+      <p className="tabular mt-1.5 text-end text-xs text-[var(--text-secondary)]">{t("watermark-pdf.message.374fc52abe", { v0: formatNumber(xPercent * 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 }), v1: formatNumber(yPercent * 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })}</p>
     </div>
   );
 
   return (
     <ToolShell width="wide" centered={!file}>
-      <ToolHeader title="Watermark PDF" />
+      <ToolHeader title={t("watermark-pdf.watermark.pdf.903ce9")} />
 
       <AnimatePresence mode="wait">
         {!file ? (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="max-w-3xl mx-auto">
-            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label="Choose a PDF to watermark" />
+            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("watermark-pdf.choose.a.pdf.to.watermark.a7c360")} />
           </motion.div>
         ) : (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_420px]">
             <ToolPanel className="order-2 min-w-0 space-y-3 lg:order-1">
               <div>
-                <label className="block type-footnote font-semibold text-[var(--text-secondary)] mb-1">Watermark text</label>
+                <label className="block type-footnote font-semibold text-[var(--text-secondary)] mb-1">{t("watermark-pdf.watermark.text.9429e8")}</label>
                 <input
                   value={text}
                   onChange={(event) => setText(event.target.value)}
@@ -403,7 +406,7 @@ export const WatermarkPDF: React.FC = () => {
 
               <div>
                 <ChefSliderField
-                  label="Size"
+                  label={t("watermark-pdf.size.1af851")}
                   suffix="pt"
                   decimals={1}
                   min={WATERMARK_MIN_SIZE}
@@ -411,13 +414,13 @@ export const WatermarkPDF: React.FC = () => {
                   step={0.5}
                   value={size}
                   onChange={setSize}
-                  ariaLabel="Watermark size"
+                  ariaLabel={t("watermark-pdf.watermark.size.2dccd4")}
                 />
               </div>
 
               <div>
                 <ChefSliderField
-                  label="Opacity"
+                  label={t("watermark-pdf.opacity.606265")}
                   suffix="%"
                   decimals={1}
                   min={WATERMARK_MIN_OPACITY * 100}
@@ -425,13 +428,13 @@ export const WatermarkPDF: React.FC = () => {
                   step={0.5}
                   value={opacityPercent}
                   onChange={(next) => setOpacity(next / 100)}
-                  ariaLabel="Watermark opacity"
+                  ariaLabel={t("watermark-pdf.watermark.opacity.d101b5")}
                 />
               </div>
 
               <div>
                 <ChefSliderField
-                  label="Rotation"
+                  label={t("watermark-pdf.rotation.57b5e2")}
                   suffix="°"
                   decimals={1}
                   min={WATERMARK_MIN_ROTATION_DEGREES}
@@ -439,21 +442,21 @@ export const WatermarkPDF: React.FC = () => {
                   step={0.5}
                   value={rotation}
                   onChange={setRotation}
-                  ariaLabel="Watermark rotation"
+                  ariaLabel={t("watermark-pdf.watermark.rotation.f52934")}
                 />
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <ChefSliderField label="Horizontal" suffix="%" decimals={1} min={0} max={100} step={0.1} value={xPercent * 100} onChange={(next) => setXPercent(next / 100)} ariaLabel="Watermark horizontal position" />
+                  <ChefSliderField label={t("watermark-pdf.horizontal.0abba4")} suffix="%" decimals={1} min={0} max={100} step={0.1} value={xPercent * 100} onChange={(next) => setXPercent(next / 100)} ariaLabel={t("watermark-pdf.watermark.horizontal.position.a594dc")} />
                 </div>
                 <div>
-                  <ChefSliderField label="Vertical" suffix="%" decimals={1} min={0} max={100} step={0.1} value={yPercent * 100} onChange={(next) => setYPercent(next / 100)} ariaLabel="Watermark vertical position" />
+                  <ChefSliderField label={t("watermark-pdf.vertical.727cd3")} suffix="%" decimals={1} min={0} max={100} step={0.1} value={yPercent * 100} onChange={(next) => setYPercent(next / 100)} ariaLabel={t("watermark-pdf.watermark.vertical.position.793ba3")} />
                 </div>
               </div>
 
               <div>
-                <label className="block type-footnote font-semibold text-[var(--text-secondary)] mb-1">Color</label>
+                <label className="block type-footnote font-semibold text-[var(--text-secondary)] mb-1">{t("watermark-pdf.color.6b7319")}</label>
                 <input
                   type="color"
                   value={color}
@@ -465,21 +468,19 @@ export const WatermarkPDF: React.FC = () => {
 
             <ToolPanel className="order-1 h-fit space-y-2.5 lg:order-2">
               <div className="flex items-center justify-between">
-                <div className="type-caption uppercase tracking-[0.18em] text-[var(--text-tertiary)]">Live preview · page 1</div>
+                <div className="type-caption uppercase tracking-[0.18em] text-[var(--text-tertiary)]">{t("watermark-pdf.live.preview.page.1.e4a4b6")}</div>
                 <button
                   ref={largePreviewTriggerRef}
                   type="button"
                   onClick={() => setShowLargePreview(true)}
                   className="chef-pressable chef-hit-y inline-flex items-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-2.5 py-1.5 type-footnote font-semibold text-[var(--text-secondary)] hover:border-[var(--accent-rest)]"
                 >
-                  <Maximize2 aria-hidden size={16} /> Large preview
-                </button>
+                  <Maximize2 aria-hidden size={16} />{t("watermark-pdf.large.preview.ab2772")}</button>
               </div>
 
               {previewLoading ? (
                 <div className="flex items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-hairline)] py-6 text-sm text-[var(--text-secondary)]">
-                  <Loader2 aria-hidden className="mr-2 animate-spin" size={18} /> Rendering...
-                </div>
+                  <Loader2 aria-hidden className="mr-2 animate-spin" size={18} />{t("watermark-pdf.rendering.5d9292")}</div>
               ) : (
                 renderPreviewCanvas(inlinePreviewRef)
               )}
@@ -490,11 +491,9 @@ export const WatermarkPDF: React.FC = () => {
                 className="chef-target chef-pressable flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-5 font-semibold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-55"
               >
                 {status.isProcessing ? <Loader2 aria-hidden className="animate-spin" size={18} /> : <Droplets aria-hidden size={18} />}
-                <span>Save stamped PDF</span>
+                <span>{t("watermark-pdf.save.stamped.pdf.4051c0")}</span>
               </button>
-              <button type="button" onClick={() => setFile(null)} className="chef-target w-full text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-                Choose another file
-              </button>
+              <button type="button" onClick={() => setFile(null)} className="chef-target w-full text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">{t("watermark-pdf.choose.another.file.26eac8")}</button>
             </ToolPanel>
           </motion.div>
         )}
@@ -510,7 +509,7 @@ export const WatermarkPDF: React.FC = () => {
             ref={largePreviewRef}
             className="chef-safe-x chef-safe-bottom fixed inset-0 z-[100] flex items-center justify-center p-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:p-6"
           >
-            <button className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowLargePreview(false)} aria-label="Close large preview" />
+            <button className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowLargePreview(false)} aria-label={t("watermark-pdf.close.large.preview.10665d")} />
             <motion.div
               initial={{ scale: 0.98, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -522,17 +521,17 @@ export const WatermarkPDF: React.FC = () => {
             >
               <div className="mb-3 flex items-center justify-between">
                 <div>
-                  <div id="large-watermark-preview-title" className="text-sm font-semibold text-white">Large preview</div>
+                  <div id="large-watermark-preview-title" className="text-sm font-semibold text-white">{t("watermark-pdf.large.preview.6b8047")}</div>
                   {/* Kept: inside the modal, dragging is the only way to place
                       the text — the position sliders are behind it. */}
-                  <div className="type-caption text-paper-400">Drag the text to position it.</div>
+                  <div className="type-caption text-paper-400">{t("watermark-pdf.drag.the.text.to.position.it.18cc0d")}</div>
                 </div>
                 <button
                   ref={largePreviewCloseRef}
                   type="button"
                   onClick={() => setShowLargePreview(false)}
                   className="chef-target chef-pressable grid shrink-0 place-items-center rounded-lg text-paper-300 hover:bg-slate-800 hover:text-white"
-                  aria-label="Close large preview"
+                  aria-label={t("watermark-pdf.close.large.preview.10665d")}
                 >
                   <X aria-hidden size={20} />
                 </button>

@@ -1,3 +1,5 @@
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2, RotateCcw, Save, Trash2 } from 'lucide-react';
@@ -16,17 +18,18 @@ import { formatBytes } from '../UI/format';
 type MetadataTextField = 'title' | 'author' | 'subject' | 'keywords' | 'creator' | 'producer';
 
 const METADATA_FIELDS: ReadonlyArray<{ key: MetadataTextField; label: string; hint: string }> = [
-  { key: 'title', label: 'Title', hint: 'The name of the document, which some readers show instead of the file name' },
-  { key: 'author', label: 'Author', hint: 'Who wrote it' },
-  { key: 'subject', label: 'Subject', hint: 'A short line about what it covers' },
-  { key: 'keywords', label: 'Keywords', hint: 'Words to help you find it later, separated by commas' },
-  { key: 'creator', label: 'Made with', hint: 'The app the document was originally written in' },
-  { key: 'producer', label: 'Saved as PDF by', hint: 'The app that turned it into a PDF' },
+  { key: 'title', get label() { return t("metadata-pdf.title.7e8cd2"); }, get hint() { return t("metadata-pdf.the.name.of.the.document.which.some.2558ca"); } },
+  { key: 'author', get label() { return t("metadata-pdf.author.d95082"); }, get hint() { return t("metadata-pdf.who.wrote.it.47c51a"); } },
+  { key: 'subject', get label() { return t("metadata-pdf.subject.689712"); }, get hint() { return t("metadata-pdf.a.short.line.about.what.it.covers.b0bbee"); } },
+  { key: 'keywords', get label() { return t("metadata-pdf.keywords.8bfdb9"); }, get hint() { return t("metadata-pdf.words.to.help.you.find.it.later.84e301"); } },
+  { key: 'creator', get label() { return t("metadata-pdf.made.with.42c6b8"); }, get hint() { return t("metadata-pdf.the.app.the.document.was.originally.written.9a123d"); } },
+  { key: 'producer', get label() { return t("metadata-pdf.saved.as.pdf.by.854dda"); }, get hint() { return t("metadata-pdf.the.app.that.turned.it.into.a.ecace5"); } },
 ];
 
 const emptyStatus = (): ProcessingStatus => ({ isProcessing: false, progress: 0, message: '' });
 
 export const MetadataPDF: React.FC = () => {
+  useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
   const [metadata, setMetadata] = useState<PDFMetadata>({});
   const [sourceMetadata, setSourceMetadata] = useState<PDFMetadata>({});
@@ -37,16 +40,16 @@ export const MetadataPDF: React.FC = () => {
     if (files.length === 0) return;
     const selected = files[0];
     if (!isPdfFile(selected)) {
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Choose a PDF file.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("metadata-pdf.choose.a.pdf.file.c2a7df") });
       return;
     }
 
-    setStatus({ isProcessing: true, progress: 10, message: 'Reading this PDF\u2019s details on your device…' });
+    setStatus({ isProcessing: true, progress: 10, message: t("metadata-pdf.reading.this.pdf.s.details.on.your.3b0103") });
     try {
       const probe = await loadPDFDocument(selected);
       const pageCount = Number(probe?.numPages) || 0;
       if (probe?.destroy) void probe.destroy();
-      if (pageCount < 1) throw new Error('No readable pages');
+      if (pageCount < 1) throw new Error(t("metadata-pdf.no.readable.pages.c37281"));
 
       const loaded = await getPDFMetadata(selected);
       setSourceMetadata(loaded);
@@ -58,14 +61,14 @@ export const MetadataPDF: React.FC = () => {
         name: selected.name,
         size: selected.size,
       });
-      setStatus({ isProcessing: false, progress: 100, message: 'Details loaded.' });
+      setStatus({ isProcessing: false, progress: 100, message: t("metadata-pdf.details.loaded.e7d90c") });
     } catch (error) {
       console.error(error);
       setStatus({
         isProcessing: false,
         progress: 0,
         message: '',
-        error: 'This PDF\u2019s details could not be read. Choose another file, or run Repair PDF on it first.',
+        error: t("metadata-pdf.this.pdf.s.details.could.not.be.ac723c"),
       });
     }
   };
@@ -84,7 +87,7 @@ export const MetadataPDF: React.FC = () => {
     setStatus({
       isProcessing: false,
       progress: 0,
-      message: 'Your changes have been undone. Nothing is saved until you press Save changes.',
+      message: t("metadata-pdf.your.changes.have.been.undone.nothing.is.535615"),
     });
   };
 
@@ -94,7 +97,7 @@ export const MetadataPDF: React.FC = () => {
     setStatus({
       isProcessing: false,
       progress: 0,
-      message: 'All six boxes emptied. Nothing is saved until you press Save changes.',
+      message: t("metadata-pdf.all.six.boxes.emptied.nothing.is.saved.64927c"),
     });
   };
 
@@ -104,7 +107,7 @@ export const MetadataPDF: React.FC = () => {
 
   const handleSave = async () => {
     if (!file) return;
-    setStatus({ isProcessing: true, progress: 10, message: 'Creating the updated PDF on this device…' });
+    setStatus({ isProcessing: true, progress: 10, message: t("metadata-pdf.creating.the.updated.pdf.on.this.device.e2cac9") });
 
     try {
       const pdfBytes = await setPDFMetadata(file.file, metadata, { clearAll: clearAllPending });
@@ -116,7 +119,7 @@ export const MetadataPDF: React.FC = () => {
       setStatus({
         isProcessing: false,
         progress: 100,
-        message: 'Updated PDF created with the details shown above.',
+        message: t("metadata-pdf.updated.pdf.created.with.the.details.shown.ad2e55"),
       });
     } catch (error) {
       console.error(error);
@@ -124,14 +127,14 @@ export const MetadataPDF: React.FC = () => {
         isProcessing: false,
         progress: 0,
         message: '',
-        error: 'The updated PDF could not be made, so your original file is untouched. Try saving again, or run Repair PDF on it first.',
+        error: t("metadata-pdf.the.updated.pdf.could.not.be.made.4f5b0e"),
       });
     }
   };
 
   return (
     <ToolShell width="list" centered={!file}>
-      <ToolHeader title="Document Info" />
+      <ToolHeader title={t("metadata-pdf.document.info.758cc7")} />
 
       <AnimatePresence mode="wait">
         {!file ? (
@@ -145,11 +148,11 @@ export const MetadataPDF: React.FC = () => {
               className="flex items-center justify-center gap-3 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] px-4 py-4 text-[var(--text-secondary)]"
             >
               <Loader2 aria-hidden className="h-5 w-5 animate-spin text-[var(--accent-text)]" />
-              <span className="font-medium">Reading this PDF’s details on your device…</span>
+              <span className="font-medium">{t("metadata-pdf.reading.this.pdf.s.details.on.your.3b0103")}</span>
             </motion.div>
           ) : (
             <motion.div key="upload" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-              <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label="Choose a PDF to see its details" />
+              <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("metadata-pdf.choose.a.pdf.to.see.its.details.182ae2")} />
             </motion.div>
           )
         ) : (
@@ -160,42 +163,33 @@ export const MetadataPDF: React.FC = () => {
             className="space-y-3"
           >
             <section
-              aria-label="Selected PDF"
+              aria-label={t("metadata-pdf.selected.pdf.ed0ff3")}
               className="flex items-center justify-between gap-3 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3"
             >
               <div className="min-w-0">
                 <p className="chef-filename text-sm font-semibold text-[var(--text-primary)]">{file.name}</p>
                 <p className="type-caption text-[var(--text-tertiary)]">{formatBytes(file.size)}</p>
               </div>
-              <Button tone="quiet" onClick={chooseAnotherFile} className="shrink-0">
-                Change
-              </Button>
+              <Button tone="quiet" onClick={chooseAnotherFile} className="shrink-0">{t("metadata-pdf.change.c0bf75")}</Button>
             </section>
 
             <section
-              aria-label="Document properties"
+              aria-label={t("metadata-pdf.document.properties.7115a7")}
               className="rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 sm:p-4"
             >
               <div className="grid gap-2 sm:grid-cols-2">
-                <Button icon={<RotateCcw aria-hidden size={18} />} onClick={resetToSource} block>
-                  Undo my changes
-                </Button>
+                <Button icon={<RotateCcw aria-hidden size={18} />} onClick={resetToSource} block>{t("metadata-pdf.undo.my.changes.9ed9fe")}</Button>
                 <Button
                   tone="destructive"
                   icon={<Trash2 aria-hidden size={18} />}
                   onClick={clearSixProperties}
                   block
-                >
-                  Empty all six boxes
-                </Button>
+                >{t("metadata-pdf.empty.all.six.boxes.2d84a6")}</Button>
               </div>
 
               {/* Kept: without it, "Clear" reads as full sanitization, which
                   it is not. */}
-              <p className="mt-2 rounded-[var(--radius-field)] bg-[var(--surface-sunken)] px-3 py-2 type-footnote text-[var(--text-secondary)]">
-                This empties the six boxes below. Other hidden information — comments, attachments,
-                anything you typed into a form — stays in the file. Clean Up PDF removes document details and comments; it does not erase form values.
-              </p>
+              <p className="mt-2 rounded-[var(--radius-field)] bg-[var(--surface-sunken)] px-3 py-2 type-footnote text-[var(--text-secondary)]">{t("metadata-pdf.this.empties.the.six.boxes.below.other.dba172")}</p>
 
               <div className="mt-3 space-y-2.5">
                 {METADATA_FIELDS.map(({ key, label, hint }) => (
@@ -220,9 +214,7 @@ export const MetadataPDF: React.FC = () => {
               </div>
 
               {/* Kept: an empty field does not mean an empty value. */}
-              <p className="type-footnote mt-3 text-[var(--text-secondary)]">
-                Leaving a box empty keeps whatever the file already had. To wipe a value, use Empty all six boxes.
-              </p>
+              <p className="type-footnote mt-3 text-[var(--text-secondary)]">{t("metadata-pdf.leaving.a.box.empty.keeps.whatever.the.98e023")}</p>
 
               <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
                 <Button
@@ -231,9 +223,7 @@ export const MetadataPDF: React.FC = () => {
                   busy={status.isProcessing}
                   onClick={handleSave}
                   className="w-full sm:w-auto"
-                >
-                  Save changes
-                </Button>
+                >{t("metadata-pdf.save.changes.dd0ae7")}</Button>
               </div>
             </section>
           </motion.div>

@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "include": [
+    "/*"
+  ],
+  "exclude": [
+    "/assets/*",
+    "/vendor/*",
+    "/tool-icons/*",
+    "/site.webmanifest",
+    "/og-image.png",
+    "/pdf-chef-app-icon-512.png",
+    "/pdf-chef-logo-exact.png",
+    "/pdf-chef-logo-exact.webp"
+  ]
+}

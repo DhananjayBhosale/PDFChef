@@ -1,3 +1,5 @@
+import { LocalizedError, nativeTextPlanningError } from './i18n/errors.ts';
+import { t } from './i18n/core.ts';
 import { init, type WrappedPdfiumModule } from '@embedpdf/pdfium';
 import pdfiumWasmUrl from '@embedpdf/pdfium/pdfium.wasm?url';
 import { boundsFitWithinCropBox, PDF_TEXT_OVERFLOW_MESSAGE } from './pdfTextEditSafety';
@@ -102,7 +104,7 @@ const inspectionDisabledReasons = new WeakMap<File, string>();
 const loadEngine = () => {
   enginePromise ??= (async () => {
     const response = await fetch(pdfiumWasmUrl);
-    if (!response.ok) throw new Error('The local PDF text engine could not be loaded.');
+    if (!response.ok) throw new LocalizedError("pdf-native-text-editor.the.local.pdf.text.engine.could.not.d6b23b");
     const wasmBinary = await response.arrayBuffer();
     const engine = await init({ wasmBinary }) as PdfiumEngine;
     engine.PDFiumExt_Init();
@@ -200,7 +202,7 @@ const readEffectiveCropBox = (engine: PdfiumEngine, page: number): PdfSpaceRect 
     // PDFium intersects inherited MediaBox/CropBox values in unrotated PDF
     // coordinates, the same space used by its saved object/character bounds.
     if (!engine.FPDF_GetPageBoundingBox(page, rectPointer)) {
-      throw new Error('Direct text edit failed: the saved page bounds could not be verified.');
+      throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.the.saved.page.adebe8");
     }
     // FS_RECTF is stored as left, top, right, bottom.
     return [
@@ -440,7 +442,7 @@ const withDocument = async <T>(
   const document = engine.FPDF_LoadMemDocument64(inputPointer, bytes.byteLength, '');
   if (!document) {
     free(engine, inputPointer);
-    throw new Error('PDFium could not open this document for direct text editing.');
+    throw new LocalizedError("pdf-native-text-editor.pdfium.could.not.open.this.document.for.8200b9");
   }
 
   try {
@@ -453,18 +455,18 @@ const withDocument = async <T>(
 
 const saveDocument = (engine: PdfiumEngine, document: number) => {
   const writer = engine.PDFiumExt_OpenFileWriter();
-  if (!writer) throw new Error('PDFium could not create an output writer.');
+  if (!writer) throw new LocalizedError("pdf-native-text-editor.pdfium.could.not.create.an.output.writer.a20516");
 
   try {
     if (!engine.PDFiumExt_SaveAsCopy(document, writer)) {
-      throw new Error('PDFium could not save the direct text edit.');
+      throw new LocalizedError("pdf-native-text-editor.pdfium.could.not.save.the.direct.text.58e5a1");
     }
     const size = engine.PDFiumExt_GetFileWriterSize(writer);
-    if (size <= 0) throw new Error('PDFium produced an empty document.');
+    if (size <= 0) throw new LocalizedError("pdf-native-text-editor.pdfium.produced.an.empty.document.f68b68");
     const outputPointer = malloc(engine, size);
     try {
       if (!engine.PDFiumExt_GetFileWriterData(writer, outputPointer, size)) {
-        throw new Error('PDFium could not read the edited document.');
+        throw new LocalizedError("pdf-native-text-editor.pdfium.could.not.read.the.edited.document.3cf746");
       }
       return engine.pdfium.HEAPU8.slice(outputPointer, outputPointer + size);
     } finally {
@@ -496,7 +498,7 @@ const openInspectionDocument = async (engine: PdfiumEngine, file: File) => {
   const document = engine.FPDF_LoadMemDocument64(inputPointer, bytes.byteLength, '');
   if (!document) {
     free(engine, inputPointer);
-    throw new Error('PDFium could not open this document for direct text editing.');
+    throw new LocalizedError("pdf-native-text-editor.pdfium.could.not.open.this.document.for.8200b9");
   }
   const opened = { engine, inputPointer, document };
   inspectionDocuments.set(file, opened);
@@ -560,7 +562,7 @@ export const inspectNativePdfTextTarget = async (
     const result = inspectTarget(engine, cached.document, pageIndex, target);
     const elapsedMs = performance.now() - startedAt;
     if (elapsedMs > MAX_FIRST_INSPECTION_MS) {
-      const reason = 'Direct text analysis is too slow for this PDF on this device. Visual fallback is available.';
+      const reason = t("pdf-native-text-editor.direct.text.analysis.is.too.slow.for.d97968");
       closeInspectionDocument(file);
       inspectionDisabledReasons.set(file, reason);
       return { supported: false, reason };
@@ -641,7 +643,7 @@ const verifyTextObjectFitsPage = (
       character.text.trim() && !boundsFitWithinCropBox(character.bounds, cropBox)
     ))
   ) {
-    throw new Error(PDF_TEXT_OVERFLOW_MESSAGE);
+    throw new LocalizedError("error.pdfTextOverflow");
   }
 };
 
@@ -705,50 +707,50 @@ const verifySerializedOutput = async (
 ) => withDocument(engine, output, (document) => {
   for (const expectation of expectations) {
     if (!pageExists(engine, document, expectation.pageIndex)) {
-      throw new Error('Direct text edit failed: the saved page could not be reopened.');
+      throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.the.saved.page.649ea9");
     }
     const page = engine.FPDF_LoadPage(document, expectation.pageIndex);
-    if (!page) throw new Error('Direct text edit failed: the saved page could not be reopened.');
+    if (!page) throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.the.saved.page.649ea9");
     const textPage = engine.FPDFText_LoadPage(page);
     if (!textPage) {
       engine.FPDF_ClosePage(page);
-      throw new Error('Direct text edit failed: the saved text layer could not be reopened.');
+      throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.the.saved.text.570895");
     }
 
     try {
       const cropBox = readEffectiveCropBox(engine, page);
       const reopenedObjects = collectPageObjectStates(engine, page, textPage);
       if (reopenedObjects.length !== expectation.originalObjects.length) {
-        throw new Error('Direct text edit failed: serialized page objects changed unexpectedly.');
+        throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.serialized.page.objects.240a8d");
       }
       const changes = new Map(expectation.changes.map((change) => [change.objectIndex, change]));
       for (const original of expectation.originalObjects) {
         const reopened = reopenedObjects.find((candidate) => candidate.objectIndex === original.objectIndex);
         if (!reopened || reopened.type !== original.type) {
-          throw new Error('Direct text edit failed: a serialized page object changed unexpectedly.');
+          throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.a.serialized.page.dc7a33");
         }
         if (
           original.fontSize !== undefined
           && (reopened.fontSize === undefined || !closeEnough(original.fontSize, reopened.fontSize))
         ) {
-          throw new Error('Direct text edit failed: a serialized PDF font size changed unexpectedly.');
+          throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.a.serialized.pdf.ee04bb");
         }
         if (
           original.matrix
           && (!reopened.matrix || original.matrix.some((value, index) => !closeEnough(value, reopened.matrix![index])))
         ) {
-          throw new Error('Direct text edit failed: a serialized PDF text transform changed unexpectedly.');
+          throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.a.serialized.pdf.43947f");
         }
         if (
           original.fillColor
           && (!reopened.fillColor || original.fillColor.some((value, index) => value !== reopened.fillColor![index]))
         ) {
-          throw new Error('Direct text edit failed: a serialized PDF text colour changed unexpectedly.');
+          throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.a.serialized.pdf.f899d6");
         }
         const change = changes.get(original.objectIndex);
         if (change) {
           if (!sameSourceRun(reopened.text, change.replacementText)) {
-            throw new Error('Direct text edit failed: saved text disagreed with the requested edit.');
+            throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.saved.text.disagreed.be249e");
           }
           // Check the serialized result with its retained font and transform.
           // The full object also includes any untouched suffix pushed by the
@@ -767,7 +769,7 @@ const verifySerializedOutput = async (
               !reopenedCharacter
               || character.bounds.some((value, index) => !closeEnough(value, reopenedCharacter.bounds[index]))
             ) {
-              throw new Error('Direct text edit failed: unedited PDF text moved during serialization.');
+              throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.unedited.pdf.text.9c5a5b");
             }
           }
           // A shorter replacement widens the gap to the next object, and extractors answer that by
@@ -790,7 +792,7 @@ const verifySerializedOutput = async (
                 && character.text === reopenedCharacter.text;
             });
           if (!suffixCharactersMatch) {
-            throw new Error('Direct text edit failed: unedited PDF text moved during serialization.');
+            throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.unedited.pdf.text.9c5a5b");
           }
           if (originalSuffixCharacters.length > 0) {
             const originalAnchor = originalSuffixCharacters[0].bounds;
@@ -813,20 +815,20 @@ const verifySerializedOutput = async (
               if (originalRelativeBounds.some((value, boundIndex) => (
                 !closeEnough(value, reopenedRelativeBounds[boundIndex])
               ))) {
-                throw new Error('Direct text edit failed: unedited PDF text moved during serialization.');
+                throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.unedited.pdf.text.9c5a5b");
               }
             }
           }
           continue;
         }
         if (!sameSourceRun(original.text, reopened.text)) {
-          throw new Error('Direct text edit failed: unrelated PDF text changed during serialization.');
+          throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.unrelated.pdf.text.081189");
         }
         if (
           original.bounds
           && (!reopened.bounds || original.bounds.some((value, index) => !closeEnough(value, reopened.bounds![index])))
         ) {
-          throw new Error('Direct text edit failed: unrelated PDF content moved during serialization.');
+          throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.unrelated.pdf.content.5887cc");
         }
       }
     } finally {
@@ -880,6 +882,8 @@ const overlaps = (first: PdfSpaceRect, second: PdfSpaceRect) => (
 export interface NativePdfTextClearance {
   pageIndex: number;
   pdfRect: PdfSpaceRect;
+  /** Exact original runs can recover a wider native text box when PDF.js underreports its width. */
+  sourceTexts?: string[];
 }
 
 // Form streams can be shared by multiple placements, including placements on other pages.
@@ -895,18 +899,18 @@ const collectUntouchedCharacters = (
   try {
     for (let pageIndex = 0; pageIndex < engine.FPDF_GetPageCount(document); pageIndex += 1) {
       const page = engine.FPDF_LoadPage(document, pageIndex);
-      if (!page) throw new Error('Direct text edit failed: unrelated page content could not be checked.');
+      if (!page) throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.unrelated.page.content.96fa30");
       let textPage = 0;
       try {
         textPage = engine.FPDFText_LoadPage(page);
-        if (!textPage) throw new Error('Direct text edit failed: unrelated page text could not be checked.');
+        if (!textPage) throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.unrelated.page.text.e66f4a");
         const areas = areasByPage.get(pageIndex) ?? [];
         for (let index = 0; index < engine.FPDFText_CountChars(textPage); index += 1) {
           if (engine.FPDFText_IsGenerated(textPage, index) === 1) continue;
           const unicode = engine.FPDFText_GetUnicode(textPage, index);
           if (!unicode) continue;
           if (!engine.FPDFText_GetCharBox(textPage, index, ...pointers as [number, number, number, number])) {
-            throw new Error('Direct text edit failed: unrelated text bounds could not be checked.');
+            throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.unrelated.text.bounds.86bda2");
           }
           const bounds: PdfSpaceRect = [
             readFloat64(engine, pointers[0]), readFloat64(engine, pointers[2]),
@@ -971,6 +975,54 @@ export const clearNativePdfTextInAreas = async (
         if (!page) continue;
         const pointers = [malloc(engine, 4), malloc(engine, 4), malloc(engine, 4), malloc(engine, 4)];
         const [leftPointer, bottomPointer, rightPointer, topPointer] = pointers;
+        const exactRuns = clearances.filter((clearance) => clearance.pageIndex === pageIndex && clearance.sourceTexts?.length);
+        const matchedExactObjects = new Set<number>();
+        if (exactRuns.length > 0) {
+          const textPage = engine.FPDFText_LoadPage(page);
+          try {
+            if (textPage) {
+              const objects: Array<{ object: number; text: string; bounds: PdfSpaceRect }> = [];
+              for (let index = 0; index < engine.FPDFPage_CountObjects(page); index += 1) {
+                const object = engine.FPDFPage_GetObject(page, index);
+                if (!object || engine.FPDFPageObj_GetType(object) !== PDF_PAGE_OBJECT_TEXT) continue;
+                const text = readTextObject(engine, object, textPage).replace(/\u00ad/g, '').trim();
+                if (!engine.FPDFPageObj_GetBounds(object, leftPointer, bottomPointer, rightPointer, topPointer)) continue;
+                const bounds: PdfSpaceRect = [
+                  readFloat32(engine, leftPointer), readFloat32(engine, bottomPointer),
+                  readFloat32(engine, rightPointer), readFloat32(engine, topPointer),
+                ];
+                objects.push({ object, text, bounds });
+              }
+              for (const { object, text, bounds } of objects) {
+                if (!text) continue;
+                for (const clearance of exactRuns) {
+                  const horizontalOverlap = Math.min(bounds[2], clearance.pdfRect[2]) > Math.max(bounds[0], clearance.pdfRect[0]);
+                  // Invisible logical text may have a zero-height native box at its baseline.
+                  const verticalOverlap = overlaps(bounds, clearance.pdfRect)
+                    || (bounds[1] === bounds[3] && bounds[1] >= clearance.pdfRect[1] && bounds[1] <= clearance.pdfRect[3]);
+                  if (!clearance.sourceTexts?.some((source) => source.trim() === text)
+                    || !horizontalOverlap || !verticalOverlap) continue;
+                  const area = areas.find((candidate) => candidate === clearance.pdfRect);
+                  if (!area) continue;
+                  const expanded: PdfSpaceRect = [
+                    Math.min(area[0], bounds[0]), Math.min(area[1], bounds[1]),
+                    Math.max(area[2], bounds[2]), Math.max(area[3], bounds[3]),
+                  ];
+                  // A wider native box must not take a neighbouring paragraph with it.
+                  const unrelated = objects.some((candidate) => candidate.text
+                    && !clearance.sourceTexts?.some((source) => source.trim() === candidate.text)
+                    && !containedWithin(candidate.bounds, area)
+                    && overlaps(candidate.bounds, expanded));
+                  if (unrelated) continue;
+                  area.splice(0, 4, ...expanded);
+                  matchedExactObjects.add(object);
+                }
+              }
+            }
+          } finally {
+            if (textPage) engine.FPDFText_ClosePage(textPage);
+          }
+        }
 
         /**
          * Remove the text this area covers, following the page into any form it draws.
@@ -1016,7 +1068,7 @@ export const clearNativePdfTextInAreas = async (
               readFloat32(engine, rightPointer),
               readFloat32(engine, topPointer),
             ]);
-            if (!areas.some((area) => overlaps(bounds, area))) continue;
+            if (!matchedExactObjects.has(object) && !areas.some((area) => overlaps(bounds, area))) continue;
             if (!areas.some((area) => containedWithin(bounds, area))) {
               uncleared += 1;
               continue;
@@ -1046,7 +1098,7 @@ export const clearNativePdfTextInAreas = async (
             true,
           );
           if (removed > 0 && !engine.FPDFPage_GenerateContent(page)) {
-            throw new Error('Direct text edit failed: the page could not be rewritten after removing its old text.');
+            throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.the.page.could.ccf1c1");
           }
         } finally {
           pointers.forEach((pointer) => free(engine, pointer));
@@ -1064,7 +1116,7 @@ export const clearNativePdfTextInAreas = async (
             || character.unicode !== actual[index].unicode
             || character.bounds.some((bound, side) => !closeEnough(bound, actual[index].bounds[side]))
           ))) {
-            throw new Error('Direct text edit failed: removing a shared form would change text outside the edited paragraph.');
+            throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.removing.a.shared.fb8791");
           }
         });
       }
@@ -1092,14 +1144,14 @@ export const applyNativePdfTextEdits = async (
 
       for (const [pageIndex, pageEdits] of editsByPage) {
         if (!pageExists(engine, document, pageIndex)) {
-          throw new Error(`Direct text edit failed: page ${pageIndex + 1} does not exist.`);
+          throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.page.does.not.8a16cc", { v0: pageIndex + 1 });
         }
         const page = engine.FPDF_LoadPage(document, pageIndex);
-        if (!page) throw new Error(`Direct text edit failed: page ${pageIndex + 1} could not be opened.`);
+        if (!page) throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.page.could.not.96deff", { v0: pageIndex + 1 });
         let textPage = engine.FPDFText_LoadPage(page);
         if (!textPage) {
           engine.FPDF_ClosePage(page);
-          throw new Error(`Direct text edit failed: page ${pageIndex + 1} has no text layer.`);
+          throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.page.has.no.237330", { v0: pageIndex + 1 });
         }
 
         try {
@@ -1107,7 +1159,7 @@ export const applyNativePdfTextEdits = async (
           const originalObjects = collectPageObjectStates(engine, page, textPage);
           const rawPlan = planNativePdfTextEdits(objects, pageEdits as PlannedNativePdfTextEdit[]);
           if ('reason' in rawPlan) {
-            throw new Error(`Direct text edit failed: ${rawPlan.reason}`);
+            throw nativeTextPlanningError(rawPlan.reason);
           }
           // PDFium aborts when a text object is set to the empty string, so an object whose whole
           // content is removed keeps a single space. It draws nothing, and it means deleting the
@@ -1152,12 +1204,12 @@ export const applyNativePdfTextEdits = async (
             if (change.originalText === change.replacementText) continue;
             const object = engine.FPDFPage_GetObject(page, change.objectIndex);
             if (!object || engine.FPDFPageObj_GetType(object) !== PDF_PAGE_OBJECT_TEXT) {
-              throw new Error('Direct text edit failed: the source text object changed before save.');
+              throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.the.source.text.e6971f");
             }
             const textPointer = utf16Pointer(engine, change.replacementText);
             try {
               if (!engine.FPDFText_SetText(object, textPointer)) {
-                throw new Error('Direct text edit failed: the original font cannot draw the replacement text.');
+                throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.the.original.font.af74ac");
               }
             } finally {
               free(engine, textPointer);
@@ -1167,12 +1219,12 @@ export const applyNativePdfTextEdits = async (
           engine.FPDFText_ClosePage(textPage);
           textPage = 0;
           if (!engine.FPDFPage_GenerateContent(page)) {
-            throw new Error(`Direct text edit failed: page ${pageIndex + 1} could not be regenerated.`);
+            throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.page.could.not.c9fc89", { v0: pageIndex + 1 });
           }
 
           const verificationTextPage = engine.FPDFText_LoadPage(page);
           if (!verificationTextPage) {
-            throw new Error('Direct text edit failed: the saved text could not be verified.');
+            throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.the.saved.text.e2f09e");
           }
           try {
             for (const change of plan.changes) {
@@ -1183,7 +1235,7 @@ export const applyNativePdfTextEdits = async (
                 // after a gap, so the comparison ignores whitespace at the very end.
                 && sameSourceRun(readTextObject(engine, object, verificationTextPage), change.replacementText);
               if (!verified) {
-                throw new Error('Direct text edit failed: the saved text did not read back as written.');
+                throw new LocalizedError("pdf-native-text-editor.direct.text.edit.failed.the.saved.text.95df88");
               }
             }
           } finally {

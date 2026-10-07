@@ -1,3 +1,6 @@
+import { localizeError } from '../../services/i18n/errors.ts';
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useState, useEffect } from 'react';
 import { FileUpload } from '../UI/FileUpload';
 import { PDFFile, ProcessingStatus } from '../../types';
@@ -14,6 +17,7 @@ import { ToolChoiceRow, ToolHeader, ToolPanel, ToolSelectionBar, ToolShell } fro
 import { androidExportFileName, sanitizePageRotationDegrees } from '../../services/androidParity';
 
 export const RotatePDF: React.FC = () => {
+  useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
   const [previews, setPreviews] = useState<string[]>([]);
   const [loadingPreviews, setLoadingPreviews] = useState(false);
@@ -53,7 +57,7 @@ export const RotatePDF: React.FC = () => {
         .catch(err => {
           if (cancelled) return;
           console.error(err);
-          setPreviewError(err instanceof Error ? err.message : 'The pages could not be shown. Choose another file, or run Repair PDF on it first.');
+          setPreviewError(err instanceof Error ? localizeError(err) : t("rotate-pdf.the.pages.could.not.be.shown.choose.9884e4"));
           setLoadingPreviews(false);
         });
     } else {
@@ -97,7 +101,7 @@ export const RotatePDF: React.FC = () => {
 
   const rotateSelected = (angle: 90 | -90) => {
     if (selectedPages.length === 0) {
-      setSelectionMessage('Select at least one page to rotate.');
+      setSelectionMessage(t("rotate-pdf.select.at.least.one.page.to.rotate.0729e0"));
       return;
     }
     setPageRotations(prev => {
@@ -107,23 +111,23 @@ export const RotatePDF: React.FC = () => {
       });
       return next;
     });
-    setSelectionMessage(`${selectedPages.length} page${selectedPages.length === 1 ? '' : 's'} turned ${angle < 0 ? 'left' : 'right'} 90°.`);
+    setSelectionMessage(t(angle < 0 ? 'rotate.turned.left' : 'rotate.turned.right', { count: selectedPages.length }));
   };
 
   const resetRotation = () => {
     const next: Record<number, number> = {};
     for (let i = 0; i < totalPages; i += 1) next[i] = 0;
     setPageRotations(next);
-    setSelectionMessage('All rotation changes reset.');
+    setSelectionMessage(t("rotate-pdf.all.rotation.changes.reset.6ccc9a"));
   };
 
   const handleSave = async () => {
     if (!file) return;
-    setStatus({ isProcessing: true, progress: 10, message: 'Applying rotations...' });
+    setStatus({ isProcessing: true, progress: 10, message: t("rotate-pdf.applying.rotations.dbe0c1") });
     
     try {
       if (rotationArray.length === 0) {
-        setStatus({ isProcessing: false, progress: 0, message: '', error: 'Select at least one page and a rotation before exporting.' });
+        setStatus({ isProcessing: false, progress: 0, message: '', error: t("rotate-pdf.select.at.least.one.page.and.a.18a7e9") });
         return;
       }
 
@@ -131,7 +135,7 @@ export const RotatePDF: React.FC = () => {
         setStatus({
           isProcessing: true,
           progress: Math.round((current / Math.max(1, total)) * 100),
-          message: `Rotating page ${current} of ${total}...`,
+          message: t("rotate-pdf.rotating.page.of.c99b01", { v0: current, v1: total }),
         });
       });
       
@@ -139,26 +143,26 @@ export const RotatePDF: React.FC = () => {
         new Blob([pdfBytes], { type: 'application/pdf' }),
         androidExportFileName('rotate_pages', file.name, 'pdf'),
       );
-      setStatus({ isProcessing: false, progress: 100, message: 'Rotated PDF ready.' });
+      setStatus({ isProcessing: false, progress: 100, message: t("rotate-pdf.rotated.pdf.ready.d9ab7a") });
     } catch (error) {
       console.error(error);
       setStatus({
         isProcessing: false,
         progress: 0,
         message: '',
-        error: error instanceof Error ? error.message : 'Rotation failed.',
+        error: error instanceof Error ? localizeError(error) : t("rotate-pdf.rotation.failed.7a64b8"),
       });
     }
   };
 
   return (
     <ToolShell width="full" centered={!file}>
-      <ToolHeader title="Rotate Pages" />
+      <ToolHeader title={t("rotate-pdf.rotate.pages.0cbe65")} />
 
       <AnimatePresence mode="wait">
         {!file ? (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="max-w-3xl mx-auto">
-             <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label="Choose a PDF to rotate" />
+             <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("rotate-pdf.choose.a.pdf.to.rotate.123e33")} />
           </motion.div>
         ) : (
           <motion.div
@@ -175,7 +179,7 @@ export const RotatePDF: React.FC = () => {
                 <button
                   onClick={() => setFile(null)}
                   className="chef-pressable chef-target -ml-1 flex shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)]"
-                  aria-label="Choose another PDF"
+                  aria-label={t("rotate-pdf.choose.another.pdf.9434e3")}
                 >
                   <Undo2 aria-hidden size={18} />
                 </button>
@@ -183,22 +187,22 @@ export const RotatePDF: React.FC = () => {
               </div>
 
               <ToolChoiceRow
-                label="Rotation"
+                label={t("rotate-pdf.rotation.57b5e2")}
                 choices={[
                   {
                     key: 'left',
-                    label: 'Left 90°',
+                    label: t("rotate-pdf.left.90.4b87de"),
                     // The accessible name starts with the visible label, so "Left 90°" spoken
                     // and "Left 90°" seen are the same control (WCAG 2.5.3).
-                    ariaLabel: 'Left 90°, rotate selected pages counterclockwise',
+                    ariaLabel: t("rotate-pdf.left.90.rotate.selected.pages.counterclockwise.0fd123"),
                     icon: <RotateCw aria-hidden size={18} className="-scale-x-100 shrink-0" />,
                     onClick: () => rotateSelected(-90),
                     disabled: selectedPages.length === 0,
                   },
                   {
                     key: 'right',
-                    label: 'Right 90°',
-                    ariaLabel: 'Right 90°, rotate selected pages clockwise',
+                    label: t("rotate-pdf.right.90.471b9b"),
+                    ariaLabel: t("rotate-pdf.right.90.rotate.selected.pages.clockwise.a6de0a"),
                     icon: <RotateCw aria-hidden size={18} className="shrink-0" />,
                     onClick: () => rotateSelected(90),
                     disabled: selectedPages.length === 0,
@@ -207,30 +211,30 @@ export const RotatePDF: React.FC = () => {
               />
 
               <ToolSelectionBar
-                summary={selectionMessage ?? `${selectedPages.length} of ${totalPages} selected`}
+                summary={selectionMessage ?? t("rotate-pdf.of.selected.2d057c", { v0: selectedPages.length, v1: totalPages })}
                 actions={[
                   {
                     key: 'select-all',
-                    label: 'Select all',
+                    label: t("rotate-pdf.select.all.1fc9a3"),
                     disabled: totalPages === 0 || selectedPages.length === totalPages,
                     onClick: () => {
                       setSelectedPages(Array.from({ length: totalPages }, (_, index) => index));
-                      setSelectionMessage('All pages selected.');
+                      setSelectionMessage(t("rotate-pdf.all.pages.selected.044753"));
                     },
                   },
                   {
                     key: 'clear',
-                    label: 'Clear',
+                    label: t("rotate-pdf.clear.83b12c"),
                     disabled: selectedPages.length === 0 && !hasRotationChanges,
                     onClick: () => {
                       setSelectedPages([]);
                       resetRotation();
-                      setSelectionMessage('Selection and rotations cleared.');
+                      setSelectionMessage(t("rotate-pdf.selection.and.rotations.cleared.5f1e1a"));
                     },
                   },
                   // Reset only exists once there is something to undo. Greyed out
                   // it held a full row of its own above the page list.
-                  { key: 'reset', label: 'Reset', hidden: !hasRotationChanges, onClick: resetRotation },
+                  { key: 'reset', label: t("rotate-pdf.reset.daee76"), hidden: !hasRotationChanges, onClick: resetRotation },
                 ]}
               />
             </ToolPanel>
@@ -246,19 +250,19 @@ export const RotatePDF: React.FC = () => {
               icon={<Save aria-hidden size={18} />}
               onClick={() => void handleSave()}
             >
-              {status.isProcessing ? status.message || 'Rotating pages...' : 'Save turned PDF'}
+              {status.isProcessing ? status.message || t("rotate-pdf.rotating.pages.a6d7f2") : t("rotate-pdf.save.turned.pdf.fa1cfd")}
             </Button>
 
             {loadingPreviews ? (
               <div className="flex flex-col items-center justify-center gap-2 py-6 text-[var(--text-tertiary)]">
                 <Loader2 aria-hidden className="animate-spin" size={24} />
-                <p className="text-sm">Loading pages...</p>
+                <p className="text-sm">{t("rotate-pdf.loading.pages.1b27e2")}</p>
               </div>
             ) : previewError ? (
               <div className="flex flex-col items-center gap-2 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] px-4 py-4 text-center">
-                <p className="font-semibold text-[var(--status-danger-text)]">The pages could not be shown. Choose another file, or run Repair PDF on it first.</p>
+                <p className="font-semibold text-[var(--status-danger-text)]">{t("rotate-pdf.the.pages.could.not.be.shown.choose.9884e4")}</p>
                 <p className="max-w-measure text-sm text-[var(--text-secondary)]">{previewError}</p>
-                <Button tone="secondary" onClick={() => setFile(null)}>Choose another PDF</Button>
+                <Button tone="secondary" onClick={() => setFile(null)}>{t("rotate-pdf.choose.another.pdf.9434e3")}</Button>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">

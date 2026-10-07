@@ -27,6 +27,24 @@ const substitutedFont: ResolvedFont = {
 const options = { width: 200, fontSize: 12, lineHeight: 16, align: 'left' as const };
 const near = (actual: number, expected: number) => assert.ok(Math.abs(actual - expected) < 0.00001, `${actual} != ${expected}`);
 
+test('redraw keeps different sizes even when adjacent runs use the same face', () => {
+  const lines = [[
+    { text: 'Heading ', face: regular, fontSize: 15.96 },
+    { text: 'body ', face: regular, fontSize: 12 },
+    { text: 'small', face: regular, fontSize: 10 },
+  ]];
+  for (const align of ['left', 'justify'] as const) {
+    const pieces = layoutParagraphLines(align === 'justify' ? [...lines, [{ text: 'Last', face: regular }]] : lines,
+      { ...options, align });
+    const firstLine = pieces.filter(piece => piece.lineIndex === 0);
+    assert.deepEqual(firstLine.map(piece => piece.fontSize), align === 'justify' ? [15.96, 15.96, 12, 12, 10] : [15.96, 12, 10]);
+    for (const piece of firstLine) {
+      near(piece.width, measureParagraphText(piece.text, piece.face, piece.fontSize));
+    }
+    assert.deepEqual([...new Set(pieces.filter(piece => piece.lineIndex === 0).map(piece => piece.fontSize))], [15.96, 12, 10]);
+  }
+});
+
 test('an extended amount retains its explicit row and original baseline despite exceeding the old width', () => {
   const lines = [[{ text: '2099 Dr fdagadga', face: regular }]];
   const [piece] = layoutParagraphLines(lines, {

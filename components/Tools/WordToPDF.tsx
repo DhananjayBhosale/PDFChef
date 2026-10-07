@@ -1,3 +1,7 @@
+import { formatPercent } from '../../services/i18n/core.ts';
+import { localizeError } from '../../services/i18n/errors.ts';
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useRef, useState } from 'react';
 import { FileText } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -15,6 +19,7 @@ const idleStatus = (): ProcessingStatus => ({ isProcessing: false, progress: 0, 
 const isAbortError = (error: unknown) => error instanceof Error && error.name === 'AbortError';
 
 export const WordToPDF: React.FC = () => {
+  useI18n();
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>(idleStatus);
   const activeRun = useRef(0);
@@ -27,12 +32,12 @@ export const WordToPDF: React.FC = () => {
     const selected = files[0];
     if (!selected) return;
     if (!selected.name.toLowerCase().endsWith('.docx')) {
-      setStatus({ ...idleStatus(), error: 'Choose a .docx Word file. Older .doc files are not supported.' });
+      setStatus({ ...idleStatus(), error: t("word-to-pdf.choose.a.docx.word.file.older.doc.334d2c") });
       return;
     }
     if (
       shouldWarnForFiles([selected]) &&
-      !window.confirm('This is a large Word file and may use substantial browser memory. Continue?')
+      !window.confirm(t("word-to-pdf.this.is.a.large.word.file.and.1543cf"))
     ) {
       return;
     }
@@ -46,36 +51,36 @@ export const WordToPDF: React.FC = () => {
     if (!file) return;
     const runId = activeRun.current + 1;
     activeRun.current = runId;
-    setStatus({ isProcessing: true, progress: 5, message: 'Opening Word document…' });
+    setStatus({ isProcessing: true, progress: 5, message: t("word-to-pdf.opening.word.document.fe5d6e") });
 
     try {
       const bytes = await convertDocxToPdf(file, (current, total) => {
-        if (activeRun.current !== runId) throw new DOMException('Operation cancelled.', 'AbortError');
+        if (activeRun.current !== runId) throw new DOMException(t("word-to-pdf.operation.cancelled.386cf3"), 'AbortError');
         const progress = Math.round(10 + (current / Math.max(1, total)) * 85);
         setStatus({
           isProcessing: true,
           progress,
-          message: `Laying out paragraph ${current} of ${total}…`,
+          message: t("word-to-pdf.laying.out.paragraph.of.fd57af", { v0: current, v1: total }),
         });
       });
       if (activeRun.current !== runId) return;
 
       downloadBytes(bytes, `${file.name.replace(/\.docx$/i, '')}.pdf`, 'application/pdf');
-      setStatus({ isProcessing: false, progress: 100, message: 'PDF ready.' });
+      setStatus({ isProcessing: false, progress: 100, message: t("word-to-pdf.pdf.ready.cf5972") });
     } catch (error) {
       if (activeRun.current !== runId || isAbortError(error)) return;
       setStatus({
         isProcessing: false,
         progress: 0,
         message: '',
-        error: error instanceof Error && error.message ? error.message : 'Word to PDF conversion failed.',
+        error: error instanceof Error && error.message ? localizeError(error) : t("word-to-pdf.word.to.pdf.conversion.failed.2f69fc"),
       });
     }
   };
 
   const cancel = () => {
     activeRun.current += 1;
-    setStatus({ isProcessing: false, progress: 0, message: 'Conversion cancelled. Nothing was saved.' });
+    setStatus({ isProcessing: false, progress: 0, message: t("word-to-pdf.conversion.cancelled.nothing.was.saved.44e2e7") });
   };
 
   const chooseAnother = () => {
@@ -88,14 +93,14 @@ export const WordToPDF: React.FC = () => {
 
   return (
     <ToolShell centered={!file}>
-      <ToolHeader title={<>Word to PDF <Badge tone="caution" className="align-middle">Beta</Badge></>} />
+      <ToolHeader title={<>{t("word-to-pdf.word.to.pdf.8d26d0")}<Badge tone="caution" className="align-middle">{t("word-to-pdf.beta.703390")}</Badge></>} />
 
       <div>
         {!file ? (
           <FileUpload
             onFilesSelected={select}
             accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            label="Choose a .docx Word file"
+            label={t("word-to-pdf.choose.a.docx.word.file.055d87")}
           />
         ) : (
           <section className="rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 sm:p-4">
@@ -105,27 +110,23 @@ export const WordToPDF: React.FC = () => {
               </div>
               <div className="min-w-0">
                 <h2 className="chef-filename text-sm font-semibold text-[var(--text-primary)]">{file.name}</h2>
-                <p className="type-caption text-[var(--text-tertiary)]">
-                  {formatBytes(file.size)} · .docx
-                </p>
+                <p className="type-caption text-[var(--text-tertiary)]">{t("word-to-pdf.message.d3f3b1b69d", { v0: formatBytes(file.size) })}</p>
               </div>
             </div>
 
             {/* Kept: a user who expects the styled document back would only find
                 out after opening the PDF. */}
-            <p className="mt-2.5 border-t border-[var(--border-hairline)] pt-2.5 type-footnote text-[var(--text-secondary)]">
-              Text and page breaks are kept; fonts, styling, and images are not.
-            </p>
+            <p className="mt-2.5 border-t border-[var(--border-hairline)] pt-2.5 type-footnote text-[var(--text-secondary)]">{t("word-to-pdf.text.and.page.breaks.are.kept.fonts.75cce8")}</p>
 
             {status.isProcessing && (
               <div role="status" aria-live="polite" className="mt-3 rounded-[var(--radius-field)] border border-blue-200 bg-blue-50 p-3 dark:border-blue-400 dark:bg-blue-500/10">
                 <div className="flex items-center justify-between gap-3 text-sm font-semibold text-blue-900 dark:text-blue-100">
                   <span>{status.message || 'Converting…'}</span>
-                  <span className="tabular-nums">{status.progress}%</span>
+                  <span className="tabular-nums">{formatPercent(status.progress)}</span>
                 </div>
                 <div
                   role="progressbar"
-                  aria-label="Word to PDF progress"
+                  aria-label={t("word-to-pdf.word.to.pdf.progress.1ff4d9")}
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={status.progress}
@@ -138,7 +139,7 @@ export const WordToPDF: React.FC = () => {
 
             {status.error && (
               <div role="alert" className="mt-3 rounded-[var(--radius-field)] border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-400 dark:bg-rose-500/10 dark:text-rose-200">
-                <p className="font-bold">{refusal ? 'There is nothing to convert' : 'That did not work'}</p>
+                <p className="font-bold">{refusal ? t("word-to-pdf.there.is.nothing.to.convert.16ffb2") : t("word-to-pdf.that.did.not.work.93a203")}</p>
                 <p className="mt-1 leading-relaxed">{status.error}</p>
               </div>
             )}
@@ -151,7 +152,7 @@ export const WordToPDF: React.FC = () => {
 
             <div className="mt-3 grid gap-2 sm:flex sm:flex-wrap">
               {status.isProcessing ? (
-                <Button tone="secondary" block onClick={cancel}>Cancel</Button>
+                <Button tone="secondary" block onClick={cancel}>{t("word-to-pdf.cancel.19766e")}</Button>
               ) : (
                 !refusal && (
                   <Button
@@ -161,7 +162,7 @@ export const WordToPDF: React.FC = () => {
                     icon={<FileText aria-hidden size={18} />}
                     onClick={() => void convert()}
                   >
-                    {status.error ? 'Try again' : 'Save PDF'}
+                    {status.error ? t("word-to-pdf.try.again.d8b839") : t("word-to-pdf.save.pdf.2462a8")}
                   </Button>
                 )
               )}
@@ -171,9 +172,7 @@ export const WordToPDF: React.FC = () => {
                 className="sm:w-auto"
                 disabled={status.isProcessing}
                 onClick={chooseAnother}
-              >
-                Choose another
-              </Button>
+              >{t("word-to-pdf.choose.another.8a2bca")}</Button>
             </div>
           </section>
         )}

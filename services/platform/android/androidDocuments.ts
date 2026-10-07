@@ -38,7 +38,11 @@ export interface AndroidDocumentsNativePlugin {
     readonly displayName?: string;
     readonly mimeType?: SupportedOwnedMime;
   }): Promise<unknown>;
-  openReader(options: { readonly ref: string; readonly displayName: string }): Promise<unknown>;
+  openReader(options: {
+    readonly ref: string;
+    readonly displayName: string;
+    readonly initialAction?: 'verify-signatures';
+  }): Promise<unknown>;
   addListener(
     eventName: 'pendingImportReady' | 'incomingPdfReady',
     listener: (event: unknown) => void,
@@ -413,9 +417,16 @@ export class AndroidDocumentsClient {
     return Object.freeze({ status: result.status });
   }
 
-  async openReader(ref: string, displayName: string): Promise<AndroidReaderResult> {
+  async openReader(
+    ref: string,
+    displayName: string,
+    initialAction?: 'verify-signatures',
+  ): Promise<AndroidReaderResult> {
     if (!isExactReference(ref) || !isDisplayName(displayName)) throw invalidRequest();
-    const raw = await this.native.openReader({ ref, displayName });
+    if (initialAction !== undefined && initialAction !== 'verify-signatures') throw invalidRequest();
+    const raw = await this.native.openReader(initialAction === undefined
+      ? { ref, displayName }
+      : { ref, displayName, initialAction });
     const envelope = exactObject(raw, raw && typeof raw === 'object'
       && (raw as Record<string, unknown>).action === 'tool'
       ? ['action', 'toolPath'] : ['action']);

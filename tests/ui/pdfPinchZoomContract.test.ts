@@ -52,7 +52,7 @@ test('the shared reader releases off-screen canvases and its PDF document', () =
   assert.match(reader, /canvas\.width = 0/);
   assert.match(reader, /width=\{0\}/);
   assert.match(reader, /currentDocument\.destroy\(\)/);
-  assert.match(reader, /aria-label="PDF password"/);
+  assert.match(reader, /aria-label=\{t\("view-pdf\.pdf\.password\.e5cca6"\)\}/);
   assert.match(reader, /loadDisposablePDFDocument\(openedPdf\.file\)/);
   assert.match(browserService, /export const loadDisposablePDFDocument/);
   assert.match(browserService, /caller exclusively owns and must destroy/);
@@ -66,7 +66,7 @@ test('iOS signature verification is capability-gated and explicitly user initiat
   const runtime = read('hooks/useWorkspaceRuntime.tsx');
   assert.match(reader, /pdfSignatureVerification/);
   assert.match(reader, /isEligible\(openedPdf\.file\)/);
-  assert.match(reader, /aria-label="Verify PDF signatures"/);
+  assert.match(reader, /aria-label=\{t\("view-pdf\.verify\.pdf\.signatures\.93bd01"\)\}/);
   assert.match(reader, /min-h-touch/);
   assert.doesNotMatch(runtime, /pdfSignatureVerification:\s*\{/);
 });

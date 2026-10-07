@@ -221,6 +221,10 @@ const saveAndRead = async (page, nextOutput, pageCount = 1) => {
         `Save reported: ${await page.getByRole('alert').innerText()}\n${(errorsByPage.get(page) ?? []).join('\n')}`,
       ); }),
   ]));
+  // Every successful export now opens the shared result menu; close it before further edits.
+  const resultMenu = page.getByRole('dialog');
+  await resultMenu.waitFor({ timeout: 5000 });
+  await resultMenu.getByRole('button', { name: 'Close', exact: true }).click();
   const task = pdfjs.getDocument({ data: Uint8Array.from(bytes) });
   const document = await task.promise;
   const first = await document.getPage(1);

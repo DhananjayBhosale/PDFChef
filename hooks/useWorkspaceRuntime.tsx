@@ -1,3 +1,6 @@
+import { localizeError } from '../services/i18n/errors.ts';
+import english from '../services/i18n/en-US.ts';
+import { t } from '../services/i18n/core.ts';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   ApplicationMetadataService,
@@ -9,6 +12,7 @@ import type {
   HapticsService,
   PdfSignatureVerificationService,
   PdfReaderService,
+  PdfOpenHandoffService,
   RecordAbilities,
   RecordRecoveryService,
   StorageInformation,
@@ -29,6 +33,7 @@ import {
   deleteOutput,
   getOutput,
   listOutputs,
+  recordOutput,
   type OutputRecord,
 } from '../services/workspace';
 import { triggerBrowserDownload } from '../services/pdfShared';
@@ -78,6 +83,8 @@ export interface WorkspaceCapabilities {
   durableDocuments: boolean;
   /** Records and retained files can be cleared independently of one another. */
   separateClearActions: boolean;
+  /** False when an automatic download would only be a blocking system picker. */
+  automaticExternalExport?: boolean;
 }
 
 /**
@@ -115,6 +122,8 @@ export interface WorkspacePlatform {
    * declarations from services/platform/contracts.ts.
    */
   pdfReader?: PdfReaderService;
+  /** Buffered continuation after the native iOS reader chooses a web tool. */
+  pdfOpenHandoffs?: PdfOpenHandoffService;
   /** Native signature details for the exact durable File returned by reopen. */
   pdfSignatureVerification?: PdfSignatureVerificationService;
   /**
@@ -131,6 +140,8 @@ export interface WorkspacePlatform {
   rename?: (record: RecentRecord, name: string) => Promise<void>;
   /** Save a just-produced result. Falls back to the browser download. */
   saveFresh(result: FreshResult): Promise<void>;
+  /** Keep a just-produced result in the app's Recent list. */
+  keepFresh?: (result: FreshResult) => Promise<void>;
   /** Share a just-produced result, when the platform has a share sheet. */
   shareFresh?: (result: FreshResult) => Promise<void>;
 }
@@ -140,7 +151,7 @@ export interface WorkspacePlatform {
  * It reports honestly on what it cannot do rather than faking it.
  * ------------------------------------------------------------------ */
 
-export const FALLBACK_DOCUMENT_NAME = 'Untitled document';
+export const FALLBACK_DOCUMENT_NAME = english["use-workspace-runtime.untitled.document.9f6d7c"];
 export const FALLBACK_MIME_TYPE = 'application/octet-stream';
 
 const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
@@ -171,7 +182,7 @@ const refFor = (id: unknown): DurableDocumentRef | null => {
 const toRecord = (output: OutputRecord): RecentRecord => {
   const ref = refFor(output.id);
   const outputSize = normalizeByteCount(output.size);
-  const name = text(output.filename) || FALLBACK_DOCUMENT_NAME;
+  const name = text(output.filename) || t("use-workspace-runtime.untitled.document.9f6d7c");
   const mimeType = text(output.mimeType) || text(output.blob?.type) || FALLBACK_MIME_TYPE;
   const createdAt = timestamp(output.createdAt);
 
@@ -214,14 +225,14 @@ const toRecord = (output: OutputRecord): RecentRecord => {
 const blobFor = async (record: RecentRecord): Promise<Blob> => {
   const output = record.entry.id ? await getOutput(record.entry.id) : undefined;
   if (!(output?.blob instanceof Blob)) {
-    throw new Error('That file is no longer stored on this device.');
+    throw new Error(t("use-workspace-runtime.that.file.is.no.longer.stored.on.a99d6c"));
   }
   return output.blob;
 };
 
 /** A File always needs a name and a type; neither may arrive as undefined. */
 const fileFrom = (blob: Blob, name: string, mimeType: string): File =>
-  new File([blob], text(name) || FALLBACK_DOCUMENT_NAME, {
+  new File([blob], text(name) || t("use-workspace-runtime.untitled.document.9f6d7c"), {
     type: text(mimeType) || text(blob.type) || FALLBACK_MIME_TYPE,
   });
 
@@ -229,7 +240,7 @@ const canWebShare = () => typeof navigator !== 'undefined' && typeof navigator.s
 
 const webShareFile = async (file: File, title: string) => {
   if (navigator.canShare && !navigator.canShare({ files: [file] })) {
-    throw new Error('This device cannot share that file type.');
+    throw new Error(t("use-workspace-runtime.this.device.cannot.share.that.file.type.fe7f0e"));
   }
   await navigator.share({ files: [file], title });
 };
@@ -260,12 +271,12 @@ export const browserPlatform: WorkspacePlatform = {
   },
   async save(record, name) {
     const blob = await blobFor(record);
-    triggerBrowserDownload(blob, text(name) || record.entry.name || FALLBACK_DOCUMENT_NAME);
+    triggerBrowserDownload(blob, text(name) || record.entry.name || t("use-workspace-runtime.untitled.document.9f6d7c"));
   },
   share: canWebShare()
     ? async (record, name) => {
         const blob = await blobFor(record);
-        const resolved = text(name) || record.entry.name || FALLBACK_DOCUMENT_NAME;
+        const resolved = text(name) || record.entry.name || t("use-workspace-runtime.untitled.document.9f6d7c");
         await webShareFile(fileFrom(blob, resolved, record.entry.mimeType), resolved);
       }
     : undefined,
@@ -274,11 +285,14 @@ export const browserPlatform: WorkspacePlatform = {
     return fileFrom(blob, record.entry.name, record.entry.mimeType);
   },
   async saveFresh(result) {
-    triggerBrowserDownload(result.blob, text(result.name) || FALLBACK_DOCUMENT_NAME);
+    triggerBrowserDownload(result.blob, text(result.name) || t("use-workspace-runtime.untitled.document.9f6d7c"));
+  },
+  async keepFresh(result) {
+    await recordOutput(result.blob, result.name, result.mimeType, window.location.pathname, true);
   },
   shareFresh: canWebShare()
     ? async (result) => {
-        const resolved = text(result.name) || FALLBACK_DOCUMENT_NAME;
+        const resolved = text(result.name) || t("use-workspace-runtime.untitled.document.9f6d7c");
         await webShareFile(fileFrom(result.blob, resolved, result.mimeType), resolved);
       }
     : undefined,
@@ -291,11 +305,11 @@ const WorkspacePlatformContext = createContext<WorkspacePlatform>(browserPlatfor
 export const WorkspacePlatformProvider: React.FC<{
   platform?: WorkspacePlatform;
   children: React.ReactNode;
-}> = ({ platform, children }) => (
+}> = ({ platform, children }) => { return (
   <WorkspacePlatformContext.Provider value={platform ?? browserPlatform}>
     {children}
   </WorkspacePlatformContext.Provider>
-);
+); };
 
 export const useWorkspacePlatform = (): WorkspacePlatform => useContext(WorkspacePlatformContext);
 
@@ -310,7 +324,7 @@ export type AsyncState<T> =
   | { status: 'ready'; value: T };
 
 const messageFrom = (caught: unknown, fallback: string) =>
-  caught instanceof Error && caught.message ? caught.message : fallback;
+  caught instanceof Error && caught.message ? localizeError(caught) : fallback;
 
 export const useRecentRecords = () => {
   const platform = useWorkspacePlatform();
@@ -330,7 +344,7 @@ export const useRecentRecords = () => {
       if (alive.current) setState({ status: 'ready', value });
     } catch (caught) {
       if (alive.current) {
-        setState({ status: 'error', message: messageFrom(caught, 'Local records could not be read on this device.') });
+        setState({ status: 'error', message: messageFrom(caught, t("use-workspace-runtime.local.records.could.not.be.read.on.2e67b3")) });
       }
     }
   }, [platform]);
@@ -361,7 +375,7 @@ export const useStorageInformation = () => {
         if (alive) setState({ status: 'ready', value });
       })
       .catch((caught: unknown) => {
-        if (alive) setState({ status: 'error', message: messageFrom(caught, 'Storage usage could not be read.') });
+        if (alive) setState({ status: 'error', message: messageFrom(caught, t("use-workspace-runtime.storage.usage.could.not.be.read.96fb6b")) });
       });
     return () => {
       alive = false;
@@ -390,7 +404,7 @@ export const useApplicationMetadata = () => {
         if (alive) setState({ status: 'ready', value });
       })
       .catch((caught: unknown) => {
-        if (alive) setState({ status: 'error', message: messageFrom(caught, 'Version information is unavailable.') });
+        if (alive) setState({ status: 'error', message: messageFrom(caught, t("use-workspace-runtime.version.information.is.unavailable.f0bee1")) });
       });
     return () => {
       alive = false;

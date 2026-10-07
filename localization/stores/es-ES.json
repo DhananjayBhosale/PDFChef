@@ -1,0 +1,52 @@
+{
+  "appLocale": "es-ES",
+  "appleLocale": "es-ES",
+  "googleLocale": "es-ES",
+  "apple": {
+    "name": "PDF Chef",
+    "subtitle": "Edita, une y comprime PDF",
+    "promotionalText": "Lee, edita y organiza PDF en tu dispositivo. Une archivos, gestiona páginas y añade una firma manuscrita.",
+    "description": "PDF Chef te ayuda a leer, editar, unir, dividir, comprimir y firmar PDF en tu dispositivo.\n\nOrganiza páginas, añade texto e imágenes, inserta una firma manuscrita, añade marcas de agua o números de página y protege PDF con contraseña. Convierte imágenes y documentos compatibles y extrae texto. Los resultados dependen del archivo de origen y de la herramienta seleccionada.\n\nEl procesamiento normal de PDF se realiza en tu dispositivo. Tus documentos no se suben a ningún servidor de PDF Chef para su procesamiento. Las herramientas sin conexión siguen disponibles una vez cargados sus recursos.\n\nPDF Chef no requiere ninguna cuenta. Revisa el resultado antes de compartirlo o exportarlo.\n\nEn iOS, las primeras cinco tareas correctas de cada periodo de asignación móvil de siete días son tareas completas que puedes guardar, compartir y exportar. El periodo comienza con la primera tarea correcta. Tras cinco tareas, el procesamiento y la vista previa siguen disponibles, pero guardar, compartir y exportar requieren Pro hasta que se restablezca la asignación.\n\nPro Mensual se renueva automáticamente hasta su cancelación. Pro Vitalicio es una compra única, no una suscripción. Ambas opciones son compatibles con En familia de Apple. Los precios y los detalles de compra aparecen en la app antes de comprar. Restaura las compras desde Ajustes.\n\nTerms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+    "whatsNew": "Versión {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Mensual",
+      "description": "Exportación total. Se renueva hasta cancelar."
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Vitalicio",
+      "description": "Exportación completa. Pago único."
+    },
+    "screenshot": {
+      "1": "Tus herramientas para PDF en un solo lugar",
+      "2": "Edita texto y añade imágenes",
+      "3": "Une archivos y organiza páginas",
+      "4": "Previsualiza antes de guardar",
+      "5": "Añade tu firma manuscrita",
+      "6": "Trabaja en tu dispositivo"
+    },
+    "keywords": "dividir,escanear,firmar,convertir,lector,marca de agua,contraseña,desbloquear,rotar"
+  },
+  "google": {
+    "name": "PDF Chef",
+    "shortDescription": "Edita, une, comprime y firma PDF en tu dispositivo.",
+    "fullDescription": "PDF Chef te ayuda a leer, editar, unir, dividir, comprimir y firmar PDF en tu dispositivo.\n\nOrganiza páginas, añade texto e imágenes, inserta una firma manuscrita, añade marcas de agua o números de página y protege PDF con contraseña. Convierte imágenes y documentos compatibles y extrae texto. Los resultados dependen del archivo de origen y de la herramienta seleccionada.\n\nEl procesamiento normal de PDF se realiza en tu dispositivo. Tus documentos no se suben a ningún servidor de PDF Chef para su procesamiento. Las herramientas sin conexión siguen disponibles una vez cargados sus recursos.\n\nPDF Chef no requiere ninguna cuenta. Revisa el resultado antes de compartirlo o exportarlo.",
+    "whatsNew": "Versión {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Mensual",
+      "description": "Guarda, comparte y exporta cada resultado. Se renueva cada mes hasta su cancelación.",
+      "benefit": "Guarda y comparte cada resultado"
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Vitalicio",
+      "description": "Guarda, comparte y exporta cada resultado con un pago único."
+    },
+    "screenshot": {
+      "1": "Tus herramientas para PDF en un solo lugar",
+      "2": "Edita texto y añade imágenes",
+      "3": "Une archivos y organiza páginas",
+      "4": "Previsualiza antes de guardar",
+      "5": "Añade tu firma manuscrita",
+      "6": "Trabaja en tu dispositivo"
+    }
+  }
+}

@@ -1,3 +1,7 @@
+import { formatBytes } from '../UI/format';
+import { localizeError } from '../../services/i18n/errors.ts';
+import { t, formatNumber } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { FileUpload } from '../UI/FileUpload';
@@ -47,6 +51,7 @@ const PageImagePreview: React.FC<{
   pdfDoc: any;
   scale: number;
 }> = ({ pdfDoc, scale }) => {
+  useI18n();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -80,24 +85,20 @@ const PageImagePreview: React.FC<{
       <canvas
         ref={canvasRef}
         role="img"
-        aria-label="Page 1 preview"
+        aria-label={t("pdfto-image.page.1.preview.b4963a")}
         className="block max-h-[64dvh] max-w-full select-none rounded-[2px] border border-[var(--border-strong)] bg-white object-contain shadow-[var(--elevation-panel)] md:max-h-[78vh]"
       />
     </figure>
   );
 };
 
-const formatBytes = (bytes: number) => {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
-};
 
 const getBaseName = (filename: string) => filename.replace(/\.pdf$/i, '');
 
 /** Comma and range syntax, as in the app's `pages=1,3-5` option token. */
 
 export const PDFToImage: React.FC = () => {
+  useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
@@ -193,7 +194,7 @@ export const PDFToImage: React.FC = () => {
       void scanEmbeddedImages(doc);
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'This PDF could not be opened. Choose another file, or run Repair PDF on it first.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("pdfto-image.this.pdf.could.not.be.opened.choose.2b90a7") });
     }
   };
 
@@ -206,10 +207,10 @@ export const PDFToImage: React.FC = () => {
       if (Capacitor.isNativePlatform()) {
         const reader = new FileReader();
         const dataUrl = await new Promise<string>((resolve, reject) => {
-          reader.onerror = () => reject(new Error('Preview image could not be opened.'));
+          reader.onerror = () => reject(new Error(t("pdfto-image.preview.image.could.not.be.opened.70d755")));
           reader.onload = () => typeof reader.result === 'string'
             ? resolve(reader.result)
-            : reject(new Error('Preview image could not be opened.'));
+            : reject(new Error(t("pdfto-image.preview.image.could.not.be.opened.70d755")));
           reader.readAsDataURL(result.blob);
         });
         URL.revokeObjectURL(result.objectUrl);
@@ -266,7 +267,7 @@ export const PDFToImage: React.FC = () => {
       return resolveOptionalPageSelection(
         (pageSelection.trim() ? parseBoundedPageRange(pageSelection, pdfDoc.numPages) : []).map((index) => index + 1),
         pdfDoc.numPages,
-        'Pages to convert',
+        t("pdfto-image.pages.to.convert.965608"),
       );
     } catch {
       return null;
@@ -298,7 +299,7 @@ export const PDFToImage: React.FC = () => {
   const handlePageExport = async () => {
     if (!pdfDoc || !file) return;
     if (resolvedPageSelection === null) {
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Check the page range. Use values such as 1,3-5.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("pdfto-image.check.the.page.range.use.values.such.4fe08b") });
       return;
     }
     if (requiresLargeJobConfirmation && !largeJobConfirmed) {
@@ -306,11 +307,11 @@ export const PDFToImage: React.FC = () => {
         isProcessing: false,
         progress: 0,
         message: '',
-        error: 'Review the large-export memory warning before continuing.',
+        error: t("pdfto-image.review.the.large.export.memory.warning.before.540b9d"),
       });
       return;
     }
-    setStatus({ isProcessing: true, progress: 0, message: 'Starting export...' });
+    setStatus({ isProcessing: true, progress: 0, message: t("pdfto-image.starting.export.8e015a") });
 
     try {
       const extension = imageExportExtension(config.format);
@@ -327,14 +328,14 @@ export const PDFToImage: React.FC = () => {
       };
 
       if (exportIndices.length === 1) {
-        setStatus({ isProcessing: true, progress: 50, message: `Rendering page ${exportIndices[0] + 1}...` });
+        setStatus({ isProcessing: true, progress: 50, message: t("pdfto-image.rendering.page.f14d93", { v0: exportIndices[0] + 1 }) });
         const { blob } = await renderPage(exportIndices[0]);
         downloadBlob(
           blob,
           androidExportFileName('pdf_to_jpg', file.name, extension),
           config.format,
         );
-        setStatus({ isProcessing: false, progress: 100, message: 'Done!' });
+        setStatus({ isProcessing: false, progress: 100, message: t("pdfto-image.done.b4e19e") });
         return;
       }
 
@@ -344,22 +345,22 @@ export const PDFToImage: React.FC = () => {
         setStatus({
           isProcessing: true,
           progress: (index / exportIndices.length) * 100,
-          message: `Rendering page ${pageIndex + 1} (${index + 1}/${exportIndices.length})...`,
+          message: t("pdfto-image.rendering.page.662494", { v0: pageIndex + 1, v1: index + 1, v2: exportIndices.length }),
         });
         const { blob } = await renderPage(pageIndex);
         zip.file(imageExportPageFileName(pageIndex, extension, highestPageIndex), blob);
       }
 
-      setStatus({ isProcessing: true, progress: 100, message: 'Putting the pictures into one zip file…' });
+      setStatus({ isProcessing: true, progress: 100, message: t("pdfto-image.putting.the.pictures.into.one.zip.file.1a0af7") });
       const content = await zip.generateAsync({ type: 'blob' });
       downloadBlob(content, `${androidExportDirectoryName(file.name, 'images')}.zip`);
-      setStatus({ isProcessing: false, progress: 100, message: 'Done!' });
+      setStatus({ isProcessing: false, progress: 100, message: t("pdfto-image.done.b4e19e") });
     } catch (error) {
       setStatus({
         isProcessing: false,
         progress: 0,
         message: '',
-        error: error instanceof Error ? error.message : 'Saving did not work',
+        error: error instanceof Error ? localizeError(error) : t("pdfto-image.saving.did.not.work.f30329"),
       });
     }
   };
@@ -376,11 +377,11 @@ export const PDFToImage: React.FC = () => {
     if (images.length === 1) {
       const image = images[0];
       downloadBlob(image.blob, `${baseName}-embedded-image-pages-${image.pageNumbers.join('-')}.png`, 'image/png');
-      setStatus({ isProcessing: false, progress: 100, message: 'Done!' });
+      setStatus({ isProcessing: false, progress: 100, message: t("pdfto-image.done.b4e19e") });
       return;
     }
 
-    setStatus({ isProcessing: true, progress: 10, message: 'Getting the pictures ready…' });
+    setStatus({ isProcessing: true, progress: 10, message: t("pdfto-image.getting.the.pictures.ready.13eef3") });
 
     try {
       const zip = new JSZip();
@@ -389,7 +390,7 @@ export const PDFToImage: React.FC = () => {
         setStatus({
           isProcessing: true,
           progress: ((index + 1) / images.length) * 100,
-          message: `Packing image ${index + 1}/${images.length}...`,
+          message: t("pdfto-image.packing.image.33f98f", { v0: index + 1, v1: images.length }),
         });
         zip.file(
           `embedded-image-${String(index + 1).padStart(2, '0')}-pages-${image.pageNumbers.join('-')}.png`,
@@ -399,10 +400,10 @@ export const PDFToImage: React.FC = () => {
 
       const content = await zip.generateAsync({ type: 'blob' });
       downloadBlob(content, `${baseName}-embedded-images.zip`);
-      setStatus({ isProcessing: false, progress: 100, message: 'Done!' });
+      setStatus({ isProcessing: false, progress: 100, message: t("pdfto-image.done.b4e19e") });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Embedded image export failed' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("pdfto-image.embedded.image.export.failed.e49cf7") });
     }
   };
 
@@ -454,17 +455,17 @@ export const PDFToImage: React.FC = () => {
   useImmersiveWorkspace(Boolean(file));
 
   const pageActionLabel = resolvedPageSelection === null
-    ? 'Check page range'
-    : `Convert ${exportPageCount} ${exportPageCount === 1 ? 'Page' : 'Pages'}`;
+    ? t("pdfto-image.check.page.range.093d41")
+    : t('pdfToImage.convertPages', { count: exportPageCount });
   const primaryActionLabel = exportMode === 'embedded-images'
-    ? `Download Selected${selectedEmbeddedImages.length > 0 ? ` (${selectedEmbeddedImages.length})` : ''}`
+    ? t("pdfto-image.download.selected.ecbb46", { v0: selectedEmbeddedImages.length > 0 ? ` (${selectedEmbeddedImages.length})` : '' })
     : pageActionLabel;
 
   if (!file) {
     return (
       <ToolShell centered>
-        <ToolHeader title="PDF to Image" />
-        <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label="Choose a PDF to convert" />
+        <ToolHeader title={t("pdfto-image.pdf.to.image.185e0a")} />
+        <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("pdfto-image.choose.a.pdf.to.convert.443592")} />
         <StatusToast status={status} />
       </ToolShell>
     );
@@ -481,7 +482,7 @@ export const PDFToImage: React.FC = () => {
               needs a name and a full target, not a bare glyph. */}
           <Link
             to="/"
-            aria-label="Back to tools"
+            aria-label={t("pdfto-image.back.to.tools.e42d59")}
             className="chef-target grid place-items-center rounded-full text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-sunken)]"
           >
             <Undo2 aria-hidden size={20} />
@@ -492,23 +493,19 @@ export const PDFToImage: React.FC = () => {
             )}
             {/* The mode is stated by the Mode control and by the export
                 button's own label; it does not need a third voice here. */}
-            <h1 className="text-lg font-bold leading-none text-[var(--text-primary)]">PDF to Image</h1>
+            <h1 className="text-lg font-bold leading-none text-[var(--text-primary)]">{t("pdfto-image.pdf.to.image.185e0a")}</h1>
           </div>
         </div>
 
         {file && (
           <div className="flex w-full items-center justify-end gap-2 sm:w-auto sm:gap-3">
             {hasDetectedEmbeddedImages && (
-              <div className="type-caption hidden rounded-full bg-[var(--status-success-quiet)] px-3 py-1 uppercase text-[var(--status-success-text)] sm:block">
-                {embeddedImages.length} images detected
-              </div>
+              <div className="type-caption hidden rounded-full bg-[var(--status-success-quiet)] px-3 py-1 uppercase text-[var(--status-success-text)] sm:block">{t("pdfto-image.message.204dac635c", { v0: embeddedImages.length })}</div>
             )}
             <button
               onClick={handleStartOver}
               className="chef-target chef-pressable rounded-[var(--radius-control)] px-3 text-xs font-bold text-[var(--status-danger-text)] transition-colors hover:bg-[var(--status-danger-quiet)] sm:px-4 sm:text-sm"
-            >
-              Start over
-            </button>
+            >{t("pdfto-image.start.over.5eed7e")}</button>
             <button
               onClick={handlePrimaryAction}
               disabled={
@@ -531,12 +528,11 @@ export const PDFToImage: React.FC = () => {
             <div className="custom-scrollbar flex max-h-[46dvh] w-full flex-shrink-0 flex-col gap-3 overflow-y-auto md:h-full md:max-h-none md:w-80 md:max-w-80">
               <div className="space-y-2 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3">
                 <div className="flex items-center gap-2 border-b border-[var(--border-hairline)] pb-2 text-sm font-bold text-[var(--text-primary)]">
-                  <Settings2 aria-hidden size={18} className="text-[var(--accent-text)]" /> Picture settings
-                </div>
+                  <Settings2 aria-hidden size={18} className="text-[var(--accent-text)]" />{t("pdfto-image.picture.settings.53a399")}</div>
 
                 {hasImageModeOption && (
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">Mode</label>
+                    <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">{t("pdfto-image.mode.5e23ec")}</label>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={() => setExportMode('pages')}
@@ -545,9 +541,7 @@ export const PDFToImage: React.FC = () => {
                             ? 'border-[var(--accent-rest)] bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]'
                             : 'border-[var(--border-strong)] text-[var(--text-primary)] hover:border-[var(--accent-rest)]'
                         }`}
-                      >
-                        Pages
-                      </button>
+                      >{t("pdfto-image.pages.9046da")}</button>
                       <button
                         onClick={() => hasDetectedEmbeddedImages && setExportMode('embedded-images')}
                         disabled={!hasDetectedEmbeddedImages}
@@ -557,7 +551,7 @@ export const PDFToImage: React.FC = () => {
                             : 'border-[var(--border-strong)] text-[var(--text-primary)] hover:border-[var(--accent-rest)]'
                         } disabled:cursor-not-allowed disabled:opacity-55`}
                       >
-                        {isScanningImages ? 'Scanning…' : `Images${hasDetectedEmbeddedImages ? ` (${embeddedImages.length})` : ''}`}
+                        {isScanningImages ? t("pdfto-image.scanning.38d96d") : t("pdfto-image.images.3df294", { v0: hasDetectedEmbeddedImages ? ` (${embeddedImages.length})` : '' })}
                       </button>
                     </div>
                   </div>
@@ -566,7 +560,7 @@ export const PDFToImage: React.FC = () => {
                 {exportMode === 'pages' ? (
                   <>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">Format</label>
+                      <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">{t("pdfto-image.format.2f3436")}</label>
                       <div className="grid grid-cols-3 gap-2">
                         {['image/jpeg', 'image/png', 'image/webp'].map((format) => (
                           <button
@@ -587,20 +581,20 @@ export const PDFToImage: React.FC = () => {
                     <div className="grid grid-cols-2 gap-3">
                       {config.format !== 'image/png' && (
                         <ChefSliderField
-                          label="Quality"
+                          label={t("pdfto-image.quality.1b2c08")}
                           suffix="%"
                           min={MIN_IMAGE_EXPORT_QUALITY}
                           max={100}
                           step={1}
                           value={Math.round(config.quality * 100)}
                           onChange={(next) => setConfig({ ...config, quality: next / 100 })}
-                          ariaLabel="Image quality"
+                          ariaLabel={t("pdfto-image.image.quality.6ad454")}
                         />
                       )}
 
                       <div className={config.format === 'image/png' ? 'col-span-2' : undefined}>
                         <ChefSliderField
-                          label="Resolution"
+                          label={t("pdfto-image.resolution.d4055f")}
                           suffix="×"
                           decimals={2}
                           fixedDecimals
@@ -609,26 +603,22 @@ export const PDFToImage: React.FC = () => {
                           step={0.05}
                           value={config.scale}
                           onChange={(next) => setConfig({ ...config, scale: next })}
-                          ariaLabel="Image resolution"
+                          ariaLabel={t("pdfto-image.image.resolution.93626a")}
                         />
                       </div>
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]" htmlFor="pdf-to-image-pages">
-                        Pages
-                      </label>
+                      <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]" htmlFor="pdf-to-image-pages">{t("pdfto-image.pages.9046da")}</label>
                       <input
                         id="pdf-to-image-pages"
                         value={pageSelection}
                         onChange={(event) => setPageSelection(event.target.value)}
-                        placeholder="All pages — or 1,3-5"
+                        placeholder={t("pdfto-image.all.pages.or.1.3.5.7f85f6")}
                         className="chef-field"
                       />
                       {resolvedPageSelection === null && (
-                        <p role="alert" className="text-xs font-medium text-rose-600 dark:text-rose-300">
-                          Use page numbers or ranges such as 1,3-5.
-                        </p>
+                        <p role="alert" className="text-xs font-medium text-rose-600 dark:text-rose-300">{t("pdfto-image.use.page.numbers.or.ranges.such.as.28c6a3")}</p>
                       )}
                     </div>
 
@@ -636,19 +626,15 @@ export const PDFToImage: React.FC = () => {
                       /* Kept in full: this is the one place the tool can warn
                          that a large export may exhaust the tab's memory. */
                       <div role="note" className="rounded-[var(--radius-field)] border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-500 dark:bg-amber-500/10 dark:text-amber-100">
-                        <p className="font-bold">Large browser export</p>
-                        <p className="mt-1 leading-relaxed">
-                          Exporting {exportPageCount} pages needs roughly {estimatedWorkingMemoryMb} MB of browser memory, and complex pages can need much more.
-                        </p>
+                        <p className="font-bold">{t("pdfto-image.large.browser.export.daeb4c")}</p>
+                        <p className="mt-1 leading-relaxed">{t("pdfto-image.message.aa8fdb0667", { v0: exportPageCount, v1: estimatedWorkingMemoryMb })}</p>
                         <label className="mt-3 flex min-h-11 cursor-pointer items-center gap-3 font-semibold">
                           <input
                             type="checkbox"
                             checked={largeJobConfirmed}
                             onChange={(event) => setLargeJobConfirmed(event.target.checked)}
                             className="h-5 w-5 accent-blue-600"
-                          />
-                          Continue with this export
-                        </label>
+                          />{t("pdfto-image.continue.with.this.export.37f365")}</label>
                       </div>
                     )}
 
@@ -657,24 +643,20 @@ export const PDFToImage: React.FC = () => {
                   hasDetectedEmbeddedImages && (
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-                        <span>Selection</span>
-                        <span>{selectedEmbeddedImages.length} / {embeddedImages.length}</span>
+                        <span>{t("pdfto-image.selection.ca4067")}</span>
+                        <span dir="ltr">{formatNumber(selectedEmbeddedImages.length)} / {formatNumber(embeddedImages.length)}</span>
                       </div>
                       <div className="flex gap-2">
                         <button
                           type="button"
                           onClick={() => setSelectedEmbeddedIds(embeddedImages.map((image) => image.id))}
                           className="chef-target chef-pressable rounded-[var(--radius-control)] border border-[var(--border-strong)] px-3 text-sm font-medium text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]"
-                        >
-                          Select all
-                        </button>
+                        >{t("pdfto-image.select.all.1fc9a3")}</button>
                         <button
                           type="button"
                           onClick={() => setSelectedEmbeddedIds([])}
                           className="chef-target chef-pressable rounded-[var(--radius-control)] border border-[var(--border-strong)] px-3 text-sm font-medium text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]"
-                        >
-                          Clear
-                        </button>
+                        >{t("pdfto-image.clear.83b12c")}</button>
                       </div>
                     </div>
                   )
@@ -707,7 +689,7 @@ export const PDFToImage: React.FC = () => {
                   ) : (
                     <div className="flex flex-col items-center text-[var(--text-tertiary)]">
                       <FileImage size={48} className="mb-2 opacity-50" />
-                      <p>Generating preview...</p>
+                      <p>{t("pdfto-image.generating.preview.17a59a")}</p>
                     </div>
                   )}
                 </div>
@@ -718,21 +700,19 @@ export const PDFToImage: React.FC = () => {
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)]">
                 <div className="border-b border-[var(--border-hairline)] px-3 py-2">
                   <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
-                    <ImageIcon aria-hidden size={18} className="text-[var(--accent-text)]" />
-                    Embedded images
-                  </div>
+                    <ImageIcon aria-hidden size={18} className="text-[var(--accent-text)]" />{t("pdfto-image.embedded.images.f88df7")}</div>
                 </div>
 
                 <div className="custom-scrollbar flex-1 overflow-y-auto p-3">
                   {isScanningImages ? (
                     <div className="flex h-full flex-col items-center justify-center text-[var(--text-secondary)]">
                       <Loader2 className="mb-4 animate-spin" size={32} />
-                      <p>Scanning PDF for embedded images…</p>
+                      <p>{t("pdfto-image.scanning.pdf.for.embedded.images.0f63ee")}</p>
                     </div>
                   ) : embeddedImages.length === 0 ? (
                     <div className="flex h-full flex-col items-center justify-center text-[var(--text-secondary)]">
                       <ImageIcon size={40} className="mb-3 opacity-50" />
-                      <p>This PDF has no pictures stored inside it. To save the pages themselves as pictures, switch to Pages above.</p>
+                      <p>{t("pdfto-image.this.pdf.has.no.pictures.stored.inside.5e555c")}</p>
                     </div>
                   ) : (
                     <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -741,7 +721,7 @@ export const PDFToImage: React.FC = () => {
                         return (
                           <article
                             key={image.id}
-                            className={`overflow-hidden rounded-2xl border text-left transition-all ${
+                            className={`overflow-hidden rounded-2xl border text-start transition-all ${
                               isSelected
                                 ? 'border-[var(--accent-rest)] shadow-lg'
                                 : 'border-[var(--border-strong)]'
@@ -750,7 +730,7 @@ export const PDFToImage: React.FC = () => {
                             <button
                               type="button"
                               aria-pressed={isSelected}
-                              aria-label={`Image ${index + 1}${isSelected ? ', selected' : ''}`}
+                              aria-label={t("pdfto-image.image.0f73dd", { v0: index + 1, v1: isSelected ? t("pdfto-image.selected.bd44f3") : '' })}
                               onClick={() => toggleEmbeddedSelection(image.id)}
                               className="chef-pressable block w-full"
                             >
@@ -762,39 +742,36 @@ export const PDFToImage: React.FC = () => {
                             <div className="space-y-2 bg-[var(--surface-raised)] p-3">
                               <div className="flex items-start justify-between gap-3">
                                 <div>
-                                  <div className="text-sm font-bold text-[var(--text-primary)]">Image {index + 1}</div>
-                                  <div className="text-xs text-[var(--text-secondary)]">
-                                    Pages {image.pageNumbers.join(', ')}
-                                  </div>
+                                  <div className="text-sm font-bold text-[var(--text-primary)]">{t("pdfto-image.message.fd3495587c", { v0: index + 1 })}</div>
+                                  <div className="text-xs text-[var(--text-secondary)]">{t("pdfto-image.message.1fac9292db", { v0: image.pageNumbers.join(', ') })}</div>
                                 </div>
                                 <div className={`type-caption rounded-full px-2 py-1 uppercase ${
                                   isSelected
                                     ? 'bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]'
                                     : 'bg-[var(--surface-sunken)] text-[var(--text-secondary)]'
                                 }`}>
-                                  {isSelected ? 'Selected' : 'Not selected'}
+                                  {isSelected ? t("pdfto-image.selected.57fd7a") : t("pdfto-image.not.selected.df12ae")}
                                 </div>
                               </div>
 
                               <div className="grid grid-cols-2 gap-2 text-xs text-[var(--text-secondary)]">
                                 <div className="rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-3 py-2">
                                   <div className="font-semibold text-[var(--text-body)]">{image.width} × {image.height}</div>
-                                  <div>pixels</div>
+                                  <div>{t("pdfto-image.pixels.6ec9c2")}</div>
                                 </div>
                                 <div className="rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-3 py-2">
                                   <div className="font-semibold text-[var(--text-body)]">{formatBytes(image.byteSize)}</div>
-                                  <div>lossless PNG</div>
+                                  <div>{t("pdfto-image.lossless.png.daae34")}</div>
                                 </div>
                               </div>
 
                               <button
                                 type="button"
-                                aria-label={`Download image ${index + 1}`}
+                                aria-label={t("pdfto-image.download.image.fdaf13", { v0: index + 1 })}
                                 onClick={() => void downloadEmbeddedImages([image])}
                                 className="chef-target chef-pressable flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] text-sm font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]"
                               >
-                                <Download aria-hidden size={16} /> Download image
-                              </button>
+                                <Download aria-hidden size={16} />{t("pdfto-image.download.image.2fd3a0")}</button>
                             </div>
                           </article>
                         );

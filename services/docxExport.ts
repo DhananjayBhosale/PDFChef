@@ -1,3 +1,5 @@
+import { LocalizedError } from './i18n/errors.ts';
+import { t } from './i18n/core.ts';
 import JSZip from 'jszip';
 import { loadPDFDocument } from './pdfBrowser';
 
@@ -115,7 +117,7 @@ export const convertPDFToDocx = async (
 ): Promise<Blob> => {
   const pages = await extractPageTextForExport(file, onProgress);
 
-  if (pages.length === 0) throw new Error('Selected PDF has no pages.');
+  if (pages.length === 0) throw new LocalizedError("docx-export.selected.pdf.has.no.pages.3882f9");
   if (!pages.some((page) => page.trim().length > 0)) throw new Error(NO_EXTRACTABLE_TEXT_MESSAGE);
 
   return buildDocxBlob(pages);

@@ -509,6 +509,18 @@ test('a paragraph nobody has edited yet still exposes its runs as segments', () 
   assert.equal(segments.length, 1);
   assert.equal(styledLineText(segments[0]), 'Alpha Beta');
   assert.deepEqual(findInStyledLines(segments, 'Beta'), [{ line: 0, start: 6, end: 10 }]);
+  assert.ok(segments[0].every(segment => segment.fontSize === 12));
+});
+
+test('find and replace retains adjacent sizes within the same font', () => {
+  const { lines } = replaceInStyledLines([[
+    { text: 'Heading ', fontKey: 'regular', fontSize: 16 },
+    { text: 'Body', fontKey: 'regular', fontSize: 12 },
+  ]], 'Body', 'Longer body');
+  assert.deepEqual(lines[0], [
+    { text: 'Heading ', fontKey: 'regular', fontSize: 16 },
+    { text: 'Longer body', fontKey: 'regular', fontSize: 12 },
+  ]);
 });
 
 test('a standard face reports the characters it has no glyph for', () => {

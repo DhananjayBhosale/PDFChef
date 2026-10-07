@@ -1,5 +1,7 @@
+import { t, formatNumber } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronDown,
   ChevronUp,
@@ -25,8 +27,9 @@ import { tools } from './toolCatalog';
 import type { ToolCardData } from './toolCatalog';
 import { ToolIdentity } from './ToolIdentity';
 import { ToolHeader, ToolShell } from '../UI/ToolLayout';
-import { Portal } from '../UI/Primitives';
+import { Badge, Portal } from '../UI/Primitives';
 import { useWorkspacePlatform } from '../../hooks/useWorkspaceRuntime';
+import { useMonetization } from '../../hooks/useMonetization';
 
 const VIEWER_TOOL_PATHS = [
   '/compress',
@@ -62,6 +65,7 @@ const ViewerPage: React.FC<{
   zoom: number;
   onActivePage: (page: number) => void;
 }> = ({ pdfDoc, pageIndex, zoom, onActivePage }) => {
+  useI18n();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -140,16 +144,17 @@ const ViewerPage: React.FC<{
     <section
       id={`viewer-page-${pageIndex + 1}`}
       ref={containerRef}
-      aria-label={`Page ${pageIndex + 1}`}
+      aria-label={t("view-pdf.page.c140ba", { v0: pageIndex + 1 })}
       className="mb-3 scroll-mt-40 rounded border border-paper-300 bg-white shadow-[var(--elevation-raised)]"
     >
       {/* The page mark sits above the page, not on it. Floated into the corner
           it landed on whatever the document put at its own top left, which on a
           normal document is the first line of the page. */}
       <div aria-hidden className="border-b border-paper-200 px-2 py-1 text-xs font-semibold text-paper-600">
-        {pageIndex + 1}
+        {formatNumber(pageIndex + 1)}
       </div>
       <div
+        dir="ltr"
         className="origin-top-left"
         style={{
           width: dimensions.width * fittedZoom,
@@ -174,7 +179,9 @@ const ViewerPage: React.FC<{
 };
 
 export const ViewPDF: React.FC = () => {
+  useI18n();
   const platform = useWorkspacePlatform();
+  const { access, runWithExportAccess } = useMonetization();
   const {
     openedPdf,
     setOpenedPdfFile,
@@ -202,6 +209,14 @@ export const ViewPDF: React.FC = () => {
   const { zoom, zoomIn, zoomOut, resetZoom, setExactZoom } = useZoom(1, 0.5, 2, 0.25);
   const setPdfZoomViewport = usePdfPinchZoom({ zoom, setZoom: setExactZoom });
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const state = location.state as { openTools?: boolean; openedPdfId?: string } | null;
+    if (state?.openTools && openedPdf?.id === state.openedPdfId && !openedPdf.previewOnly) {
+      setToolsOpen(true);
+    }
+  }, [location.key, location.state, openedPdf?.id, openedPdf?.previewOnly]);
   const handleActivePage = useCallback((page: number) => setCurrentPage(page), []);
   const replacePdfDoc = useCallback((nextDocument: any | null) => {
     const previousDocument = pdfDocRef.current;
@@ -232,7 +247,7 @@ export const ViewPDF: React.FC = () => {
     }
 
     let cancelled = false;
-    setStatus({ isProcessing: true, progress: 20, message: 'Opening PDF...' });
+    setStatus({ isProcessing: true, progress: 20, message: t("view-pdf.opening.pdf.3b7ab1") });
     setNeedsPassword(false);
     setPassword('');
     setVerifiedPassword(null);
@@ -254,7 +269,7 @@ export const ViewPDF: React.FC = () => {
         if (!cancelled) {
           const passwordRequired = error?.name === 'PasswordException' || /password/i.test(String(error?.message || ''));
           setNeedsPassword(passwordRequired);
-          setStatus({ isProcessing: false, progress: 0, message: '', error: passwordRequired ? undefined : 'Could not open this PDF.' });
+          setStatus({ isProcessing: false, progress: 0, message: '', error: passwordRequired ? undefined : t("view-pdf.could.not.open.this.pdf.90d31c") });
         }
       });
 
@@ -284,12 +299,20 @@ export const ViewPDF: React.FC = () => {
     setOpenedPdfFile(file);
   };
 
-  const openTool = (path: string) => {
+  const openToolWithAccess = (path: string) => {
     setToolsOpen(false);
     if (path === '/ocr' && openedPdf && verifiedPassword !== null) {
       stageProtectedPdfPassword(openedPdf.id, verifiedPassword);
     }
     navigate(path, { state: { useOpenedPdf: true, openedPdfId: openedPdf?.id } });
+  };
+
+  const openTool = (path: string) => {
+    if (openedPdf?.previewOnly && !access?.unlocked) {
+      void runWithExportAccess(() => openToolWithAccess(path));
+      return;
+    }
+    openToolWithAccess(path);
   };
 
   const canShare = Boolean(
@@ -301,11 +324,18 @@ export const ViewPDF: React.FC = () => {
 
   const sharePdf = async () => {
     if (!openedPdf || !canShare) return;
-    try {
+    const performShare = async () => {
       await navigator.share({ files: [openedPdf.file], title: openedPdf.name });
+    };
+    try {
+      if (openedPdf.previewOnly && !access?.unlocked) {
+        await runWithExportAccess(performShare);
+        return;
+      }
+      await performShare();
     } catch (error: any) {
       if (error?.name !== 'AbortError') {
-        setStatus({ isProcessing: false, progress: 0, message: '', error: 'This PDF could not be shared. Save it to your device first, then share it from there.' });
+        setStatus({ isProcessing: false, progress: 0, message: '', error: t("view-pdf.this.pdf.could.not.be.shared.save.52d5e3") });
       }
     }
   };
@@ -325,7 +355,7 @@ export const ViewPDF: React.FC = () => {
         isProcessing: false,
         progress: 0,
         message: '',
-        error: 'Signature details could not be opened for this PDF.',
+        error: t("view-pdf.signature.details.could.not.be.opened.for.2e56bb"),
       });
     } finally {
       setSignatureReportOpening(false);
@@ -337,7 +367,7 @@ export const ViewPDF: React.FC = () => {
     const openedPdfId = openedPdf.id;
     const passwordAttempt = passwordAttemptRef.current + 1;
     passwordAttemptRef.current = passwordAttempt;
-    setStatus({ isProcessing: true, progress: 20, message: 'Checking password…' });
+    setStatus({ isProcessing: true, progress: 20, message: t("view-pdf.checking.password.4752fe") });
     try {
       const doc = await loadProtectedPDFDocument(openedPdf.file, password);
       if (
@@ -351,13 +381,13 @@ export const ViewPDF: React.FC = () => {
       setNeedsPassword(false);
       setVerifiedPassword(password);
       setPassword('');
-      setStatus({ isProcessing: false, progress: 100, message: 'PDF opened.' });
+      setStatus({ isProcessing: false, progress: 100, message: t("view-pdf.pdf.opened.43755c") });
     } catch {
       if (
         passwordAttemptRef.current !== passwordAttempt ||
         activeOpenedPdfIdRef.current !== openedPdfId
       ) return;
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'That password did not open this PDF.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("view-pdf.that.password.did.not.open.this.pdf.a7fcc9") });
     }
   };
 
@@ -367,7 +397,7 @@ export const ViewPDF: React.FC = () => {
       setSearchResults([]);
       return;
     }
-    setStatus({ isProcessing: true, progress: 5, message: 'Searching document…' });
+    setStatus({ isProcessing: true, progress: 5, message: t("view-pdf.searching.document.235a54") });
     const matches: number[] = [];
     try {
       for (let index = 0; index < pdfDoc.numPages; index += 1) {
@@ -375,14 +405,14 @@ export const ViewPDF: React.FC = () => {
         const content = await page.getTextContent();
         const text = content.items.map((item: any) => item.str || '').join(' ').toLocaleLowerCase();
         if (text.includes(query)) matches.push(index + 1);
-        setStatus({ isProcessing: true, progress: Math.round((index + 1) / pdfDoc.numPages * 95), message: `Searching page ${index + 1} of ${pdfDoc.numPages}…` });
+        setStatus({ isProcessing: true, progress: Math.round((index + 1) / pdfDoc.numPages * 95), message: t("view-pdf.searching.page.of.5a1f8e", { v0: index + 1, v1: pdfDoc.numPages }) });
       }
       setSearchResults(matches);
       setSearchIndex(0);
       if (matches[0]) document.getElementById(`viewer-page-${matches[0]}`)?.scrollIntoView({ behavior: 'smooth' });
-      setStatus({ isProcessing: false, progress: 100, message: matches.length ? `${matches.length} matching page${matches.length === 1 ? '' : 's'}.` : 'No pages contain that. Check the spelling, or try a shorter word.' });
+      setStatus({ isProcessing: false, progress: 100, message: matches.length ? t("view-pdf.matching.page.36e5c7", { count: matches.length }) : t("view-pdf.no.pages.contain.that.check.the.spelling.a2d06b") });
     } catch {
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Search is unavailable for this PDF, but you can keep reading it.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("view-pdf.search.is.unavailable.for.this.pdf.but.1766a0") });
     }
   };
 
@@ -399,8 +429,8 @@ export const ViewPDF: React.FC = () => {
     // under it, exactly as every other tool screen does.
     return (
       <ToolShell centered>
-        <ToolHeader title="Read PDF" />
-        <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf,application/pdf" label="Choose a PDF to read" />
+        <ToolHeader title={t("view-pdf.read.pdf.b00d88")} />
+        <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf,application/pdf" label={t("view-pdf.choose.a.pdf.to.read.33816d")} />
       </ToolShell>
     );
   }
@@ -416,27 +446,38 @@ export const ViewPDF: React.FC = () => {
             <div className="min-w-0 flex-1">
               <Link
                 to="/"
-                aria-label="Back to tools"
+                aria-label={t("view-pdf.back.to.tools.e42d59")}
                 className="chef-hit-y -ml-1 inline-flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               >
                 <img src="/pdf-chef-logo-exact.webp" alt="" className="h-5 w-5 object-contain" />
                 <span>PDF Chef</span>
               </Link>
-              <h1 className="chef-filename text-base font-bold text-[var(--text-primary)]">{openedPdf.name}</h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="chef-filename text-base font-bold text-[var(--text-primary)]">{openedPdf.name}</h1>
+                {openedPdf.previewOnly && !access?.unlocked && <Badge tone="caution">{t("view-pdf.preview.only.3673f9")}</Badge>}
+              </div>
               <p aria-live="polite" className="text-xs font-medium text-[var(--text-secondary)]">
-                {pdfDoc ? `Page ${currentPage} of ${pdfDoc.numPages}` : 'Opening…'}
+                {openedPdf.previewOnly && !access?.unlocked
+                  ? t("view-pdf.unlock.to.save.share.or.use.tools.5c4c2a", { v0: pdfDoc ? t("view-pdf.page.of.477c22", { v0: currentPage, v1: pdfDoc.numPages }) : t("view-pdf.opening.c926c2") })
+                  : pdfDoc ? t("view-pdf.page.of.477c22", { v0: currentPage, v1: pdfDoc.numPages }) : t("view-pdf.opening.c926c2")}
               </p>
             </div>
 
             <div className="relative shrink-0">
               <button
                 type="button"
-                onClick={() => setToolsOpen((open) => !open)}
+                onClick={() => {
+                  if (openedPdf.previewOnly && !access?.unlocked) {
+                    void runWithExportAccess(() => setToolsOpen(true));
+                    return;
+                  }
+                  setToolsOpen((open) => !open);
+                }}
                 className="chef-pressable chef-hit inline-flex h-10 items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-3.5 text-sm font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)]"
-                aria-expanded={toolsOpen}
+                aria-expanded={openedPdf.previewOnly && !access?.unlocked ? undefined : toolsOpen}
                 aria-controls="viewer-tools-menu"
               >
-                Tools
+                {openedPdf.previewOnly && !access?.unlocked ? t("view-pdf.unlock.to.use.tools.67bb7a") : t("view-pdf.tools.ea93d6")}
                 <ChevronDown size={16} />
               </button>
 
@@ -449,26 +490,26 @@ export const ViewPDF: React.FC = () => {
                   <div className="chef-safe-x fixed inset-0 z-[100] flex items-end justify-center sm:items-center" style={{ background: 'var(--surface-scrim)' }}>
                     <button
                       type="button"
-                      aria-label="Close tools"
+                      aria-label={t("view-pdf.close.tools.3f06b7")}
                       onClick={() => setToolsOpen(false)}
                       className="absolute inset-0 cursor-default"
                     />
                     <div
                       id="viewer-tools-menu"
                       role="menu"
-                      aria-label="Use a PDF tool"
+                      aria-label={t("view-pdf.use.a.pdf.tool.7e5549")}
                       className="chef-safe-bottom chef-scroller relative w-full max-w-lg overflow-y-auto rounded-t-[var(--radius-sheet)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] shadow-[var(--elevation-sheet)] sm:max-h-[70dvh] sm:rounded-[var(--radius-sheet)]"
                       style={{ maxHeight: 'calc(100dvh - env(safe-area-inset-top) - 2rem)' }}
                     >
                       <div className="sticky top-0 z-10 flex items-start gap-2 border-b border-[var(--border-hairline)] bg-[var(--surface-raised)] px-4 py-2.5">
                         <div className="min-w-0 flex-1">
-                          <p className="font-bold text-[var(--text-primary)]">Use a PDF tool</p>
+                          <p className="font-bold text-[var(--text-primary)]">{t("view-pdf.use.a.pdf.tool.7e5549")}</p>
                         </div>
                         <button
                           type="button"
                           ref={toolsCloseRef}
                           onClick={() => setToolsOpen(false)}
-                          aria-label="Close tools"
+                          aria-label={t("view-pdf.close.tools.3f06b7")}
                           className="chef-pressable chef-target -mr-2 -mt-1 grid shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)]"
                         >
                           <X aria-hidden size={20} />
@@ -480,7 +521,7 @@ export const ViewPDF: React.FC = () => {
                           type="button"
                           role="menuitem"
                           onClick={() => openTool(tool.path)}
-                          className="chef-pressable flex min-h-touch w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-sunken)]"
+                          className="chef-pressable flex min-h-touch w-full items-center gap-3 px-4 py-2.5 text-start text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-sunken)]"
                         >
                           <ToolIdentity tool={tool} size={16} assetSize={28} assetClassName="h-7 w-7 shrink-0 object-contain" />
                           <span>{tool.name}</span>
@@ -490,9 +531,7 @@ export const ViewPDF: React.FC = () => {
                         to="/"
                         onClick={() => setToolsOpen(false)}
                         className="chef-target flex items-center border-t border-[var(--border-hairline)] px-4 text-sm font-semibold text-[var(--accent-text)] hover:bg-[var(--surface-sunken)]"
-                      >
-                        All tools
-                      </Link>
+                      >{t("view-pdf.all.tools.81c151")}</Link>
                     </div>
                   </div>
                 </Portal>
@@ -506,7 +545,7 @@ export const ViewPDF: React.FC = () => {
                 type="button"
                 onClick={() => setSearchOpen((open) => !open)}
                 className="chef-pressable chef-hit inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] text-[var(--text-primary)] hover:bg-[var(--surface-sunken)]"
-                aria-label={searchOpen ? 'Close PDF search' : 'Search PDF'}
+                aria-label={searchOpen ? t("view-pdf.close.pdf.search.2d77e1") : t("view-pdf.search.pdf.f89d76")}
                 aria-expanded={searchOpen}
               >
                 {searchOpen ? <X size={18} /> : <Search size={18} />}
@@ -518,10 +557,10 @@ export const ViewPDF: React.FC = () => {
                 onClick={() => void openSignatureReport()}
                 disabled={signatureReportOpening}
                 className="chef-pressable chef-target inline-flex min-h-touch items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-3 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-sunken)] disabled:opacity-55"
-                aria-label="Verify PDF signatures"
+                aria-label={t("view-pdf.verify.pdf.signatures.93bd01")}
               >
                 <ShieldCheck aria-hidden size={18} />
-                <span>Signatures</span>
+                <span>{t("view-pdf.signatures.d348ac")}</span>
               </button>
             )}
             <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} />
@@ -530,18 +569,24 @@ export const ViewPDF: React.FC = () => {
                 type="button"
                 onClick={() => void sharePdf()}
                 className="chef-pressable chef-hit inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] text-[var(--text-primary)] hover:bg-[var(--surface-sunken)]"
-                title="Share PDF"
-                aria-label="Share PDF"
+                title={t("view-pdf.share.pdf.ec74b2")}
+                aria-label={t("view-pdf.share.pdf.ec74b2")}
               >
                 <Share2 size={18} />
               </button>
             )}
             <button
               type="button"
-              onClick={() => downloadBlob(openedPdf.file, openedPdf.name, 'application/pdf')}
+              onClick={() => {
+                if (openedPdf.previewOnly && !access?.unlocked) {
+                  void runWithExportAccess(() => downloadBlob(openedPdf.file, openedPdf.name, 'application/pdf'));
+                  return;
+                }
+                downloadBlob(openedPdf.file, openedPdf.name, 'application/pdf', { accessScope: 'source' });
+              }}
               className="chef-pressable chef-hit inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] text-[var(--text-primary)] hover:bg-[var(--surface-sunken)]"
-              title="Download original"
-              aria-label="Download original"
+              title={t("view-pdf.download.original.9f82c2")}
+              aria-label={t("view-pdf.download.original.9f82c2")}
             >
               <Download size={18} />
             </button>
@@ -555,15 +600,15 @@ export const ViewPDF: React.FC = () => {
           {searchOpen && pdfDoc && (
             <form onSubmit={(event) => { event.preventDefault(); void searchDocument(); }} className="flex w-full items-center gap-1 rounded-[var(--radius-field)] border border-[var(--border-strong)] bg-[var(--surface-raised)] p-1.5">
               <Search aria-hidden size={18} className="ml-2 shrink-0 text-[var(--text-tertiary)]" />
-              <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search in PDF" aria-label="Search in PDF" className="h-10 min-w-0 flex-1 bg-transparent px-1 text-base outline-none" autoFocus />
-              {searchQuery.trim() && <span aria-live="polite" className="hidden whitespace-nowrap text-xs text-[var(--text-secondary)] sm:block">{searchResults.length ? `${searchIndex + 1} / ${searchResults.length} pages` : '0 pages'}</span>}
+              <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={t("view-pdf.search.in.pdf.5ef72d")} aria-label={t("view-pdf.search.in.pdf.5ef72d")} className="h-10 min-w-0 flex-1 bg-transparent px-1 text-base outline-none" autoFocus />
+              {searchQuery.trim() && <span aria-live="polite" className="hidden whitespace-nowrap text-xs text-[var(--text-secondary)] sm:block">{searchResults.length ? t("view-pdf.pages.6bef20", { v0: searchIndex + 1, v1: searchResults.length }) : t("view-pdf.0.pages.a26a25")}</span>}
               {searchResults.length > 0 && (
                 <>
-                  <button type="button" onClick={() => moveSearch(-1)} aria-label="Previous matching page" className="chef-hit-y inline-flex h-10 w-touch items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)]"><ChevronUp size={18} /></button>
-                  <button type="button" onClick={() => moveSearch(1)} aria-label="Next matching page" className="chef-hit-y inline-flex h-10 w-touch items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)]"><ChevronDown size={18} /></button>
+                  <button type="button" onClick={() => moveSearch(-1)} aria-label={t("view-pdf.previous.matching.page.a1d1dd")} className="chef-hit-y inline-flex h-10 w-touch items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)]"><ChevronUp size={18} /></button>
+                  <button type="button" onClick={() => moveSearch(1)} aria-label={t("view-pdf.next.matching.page.96922b")} className="chef-hit-y inline-flex h-10 w-touch items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)]"><ChevronDown size={18} /></button>
                 </>
               )}
-              <button type="submit" disabled={!searchQuery.trim() || status.isProcessing} className="chef-hit-y h-10 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-3 text-sm font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] disabled:opacity-55">Find</button>
+              <button type="submit" disabled={!searchQuery.trim() || status.isProcessing} className="chef-hit-y h-10 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-3 text-sm font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] disabled:opacity-55">{t("view-pdf.find.822b2a")}</button>
             </form>
           )}
         </div>
@@ -578,27 +623,25 @@ export const ViewPDF: React.FC = () => {
         {needsPassword && !pdfDoc ? (
           <div className="mx-auto mt-6 max-w-sm rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-4 text-center">
             <LockKeyhole aria-hidden className="mx-auto h-8 w-8 text-[var(--status-caution-text)]" />
-            <h2 className="mt-2 text-xl font-bold">Password required</h2>
+            <h2 className="mt-2 text-xl font-bold">{t("view-pdf.password.required.d89f81")}</h2>
             {/* Kept: whitespace in a PDF password is significant. */}
-            <p className="type-footnote mt-1 text-[var(--text-secondary)]">Spaces are preserved exactly.</p>
-            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void openWithPassword(); }} aria-label="PDF password" autoFocus className="chef-field mt-3 w-full px-3.5" />
-            <button type="button" onClick={() => void openWithPassword()} disabled={password === '' || status.isProcessing} className="chef-target chef-pressable mt-3 w-full rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] disabled:opacity-55">Open PDF</button>
-            <button type="button" onClick={clearOpenedPdf} className="chef-target chef-pressable mt-2 w-full rounded-[var(--radius-control)] px-4 font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)]">Close</button>
+            <p className="type-footnote mt-1 text-[var(--text-secondary)]">{t("view-pdf.spaces.are.preserved.exactly.876f4a")}</p>
+            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void openWithPassword(); }} aria-label={t("view-pdf.pdf.password.e5cca6")} autoFocus className="chef-field mt-3 w-full px-3.5" />
+            <button type="button" onClick={() => void openWithPassword()} disabled={password === '' || status.isProcessing} className="chef-target chef-pressable mt-3 w-full rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] disabled:opacity-55">{t("view-pdf.open.pdf.5b1034")}</button>
+            <button type="button" onClick={clearOpenedPdf} className="chef-target chef-pressable mt-2 w-full rounded-[var(--radius-control)] px-4 font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)]">{t("view-pdf.close.7d9eb7")}</button>
           </div>
         ) : status.error && !pdfDoc ? (
           <div className="mx-auto mt-6 max-w-md rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-4 text-center">
-            <h2 className="text-xl font-bold">Couldn’t open PDF</h2>
+            <h2 className="text-xl font-bold">{t("view-pdf.couldn.t.open.pdf.9b9355")}</h2>
             <p className="mt-1.5 text-sm text-[var(--text-secondary)]">{status.error}</p>
             <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
-              <button type="button" onClick={clearOpenedPdf} className="chef-target chef-pressable rounded-[var(--radius-control)] border border-[var(--border-strong)] px-5 font-semibold text-[var(--text-primary)] hover:border-[var(--accent-rest)]">Close</button>
-              <button type="button" onClick={() => setOpenAttempt((attempt) => attempt + 1)} className="chef-target chef-pressable rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-5 font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)]">Retry</button>
+              <button type="button" onClick={clearOpenedPdf} className="chef-target chef-pressable rounded-[var(--radius-control)] border border-[var(--border-strong)] px-5 font-semibold text-[var(--text-primary)] hover:border-[var(--accent-rest)]">{t("view-pdf.close.7d9eb7")}</button>
+              <button type="button" onClick={() => setOpenAttempt((attempt) => attempt + 1)} className="chef-target chef-pressable rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-5 font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)]">{t("view-pdf.retry.942087")}</button>
             </div>
           </div>
         ) : !pdfDoc ? (
           <div className="flex h-full items-center justify-center text-[var(--text-secondary)]">
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            Opening PDF
-          </div>
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" />{t("view-pdf.opening.pdf.9ad4dc")}</div>
         ) : (
           <div className="mx-auto flex w-max min-w-0 flex-col items-center">
             {Array.from({ length: pdfDoc.numPages || 0 }).map((_, index) => (

@@ -1,0 +1,52 @@
+{
+  "appLocale": "nl-NL",
+  "appleLocale": "nl-NL",
+  "googleLocale": "nl-NL",
+  "apple": {
+    "name": "PDF Chef",
+    "subtitle": "Bewerk, voeg samen, comprimeer",
+    "promotionalText": "Lees, bewerk en organiseer PDF's op je apparaat. Voeg bestanden samen, beheer pagina's en voeg een handgeschreven handtekening toe.",
+    "description": "PDF Chef helpt je PDF's te lezen, bewerken, samenvoegen, splitsen, comprimeren en ondertekenen op je apparaat.\n\nOrganiseer pagina's, voeg tekst en afbeeldingen toe, plaats een handgeschreven handtekening, voeg watermerken of paginanummers toe en beveilig PDF's met een wachtwoord. Converteer ondersteunde afbeeldingen en documenten en extraheer tekst. Resultaten zijn afhankelijk van het bronbestand en de gekozen tool.\n\nNormale PDF-verwerking vindt plaats op je apparaat. Je documenten worden niet geüpload naar een PDF Chef-server voor verwerking. Offline tools blijven beschikbaar nadat hun assets zijn geladen.\n\nPDF Chef vereist geen account. Controleer je resultaat voordat je het deelt of exporteert.\n\nOp iOS zijn de eerste vijf geslaagde taken in elke doorlopende periode van zeven dagen volledige taken die je kunt opslaan, delen en exporteren. De periode begint bij de eerste geslaagde taak. Na vijf taken blijven verwerking en voorvertoning beschikbaar, maar voor opslaan, delen en exporteren is Pro vereist totdat het tegoed wordt gereset.\n\nPro Maandelijks wordt automatisch verlengd tot opzegging. Pro Levenslang is een eenmalige aankoop, geen abonnement. Beide opties ondersteunen Delen met gezin van Apple. Prijzen en aankoopdetails worden voor aankoop in de app getoond. Herstel aankopen via Instellingen.\n\nTerms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+    "whatsNew": "Versie {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Maandelijks",
+      "description": "Volledige export. Loopt door tot opzegging."
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Levenslang",
+      "description": "Volledige export. Eenmalige aankoop."
+    },
+    "screenshot": {
+      "1": "Al je PDF-tools op één plek",
+      "2": "Bewerk tekst en voeg afbeeldingen toe",
+      "3": "Voeg bestanden samen en organiseer pagina's",
+      "4": "Voorvertoning voor het opslaan",
+      "5": "Voeg je handgeschreven handtekening toe",
+      "6": "Werk op je apparaat"
+    },
+    "keywords": "splitsen,scannen,ondertekenen,converteren,lezer,watermerk,wachtwoord,ontgrendelen"
+  },
+  "google": {
+    "name": "PDF Chef",
+    "shortDescription": "Bewerk, voeg samen, comprimeer en onderteken PDF's op je apparaat.",
+    "fullDescription": "PDF Chef helpt je PDF's te lezen, bewerken, samenvoegen, splitsen, comprimeren en ondertekenen op je apparaat.\n\nOrganiseer pagina's, voeg tekst en afbeeldingen toe, plaats een handgeschreven handtekening, voeg watermerken of paginanummers toe en beveilig PDF's met een wachtwoord. Converteer ondersteunde afbeeldingen en documenten en extraheer tekst. Resultaten zijn afhankelijk van het bronbestand en de gekozen tool.\n\nNormale PDF-verwerking vindt plaats op je apparaat. Je documenten worden niet geüpload naar een PDF Chef-server voor verwerking. Offline tools blijven beschikbaar nadat hun assets zijn geladen.\n\nPDF Chef vereist geen account. Controleer je resultaat voordat je het deelt of exporteert.",
+    "whatsNew": "Versie {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Maandelijks",
+      "description": "Sla elk resultaat op, deel en exporteer. Wordt maandelijks verlengd tot opzegging.",
+      "benefit": "Sla elk resultaat op en deel het"
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Levenslang",
+      "description": "Sla elk resultaat op, deel en exporteer met een eenmalige aankoop."
+    },
+    "screenshot": {
+      "1": "Al je PDF-tools op één plek",
+      "2": "Bewerk tekst en voeg afbeeldingen toe",
+      "3": "Voeg bestanden samen en organiseer pagina's",
+      "4": "Voorvertoning voor het opslaan",
+      "5": "Voeg je handgeschreven handtekening toe",
+      "6": "Werk op je apparaat"
+    }
+  }
+}

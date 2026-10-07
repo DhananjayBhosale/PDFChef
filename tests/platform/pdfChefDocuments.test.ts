@@ -38,6 +38,7 @@ const nativeStub = (overrides: Partial<PdfChefDocumentsNativePlugin> = {}): PdfC
   shareDocument: async () => ({ completed: true }),
   signatureVerificationAvailable: async () => ({ available: true }),
   presentSignatureReport: async () => ({ completed: true }),
+  openReader: async () => ({ action: 'closed' }),
   signalHaptic: async () => ({}),
   getApplicationMetadata: async () => ({ name: 'PDF Chef', version: '1.0', build: '1' }),
   addListener: async () => ({ remove: async () => undefined }),
@@ -96,6 +97,34 @@ test('transient retention marks native staging before committing output bytes', 
     name: 'temporary.pdf', mimeType: 'application/pdf', transient: true,
   });
   assert.deepEqual(writes, [{ name: 'temporary.pdf', mimeType: 'application/pdf', transient: true }]);
+});
+
+test('iOS picker forwards and validates the requested item limit', async () => {
+  const requests: unknown[] = [];
+  const bridge = new PdfChefDocumentsBridge(nativeStub({
+    pickDocuments: async options => {
+      requests.push(options);
+      return { imports: [{ document: stored }] };
+    },
+  }));
+
+  await bridge.pickDocuments(['application/pdf'], 1);
+  assert.deepEqual(requests, [{
+    acceptedMimeTypes: ['application/pdf'],
+    maximumItems: 1,
+  }]);
+  await assert.rejects(bridge.pickDocuments(['application/pdf'], 0), /maximumItems/);
+  await assert.rejects(bridge.pickDocuments(['application/pdf'], 101), /maximumItems/);
+
+  const overLimit = new PdfChefDocumentsBridge(nativeStub({
+    pickDocuments: async () => ({
+      imports: [{ document: stored }, { document: stored }],
+    }),
+  }));
+  await assert.rejects(
+    overLimit.pickDocuments(['application/pdf'], 1),
+    /exceeds maximumItems/,
+  );
 });
 
 test('open validates native offsets, completion state and address-free payloads', async () => {
@@ -170,4 +199,16 @@ test('export and share cancellations reject instead of reporting false success',
   }));
   await assert.rejects(bridge.exportDocument(ref, 'sample.pdf', 'application/pdf'), { name: 'AbortError' });
   await assert.rejects(bridge.shareDocument(ref, 'sample.pdf', 'application/pdf'), { name: 'AbortError' });
+});
+
+test('native reader validates bounded large-PDF batch completion', async () => {
+  const bridge = new PdfChefDocumentsBridge(nativeStub({
+    openReader: async () => ({ action: 'batched', partCount: 7 }),
+  }));
+  assert.deepEqual(await bridge.openReader(ref, 'sample.pdf'), { action: 'batched', partCount: 7 });
+
+  const invalid = new PdfChefDocumentsBridge(nativeStub({
+    openReader: async () => ({ action: 'batched', partCount: 0 }),
+  }));
+  await assert.rejects(invalid.openReader(ref, 'sample.pdf'), /invalid/);
 });

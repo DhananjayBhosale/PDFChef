@@ -8,7 +8,7 @@ import {
 const LEGACY_REF = /^a1_([1-9][0-9]{0,15})$/;
 const OWNED_REF = /^d1_[A-Za-z0-9_-]{22,64}$/;
 const FALLBACK_NAME = 'Document.pdf';
-const MAXIMUM_NATIVE_PDF_BYTES = 128 * 1024 * 1024;
+const MAXIMUM_NATIVE_PDF_BYTES = 256 * 1024 * 1024;
 
 const isCanonicalDurableRef = (value: unknown): value is string => {
   if (typeof value !== 'string') return false;
@@ -61,11 +61,16 @@ export const isAndroidNativePdfReaderAvailable = (): boolean =>
 export const createAndroidPdfReaderService = (
   documents: AndroidDocumentsClient = new AndroidDocumentsClient(),
 ): PdfReaderService => ({
+  supportsSignatureVerification: true,
   isEligible: isEligibleDocument,
-  async open(document) {
+  async open(document, options) {
     if (!isEligibleDocument(document)) {
       throw new TypeError('The document is not eligible for the native PDF reader.');
     }
-    return documents.openReader(document.ref, safeName(document));
+    if (options?.initialAction !== undefined
+        && options.initialAction !== 'verify-signatures') {
+      throw new TypeError('The native PDF reader action is invalid.');
+    }
+    return documents.openReader(document.ref, safeName(document), options?.initialAction);
   },
 });

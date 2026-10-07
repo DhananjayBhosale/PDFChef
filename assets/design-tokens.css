@@ -128,8 +128,8 @@
      even the generic. A Chinese file name, or the message naming the characters an edit could not
      write, came out as a row of boxes. "SF Pro Text" is the same typeface on Apple platforms and
      does fall back, so naming it directly costs nothing and restores the rest of the list. */
-  --font-cjk: "PingFang SC", "PingFang TC", "Hiragino Sans", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", "Malgun Gothic";
-  --font-system: "SF Pro Text", BlinkMacSystemFont, "Segoe UI", Roboto, var(--font-cjk), sans-serif;
+  --font-cjk: "PingFang SC", "PingFang TC", "Hiragino Sans", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", "Apple SD Gothic Neo", "Malgun Gothic";
+  --font-system: "SF Pro Text", BlinkMacSystemFont, "Segoe UI", Roboto, var(--font-cjk), "Noto Sans Arabic", "Geeza Pro", "Noto Sans Devanagari", "Kohinoor Devanagari", "Nirmala UI", sans-serif;
   --font-ui: "Inter Variable", "Inter", var(--font-system);
   --font-numeric: "Inter Variable", var(--font-system);
 
@@ -266,3 +266,14 @@ html[data-text-scale='small'] { --text-scale: 0.92; }
 html[data-text-scale='default'] { --text-scale: 1; }
 html[data-text-scale='large'] { --text-scale: 1.14; }
 html[data-text-scale='larger'] { --text-scale: 1.3; }
+
+/* Local system faces preserve the correct regional CJK glyph forms; Inter stays first. */
+:root:lang(ja) {
+  --font-cjk: "Hiragino Sans", "Yu Gothic", "Noto Sans CJK JP", "Meiryo", sans-serif;
+}
+:root:lang(ko) {
+  --font-cjk: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", sans-serif;
+}
+:root:lang(zh-Hant) {
+  --font-cjk: "PingFang TC", "Microsoft JhengHei", "Noto Sans CJK TC", sans-serif;
+}

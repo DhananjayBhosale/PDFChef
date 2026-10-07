@@ -1,3 +1,5 @@
+import { LocalizedError } from './i18n/errors.ts';
+import { t } from './i18n/core.ts';
 export type WorkspaceInterfaceFont = 'inter' | 'manrope' | 'noto-sans' | 'system' | 'serif' | 'monospace';
 
 export interface WorkspaceSettings {
@@ -157,7 +159,7 @@ export const recordSavings = (originalSize: number, resultSize: number): Savings
 
 const openWorkspaceDb = (): Promise<IDBDatabase> => new Promise((resolve, reject) => {
   if (typeof indexedDB === 'undefined') {
-    reject(new Error('Local history is unavailable in this browser.'));
+    reject(new LocalizedError("workspace.local.history.is.unavailable.in.this.browser.3c06bd"));
     return;
   }
 
@@ -170,18 +172,18 @@ const openWorkspaceDb = (): Promise<IDBDatabase> => new Promise((resolve, reject
     }
   };
   request.onsuccess = () => resolve(request.result);
-  request.onerror = () => reject(request.error || new Error('Unable to open local history.'));
+  request.onerror = () => reject(request.error || new LocalizedError("workspace.unable.to.open.local.history.985514"));
 });
 
 const requestValue = <T>(request: IDBRequest<T>): Promise<T> => new Promise((resolve, reject) => {
   request.onsuccess = () => resolve(request.result);
-  request.onerror = () => reject(request.error || new Error('Local history operation failed.'));
+  request.onerror = () => reject(request.error || new LocalizedError("workspace.local.history.operation.failed.c82c2d"));
 });
 
 const transactionComplete = (transaction: IDBTransaction): Promise<void> => new Promise((resolve, reject) => {
   transaction.oncomplete = () => resolve();
-  transaction.onerror = () => reject(transaction.error || new Error('Local history transaction failed.'));
-  transaction.onabort = () => reject(transaction.error || new Error('Local history transaction was cancelled.'));
+  transaction.onerror = () => reject(transaction.error || new LocalizedError("workspace.local.history.transaction.failed.ce548d"));
+  transaction.onabort = () => reject(transaction.error || new LocalizedError("workspace.local.history.transaction.was.cancelled.b41acb"));
 });
 
 const makeId = () => typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -267,6 +269,7 @@ export const recordOutput = async (
   filename: string,
   mimeType: string,
   toolPath: string,
+  forceKeep = false,
 ): Promise<OutputRecord> => {
   const record: OutputRecord = {
     id: makeId(),
@@ -278,7 +281,7 @@ export const recordOutput = async (
     blob,
   };
 
-  if (!getWorkspaceSettings().keepLocalHistory) return record;
+  if (!forceKeep && !getWorkspaceSettings().keepLocalHistory) return record;
 
   const db = await openWorkspaceDb();
   try {

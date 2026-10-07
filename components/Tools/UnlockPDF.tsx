@@ -1,3 +1,5 @@
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Eye, EyeOff, Unlock, UnlockKeyhole } from 'lucide-react';
@@ -14,6 +16,7 @@ import { ToolHeader, ToolPanel, ToolShell } from '../UI/ToolLayout';
 const EMPTY_STATUS: ProcessingStatus = { isProcessing: false, progress: 0, message: '' };
 
 export const UnlockPDF: React.FC = () => {
+  useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -29,7 +32,7 @@ export const UnlockPDF: React.FC = () => {
   const handleFilesSelected = (files: File[]) => {
     const selected = files[0];
     if (!selected || !isPdfFile(selected)) {
-      setStatus({ ...EMPTY_STATUS, error: 'Choose a password-protected PDF.' });
+      setStatus({ ...EMPTY_STATUS, error: t("unlock-pdf.choose.a.password.protected.pdf.aa9d0e") });
       return;
     }
 
@@ -43,7 +46,7 @@ export const UnlockPDF: React.FC = () => {
     // Any non-empty string is a valid candidate, including whitespace-only passwords.
     if (!file || password.length === 0 || status.isProcessing) return;
 
-    setStatus({ isProcessing: true, progress: 10, message: 'Checking the password on this device...' });
+    setStatus({ isProcessing: true, progress: 10, message: t("unlock-pdf.checking.the.password.on.this.device.9727b5") });
     try {
       const pdfBytes = await unlockPDF(file.file, password);
       const outputName = androidExportFileName('unlock', file.name, 'pdf');
@@ -54,17 +57,17 @@ export const UnlockPDF: React.FC = () => {
       setStatus({
         isProcessing: false,
         progress: 100,
-        message: `Unlocked copy ready: ${outputName}.`,
+        message: t("unlock-pdf.unlocked.copy.ready.85550a", { v0: outputName }),
       });
     } catch {
       // Keep the Android wording and never surface an error that could include the credential.
-      setStatus({ ...EMPTY_STATUS, error: UNLOCK_FAILED_MESSAGE });
+      setStatus({ ...EMPTY_STATUS, error: t("android-parity.unable.to.unlock.pdf.check.password.and.5aefc8") });
     }
   };
 
   return (
     <ToolShell centered={!file}>
-      <ToolHeader title="Unlock PDF" />
+      <ToolHeader title={t("unlock-pdf.unlock.pdf.893947")} />
 
       <AnimatePresence mode="wait">
         {!file ? (
@@ -74,7 +77,7 @@ export const UnlockPDF: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
           >
-            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label="Choose a locked PDF" />
+            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("unlock-pdf.choose.a.locked.pdf.a2cdfa")} />
           </motion.div>
         ) : (
           <motion.div
@@ -94,14 +97,10 @@ export const UnlockPDF: React.FC = () => {
 
             {/* Kept: the export loses permission restrictions too, which the
                 button label does not say. */}
-            <StatusLine tone="info">
-              The exported copy loses its password and permission restrictions; your original is unchanged.
-            </StatusLine>
+            <StatusLine tone="info">{t("unlock-pdf.the.exported.copy.loses.its.password.and.3b2f40")}</StatusLine>
 
             <div>
-              <label htmlFor="unlock-password" className="mb-1 block type-footnote font-semibold text-[var(--text-secondary)]">
-                Enter password
-              </label>
+              <label htmlFor="unlock-password" className="mb-1 block type-footnote font-semibold text-[var(--text-secondary)]">{t("unlock-pdf.enter.password.7014af")}</label>
               <div className="relative">
                 <input
                   id="unlock-password"
@@ -114,7 +113,7 @@ export const UnlockPDF: React.FC = () => {
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && password.length > 0) void handleUnlock();
                   }}
-                  placeholder="Current password"
+                  placeholder={t("unlock-pdf.current.password.72ed2b")}
                   autoComplete="current-password"
                   spellCheck={false}
                   aria-describedby="unlock-password-help"
@@ -123,15 +122,13 @@ export const UnlockPDF: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword((visible) => !visible)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showPassword ? t("unlock-pdf.hide.password.a60a56") : t("unlock-pdf.show.password.6aeaa6")}
                   className="absolute inset-y-0 right-0 grid w-12 place-items-center rounded-r-[var(--radius-field)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--focus-ring)]"
                 >
                   {showPassword ? <EyeOff aria-hidden size={19} /> : <Eye aria-hidden size={19} />}
                 </button>
               </div>
-              <p id="unlock-password-help" className="type-caption mt-1 font-normal normal-case tracking-normal text-[var(--text-tertiary)]">
-                Leading, trailing, and whitespace-only passwords are preserved exactly.
-              </p>
+              <p id="unlock-password-help" className="type-caption mt-1 font-normal normal-case tracking-normal text-[var(--text-tertiary)]">{t("unlock-pdf.leading.trailing.and.whitespace.only.passwords.are.f7b1c0")}</p>
             </div>
 
             <div className="flex flex-col gap-2">
@@ -142,12 +139,8 @@ export const UnlockPDF: React.FC = () => {
                 disabled={password.length === 0}
                 icon={<Unlock aria-hidden size={18} />}
                 onClick={() => void handleUnlock()}
-              >
-                Unlock PDF
-              </Button>
-              <Button tone="quiet" block onClick={reset} disabled={status.isProcessing}>
-                Choose another file
-              </Button>
+              >{t("unlock-pdf.unlock.pdf.893947")}</Button>
+              <Button tone="quiet" block onClick={reset} disabled={status.isProcessing}>{t("unlock-pdf.choose.another.file.26eac8")}</Button>
             </div>
           </motion.div>
         )}

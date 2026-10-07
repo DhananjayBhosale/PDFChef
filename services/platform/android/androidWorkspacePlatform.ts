@@ -1,3 +1,4 @@
+import { LocalizedError } from '../../i18n/errors.ts';
 import type {
   RecentEntry,
   RecentRecord,
@@ -388,7 +389,7 @@ export const createAndroidWorkspacePlatform = (
   const ownedRefFor = (record: RecentRecord): string => {
     const ref = refFromSyntheticId(record.entry.id);
     if (!isOwnedAndroidRef(ref) || !record.available) {
-      throw new Error('This result is not one this app keeps on this device.');
+      throw new LocalizedError("android-workspace-platform.error.17284fe28e");
     }
     return ref;
   };
@@ -492,9 +493,13 @@ export const createAndroidWorkspacePlatform = (
 
     documentImport: {
       async importDocuments(options) {
+        const maximumItems = options?.maximumItems ?? 100;
+        if (!Number.isSafeInteger(maximumItems) || maximumItems < 1 || maximumItems > 100) {
+          throw new TypeError('Android document request is invalid.');
+        }
         const picked = await documents.pickDocuments(
           pickerMimeTypes(options?.acceptedMimeTypes),
-          100,
+          maximumItems,
         );
         if (picked.status === 'cancelled') return [];
         const imports = picked.items.map(importedDocumentOf);
@@ -551,7 +556,7 @@ export const createAndroidWorkspacePlatform = (
         // to the owned-document delete, and the interface says so rather than
         // letting a press fail silently.
         if (isLegacyAndroidRef(ref)) {
-          throw new Error('Files from the older Android app are read-only here.');
+          throw new LocalizedError("android-workspace-platform.error.ce5f360252");
         }
         await documents.deleteOwned(ref);
       },
@@ -578,7 +583,7 @@ export const createAndroidWorkspacePlatform = (
     async share(record, name) {
       const view = viewOf(record);
       if (!view) {
-        if (!base.share) throw new Error('Sharing is not available on this device.');
+        if (!base.share) throw new LocalizedError("android-workspace-platform.error.f768cf1b34");
         return base.share(record, name);
       }
       await documents.shareItem(
@@ -591,11 +596,11 @@ export const createAndroidWorkspacePlatform = (
     async rename(record, name) {
       const ref = refFromSyntheticId(record.entry.id);
       if (ref === null) {
-        if (!base.rename) throw new Error('This result cannot be renamed on this device.');
+        if (!base.rename) throw new LocalizedError("android-workspace-platform.error.0414c2710f");
         return base.rename(record, name);
       }
       if (isLegacyAndroidRef(ref)) {
-        throw new Error('Files from the older Android app are read-only here.');
+        throw new LocalizedError("android-workspace-platform.error.ce5f360252");
       }
       // The same durable record is renamed in place. Nothing is copied, and the
       // ref the list already holds keeps addressing it.
@@ -606,7 +611,7 @@ export const createAndroidWorkspacePlatform = (
       const view = viewOf(record);
       if (!view) return base.reopen(record);
       if (view.kind === 'collection') {
-        throw new Error('A collection cannot be opened as a single document.');
+        throw new LocalizedError("android-workspace-platform.error.6e5880db7e");
       }
       return nativeFile(documents, view);
     },
@@ -631,7 +636,7 @@ export const createAndroidWorkspacePlatform = (
 
   const retain = async (request: FreshResult, transient = false) => {
     if (request.blob.size < 1 || !RETAINABLE.has(request.mimeType)) {
-      throw new Error('This output cannot be saved on this device.');
+      throw new LocalizedError("android-workspace-platform.error.48bf1b9e75");
     }
     const session = await documents.beginWrite(
       request.mimeType as SupportedOwnedMime,
@@ -653,19 +658,28 @@ export const createAndroidWorkspacePlatform = (
     if (!request.keepLocalHistory && !request.autoDownload) return;
     const document = await retain(request, !request.keepLocalHistory);
     if (!request.keepLocalHistory) transientRefs.add(document.ref);
+    let exportIssue: 'cancelled' | 'failed' | undefined;
+    let externallyExported = false;
     try {
       if (request.autoDownload) {
         try {
           const result = await documents.exportItem(document.ref, request.name, document.mimeType);
           if (result.status === 'cancelled') {
-            if (request.keepLocalHistory) return { exportIssue: 'cancelled' };
-            throw new Error('Saving the output was cancelled.');
+            if (request.keepLocalHistory) exportIssue = 'cancelled';
+            else throw new LocalizedError("android-workspace-platform.error.ff5066dbb7");
+          } else {
+            externallyExported = true;
           }
         } catch (failure) {
-          if (request.keepLocalHistory) return { exportIssue: 'failed' };
-          throw failure;
+          if (request.keepLocalHistory) exportIssue = 'failed';
+          else throw failure;
         }
       }
+      return {
+        externallyExported,
+        ...(exportIssue ? { exportIssue } : {}),
+        ...(request.keepLocalHistory ? { recentRecord: ownedRecordOf(document) } : {}),
+      };
     } finally {
       // A download-only result must not become a permanent Recent document.
       if (!request.keepLocalHistory) {
@@ -680,11 +694,14 @@ export const createAndroidWorkspacePlatform = (
     transientRefs.add(document.ref);
     try {
       const delivery = await documents.exportItem(document.ref, result.name, document.mimeType);
-      if (delivery.status === 'cancelled') throw new Error('Saving the output was cancelled.');
+      if (delivery.status === 'cancelled') throw new LocalizedError("android-workspace-platform.error.ff5066dbb7");
     } finally {
       await documents.deleteOwned(document.ref);
       transientRefs.delete(document.ref);
     }
+  };
+  platform.keepFresh = async (result) => {
+    await retain(result);
   };
   platform.shareFresh = async (result) => {
     const document = await retain(result, true);

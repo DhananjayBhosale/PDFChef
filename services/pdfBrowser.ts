@@ -1,6 +1,8 @@
+import { LocalizedError } from './i18n/errors.ts';
+import { t } from './i18n/core.ts';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import pdfWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFNumber, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
 import { canvasToBlob, getSafeBuffer, readFileAsArrayBuffer } from './pdfShared';
 import {
   getAdaptiveConfig,
@@ -76,7 +78,7 @@ const renderPageToBlob = async (
 
   const context = canvas.getContext('2d');
   if (!context) {
-    throw new Error('Canvas context failed');
+    throw new LocalizedError("pdf-browser.canvas.context.failed.0fc40a");
   }
 
   context.fillStyle = '#ffffff';
@@ -195,7 +197,7 @@ export const loadEditablePDFDocument = async (file: File) => {
 export const loadProtectedPDFDocument = async (file: File, password: string): Promise<any> => {
   const exactPassword = password;
   if (!exactPassword) {
-    throw new Error('Password is required');
+    throw new LocalizedError("pdf-browser.password.is.required.7aeae1");
   }
 
   const arrayBuffer = await getFileBuffer(file);
@@ -629,7 +631,7 @@ export const getPageTextBackgroundPatch = async (
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext('2d');
-  if (!context) throw new Error('The highlight behind the text could not be drawn. Try again, or pick a different colour.');
+  if (!context) throw new LocalizedError("pdf-browser.the.highlight.behind.the.text.could.not.85b523");
 
   let maximumObservedOperationIndex = -1;
   await page.render({
@@ -649,9 +651,7 @@ export const getPageTextBackgroundPatch = async (
   // Revisit this invariant whenever PDF.js changes its optimiser registrations.
   if (maximumObservedOperationIndex + 1 !== operatorList.fnArray.length) {
     releaseCanvas(canvas);
-    throw new Error(
-      'Automatic text reconstruction is unavailable for this page because its drawing operations cannot be matched safely.',
-    );
+    throw new LocalizedError("pdf-browser.automatic.text.reconstruction.is.unavailable.for.this.7b828c");
   }
 
   const dataUrl = canvas.toDataURL('image/png');
@@ -701,7 +701,7 @@ const toRgbaPixels = (image: any) => {
   const height = image.height || 0;
   const data = image.data;
   if (!width || !height || !(data instanceof Uint8Array)) {
-    throw new Error('This picture is in a format the app cannot read. Try replacing it with a JPG or PNG.');
+    throw new LocalizedError("pdf-browser.this.picture.is.in.a.format.the.b0dc49");
   }
 
   if (image.kind === pdfjs.ImageKind.RGBA_32BPP) {
@@ -738,7 +738,7 @@ const toRgbaPixels = (image: any) => {
     return rgba;
   }
 
-  throw new Error(`Unsupported embedded image kind: ${String(image.kind)}`);
+  throw new LocalizedError("pdf-browser.unsupported.embedded.image.kind.27b45e", { v0: String(image.kind) });
 };
 
 const exportEmbeddedImageAsPng = async (image: any) => {
@@ -748,7 +748,7 @@ const exportEmbeddedImageAsPng = async (image: any) => {
     canvas.height = image.height;
     const context = canvas.getContext('2d');
     if (!context) {
-      throw new Error('Canvas context failed');
+      throw new LocalizedError("pdf-browser.canvas.context.failed.0fc40a");
     }
     context.drawImage(image.bitmap, 0, 0);
     const blob = await canvasToBlob(canvas, 'image/png');
@@ -760,7 +760,7 @@ const exportEmbeddedImageAsPng = async (image: any) => {
   canvas.height = image.height;
   const context = canvas.getContext('2d');
   if (!context) {
-    throw new Error('Canvas context failed');
+    throw new LocalizedError("pdf-browser.canvas.context.failed.0fc40a");
   }
 
   const rgba = toRgbaPixels(image);
@@ -948,7 +948,7 @@ export const generatePreviewPair = async (
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Preview render failed');
+    if (!ctx) throw new LocalizedError("pdf-browser.preview.render.failed.abb8ce");
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvasContext: ctx, viewport }).promise;
@@ -961,7 +961,7 @@ export const generatePreviewPair = async (
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Preview render failed');
+    if (!ctx) throw new LocalizedError("pdf-browser.preview.render.failed.abb8ce");
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvasContext: ctx, viewport }).promise;
@@ -977,6 +977,95 @@ export const generatePreviewPair = async (
     pageCount,
     pageIndex,
   };
+};
+
+/** Re-encode ordinary opaque image objects without touching text, forms, or drawings. */
+const recompressSelectableImages = async (
+  pdfDoc: PDFDocument,
+  config: AdaptiveConfig,
+  onProgress: (progress: number) => void,
+) => {
+  const name = (value: string) => PDFName.of(value);
+  const images = pdfDoc.context.enumerateIndirectObjects().filter(([, object]) => {
+    if (!(object instanceof PDFRawStream)) return false;
+    const dictionary = object.dict;
+    const width = dictionary.lookupMaybe(name('Width'), PDFNumber)?.asNumber() ?? 0;
+    const height = dictionary.lookupMaybe(name('Height'), PDFNumber)?.asNumber() ?? 0;
+    const colorSpace = dictionary.lookupMaybe(name('ColorSpace'), PDFName)?.toString();
+    const filter = dictionary.get(name('Filter'))?.toString();
+    return dictionary.get(name('Subtype'))?.toString() === '/Image'
+      && (filter === '/DCTDecode' || filter === '/FlateDecode')
+      && (colorSpace === '/DeviceRGB' || colorSpace === '/DeviceGray')
+      && dictionary.lookupMaybe(name('BitsPerComponent'), PDFNumber)?.asNumber() === 8
+      && !dictionary.has(name('SMask')) && !dictionary.has(name('Mask'))
+      && !dictionary.has(name('Decode')) && !dictionary.has(name('DecodeParms'))
+      && width >= 128 && height >= 128 && width * height <= 24_000_000;
+  }) as Array<[import('pdf-lib').PDFRef, PDFRawStream]>;
+
+  for (let index = 0; index < images.length; index += 1) {
+    const [ref, original] = images[index];
+    let objectUrl: string | null = null;
+    let sourceCanvas: HTMLCanvasElement | null = null;
+    let canvas: HTMLCanvasElement | null = null;
+    try {
+      const width = original.dict.lookup(name('Width'), PDFNumber).asNumber();
+      const height = original.dict.lookup(name('Height'), PDFNumber).asNumber();
+      let drawable: CanvasImageSource;
+      if (original.dict.get(name('Filter'))?.toString() === '/DCTDecode') {
+        objectUrl = URL.createObjectURL(new Blob([original.getContents()], { type: 'image/jpeg' }));
+        const image = new Image();
+        image.src = objectUrl;
+        await image.decode();
+        drawable = image;
+      } else {
+        const channels = original.dict.get(name('ColorSpace'))?.toString() === '/DeviceGray' ? 1 : 3;
+        const pixels = decodePDFRawStream(original).decode();
+        if (pixels.length !== width * height * channels) continue;
+        sourceCanvas = document.createElement('canvas');
+        sourceCanvas.width = width;
+        sourceCanvas.height = height;
+        const sourceContext = sourceCanvas.getContext('2d');
+        if (!sourceContext) continue;
+        const rgba = sourceContext.createImageData(width, height);
+        for (let pixel = 0; pixel < width * height; pixel += 1) {
+          const source = pixel * channels;
+          const target = pixel * 4;
+          rgba.data[target] = pixels[source];
+          rgba.data[target + 1] = pixels[source + (channels === 3 ? 1 : 0)];
+          rgba.data[target + 2] = pixels[source + (channels === 3 ? 2 : 0)];
+          rgba.data[target + 3] = 255;
+        }
+        sourceContext.putImageData(rgba, 0, 0);
+        drawable = sourceCanvas;
+      }
+      const nextWidth = Math.max(1, Math.round(width * config.scale));
+      const nextHeight = Math.max(1, Math.round(height * config.scale));
+      canvas = document.createElement('canvas');
+      canvas.width = nextWidth;
+      canvas.height = nextHeight;
+      const context = canvas.getContext('2d');
+      if (!context) continue;
+      context.drawImage(drawable, 0, 0, nextWidth, nextHeight);
+      const encoded = await canvasToBlob(canvas, 'image/jpeg', config.quality);
+      if (encoded.size >= original.getContentsSize()) continue;
+
+      const bytes = new Uint8Array(await encoded.arrayBuffer());
+      const dictionary = original.dict.clone();
+      dictionary.set(name('Width'), PDFNumber.of(nextWidth));
+      dictionary.set(name('Height'), PDFNumber.of(nextHeight));
+      dictionary.set(name('ColorSpace'), name('DeviceRGB'));
+      dictionary.set(name('Filter'), name('DCTDecode'));
+      dictionary.set(name('Length'), PDFNumber.of(bytes.length));
+      pdfDoc.context.assign(ref, PDFRawStream.of(dictionary, bytes));
+    } catch {
+      // Unsupported or corrupt images are preserved byte-for-byte in the saved PDF.
+    } finally {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      if (canvas) { canvas.width = 0; canvas.height = 0; }
+      if (sourceCanvas) { sourceCanvas.width = 0; sourceCanvas.height = 0; }
+      onProgress(10 + ((index + 1) / images.length) * 80);
+    }
+  }
 };
 
 export const compressPDFAdaptive = async (
@@ -1004,16 +1093,17 @@ export const compressPDFAdaptive = async (
 
   if (!flatten) {
     const arrayBuffer = await readFileAsArrayBuffer(file);
-    onProgress(50);
     const pdfDoc = await PDFDocument.load(arrayBuffer);
+    await recompressSelectableImages(pdfDoc, config, onProgress);
+    onProgress(90);
     const saved = await pdfDoc.save({ useObjectStreams: true });
     onProgress(100);
     return {
       data: saved,
       meta: {
         compressedSize: saved.byteLength,
-        projectedDPI: 300,
-        strategyUsed: 'Basic Optimization (No Flattening)',
+        projectedDPI: config.projectedDPI,
+        strategyUsed: 'Selectable Text Image Compression',
       },
       status: 'success' as const,
     };

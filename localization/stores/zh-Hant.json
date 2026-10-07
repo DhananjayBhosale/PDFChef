@@ -1,0 +1,52 @@
+{
+  "appLocale": "zh-Hant",
+  "appleLocale": "zh-Hant",
+  "googleLocale": "zh-TW",
+  "apple": {
+    "name": "PDF Chef",
+    "subtitle": "編輯、合併、壓縮 PDF",
+    "promotionalText": "在裝置上閱讀、編輯與整理 PDF。合併檔案、管理頁面並加入手寫簽名。",
+    "description": "PDF Chef 協助您在裝置上閱讀、編輯、合併、分割、壓縮與簽署 PDF。\n\n整理頁面、新增文字與圖片、放置手寫簽名、新增浮水印或頁碼，並使用密碼保護 PDF。轉換支援的圖片與文件，並擷取文字。處理結果取決於來源檔案與所選工具。\n\n一般 PDF 處理作業均在您的裝置上執行。您的文件不會上傳至 PDF Chef 伺服器進行處理。離線工具在載入相關資源後即可繼續使用。\n\nPDF Chef 無需帳號。在分享或匯出之前，請先檢視處理結果。\n\n在 iOS 上，每 7 天循環額度週期內的前 5 次成功工作皆為完整工作，您可以直接儲存、分享和匯出。該週期自第一次成功工作起算。完成 5 次成功工作後，處理與預覽功能仍可繼續使用，但儲存、分享和匯出則需要 Pro，直到額度重設為止。\n\nPro 月費方案會自動續訂，直到取消為止。Pro 終身方案為一次性購買，而非訂閱。兩種方案皆支援 Apple「家人共享」。價格與購買詳細資訊會在購買前於 App 內顯示。可隨時從「設定」中還原購買項目。\n\nTerms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+    "whatsNew": "版本 {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro 月費方案",
+      "description": "完整匯出功能。自動續訂至取消為止。"
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro 終身方案",
+      "description": "完整匯出功能。一次性購買。"
+    },
+    "screenshot": {
+      "1": "您的 PDF 工具集於一處",
+      "2": "編輯文字與新增圖片",
+      "3": "合併檔案與整理頁面",
+      "4": "儲存前先預覽",
+      "5": "加入手寫簽名",
+      "6": "直接在裝置上處理"
+    },
+    "keywords": "分割,掃描,簽名,轉換,閱讀,浮水印,密碼,解鎖,旋轉,擷取"
+  },
+  "google": {
+    "name": "PDF Chef",
+    "shortDescription": "在裝置上編輯、合併、壓縮與簽署 PDF。",
+    "fullDescription": "PDF Chef 協助您在裝置上閱讀、編輯、合併、分割、壓縮與簽署 PDF。\n\n整理頁面、新增文字與圖片、放置手寫簽名、新增浮水印或頁碼，並使用密碼保護 PDF。轉換支援的圖片與文件，並擷取文字。處理結果取決於來源檔案與所選工具。\n\n一般 PDF 處理作業均在您的裝置上執行。您的文件不會上傳至 PDF Chef 伺服器進行處理。離線工具在載入相關資源後即可繼續使用。\n\nPDF Chef 無需帳號。在分享或匯出之前，請先檢視處理結果。",
+    "whatsNew": "版本 {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro 月費方案",
+      "description": "儲存、分享並匯出每項結果。每月自動續訂，直到取消為止。",
+      "benefit": "儲存並分享每項結果"
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro 終身方案",
+      "description": "一次性購買，即可儲存、分享並匯出每項結果。"
+    },
+    "screenshot": {
+      "1": "您的 PDF 工具集於一處",
+      "2": "編輯文字與新增圖片",
+      "3": "合併檔案與整理頁面",
+      "4": "儲存前先預覽",
+      "5": "加入手寫簽名",
+      "6": "直接在裝置上處理"
+    }
+  }
+}

@@ -1,6 +1,8 @@
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Clock, Grid2x2, Settings as SettingsIcon } from 'lucide-react';
+import { ChevronLeft, History, LayoutGrid, SlidersHorizontal } from 'lucide-react';
 import { tools } from '../Tools/toolCatalog';
 import type { ToolCardData } from '../Tools/toolCatalog';
 import { ToolIdentity } from '../Tools/ToolIdentity';
@@ -12,9 +14,9 @@ import { useHaptics } from '../../hooks/useWorkspaceRuntime';
  * because a specific label is predictable and a generic one is not.
  */
 export const TABS = [
-  { to: '/', label: 'Tools', icon: Grid2x2, match: (path: string) => path === '/' || tools.some((tool) => tool.path === path) },
-  { to: '/recent', label: 'Recent', icon: Clock, match: (path: string) => path === '/recent' || path === '/history' },
-  { to: '/settings', label: 'Settings', icon: SettingsIcon, match: (path: string) => path === '/settings' },
+  { to: '/', get label() { return t("app-shell.tools.ea93d6"); }, icon: LayoutGrid, match: (path: string) => path === '/' || tools.some((tool) => tool.path === path) },
+  { to: '/recent', get label() { return t("app-shell.recent.690dbe"); }, icon: History, match: (path: string) => path === '/recent' || path === '/history' },
+  { to: '/settings', get label() { return t("app-shell.settings.74a883"); }, icon: SlidersHorizontal, match: (path: string) => path === '/settings' },
 ] as const;
 
 /**
@@ -130,12 +132,13 @@ const useVisualViewportInsets = () => {
 /* ------------------------------------------------------------- Tab bar --- */
 
 const TabBar: React.FC = () => {
+  useI18n();
   const location = useLocation();
   const haptic = useHaptics();
 
   return (
     <nav
-      aria-label="Primary"
+      aria-label={t("app-shell.primary.efe10c")}
       className="chef-chrome chef-safe-bottom chef-safe-x fixed inset-x-0 bottom-0 z-40 border-t md:hidden"
     >
       <ul className="mx-auto flex max-w-xl">
@@ -172,20 +175,19 @@ const TabBar: React.FC = () => {
  * different information architecture: identical labels, identical order.
  */
 const SideRail: React.FC = () => {
+  useI18n();
   const location = useLocation();
 
   return (
   <nav
-    aria-label="Primary"
-    className="chef-safe-top chef-safe-x sticky top-0 hidden h-screen w-[13.5rem] shrink-0 flex-col border-r border-[var(--border-hairline)] bg-[var(--surface-raised)] px-3 py-5 md:flex lg:w-[15rem]"
+    aria-label={t("app-shell.primary.efe10c")}
+    className="chef-safe-top chef-safe-x sticky top-0 hidden h-screen w-[13.5rem] shrink-0 flex-col border-e border-[var(--border-hairline)] bg-[var(--surface-raised)] px-3 py-5 md:flex lg:w-[15rem]"
   >
     <Link to="/" className="chef-pressable mb-6 flex items-center gap-3 rounded-[var(--radius-control)] px-2 py-1">
       <img src="/pdf-chef-logo-exact.webp" alt="" aria-hidden className="h-9 w-9 object-contain" />
       <span className="min-w-0">
         <span className="block font-semibold leading-tight text-[var(--text-primary)]">PDF Chef</span>
-        <span className="type-caption block font-medium normal-case tracking-normal text-[var(--text-secondary)]">
-          On this device
-        </span>
+        <span className="type-caption block font-medium normal-case tracking-normal text-[var(--text-secondary)]">{t("app-shell.on.this.device.38b9d8")}</span>
       </span>
     </Link>
 
@@ -223,6 +225,7 @@ const SideRail: React.FC = () => {
  * that reads "Tools", so the destination is stated rather than implied.
  */
 const ToolNavBar: React.FC<{ title: string; tool?: ToolCardData }> = ({ title, tool }) => {
+  useI18n();
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const bar = useRef<HTMLDivElement>(null);
@@ -272,11 +275,9 @@ const ToolNavBar: React.FC<{ title: string; tool?: ToolCardData }> = ({ title, t
             if (historyIndex > 0) navigate(-1);
             else navigate('/', { replace: true });
           }}
-          className="chef-pressable chef-target inline-flex items-center gap-0.5 rounded-[var(--radius-control)] pl-1 pr-2 font-medium text-[var(--accent-text)]"
+          className="chef-pressable chef-target inline-flex items-center gap-0.5 rounded-[var(--radius-control)] ps-1 pe-2 font-medium text-[var(--accent-text)]"
         >
-          <ChevronLeft aria-hidden size={22} />
-          Tools
-        </button>
+          <ChevronLeft aria-hidden size={22} className="rtl:rotate-180" />{t("app-shell.tools.ea93d6")}</button>
         {/* Identity and title are one unit: the mark never appears without the
             name it belongs to, so the bar is either empty or fully legible. */}
         <div
@@ -311,20 +312,21 @@ const ToolNavBar: React.FC<{ title: string; tool?: ToolCardData }> = ({ title, t
  * follows the screen it sits above, so all three agree.
  */
 const ROUTE_TITLE_OVERRIDES: Record<string, string> = {
-  '/view': 'Read PDF',
+  get '/view'() { return t("app-shell.read.pdf.b00d88"); },
 };
 
 const ROUTE_TITLES: Record<string, string> = {
-  '/batch': 'Batch',
-  '/help': 'Help',
-  '/privacy': 'Privacy',
-  '/privacy-policy': 'Privacy',
-  '/pdf-chef-privacy': 'Privacy',
-  '/terms': 'Terms',
-  '/terms-and-conditions': 'Terms',
+  get '/batch'() { return t("app-shell.batch.320b5d"); },
+  get '/help'() { return t("app-shell.help.b79cac"); },
+  get '/privacy'() { return t("app-shell.privacy.54a57c"); },
+  get '/privacy-policy'() { return t("app-shell.privacy.54a57c"); },
+  get '/pdf-chef-privacy'() { return t("app-shell.privacy.54a57c"); },
+  get '/terms'() { return t("app-shell.terms.ede548"); },
+  get '/terms-and-conditions'() { return t("app-shell.terms.ede548"); },
 };
 
 export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  useI18n();
   const location = useLocation();
   const path = location.pathname;
   const mainRef = useRef<HTMLElement>(null);
@@ -386,7 +388,7 @@ export const TabHeader: React.FC<{
   subtitle?: string;
   trailing?: React.ReactNode;
   leading?: React.ReactNode;
-}> = ({ title, subtitle, trailing, leading }) => (
+}> = ({ title, subtitle, trailing, leading }) => { useI18n(); return (
   <div className="chef-safe-top px-4 pb-3 md:px-8 md:pb-2">
     {/* `.chef-safe-top` owns padding-top, so the header's own 14px lives on the
         inner row; otherwise the inset rule wins and the title sits on the edge. */}
@@ -409,4 +411,4 @@ export const TabHeader: React.FC<{
       {trailing}
     </div>
   </div>
-);
+); };

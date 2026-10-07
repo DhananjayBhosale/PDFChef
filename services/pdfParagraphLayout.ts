@@ -2,8 +2,9 @@ import { StandardFontEmbedder, StandardFonts } from 'pdf-lib';
 import type { ParagraphFace } from './pdfDocument';
 import type { PdfTextBlock } from './pdfTextBlocks';
 import { substituteForStandardFont } from './pdfFontResolution.ts';
+import { measureEmbeddedText, type EmbeddedPdfFontId } from './pdfEmbeddedFonts.ts';
 
-type StandardParagraphFace = { family: string; bold?: boolean; italic?: boolean };
+type StandardParagraphFace = { family: string; bold?: boolean; italic?: boolean; embeddedFontId?: EmbeddedPdfFontId };
 type ParagraphStandardFontKey = Exclude<keyof typeof StandardFonts, 'Symbol' | 'ZapfDingbats'>;
 
 /** The redraw preview and PDF writer must choose the same face, including its style. */
@@ -30,6 +31,7 @@ const metricFaces = new Map<ParagraphStandardFontKey, StandardFontEmbedder>();
  * guessing an advance would produce a preview that cannot be reproduced in the PDF.
  */
 export const measureParagraphText = (text: string, face: StandardParagraphFace, fontSize: number): number => {
+  if (face.embeddedFontId) return measureEmbeddedText(text, face.embeddedFontId, fontSize);
   const key = paragraphStandardFontKey(face);
   let metricFace = metricFaces.get(key);
   if (!metricFace) {
@@ -43,6 +45,7 @@ export const measureParagraphText = (text: string, face: StandardParagraphFace, 
 export interface ParagraphLayoutPiece {
   text: string;
   face: ParagraphFace;
+  fontSize: number;
   x: number;
   /** Baseline measured down from the top of the paragraph. */
   y: number;
@@ -69,18 +72,24 @@ export const paragraphLineOrigins = (block: PdfTextBlock, lineCount: number, fon
 
 /** Place explicit lines once, for both the rendered preview and PDF drawing. Never soft-wrap. */
 export const layoutParagraphLines = (
-  lines: Array<Array<{ text: string; face: ParagraphFace }>>,
-  { width, fontSize, lineHeight, align, lineOrigins }: {
+  lines: Array<Array<{ text: string; face: ParagraphFace; fontSize?: number }>>,
+  { width, fontSize, lineHeight, align, lineOrigins, measure = measureParagraphText, normalizeText }: {
     width: number;
     fontSize: number;
     lineHeight: number;
     align: 'left' | 'center' | 'right' | 'justify';
     lineOrigins?: Array<{ x?: number; y: number }>;
+    measure?: (text: string, face: ParagraphFace, fontSize: number) => number;
+    normalizeText?: (text: string, face: ParagraphFace) => string;
   },
 ): ParagraphLayoutPiece[] => {
   const positioned: ParagraphLayoutPiece[] = [];
   lines.forEach((line, lineIndex) => {
-    const pieces = line.map((piece) => ({ ...piece, text: exportText(piece.text) }));
+    const pieces = line.map((piece) => ({ ...piece, fontSize: piece.fontSize ?? fontSize,
+      text: normalizeText ? normalizeText(piece.text, piece.face)
+        : piece.face.embeddedFontId ? normalizeParagraphLineBreaks(piece.text).replace(/\n/g, ' ').replace(/\t/g, '    ')
+        : exportText(piece.text),
+    }));
     if (!pieces.some((piece) => piece.text.trim())) return;
     const origin = lineOrigins?.[lineIndex];
     const y = origin?.y ?? fontSize + lineIndex * lineHeight;
@@ -92,19 +101,19 @@ export const layoutParagraphLines = (
       pieces.forEach((piece) => piece.text.split(/(\s+)/).filter(Boolean).forEach((text) => {
         const blank = /^\s+$/.test(text);
         const previous = tokens[tokens.length - 1];
-        if (previous?.blank === blank) previous.pieces.push({ text, face: piece.face });
-        else tokens.push({ blank, pieces: [{ text, face: piece.face }] });
+        if (previous?.blank === blank) previous.pieces.push({ ...piece, text });
+        else tokens.push({ blank, pieces: [{ ...piece, text }] });
       }));
       const gaps = tokens.filter((token, index) => token.blank && index > 0 && index < tokens.length - 1).length;
       if (gaps > 0) {
         const naturalWidth = tokens.reduce((total, token) => total + token.pieces.reduce(
-          (tokenWidth, piece) => tokenWidth + measureParagraphText(piece.text, piece.face, fontSize), 0,
+          (tokenWidth, piece) => tokenWidth + measure(piece.text, piece.face, piece.fontSize), 0,
         ), 0);
         const extraGap = Math.max(0, width - (origin?.x ?? 0) - naturalWidth) / gaps;
         let x = origin?.x ?? 0;
         tokens.forEach((token, index) => {
           token.pieces.forEach((piece) => {
-            const pieceWidth = measureParagraphText(piece.text, piece.face, fontSize);
+            const pieceWidth = measure(piece.text, piece.face, piece.fontSize);
             positioned.push({ ...piece, x, y, width: pieceWidth, lineIndex });
             x += pieceWidth;
           });
@@ -114,7 +123,7 @@ export const layoutParagraphLines = (
       }
     }
 
-    const measured = pieces.map((piece) => ({ ...piece, width: measureParagraphText(piece.text, piece.face, fontSize) }));
+    const measured = pieces.map((piece) => ({ ...piece, width: measure(piece.text, piece.face, piece.fontSize) }));
     const lineWidth = measured.reduce((total, piece) => total + piece.width, 0);
     let x = origin?.x ?? (align === 'right'
       ? Math.max(0, width - lineWidth)

@@ -1,9 +1,12 @@
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FileText, FolderOpen, Upload } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useOpenedPdf, type OpenedPdfRouteState } from '../../hooks/useOpenedPdf';
 import { Button, cx } from './Primitives';
 import { useHaptics } from '../../hooks/useWorkspaceRuntime';
+import { useFileDrop } from '../../hooks/useFileDrop';
 
 interface FileUploadProps {
   onFilesSelected: (files: File[]) => void;
@@ -27,16 +30,22 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   onFilesSelected,
   accept,
   multiple = false,
-  label = 'Choose a PDF',
+  label = t("file-upload.choose.a.pdf.3ba70f"),
   allowOpenedPdf = true,
 }) => {
+  useI18n();
   const [isDragging, setIsDragging] = useState(false);
   const usedOpenedPdf = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const { openedPdf } = useOpenedPdf();
   const haptic = useHaptics();
+  useFileDrop({ accept, element: dropRef, onFiles: (files) => {
+    haptic('commit');
+    onFilesSelected(multiple ? files : files.slice(0, 1));
+  } });
 
   const acceptsPdf = accept.toLowerCase().includes('.pdf') || accept.toLowerCase().includes('application/pdf');
   const routeState = location.state as OpenedPdfRouteState | null;
@@ -73,6 +82,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
   return (
     <div
+      ref={dropRef}
       data-file-upload
       onDragOver={(event) => {
         event.preventDefault();
@@ -83,14 +93,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         if (event.currentTarget.contains(event.relatedTarget as Node)) return;
         setIsDragging(false);
       }}
-      onDrop={(event) => {
-        event.preventDefault();
+      onDrop={() => {
         setIsDragging(false);
-        const dropped = Array.from(event.dataTransfer.files ?? []);
-        if (dropped.length > 0) {
-          haptic('commit');
-          onFilesSelected(multiple ? dropped : dropped.slice(0, 1));
-        }
       }}
       className={cx(
         'rounded-[var(--radius-panel)] border border-dashed p-4 text-center transition-colors duration-transition ease-settle sm:p-6',
@@ -130,12 +134,10 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
       <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
         <Button tone="primary" icon={<FolderOpen aria-hidden size={16} />} onClick={openPicker}>
-          {multiple ? 'Choose files' : 'Choose file'}
+          {multiple ? t("file-upload.choose.files.1157de") : t("file-upload.choose.file.b09c73")}
         </Button>
         {canUseOpenedPdf && openedPdf && (
-          <Button icon={<FileText aria-hidden size={16} />} onClick={() => onFilesSelected([openedPdf.file])}>
-            Use {openedPdf.name.length > 22 ? `${openedPdf.name.slice(0, 20)}…` : openedPdf.name}
-          </Button>
+          <Button icon={<FileText aria-hidden size={16} />} onClick={() => onFilesSelected([openedPdf.file])}>{t("file-upload.message.1a047c4b6b", { v0: openedPdf.name.length > 22 ? t("file-upload..1092cb", { v0: openedPdf.name.slice(0, 20) }) : openedPdf.name })}</Button>
         )}
       </div>
 

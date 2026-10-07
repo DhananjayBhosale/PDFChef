@@ -1,3 +1,6 @@
+import english from '../../services/i18n/en-US.ts';
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
@@ -18,7 +21,8 @@ import {
 import { ProcessingStatus } from '../../types';
 import { createPDFFromImages } from '../../services/pdfDocument';
 import { preparePdfImageAsset } from '../../services/imageBrowser';
-import { downloadBlob } from '../../services/pdfShared';
+import { downloadBlob, type OutputReadyRecord } from '../../services/pdfShared';
+import { announceOutput } from '../../services/workspace';
 import { StatusToast } from '../UI/StatusToast';
 import { ToolHeader, ToolShell } from '../UI/ToolLayout';
 import { Button, ConfirmSheet, StatusLine } from '../UI/Primitives';
@@ -37,6 +41,12 @@ interface CapturedImage {
   previewUrl: string;
 }
 
+const GALLERY_IMAGE_MIME: Readonly<Record<string, string>> = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+  webp: 'image/webp', heic: 'image/heic', heif: 'image/heif',
+  avif: 'image/avif', gif: 'image/gif', bmp: 'image/bmp',
+};
+
 interface ScanOutcome {
   document: StoredDocument;
   pageCount: number;
@@ -51,22 +61,20 @@ interface ScanOutcome {
  * basic camera one press away, and none of them launches it uninvited.
  */
 const SCAN_FAILURES: Readonly<Record<string, string>> = {
-  SCANNER_BUSY: 'A scan is already running. Let it finish, then start the next one.',
-  SCANNER_STORAGE_FULL: 'There is not enough free space on this device to keep that scan.',
-  SCANNER_LIMIT_EXCEEDED: 'That scan is too large to keep. Scan fewer pages and try again.',
-  SCANNER_INTERRUPTED: 'The scan stopped before it finished, so nothing was kept.',
-  SCANNER_UNAVAILABLE:
-    'The device scanner could not start. It may still be getting ready the first time you use it.',
-  SCANNER_LAUNCH_FAILED:
-    'The device scanner could not start. It may still be getting ready the first time you use it.',
+  get SCANNER_BUSY() { return t("make-pdf.a.scan.is.already.running.let.it.3000ed"); },
+  get SCANNER_STORAGE_FULL() { return t("make-pdf.there.is.not.enough.free.space.on.285c0c"); },
+  get SCANNER_LIMIT_EXCEEDED() { return t("make-pdf.that.scan.is.too.large.to.keep.d7d4ee"); },
+  get SCANNER_INTERRUPTED() { return t("make-pdf.the.scan.stopped.before.it.finished.so.957a38"); },
+  get SCANNER_UNAVAILABLE() { return t("make-pdf.the.device.scanner.could.not.start.it.e74210"); },
+  get SCANNER_LAUNCH_FAILED() { return t("make-pdf.the.device.scanner.could.not.start.it.e74210"); },
 };
-const SCAN_FAILED = 'That scan could not be kept, so nothing was changed.';
-const SCAN_OPEN_FAILED = 'That scan could not be opened. It is still kept on this device.';
+const SCAN_FAILED = english["make-pdf.that.scan.could.not.be.kept.so.30410c"];
+const SCAN_OPEN_FAILED = english["make-pdf.that.scan.could.not.be.opened.it.7a1de2"];
 
 /** Capacitor reports a fixed code beside the message; the message itself is never shown. */
 const scanFailureFor = (caught: unknown): string => {
   const code = (caught as { code?: unknown } | null)?.code;
-  return (typeof code === 'string' && SCAN_FAILURES[code]) || SCAN_FAILED;
+  return (typeof code === 'string' && SCAN_FAILURES[code]) || t("make-pdf.that.scan.could.not.be.kept.so.30410c");
 };
 
 /**
@@ -90,6 +98,7 @@ const recordFor = (document: StoredDocument): RecentRecord => ({
 });
 
 export const MakePDF: React.FC = () => {
+  useI18n();
   const [images, setImages] = useState<CapturedImage[]>([]);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
@@ -147,6 +156,18 @@ export const MakePDF: React.FC = () => {
       // saved or downloaded.
       if (result.status === 'cancelled') return;
       setScanned({ document: result.document, pageCount: result.pageCount });
+      const output: OutputReadyRecord = {
+        id: `scan-${result.document.ref}`,
+        filename: result.document.name ?? 'scan.pdf',
+        mimeType: result.document.mimeType ?? 'application/pdf',
+        size: result.document.sizeBytes ?? 0,
+        toolPath: '/make-pdf',
+        createdAt: result.document.retainedAt ?? Date.now(),
+        blob: null,
+        historyRetained: true,
+        recentRecord: recordFor(result.document),
+      };
+      announceOutput(output);
       haptic('commit');
     } catch (caught) {
       setScanNotice(scanFailureFor(caught));
@@ -180,7 +201,7 @@ export const MakePDF: React.FC = () => {
       }
       await handOff(document, null);
     } catch {
-      setScanNotice(SCAN_OPEN_FAILED);
+      setScanNotice(t("make-pdf.that.scan.could.not.be.opened.it.7a1de2"));
       haptic('error');
     } finally {
       setOpeningScan(false);
@@ -203,12 +224,8 @@ export const MakePDF: React.FC = () => {
     const picked = Array.from(files);
     const supported = picked.flatMap((file) => {
       const extension = file.name.split('.').pop()?.toLowerCase();
-      const resolvedType = file.type === 'image/jpeg' || file.type === 'image/jpg' || extension === 'jpg' || extension === 'jpeg'
-        ? 'image/jpeg'
-        : file.type === 'image/png' || extension === 'png'
-          ? 'image/png'
-          : null;
-      if (!resolvedType) return [];
+      const resolvedType = file.type.startsWith('image/') ? file.type : GALLERY_IMAGE_MIME[extension ?? ''];
+      if (!resolvedType || resolvedType === 'image/svg+xml') return [];
       return [file.type === resolvedType
         ? file
         : new File([file], file.name, { type: resolvedType, lastModified: file.lastModified })];
@@ -227,7 +244,7 @@ export const MakePDF: React.FC = () => {
     const valid = checked.filter((item): item is { file: File; previewUrl: string } => item !== null);
     const skippedCount = picked.length - valid.length;
     setSelectionNotice(skippedCount > 0
-      ? `${skippedCount} ${skippedCount === 1 ? 'photo was' : 'photos were'} skipped: only readable JPEG and PNG images are supported.`
+      ? t("image-browser.image.could.not.be.decoded.7984a8")
       : null);
     const next = valid.map(({ file, previewUrl }) => {
       previewUrlsRef.current.add(previewUrl);
@@ -274,14 +291,14 @@ export const MakePDF: React.FC = () => {
     // The same latch the scanner uses, so building from photos can never run
     // alongside a scan, an open, or a second build.
     if (images.length === 0 || !claimOperation()) return;
-    setStatus({ isProcessing: true, progress: 10, message: `Building ${images.length}-page PDF on this device…` });
+    setStatus({ isProcessing: true, progress: 10, message: t("make-pdf.building.page.pdf.on.this.device.85fead", { count: images.length }) });
     try {
       const bytes = await createPDFFromImages(images.map((item) => item.file));
       downloadBlob(new Blob([bytes], { type: 'application/pdf' }), `scanned-${Date.now()}.pdf`);
-      setStatus({ isProcessing: false, progress: 100, message: `Scanned PDF ready with ${images.length} page${images.length === 1 ? '' : 's'}.` });
+      setStatus({ isProcessing: false, progress: 100, message: t("make-pdf.scanned.pdf.ready.with.page.02e105", { count: images.length }) });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'The PDF could not be made. Try again, or remove the last photo you added.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("make-pdf.the.pdf.could.not.be.made.try.cd3740") });
     } finally {
       operationRef.current = false;
     }
@@ -289,12 +306,12 @@ export const MakePDF: React.FC = () => {
 
   return (
     <ToolShell width="wide" centered={images.length === 0}>
-      <ToolHeader title="Create PDF" />
+      <ToolHeader title={t("make-pdf.create.pdf.e45411")} />
 
       <input
         ref={cameraInputRef}
         type="file"
-        accept="image/jpeg,image/png"
+        accept="image/*"
         capture="environment"
         className="hidden"
         onChange={(event) => {
@@ -305,7 +322,7 @@ export const MakePDF: React.FC = () => {
       <input
         ref={galleryInputRef}
         type="file"
-        accept="image/jpeg,image/png"
+        accept="image/*"
         multiple
         className="hidden"
         onChange={(event) => {
@@ -316,7 +333,7 @@ export const MakePDF: React.FC = () => {
 
       {scanner && (
         <section
-          aria-label="Device scanner"
+          aria-label={t("make-pdf.device.scanner.7d7538")}
           className="mb-3 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3"
         >
           {scanned ? (
@@ -324,12 +341,8 @@ export const MakePDF: React.FC = () => {
               <div className="flex items-start gap-2">
                 <CheckCircle2 aria-hidden size={20} className="mt-0.5 shrink-0 text-[var(--status-success-text)]" />
                 <div className="min-w-0">
-                  <p role="status" className="text-[1.0625rem] font-semibold text-[var(--text-primary)]">
-                    {scanned.pageCount} page{scanned.pageCount === 1 ? '' : 's'} scanned
-                  </p>
-                  <p className="type-footnote chef-filename text-[var(--text-secondary)]">
-                    {scanned.document.name ?? 'Scan'} · {formatBytes(scanned.document.sizeBytes)} · kept on this device
-                  </p>
+                  <p role="status" className="text-[1.0625rem] font-semibold text-[var(--text-primary)]">{t("make-pdf.message.93ad0d32b8", { count: scanned.pageCount })}</p>
+                  <p className="type-footnote chef-filename text-[var(--text-secondary)]">{t("make-pdf.message.d22425d581", { v0: scanned.document.name ?? t("make-pdf.scan.ea1c51"), v1: formatBytes(scanned.document.sizeBytes) })}</p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -340,9 +353,7 @@ export const MakePDF: React.FC = () => {
                   icon={<ExternalLink aria-hidden size={16} />}
                   onClick={() => void openScan()}
                   className="min-h-12 flex-1 basis-[11rem]"
-                >
-                  Open scanned PDF
-                </Button>
+                >{t("make-pdf.open.scanned.pdf.213753")}</Button>
                 <Button
                   tone="secondary"
                   busy={scanning}
@@ -350,9 +361,7 @@ export const MakePDF: React.FC = () => {
                   icon={<RefreshCw aria-hidden size={16} />}
                   onClick={() => void runScan()}
                   className="min-h-12 flex-1 basis-[9rem]"
-                >
-                  Scan again
-                </Button>
+                >{t("make-pdf.scan.again.3d0458")}</Button>
               </div>
             </div>
           ) : (
@@ -364,9 +373,7 @@ export const MakePDF: React.FC = () => {
               onClick={() => void runScan()}
               disabled={status.isProcessing}
               className="min-h-12"
-            >
-              Scan document
-            </Button>
+            >{t("make-pdf.scan.document.49793d")}</Button>
           )}
 
           {scanNotice && (
@@ -380,9 +387,7 @@ export const MakePDF: React.FC = () => {
                 onClick={() => cameraInputRef.current?.click()}
                 disabled={status.isProcessing || scanning || openingScan}
                 className="min-h-12"
-              >
-                Use the basic camera
-              </Button>
+              >{t("make-pdf.use.the.basic.camera.8625f2")}</Button>
             </div>
           )}
         </section>
@@ -402,7 +407,7 @@ export const MakePDF: React.FC = () => {
               : 'chef-target flex items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 text-sm font-semibold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-55'}
           >
             <Camera aria-hidden size={18} />
-            <span>{scanner ? 'Basic camera' : 'Camera'}</span>
+            <span>{scanner ? t("make-pdf.basic.camera.237a91") : t("make-pdf.camera.03494b")}</span>
           </button>
           <button
             type="button"
@@ -411,15 +416,13 @@ export const MakePDF: React.FC = () => {
             className="chef-target flex items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-4 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)] disabled:opacity-55"
           >
             <FileImage aria-hidden size={18} />
-            <span>Gallery</span>
+            <span>{t("make-pdf.gallery.352cfc")}</span>
           </button>
           {images.length > 0 && (
           <div className="flex items-center justify-between gap-3 text-sm text-[var(--text-secondary)] sm:ml-auto">
-            <span>{images.length} page{images.length === 1 ? '' : 's'} • {formatBytes(totalSize)}</span>
+            <span>{t("make-pdf.message.dc7f250a5f", { v2: formatBytes(totalSize), count: images.length })}</span>
             {images.length > 0 && (
-              <button type="button" onClick={() => setConfirmClear(true)} disabled={status.isProcessing} className="chef-target rounded-[var(--radius-control)] px-2 font-semibold text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)] disabled:opacity-55">
-                Clear all
-              </button>
+              <button type="button" onClick={() => setConfirmClear(true)} disabled={status.isProcessing} className="chef-target rounded-[var(--radius-control)] px-2 font-semibold text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)] disabled:opacity-55">{t("make-pdf.clear.all.29a390")}</button>
             )}
           </div>
           )}
@@ -440,7 +443,7 @@ export const MakePDF: React.FC = () => {
             className="chef-target chef-pressable flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 text-sm font-bold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-55 sm:w-auto sm:min-w-64"
           >
             {status.isProcessing ? <Loader2 aria-hidden className="animate-spin" size={18} /> : <ScanLine aria-hidden size={18} />}
-            <span>{status.isProcessing ? status.message : `Export ${images.length}-page PDF`}</span>
+            <span>{status.isProcessing ? status.message : t("make-pdf.export.page.pdf.2e36cb", { count: images.length })}</span>
           </button>
         </div>
       )}
@@ -460,16 +463,16 @@ export const MakePDF: React.FC = () => {
                 screen before the reorder controls appeared. */}
             {images.map((image, index) => (
               <div key={image.id} className="flex items-center gap-2 rounded-[var(--radius-row)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-1.5">
-                <img src={image.previewUrl} alt={`Scan ${index + 1}`} className="h-14 w-11 shrink-0 rounded-[var(--radius-control)] border border-[var(--border-hairline)] object-cover" />
+                <img src={image.previewUrl} alt={t("make-pdf.scan.07df33", { v0: index + 1 })} className="h-14 w-11 shrink-0 rounded-[var(--radius-control)] border border-[var(--border-hairline)] object-cover" />
                 <div className="min-w-0 flex-1">
                   <div className="chef-filename text-sm font-semibold text-[var(--text-primary)]">{image.file.name}</div>
-                  <div className="type-caption text-[var(--text-tertiary)]">Page {index + 1} • {formatBytes(image.file.size)}</div>
+                  <div className="type-caption text-[var(--text-tertiary)]">{t("make-pdf.message.179910f5ad", { v0: index + 1, v1: formatBytes(image.file.size) })}</div>
                 </div>
                 <button
                   type="button"
                   onClick={() => moveImage(index, index - 1)}
                   disabled={index === 0}
-                  aria-label={`Move page ${index + 1} up`}
+                  aria-label={t("make-pdf.move.page.up.79624d", { v0: index + 1 })}
                   className="chef-target inline-flex shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:text-[var(--text-tertiary)] disabled:opacity-35"
                 >
                   <ArrowUp aria-hidden size={18} />
@@ -478,7 +481,7 @@ export const MakePDF: React.FC = () => {
                   type="button"
                   onClick={() => moveImage(index, index + 1)}
                   disabled={index === images.length - 1}
-                  aria-label={`Move page ${index + 1} down`}
+                  aria-label={t("make-pdf.move.page.down.9e61e2", { v0: index + 1 })}
                   className="chef-target inline-flex shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:text-[var(--text-tertiary)] disabled:opacity-35"
                 >
                   <ArrowDown aria-hidden size={18} />
@@ -488,7 +491,7 @@ export const MakePDF: React.FC = () => {
                   onClick={() => removeImage(image.id)}
                   disabled={status.isProcessing}
                   className="chef-target inline-flex shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)] disabled:opacity-55"
-                  aria-label={`Remove page ${index + 1}`}
+                  aria-label={t("make-pdf.remove.page.0a72af", { v0: index + 1 })}
                 >
                   <Trash2 aria-hidden size={18} />
                 </button>
@@ -500,9 +503,9 @@ export const MakePDF: React.FC = () => {
 
       <ConfirmSheet
         open={confirmClear}
-        title="Remove every page?"
-        description="Photos on your device and any PDF you already exported are not affected."
-        confirmLabel="Remove all"
+        title={t("make-pdf.remove.every.page.6c477e")}
+        description={t("make-pdf.photos.on.your.device.and.any.pdf.f3658c")}
+        confirmLabel={t("make-pdf.remove.all.ef7b7e")}
         onCancel={() => setConfirmClear(false)}
         onConfirm={() => {
           clearImages();

@@ -1,0 +1,52 @@
+{
+  "appLocale": "it-IT",
+  "appleLocale": "it",
+  "googleLocale": "it-IT",
+  "apple": {
+    "name": "PDF Chef",
+    "subtitle": "Modifica, unisci, comprimi PDF",
+    "promotionalText": "Leggi, modifica e organizza PDF sul tuo dispositivo. Unisci file, gestisci pagine e inserisci una firma autografa.",
+    "description": "PDF Chef ti aiuta a leggere, modificare, unire, dividere, comprimere e firmare PDF sul tuo dispositivo.\n\nOrganizza le pagine, aggiungi testo e immagini, inserisci una firma autografa, aggiungi filigrane o numeri di pagina e proteggi i PDF con una password. Converti immagini e documenti supportati ed estrai testo. I risultati dipendono dal file di origine e dallo strumento selezionato.\n\nL'elaborazione standard dei PDF avviene sul tuo dispositivo. I tuoi documenti non vengono caricati su un server PDF Chef per l'elaborazione. Gli strumenti offline restano disponibili dopo il caricamento delle relative risorse.\n\nPDF Chef non richiede un account. Controlla il risultato prima di condividerlo o esportarlo.\n\nSu iOS, le prime cinque operazioni completate con successo in ogni periodo di disponibilità di sette giorni a scorrimento sono operazioni complete che puoi salvare, condividere ed esportare. Il periodo inizia con la prima operazione completata con successo. Dopo cinque operazioni, l'elaborazione e l'anteprima restano disponibili, ma salvataggio, condivisione ed esportazione richiedono Pro fino al ripristino della disponibilità.\n\nPro Mensile si rinnova automaticamente fino all'annullamento. Pro a vita è un acquisto una tantum, non un abbonamento. Entrambe le opzioni supportano «In famiglia» di Apple. I prezzi e i dettagli dell'acquisto compaiono nell'app prima dell'acquisto. Ripristina gli acquisti da Impostazioni.\n\nTerms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+    "whatsNew": "Versione {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Mensile",
+      "description": "Export completi. Rinnovo fino a disdetta."
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro a vita",
+      "description": "Export completi. Acquisto una tantum."
+    },
+    "screenshot": {
+      "1": "I tuoi strumenti PDF in un unico posto",
+      "2": "Modifica il testo e aggiungi immagini",
+      "3": "Unisci file e organizza le pagine",
+      "4": "Visualizza l'anteprima prima di salvare",
+      "5": "Aggiungi la tua firma autografa",
+      "6": "Lavora sul tuo dispositivo"
+    },
+    "keywords": "dividere,scansionare,firmare,convertire,lettore,filigrana,password,sbloccare,ruotare"
+  },
+  "google": {
+    "name": "PDF Chef",
+    "shortDescription": "Modifica, unisci, comprimi e firma PDF sul tuo dispositivo.",
+    "fullDescription": "PDF Chef ti aiuta a leggere, modificare, unire, dividere, comprimere e firmare PDF sul tuo dispositivo.\n\nOrganizza le pagine, aggiungi testo e immagini, inserisci una firma autografa, aggiungi filigrane o numeri di pagina e proteggi i PDF con una password. Converti immagini e documenti supportati ed estrai testo. I risultati dipendono dal file di origine e dallo strumento selezionato.\n\nL'elaborazione standard dei PDF avviene sul tuo dispositivo. I tuoi documenti non vengono caricati su un server PDF Chef per l'elaborazione. Gli strumenti offline restano disponibili dopo il caricamento delle relative risorse.\n\nPDF Chef non richiede un account. Controlla il risultato prima di condividerlo o esportarlo.",
+    "whatsNew": "Versione {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Mensile",
+      "description": "Salva, condividi ed esporta ogni risultato. Si rinnova ogni mese fino ad annullamento.",
+      "benefit": "Salva e condividi ogni risultato"
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro a vita",
+      "description": "Salva, condividi ed esporta ogni risultato con un acquisto una tantum."
+    },
+    "screenshot": {
+      "1": "I tuoi strumenti PDF in un unico posto",
+      "2": "Modifica il testo e aggiungi immagini",
+      "3": "Unisci file e organizza le pagine",
+      "4": "Visualizza l'anteprima prima di salvare",
+      "5": "Aggiungi la tua firma autografa",
+      "6": "Lavora sul tuo dispositivo"
+    }
+  }
+}

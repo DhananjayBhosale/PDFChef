@@ -137,8 +137,14 @@ try {
   const redo = page.getByRole('button', { name: 'Redo added element change' });
 
   await page.getByRole('button', { name: 'Text', exact: true }).click();
+  await page.getByTestId('pdf-placement-target').waitFor();
+  const paragraphBounds = await paragraphs.first().boundingBox();
+  assert.ok(paragraphBounds, 'existing PDF paragraph has no click bounds');
+  await page.mouse.click(paragraphBounds.x + paragraphBounds.width / 2, paragraphBounds.y + paragraphBounds.height / 2);
   const selectedText = page.locator('[role="group"][aria-label^="Selected text on page "]').first();
   await selectedText.waitFor();
+  assert.equal(await page.getByTestId('pdf-placement-target').count(), 0, 'text placement stayed armed');
+  assert.equal(await page.getByTestId('pdf-paragraph-inspector').count(), 0, 'placing new text selected the old paragraph');
 
   const inlineTextEditor = page.getByRole('textbox', { name: 'Edit text on page 1' });
   await inlineTextEditor.waitFor();

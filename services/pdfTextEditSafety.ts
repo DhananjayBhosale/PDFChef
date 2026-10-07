@@ -1,4 +1,5 @@
-export const PDF_TEXT_OVERFLOW_MESSAGE = 'Replacement text does not fit on this page. Shorten the text or reduce its size before saving.';
+import english from './i18n/en-US.ts';
+export const PDF_TEXT_OVERFLOW_MESSAGE = english["error.pdfTextOverflow"];
 
 /** Both rectangles use PDF coordinates: [left, bottom, right, top]. */
 export const boundsFitWithinCropBox = (

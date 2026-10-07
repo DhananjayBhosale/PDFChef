@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import { t, formatPercent } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import JSZip from 'jszip';
 import { v4 as uuidv4 } from 'uuid';
@@ -16,6 +18,7 @@ import {
 import { extractEmbeddedImagesFromPDF, loadPDFDocument, type EmbeddedPdfImageAsset } from '../../services/pdfBrowser';
 import { downloadBlob } from '../../services/pdfShared';
 import { formatBytes } from '../UI/format';
+import { useMonetization, type JobAccessGrant } from '../../hooks/useMonetization';
 
 interface ToolShellProps {
   title: string;
@@ -53,6 +56,7 @@ const ToolShell: React.FC<ToolShellProps> = ({
   children,
   selectedContent,
 }) => {
+  useI18n();
   const progress = Math.max(0, Math.min(100, status.progress));
 
   return (
@@ -96,9 +100,7 @@ const ToolShell: React.FC<ToolShellProps> = ({
                 onClick={onReset}
                 disabled={status.isProcessing}
                 className="chef-target chef-pressable shrink-0 rounded-xl px-3 text-sm font-semibold text-[var(--accent-text)] hover:bg-[var(--accent-quiet)] disabled:cursor-not-allowed disabled:opacity-55"
-              >
-                Change
-              </button>
+              >{t("pdf-advanced-tools.change.c0bf75")}</button>
             </div>
 
             {children && <div className="mt-3">{children}</div>}
@@ -107,12 +109,12 @@ const ToolShell: React.FC<ToolShellProps> = ({
             {status.isProcessing && (
               <div role="status" aria-live="polite" className="mt-3 rounded-[var(--radius-field)] bg-[var(--surface-sunken)] px-3 py-2.5">
                 <div className="flex items-start justify-between gap-3 text-sm font-semibold text-[var(--text-body)]">
-                  <span>{status.message || 'Processing on this device…'}</span>
-                  <span className="shrink-0 tabular-nums">{progress}%</span>
+                  <span>{status.message || t("pdf-advanced-tools.processing.on.this.device.83aab2")}</span>
+                  <span className="shrink-0 tabular-nums">{formatPercent(progress)}</span>
                 </div>
                 <div
                   role="progressbar"
-                  aria-label={`${title} progress`}
+                  aria-label={t("pdf-advanced-tools.progress.459332", { v0: title })}
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={progress}
@@ -181,13 +183,14 @@ const SimpleTransformTool: React.FC<SimpleTransformToolProps> = ({
   outputPrefix,
   transform,
 }) => {
+  useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
 
   const handleFilesSelected = (files: File[]) => {
     const next = toPdfFile(files);
     if (!next) {
-      setStatus({ ...idleStatus(), error: 'Choose a PDF file.' });
+      setStatus({ ...idleStatus(), error: t("pdf-advanced-tools.choose.a.pdf.file.c2a7df") });
       return;
     }
     setStatus(idleStatus());
@@ -196,15 +199,15 @@ const SimpleTransformTool: React.FC<SimpleTransformToolProps> = ({
 
   const handleTransform = async () => {
     if (!file) return;
-    setStatus({ isProcessing: true, progress: 20, message: 'Processing PDF...' });
+    setStatus({ isProcessing: true, progress: 20, message: t("pdf-advanced-tools.processing.pdf.3087fc") });
     try {
       const bytes = await transform(file.file);
       const outputName = `${outputPrefix}-${file.name}`;
       downloadBlob(new Blob([bytes], { type: 'application/pdf' }), outputName);
-      setStatus({ isProcessing: false, progress: 100, message: `Created ${outputName}.` });
+      setStatus({ isProcessing: false, progress: 100, message: t("pdf-advanced-tools.created.21ab7c", { v0: outputName }) });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'This PDF could not be changed. If it is password-protected, use Unlock PDF first. Otherwise, try Repair PDF or choose another file.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("pdf-advanced-tools.this.pdf.could.not.be.changed.if.82905a") });
     }
   };
 
@@ -226,40 +229,41 @@ const SimpleTransformTool: React.FC<SimpleTransformToolProps> = ({
   );
 };
 
-export const RemoveMetadataPDF: React.FC = () => (
+export const RemoveMetadataPDF: React.FC = () => { useI18n(); return (
   <SimpleTransformTool
-    title="Remove hidden info"
-    description="Clears the author, the dates and the app that made the file. The pages stay exactly as they are."
-    uploadLabel="Choose a PDF to clean"
-    actionLabel="Remove hidden info"
+    title={t("pdf-advanced-tools.remove.hidden.info.fa4793")}
+    description={t("pdf-advanced-tools.clears.the.author.the.dates.and.the.3fc978")}
+    uploadLabel={t("pdf-advanced-tools.choose.a.pdf.to.clean.e0a661")}
+    actionLabel={t("pdf-advanced-tools.remove.hidden.info.fa4793")}
     outputPrefix="hidden-info-removed"
     transform={removePDFMetadata}
   />
-);
+); };
 
-export const RemoveAnnotationsPDF: React.FC = () => (
+export const RemoveAnnotationsPDF: React.FC = () => { useI18n(); return (
   <SimpleTransformTool
-    title="Remove comments"
-    description="Removes comments, notes, highlights and links. Form fields and their values are kept."
-    uploadLabel="Choose a PDF to clean"
-    actionLabel="Remove comments"
+    title={t("pdf-advanced-tools.remove.comments.0788e6")}
+    description={t("pdf-advanced-tools.removes.comments.notes.highlights.and.links.form.e7de67")}
+    uploadLabel={t("pdf-advanced-tools.choose.a.pdf.to.clean.e0a661")}
+    actionLabel={t("pdf-advanced-tools.remove.comments.0788e6")}
     outputPrefix="annotations-removed"
     transform={removePDFAnnotations}
   />
-);
+); };
 
-export const SanitizePDF: React.FC = () => (
+export const SanitizePDF: React.FC = () => { useI18n(); return (
   <SimpleTransformTool
-    title="Clean Up PDF"
-    description="Removes hidden info and comments in one go: author, dates, the app that made the file, and any notes or highlights."
-    uploadLabel="Choose a PDF to clean"
-    actionLabel="Clean up PDF"
+    title={t("pdf-advanced-tools.clean.up.pdf.33d903")}
+    description={t("pdf-advanced-tools.removes.hidden.info.and.comments.in.one.732679")}
+    uploadLabel={t("pdf-advanced-tools.choose.a.pdf.to.clean.e0a661")}
+    actionLabel={t("pdf-advanced-tools.clean.up.pdf.0b4aaa")}
     outputPrefix="cleaned"
     transform={sanitizePDF}
   />
-);
+); };
 
 export const CropPDF: React.FC = () => {
+  useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const [margins, setMargins] = useState({ top: 5, right: 5, bottom: 5, left: 5 });
@@ -271,29 +275,29 @@ export const CropPDF: React.FC = () => {
 
   const handleCrop = async () => {
     if (!file) return;
-    setStatus({ isProcessing: true, progress: 20, message: 'Trimming the edges…' });
+    setStatus({ isProcessing: true, progress: 20, message: t("pdf-advanced-tools.trimming.the.edges.bf7d52") });
     try {
       const bytes = await cropPDFMargins(file.file, margins);
       const outputName = `cropped-${file.name}`;
       downloadBlob(new Blob([bytes], { type: 'application/pdf' }), outputName);
-      setStatus({ isProcessing: false, progress: 100, message: `Created ${outputName}.` });
+      setStatus({ isProcessing: false, progress: 100, message: t("pdf-advanced-tools.created.21ab7c", { v0: outputName }) });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'This PDF could not be cropped. Try another file, or run Repair PDF on it first.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("pdf-advanced-tools.this.pdf.could.not.be.cropped.try.b13377") });
     }
   };
 
   return (
     <ToolShell
-      title="Crop PDF"
-      description="Trims the white space around the edges of every page. The words and pictures are not resized."
-      uploadLabel="Choose a PDF to crop"
+      title={t("pdf-advanced-tools.crop.pdf.dc4bdb")}
+      description={t("pdf-advanced-tools.trims.the.white.space.around.the.edges.27ed25")}
+      uploadLabel={t("pdf-advanced-tools.choose.a.pdf.to.crop.35fb47")}
       file={file}
       status={status}
       onFilesSelected={(files) => {
         const next = toPdfFile(files);
         if (!next) {
-          setStatus({ ...idleStatus(), error: 'Choose a PDF file.' });
+          setStatus({ ...idleStatus(), error: t("pdf-advanced-tools.choose.a.pdf.file.c2a7df") });
           return;
         }
         setStatus(idleStatus());
@@ -303,10 +307,10 @@ export const CropPDF: React.FC = () => {
         setFile(null);
         setStatus(idleStatus());
       }}
-      actionLabel="Crop PDF"
+      actionLabel={t("pdf-advanced-tools.crop.pdf.dc4bdb")}
       onAction={handleCrop}
       actionDisabled={Object.values(margins).every((value) => value === 0)}
-      actionHint="Increase at least one margin."
+      actionHint={t("pdf-advanced-tools.increase.at.least.one.margin.559863")}
     >
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {(['top', 'right', 'bottom', 'left'] as const).map((key) => (
@@ -322,7 +326,7 @@ export const CropPDF: React.FC = () => {
               inputMode="decimal"
               className="chef-field disabled:cursor-not-allowed disabled:opacity-60"
             />
-            <span className="mt-1 block text-xs text-[var(--text-tertiary)]">% of page</span>
+            <span className="mt-1 block text-xs text-[var(--text-tertiary)]">{t("pdf-advanced-tools.of.page.42a4a1")}</span>
           </label>
         ))}
       </div>
@@ -331,6 +335,7 @@ export const CropPDF: React.FC = () => {
 };
 
 export const HeaderFooterPDF: React.FC = () => {
+  useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const [headerText, setHeaderText] = useState('');
@@ -346,32 +351,32 @@ export const HeaderFooterPDF: React.FC = () => {
   const handleApply = async () => {
     if (!file) return;
     if (!hasContent) {
-      setStatus({ ...idleStatus(), error: 'Add header text, footer text, or page numbers.' });
+      setStatus({ ...idleStatus(), error: t("pdf-advanced-tools.add.header.text.footer.text.or.page.0b0900") });
       return;
     }
-    setStatus({ isProcessing: true, progress: 20, message: 'Adding header and footer...' });
+    setStatus({ isProcessing: true, progress: 20, message: t("pdf-advanced-tools.adding.header.and.footer.c9c262") });
     try {
       const bytes = await addHeaderFooterToPDF(file.file, { headerText, footerText, fontSize, includePageNumbers });
       const outputName = `header-footer-${file.name}`;
       downloadBlob(new Blob([bytes], { type: 'application/pdf' }), outputName);
-      setStatus({ isProcessing: false, progress: 100, message: `Created ${outputName}.` });
+      setStatus({ isProcessing: false, progress: 100, message: t("pdf-advanced-tools.created.21ab7c", { v0: outputName }) });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'The header and footer could not be added. Try another file, or run Repair PDF on it first.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("pdf-advanced-tools.the.header.and.footer.could.not.be.90a336") });
     }
   };
 
   return (
     <ToolShell
-      title="Header & Footer"
-      description="Puts the same line of text at the top or bottom of every page."
-      uploadLabel="Choose a PDF for header and footer"
+      title={t("pdf-advanced-tools.header.footer.aaf783")}
+      description={t("pdf-advanced-tools.puts.the.same.line.of.text.at.4718c1")}
+      uploadLabel={t("pdf-advanced-tools.choose.a.pdf.for.header.and.footer.a944a3")}
       file={file}
       status={status}
       onFilesSelected={(files) => {
         const next = toPdfFile(files);
         if (!next) {
-          setStatus({ ...idleStatus(), error: 'Choose a PDF file.' });
+          setStatus({ ...idleStatus(), error: t("pdf-advanced-tools.choose.a.pdf.file.c2a7df") });
           return;
         }
         setStatus(idleStatus());
@@ -381,41 +386,41 @@ export const HeaderFooterPDF: React.FC = () => {
         setFile(null);
         setStatus(idleStatus());
       }}
-      actionLabel="Add header/footer"
+      actionLabel={t("pdf-advanced-tools.add.header.footer.532ade")}
       onAction={handleApply}
       actionDisabled={!hasContent}
-      actionHint="Add header text, footer text, or page numbers."
+      actionHint={t("pdf-advanced-tools.add.header.text.footer.text.or.page.0b0900")}
     >
       <div className="grid gap-2.5">
         <label>
-          <span className="mb-1 block text-sm font-semibold text-[var(--text-secondary)]">Header text</span>
+          <span className="mb-1 block text-sm font-semibold text-[var(--text-secondary)]">{t("pdf-advanced-tools.header.text.a16987")}</span>
           <input
             value={headerText}
             onChange={(event) => {
               clearTerminalStatus();
               setHeaderText(event.target.value);
             }}
-            placeholder="Optional header"
+            placeholder={t("pdf-advanced-tools.optional.header.8bc58e")}
             disabled={status.isProcessing}
             className="chef-field disabled:cursor-not-allowed disabled:opacity-60"
           />
         </label>
         <label>
-          <span className="mb-1 block text-sm font-semibold text-[var(--text-secondary)]">Footer text</span>
+          <span className="mb-1 block text-sm font-semibold text-[var(--text-secondary)]">{t("pdf-advanced-tools.footer.text.0b0272")}</span>
           <input
             value={footerText}
             onChange={(event) => {
               clearTerminalStatus();
               setFooterText(event.target.value);
             }}
-            placeholder="Page {n} of {total}"
+            placeholder={t("pdf-advanced-tools.page.of.373437", { pageToken: "{n}", totalToken: "{total}" })}
             disabled={status.isProcessing}
             className="chef-field disabled:cursor-not-allowed disabled:opacity-60"
           />
         </label>
         <div className="grid gap-2.5 sm:grid-cols-[160px_1fr] sm:items-end">
           <label>
-            <span className="mb-1 block text-sm font-semibold text-[var(--text-secondary)]">Font size</span>
+            <span className="mb-1 block text-sm font-semibold text-[var(--text-secondary)]">{t("pdf-advanced-tools.font.size.6d784d")}</span>
             <input
               type="number"
               min={8}
@@ -440,9 +445,7 @@ export const HeaderFooterPDF: React.FC = () => {
               }}
               disabled={status.isProcessing}
               className="h-5 w-5 disabled:cursor-not-allowed disabled:opacity-60"
-            />
-            Use page numbers if footer is blank
-          </label>
+            />{t("pdf-advanced-tools.use.page.numbers.if.footer.is.blank.b67db0")}</label>
         </div>
       </div>
     </ToolShell>
@@ -450,6 +453,7 @@ export const HeaderFooterPDF: React.FC = () => {
 };
 
 export const RemoveBlankPagesPDF: React.FC = () => {
+  useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const [removedPages, setRemovedPages] = useState<number[]>([]);
@@ -457,11 +461,11 @@ export const RemoveBlankPagesPDF: React.FC = () => {
   const handleRemove = async () => {
     if (!file) return;
     setRemovedPages([]);
-    setStatus({ isProcessing: true, progress: 5, message: 'Scanning pages...' });
+    setStatus({ isProcessing: true, progress: 5, message: t("pdf-advanced-tools.scanning.pages.0ef4d2") });
     try {
       const result = await removeBlankPagesFromPDF(file.file, {
         onProgress: (current, total) => {
-          setStatus({ isProcessing: true, progress: Math.round((current / total) * 90), message: `Scanning page ${current} of ${total}` });
+          setStatus({ isProcessing: true, progress: Math.round((current / total) * 90), message: t("pdf-advanced-tools.scanning.page.of.0f093b", { v0: current, v1: total }) });
         },
       });
       setRemovedPages(result.removedPages);
@@ -471,26 +475,26 @@ export const RemoveBlankPagesPDF: React.FC = () => {
         isProcessing: false,
         progress: 100,
         message: result.removedPages.length > 0
-          ? `Removed ${result.removedPages.length} blank page${result.removedPages.length === 1 ? '' : 's'}. Created ${outputName}.`
-          : `No blank pages were detected. Created ${outputName} without removing pages.`,
+          ? t("pdf-advanced-tools.removed.blank.page.created.ffb782", { v2: outputName, count: result.removedPages.length })
+          : t("pdf-advanced-tools.no.blank.pages.were.detected.created.without.2e7fdb", { v0: outputName }),
       });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'The blank pages could not be removed. Try another file, or run Repair PDF on it first.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("pdf-advanced-tools.the.blank.pages.could.not.be.removed.e20ac8") });
     }
   };
 
   return (
     <ToolShell
-      title="Remove Blank Pages"
-      description="Nearly empty pages count as blank."
-      uploadLabel="Choose a PDF to remove blank pages"
+      title={t("pdf-advanced-tools.remove.blank.pages.f85882")}
+      description={t("pdf-advanced-tools.nearly.empty.pages.count.as.blank.8e2727")}
+      uploadLabel={t("pdf-advanced-tools.choose.a.pdf.to.remove.blank.pages.56a840")}
       file={file}
       status={status}
       onFilesSelected={(files) => {
         const next = toPdfFile(files);
         if (!next) {
-          setStatus({ ...idleStatus(), error: 'Choose a PDF file.' });
+          setStatus({ ...idleStatus(), error: t("pdf-advanced-tools.choose.a.pdf.file.c2a7df") });
           return;
         }
         setStatus(idleStatus());
@@ -502,13 +506,11 @@ export const RemoveBlankPagesPDF: React.FC = () => {
         setRemovedPages([]);
         setStatus(idleStatus());
       }}
-      actionLabel="Remove blank pages"
+      actionLabel={t("pdf-advanced-tools.remove.blank.pages.527c64")}
       onAction={handleRemove}
       selectedContent={
         removedPages.length > 0 ? (
-          <p className="mt-3 rounded-[var(--radius-field)] bg-[var(--status-caution-quiet)] px-3 py-2.5 text-sm font-semibold text-[var(--status-caution-text)]">
-            Removed pages: {removedPages.join(', ')}
-          </p>
+          <p className="mt-3 rounded-[var(--radius-field)] bg-[var(--status-caution-quiet)] px-3 py-2.5 text-sm font-semibold text-[var(--status-caution-text)]">{t("pdf-advanced-tools.message.42c8b18305", { v0: removedPages.join(', ') })}</p>
         ) : null
       }
     />
@@ -516,45 +518,57 @@ export const RemoveBlankPagesPDF: React.FC = () => {
 };
 
 export const ExtractImagesPDF: React.FC = () => {
+  useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const [images, setImages] = useState<EmbeddedPdfImageAsset[]>([]);
+  const imageOperationIdRef = useRef<string | null>(null);
+  const imageGrantRef = useRef<JobAccessGrant | null>(null);
+  const { completeJob, runWithExportAccess } = useMonetization();
 
   useEffect(() => {
     return () => images.forEach((image) => URL.revokeObjectURL(image.objectUrl));
   }, [images]);
 
   const scanImages = async (selected: PDFFile) => {
-    setStatus({ isProcessing: true, progress: 10, message: 'Looking for pictures inside the PDF…' });
+    const operationId = uuidv4();
+    imageOperationIdRef.current = operationId;
+    imageGrantRef.current = null;
+    setStatus({ isProcessing: true, progress: 10, message: t("pdf-advanced-tools.looking.for.pictures.inside.the.pdf.5e0e3e") });
     try {
       const pdfDoc = await loadPDFDocument(selected.file);
       const extracted = await extractEmbeddedImagesFromPDF(pdfDoc, {
         onProgress: (current, total) => {
-          setStatus({ isProcessing: true, progress: Math.round((current / total) * 90), message: `Scanning page ${current} of ${total}` });
+          setStatus({ isProcessing: true, progress: Math.round((current / total) * 90), message: t("pdf-advanced-tools.scanning.page.of.0f093b", { v0: current, v1: total }) });
         },
       });
       setImages(extracted);
+      const grant = await completeJob(operationId).catch(() => 'preview-only' as const);
+      if (imageOperationIdRef.current !== operationId) return;
+      imageGrantRef.current = grant;
       setStatus({
         isProcessing: false,
         progress: 100,
         message: extracted.length > 0
-          ? `Found ${extracted.length} embedded image${extracted.length === 1 ? '' : 's'}.`
-          : 'This PDF has no pictures stored in it. If you want the pages themselves as pictures, use PDF to Image.',
+          ? t("pdf-advanced-tools.found.embedded.image.11b935", { count: extracted.length })
+          : t("pdf-advanced-tools.this.pdf.has.no.pictures.stored.in.fa5b86"),
       });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'The pictures could not be saved. Try another file, or use PDF to Image to save whole pages instead.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("pdf-advanced-tools.the.pictures.could.not.be.saved.try.7b1ada") });
     }
   };
 
   const handleFilesSelected = (files: File[]) => {
     const next = toPdfFile(files);
     if (!next) {
-      setStatus({ ...idleStatus(), error: 'Choose a PDF file.' });
+      setStatus({ ...idleStatus(), error: t("pdf-advanced-tools.choose.a.pdf.file.c2a7df") });
       return;
     }
     images.forEach((image) => URL.revokeObjectURL(image.objectUrl));
     setImages([]);
+    imageOperationIdRef.current = null;
+    imageGrantRef.current = null;
     setFile(next);
     setStatus(idleStatus());
     void scanImages(next);
@@ -562,7 +576,9 @@ export const ExtractImagesPDF: React.FC = () => {
 
   const downloadAll = async () => {
     if (!file || images.length === 0) return;
-    setStatus({ isProcessing: true, progress: 90, message: 'Packing images...' });
+    const operationId = imageOperationIdRef.current;
+    if (!operationId) return;
+    setStatus({ isProcessing: true, progress: 90, message: t("pdf-advanced-tools.packing.images.e1a3a2") });
     try {
       const zip = new JSZip();
       images.forEach((image, index) => {
@@ -572,27 +588,43 @@ export const ExtractImagesPDF: React.FC = () => {
         setStatus({
           isProcessing: true,
           progress: 90 + Math.round(metadata.percent / 10),
-          message: 'Packing images...',
+          message: t("pdf-advanced-tools.packing.images.e1a3a2"),
         });
       });
       const outputName = `extracted-images-${file.name.replace(/\.pdf$/i, '')}.zip`;
-      downloadBlob(blob, outputName, 'application/zip');
+      const download = async () => {
+        downloadBlob(blob, outputName, 'application/zip', { operationId });
+      };
+      if (imageGrantRef.current === 'preview-only') {
+        try {
+          const access = await runWithExportAccess(download);
+          if (access.status === 'blocked') {
+            setStatus({ isProcessing: false, progress: 100, message: t("pdf-advanced-tools.image.preview.ready.unlock.to.download.all.d120b3") });
+            return;
+          }
+        } catch {
+          setStatus({ isProcessing: false, progress: 100, message: t("pdf-advanced-tools.image.preview.ready.unlock.to.download.all.d120b3") });
+          return;
+        }
+      } else {
+        await download();
+      }
       setStatus({
         isProcessing: false,
         progress: 100,
-        message: `Created ${outputName} with ${images.length} image${images.length === 1 ? '' : 's'}.`,
+        message: t("pdf-advanced-tools.created.with.image.a61a29", { v0: outputName, count: images.length }),
       });
     } catch (error) {
       console.error(error);
-      setStatus({ ...idleStatus(), error: 'The pictures could not be put into a zip file. Try again, or pick a PDF with fewer pictures.' });
+      setStatus({ ...idleStatus(), error: t("pdf-advanced-tools.the.pictures.could.not.be.put.into.d67287") });
     }
   };
 
   return (
     <ToolShell
-      title="Extract Images"
-      description="Embedded images are exported as PNG."
-      uploadLabel="Choose a PDF to extract images"
+      title={t("pdf-advanced-tools.extract.images.6a8eaf")}
+      description={t("pdf-advanced-tools.embedded.images.are.exported.as.png.f1bce4")}
+      uploadLabel={t("pdf-advanced-tools.choose.a.pdf.to.extract.images.7201bd")}
       file={file}
       status={status}
       onFilesSelected={handleFilesSelected}
@@ -600,36 +632,49 @@ export const ExtractImagesPDF: React.FC = () => {
         images.forEach((image) => URL.revokeObjectURL(image.objectUrl));
         setImages([]);
         setFile(null);
+        imageOperationIdRef.current = null;
+        imageGrantRef.current = null;
         setStatus(idleStatus());
       }}
-      actionLabel={images.length > 0 ? 'Download all images' : 'Scan images'}
+      actionLabel={images.length > 0 ? t("pdf-advanced-tools.download.all.images.c7daa4") : t("pdf-advanced-tools.scan.images.fc2418")}
       onAction={images.length > 0 ? downloadAll : () => file && scanImages(file)}
     >
       {images.length > 0 ? (
         <div>
           <div className="mb-2 flex items-center gap-2 text-sm font-bold uppercase tracking-[0.16em] text-[var(--text-secondary)]">
-            <Archive aria-hidden size={18} />
-            {images.length} image{images.length === 1 ? '' : 's'} found
-          </div>
+            <Archive aria-hidden size={18} />{t("pdf-advanced-tools.message.ba0aedff09", { count: images.length })}</div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {images.slice(0, 9).map((image, index) => (
-              <a
+              <button
                 key={image.id}
-                href={image.objectUrl}
-                download={`image-${index + 1}.png`}
+                type="button"
+                onClick={() => {
+                  const operationId = imageOperationIdRef.current;
+                  if (!operationId) return;
+                  const download = async () => {
+                    downloadBlob(image.blob, `image-${index + 1}.png`, 'image/png', { operationId });
+                  };
+                  if (imageGrantRef.current !== 'preview-only') {
+                    void download();
+                    return;
+                  }
+                  void runWithExportAccess(download).then((access) => {
+                    if (access.status === 'blocked') {
+                      setStatus({ isProcessing: false, progress: 100, message: t("pdf-advanced-tools.image.preview.ready.unlock.to.download.this.ff4fa3") });
+                    }
+                  }).catch(() => {
+                    setStatus({ isProcessing: false, progress: 100, message: t("pdf-advanced-tools.image.preview.ready.unlock.to.download.this.ff4fa3") });
+                  });
+                }}
                 className="group overflow-hidden rounded-[var(--radius-field)] border border-[var(--border-strong)] bg-[var(--surface-sunken)]"
               >
-                <img src={image.objectUrl} alt={`Extracted image ${index + 1}`} className="h-24 w-full object-contain p-2" />
-                <div className="border-t border-[var(--border-hairline)] px-2 py-1.5 text-xs font-semibold text-[var(--text-secondary)]">
-                  Pages {image.pageNumbers.join(', ')}
-                </div>
-              </a>
+                <img src={image.objectUrl} alt={t("pdf-advanced-tools.extracted.image.a40163", { v0: index + 1 })} className="h-24 w-full object-contain p-2" />
+                <div className="border-t border-[var(--border-hairline)] px-2 py-1.5 text-xs font-semibold text-[var(--text-secondary)]">{t("pdf-advanced-tools.message.1fac9292db", { v0: image.pageNumbers.join(', ') })}</div>
+              </button>
             ))}
           </div>
           {images.length > 9 && (
-            <p className="type-footnote mt-2 text-[var(--text-secondary)]">
-              First 9 shown · Download all includes {images.length}.
-            </p>
+            <p className="type-footnote mt-2 text-[var(--text-secondary)]">{t("pdf-advanced-tools.message.6e168770e3", { v0: images.length })}</p>
           )}
         </div>
       ) : null}

@@ -1,3 +1,5 @@
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
@@ -20,6 +22,7 @@ import { Portal } from '../UI/Primitives';
 import { PDFFile, ProcessingStatus } from '../../types';
 import { useZoom } from '../../hooks/useZoom';
 import { usePdfPinchZoom } from '../../hooks/usePdfPinchZoom';
+import { useFileDrop } from '../../hooks/useFileDrop';
 import { loadPDFDocument } from '../../services/pdfBrowser';
 import { applySignaturesToPDF } from '../../services/pdfDocument';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
@@ -45,13 +48,13 @@ const clampWidth = (value: number) => clamp(value, 0.1, 0.8);
 
 const getPoint = (event: PointerEvent | React.PointerEvent) => ({ x: event.clientX, y: event.clientY });
 
-const createTransparentSignature = async (dataUrl: string, threshold = 242) => {
+const createTransparentSignature = async (dataUrl: string, threshold = 242, transparent = true) => {
   const image = new Image();
   image.decoding = 'async';
 
   await new Promise<void>((resolve, reject) => {
     image.onload = () => resolve();
-    image.onerror = () => reject(new Error('This signature picture could not be read. Try a JPG or PNG instead.'));
+    image.onerror = () => reject(new Error(t("sign-pdf.this.signature.picture.could.not.be.read.43b251")));
     image.src = dataUrl;
   });
 
@@ -65,6 +68,7 @@ const createTransparentSignature = async (dataUrl: string, threshold = 242) => {
   }
 
   context.drawImage(image, 0, 0);
+  if (!transparent) return canvas.toDataURL('image/png');
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
   const pixels = imageData.data;
   const softness = 18;
@@ -90,7 +94,7 @@ const rotateSignatureImage = async (dataUrl: string) => {
   const image = new Image();
   await new Promise<void>((resolve, reject) => {
     image.onload = () => resolve();
-    image.onerror = () => reject(new Error('The signature could not be turned. Try drawing or adding it again.'));
+    image.onerror = () => reject(new Error(t("sign-pdf.the.signature.could.not.be.turned.try.1d434d")));
     image.src = dataUrl;
   });
   const canvas = document.createElement('canvas');
@@ -126,6 +130,7 @@ const SignatureOverlay: React.FC<{
   onUpdate: (id: string, updates: Partial<SignatureItem>) => void;
   onDelete: (id: string) => void;
 }> = ({ item, containerRef, isSelected, onSelect, onUpdate, onDelete }) => {
+  useI18n();
   const [editing, setEditing] = useState(false);
   const modeRef = useRef<EditMode>(null);
   const originRef = useRef({
@@ -228,7 +233,7 @@ const SignatureOverlay: React.FC<{
     <div
       role="button"
       tabIndex={0}
-      aria-label="Signature stamp. Drag to move, use arrow keys for precise movement."
+      aria-label={t("sign-pdf.signature.stamp.drag.to.move.use.arrow.90b646")}
       className={`absolute z-20 cursor-move touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-500 ${isSelected ? 'ring-2 ring-ink-500' : 'ring-ink-400 hover:ring-1'}`}
       style={{
         left: `${item.x * 100}%`,
@@ -245,7 +250,7 @@ const SignatureOverlay: React.FC<{
         <>
           <button
             type="button"
-            aria-label="Remove signature stamp"
+            aria-label={t("sign-pdf.remove.signature.stamp.54e28c")}
             className="absolute -right-6 -top-6 grid h-12 w-12 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger-500"
             onClick={(event) => {
               event.stopPropagation();
@@ -258,7 +263,7 @@ const SignatureOverlay: React.FC<{
           </button>
           <button
             type="button"
-            aria-label="Resize signature stamp"
+            aria-label={t("sign-pdf.resize.signature.stamp.b617b6")}
             className="absolute -bottom-6 -right-6 grid h-12 w-12 touch-none place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-500"
             onPointerDown={(event) => startEdit(event, 'resize')}
           >
@@ -293,6 +298,7 @@ const PDFPageCanvas: React.FC<{
   onDeleteSignature,
   onBackgroundClick,
 }) => {
+  useI18n();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -342,6 +348,7 @@ const PDFPageCanvas: React.FC<{
     >
       <div
         ref={containerRef}
+        dir="ltr"
         className="relative origin-top-left bg-white"
         style={{ width: dimensions.width, height: dimensions.height, transform: `scale(${zoom})` }}
         onClick={onBackgroundClick}
@@ -369,6 +376,8 @@ const PDFPageCanvas: React.FC<{
 };
 
 export const SignPDF: React.FC = () => {
+  useI18n();
+  const dropBusy = useRef(false);
   const [file, setFile] = useState<PDFFile | null>(null);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
@@ -532,37 +541,40 @@ export const SignPDF: React.FC = () => {
 
   const handleFilesSelected = async (files: File[]) => {
     if (!files.length || !isPdfFile(files[0])) {
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Choose a PDF file to sign.' });
-      return;
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("sign-pdf.choose.a.pdf.file.to.sign.7aad65") });
+      return false;
     }
     const selected = files[0];
-    setStatus({ isProcessing: true, progress: 5, message: 'Opening PDF...' });
+    setStatus({ isProcessing: true, progress: 5, message: t("sign-pdf.opening.pdf.3b7ab1") });
 
     try {
       const doc = await loadPDFDocument(selected);
       setFile({ id: uuidv4(), file: selected, name: selected.name, size: selected.size });
       setPdfDoc(doc);
-      setSignatures([]);
+      // Images dropped before choosing a document are waiting for its first page.
+      if (file) setSignatures([]);
       setSelectedSignatureId(null);
       setCurrentPageIndex(0);
       setMobilePanel('document');
       setExactZoom(window.matchMedia('(max-width: 767px)').matches ? 0.5 : 1);
       setStatus({ isProcessing: false, progress: 0, message: '' });
+      return true;
     } catch {
       setStatus({
         isProcessing: false,
         progress: 0,
         message: '',
-        error: 'Unable to open this PDF. Unlock password-protected files first.',
+        error: t("sign-pdf.unable.to.open.this.pdf.unlock.password.2ed9cf"),
       });
+      return false;
     }
   };
 
-  const addSignature = (dataUrl: string) => {
+  const addSignature = async (dataUrl: string, pageIndex = currentPageIndex) => {
     const nextSignature: SignatureItem = {
       localId: uuidv4(),
       id: uuidv4(),
-      pageIndex: currentPageIndex,
+      pageIndex,
       dataUrl,
       x: 0.35,
       y: 0.45,
@@ -571,28 +583,60 @@ export const SignPDF: React.FC = () => {
     };
 
     const image = new Image();
-    image.onload = () => {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error(t("sign-pdf.unable.to.use.this.signature.image.148751")));
+        image.src = dataUrl;
+      });
       nextSignature.aspectRatio = image.width / Math.max(1, image.height);
       setSignatures((previous) => [...previous, nextSignature]);
       setSelectedSignatureId(nextSignature.localId);
       setMobilePanel('document');
-    };
-    image.onerror = () => {
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Unable to use this signature image.' });
-    };
-    image.src = dataUrl;
+    } catch {
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("sign-pdf.unable.to.use.this.signature.image.148751") });
+    }
   };
+
+  useFileDrop({
+    accept: '.pdf,application/pdf,image/*,.png,.jpg,.jpeg,.webp,.gif,.bmp,.svg',
+    priority: 10,
+    onFiles: async (files) => {
+      if (dropBusy.current || status.isProcessing) return;
+      dropBusy.current = true;
+      try {
+        const pdf = files.find(isPdfFile);
+        if (pdf && !await handleFilesSelected([pdf])) return;
+        for (const image of files.filter((item) => !isPdfFile(item))) {
+          const source = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error(t("sign-pdf.unable.to.read.image.146e6e")));
+            reader.onerror = () => reject(new Error(t("sign-pdf.unable.to.read.image.146e6e")));
+            reader.readAsDataURL(image);
+          });
+          // Normalize browser-readable formats to PNG for both preview and PDF export.
+          const stamp = await createTransparentSignature(source, 242, transparentUpload);
+          await addSignature(stamp, pdf ? 0 : currentPageIndex);
+        }
+        setShowModal(false);
+      } catch {
+        setStatus({ isProcessing: false, progress: 0, message: '', error: t("sign-pdf.this.signature.picture.could.not.be.read.43b251") });
+      } finally {
+        dropBusy.current = false;
+      }
+    },
+  });
 
   const handleSave = async () => {
     if (!file) return;
-    setStatus({ isProcessing: true, progress: 10, message: 'Applying signatures...' });
+    setStatus({ isProcessing: true, progress: 10, message: t("sign-pdf.applying.signatures.331407") });
     try {
       const bytes = await applySignaturesToPDF(file.file, signatures);
       const outputName = androidExportFileName('sign', file.name, 'pdf');
       downloadBlob(new Blob([bytes], { type: 'application/pdf' }), outputName);
-      setStatus({ isProcessing: false, progress: 100, message: `Signed copy ready: ${outputName}.` });
+      setStatus({ isProcessing: false, progress: 100, message: t("sign-pdf.signed.copy.ready.f2efbd", { v0: outputName }) });
     } catch {
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'The signed PDF could not be saved. Try again, or run Repair PDF on this file first.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("sign-pdf.the.signed.pdf.could.not.be.saved.0a4825") });
     }
   };
 
@@ -728,7 +772,7 @@ export const SignPDF: React.FC = () => {
       });
       image.src = dataUrl;
     } catch {
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'The signature could not be turned. Try drawing or adding it again.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("sign-pdf.the.signature.could.not.be.turned.try.1d434d") });
     }
   };
 
@@ -740,9 +784,9 @@ export const SignPDF: React.FC = () => {
     <div className={`mx-auto w-full max-w-7xl px-4 py-4 sm:py-6 ${file ? 'chef-workspace-fill flex flex-col' : 'chef-tool-landing-centered'}`}>
       <div className="mb-2 flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Sign PDF</h1>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">{t("sign-pdf.sign.pdf.1bf93e")}</h1>
           {!file && (
-            <p className="mt-1 text-[var(--text-secondary)]">Draw your signature and place it on the page.</p>
+            <p className="mt-1 text-[var(--text-secondary)]">{t("sign-pdf.draw.your.signature.and.place.it.on.541540")}</p>
           )}
         </div>
         {file && (
@@ -752,16 +796,13 @@ export const SignPDF: React.FC = () => {
               onClick={() => setShowModal(true)}
               className="chef-target chef-pressable flex min-w-0 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-3 text-sm font-bold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)] sm:px-4"
             >
-              <Plus size={18} /> Add signature
-            </button>
+              <Plus size={18} />{t("sign-pdf.add.signature.5f9ca2")}</button>
             <button
               onClick={handleSave}
               disabled={status.isProcessing || signatures.length === 0}
               className="chef-target chef-pressable flex min-w-0 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-3 text-sm font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] disabled:border disabled:border-[var(--border-hairline)] disabled:bg-[var(--surface-sunken)] disabled:text-[var(--text-tertiary)] disabled:opacity-100 sm:px-6"
             >
-              {status.isProcessing ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-              Export
-            </button>
+              {status.isProcessing ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}{t("sign-pdf.export.366489")}</button>
           </div>
         )}
       </div>
@@ -769,11 +810,11 @@ export const SignPDF: React.FC = () => {
       {file && (
         <div className="mb-2 md:hidden">
           <SegmentedControl
-            label="Sign PDF workspace"
+            label={t("sign-pdf.sign.pdf.workspace.7eac1d")}
             value={mobilePanel}
             options={[
-              { value: 'document', label: 'Document' },
-              { value: 'stamps', label: `Stamps (${signatures.length})` },
+              { value: 'document', label: t("sign-pdf.document.d6bd8c") },
+              { value: 'stamps', label: t("sign-pdf.stamps.18f974", { v0: signatures.length }) },
             ]}
             onChange={setMobilePanel}
           />
@@ -783,7 +824,13 @@ export const SignPDF: React.FC = () => {
       <AnimatePresence mode="wait">
         {!file ? (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mx-auto w-full max-w-xl">
-            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label="Choose a PDF to sign" />
+            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("sign-pdf.choose.a.pdf.to.sign.0d93e1")} />
+            {signatures.length > 0 && <div className="mt-3 rounded-xl border border-[var(--border-hairline)] p-3">
+              <p role="status">{t("sign-pdf.message.51b1112d1d", { count: signatures.length })}</p>
+              <div className="mt-2 flex flex-wrap gap-2">{signatures.map((stamp, index) =>
+                <img key={stamp.localId} src={stamp.dataUrl} alt={t("sign-pdf.pending.signature.stamp.275b7b", { v0: index + 1 })} className="h-16 max-w-40 object-contain" />,
+              )}</div>
+            </div>}
           </motion.div>
         ) : (
           <motion.div
@@ -798,21 +845,19 @@ export const SignPDF: React.FC = () => {
                   <button
                     onClick={() => jumpToPage(currentPageIndex - 1)}
                     disabled={currentPageIndex <= 0}
-                    aria-label="Previous page"
+                    aria-label={t("sign-pdf.previous.page.1208ec")}
                     className="chef-hit-y chef-pressable grid h-11 w-11 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:opacity-55"
                   >
-                    <ChevronLeft size={16} />
+                    <ChevronLeft size={16} className="rtl:rotate-180" />
                   </button>
-                  <div className="tabular rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-3 py-1 text-xs font-semibold text-[var(--text-body)]">
-                    Page {currentPageIndex + 1} / {Math.max(1, pageCount)}
-                  </div>
+                  <div className="tabular rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-3 py-1 text-xs font-semibold text-[var(--text-body)]">{t("sign-pdf.message.61ebc290b6", { v0: currentPageIndex + 1, v1: Math.max(1, pageCount) })}</div>
                   <button
                     onClick={() => jumpToPage(currentPageIndex + 1)}
                     disabled={!pageCount || currentPageIndex >= pageCount - 1}
-                    aria-label="Next page"
+                    aria-label={t("sign-pdf.next.page.c08ac7")}
                     className="chef-hit-y chef-pressable grid h-11 w-11 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:opacity-55"
                   >
-                    <ChevronRight size={16} />
+                    <ChevronRight size={16} className="rtl:rotate-180" />
                   </button>
                 </div>
                 <ZoomControls
@@ -847,8 +892,7 @@ export const SignPDF: React.FC = () => {
                   </div>
                 ) : (
                   <div className="flex h-full items-center justify-center text-[var(--text-secondary)]">
-                    <Loader2 className="mr-2 animate-spin" /> Loading pages...
-                  </div>
+                    <Loader2 className="mr-2 animate-spin" />{t("sign-pdf.loading.pages.fdde04")}</div>
                 )}
               </div>
 
@@ -856,27 +900,27 @@ export const SignPDF: React.FC = () => {
 
             <aside className={`min-h-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] ${mobilePanel === 'stamps' ? 'flex' : 'hidden'} md:flex`}>
               <div className="border-b border-[var(--border-hairline)] px-3 py-2">
-                <div className="text-sm font-semibold text-[var(--text-primary)]">Signature stamps</div>
+                <div className="text-sm font-semibold text-[var(--text-primary)]">{t("sign-pdf.signature.stamps.42bab6")}</div>
               </div>
 
               <div className="custom-scrollbar flex-1 space-y-3 overflow-y-auto p-3">
                 {signatures.length === 0 ? (
-                  <p className="type-footnote py-2 text-center text-[var(--text-secondary)]">No stamps yet.</p>
+                  <p className="type-footnote py-2 text-center text-[var(--text-secondary)]">{t("sign-pdf.no.stamps.yet.4a9062")}</p>
                 ) : (
                   <div className="space-y-2">
                     {signatures.map((signature, index) => (
                       <button
                         key={signature.localId}
                         onClick={() => selectSignature(signature.localId)}
-                        className={`w-full rounded-xl border px-3 py-2 text-left ${
+                        className={`w-full rounded-xl border px-3 py-2 text-start ${
                           selectedSignatureId === signature.localId
                             ? 'border-[var(--accent-rest)] bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]'
                             : 'border-[var(--border-strong)] text-[var(--text-body)] hover:border-[var(--accent-rest)]'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <div className="font-semibold">Stamp {index + 1}</div>
-                          <div className="text-xs opacity-70">Page {signature.pageIndex + 1}</div>
+                          <div className="font-semibold">{t("sign-pdf.message.3da277c815", { v0: index + 1 })}</div>
+                          <div className="text-xs opacity-70">{t("sign-pdf.message.c140ba4857", { v0: signature.pageIndex + 1 })}</div>
                         </div>
                       </button>
                     ))}
@@ -885,19 +929,19 @@ export const SignPDF: React.FC = () => {
 
                 {selectedSignature && (
                   <div className="space-y-2.5 rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)] p-3">
-                    <div className="text-sm font-semibold text-[var(--text-primary)]">Selected stamp</div>
+                    <div className="text-sm font-semibold text-[var(--text-primary)]">{t("sign-pdf.selected.stamp.e91765")}</div>
 
                     <div>
-                      <label className="mb-1 block text-xs font-semibold text-[var(--text-secondary)]">Page</label>
+                      <label className="mb-1 block text-xs font-semibold text-[var(--text-secondary)]">{t("sign-pdf.page.0a30a8")}</label>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          aria-label="Move stamp to previous page"
+                          aria-label={t("sign-pdf.move.stamp.to.previous.page.dc0ebd")}
                           onClick={() => updateSelectedSignaturePage(selectedSignature.pageIndex - 1)}
                           disabled={selectedSignature.pageIndex <= 0}
                           className="chef-target chef-pressable grid shrink-0 place-items-center rounded-[var(--radius-control)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:border-[var(--accent-rest)] disabled:opacity-55"
                         >
-                          <ChevronLeft aria-hidden size={18} />
+                          <ChevronLeft aria-hidden size={18} className="rtl:rotate-180" />
                         </button>
                         <select
                           value={selectedSignature.pageIndex}
@@ -905,26 +949,24 @@ export const SignPDF: React.FC = () => {
                           className="flex-1 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-rest)]"
                         >
                           {Array.from({ length: Math.max(1, pageCount) }, (_, index) => (
-                            <option key={index} value={index}>
-                              Page {index + 1}
-                            </option>
+                            <option key={index} value={index}>{t("sign-pdf.message.c140ba4857", { v0: index + 1 })}</option>
                           ))}
                         </select>
                         <button
                           type="button"
-                          aria-label="Move stamp to next page"
+                          aria-label={t("sign-pdf.move.stamp.to.next.page.ac969c")}
                           onClick={() => updateSelectedSignaturePage(selectedSignature.pageIndex + 1)}
                           disabled={!pageCount || selectedSignature.pageIndex >= pageCount - 1}
                           className="chef-target chef-pressable grid shrink-0 place-items-center rounded-[var(--radius-control)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:border-[var(--accent-rest)] disabled:opacity-55"
                         >
-                          <ChevronRight aria-hidden size={18} />
+                          <ChevronRight aria-hidden size={18} className="rtl:rotate-180" />
                         </button>
                       </div>
                     </div>
 
                     <div>
                       <ChefSliderField
-                        label="Stamp width"
+                        label={t("sign-pdf.stamp.width.b43467")}
                         suffix="%"
                         decimals={2}
                         min={10}
@@ -932,7 +974,7 @@ export const SignPDF: React.FC = () => {
                         step={0.25}
                         value={Number((selectedSignature.width * 100).toFixed(2))}
                         onChange={(next) => updateSignature(selectedSignature.localId, { width: next / 100 })}
-                        ariaLabel="Signature width"
+                        ariaLabel={t("sign-pdf.signature.width.d53c9c")}
                       />
                     </div>
 
@@ -940,15 +982,13 @@ export const SignPDF: React.FC = () => {
                       onClick={() => void rotateSelectedSignature()}
                       className="chef-pressable chef-hit-y flex h-10 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--accent-quiet)] px-3 text-sm font-semibold text-[var(--accent-on-quiet)]"
                     >
-                      <RotateCw aria-hidden size={18} /> Rotate stamp 90°
-                    </button>
+                      <RotateCw aria-hidden size={18} />{t("sign-pdf.rotate.stamp.90.9d61f0")}</button>
 
                     <button
                       onClick={() => deleteSignature(selectedSignature.localId)}
                       className="chef-pressable chef-hit-y flex h-10 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--status-danger-text)] px-3 text-sm font-semibold text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)]"
                     >
-                      <Trash2 aria-hidden size={18} /> Remove stamp
-                    </button>
+                      <Trash2 aria-hidden size={18} />{t("sign-pdf.remove.stamp.8c69ae")}</button>
                   </div>
                 )}
               </div>
@@ -968,19 +1008,17 @@ export const SignPDF: React.FC = () => {
             aria-labelledby="create-signature-title"
             className="chef-scroller max-h-[calc(100dvh-env(safe-area-inset-top))] w-full max-w-2xl overflow-y-auto rounded-t-[var(--radius-sheet)] border border-[var(--border-strong)] bg-[var(--surface-raised)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[var(--elevation-sheet)] sm:max-h-[calc(100dvh-2rem)] sm:rounded-[var(--radius-sheet)] sm:p-5"
           >
-            <h3 id="create-signature-title" className="mb-3 font-bold text-[var(--text-primary)]">
-              Create signature stamp
-            </h3>
+            <h3 id="create-signature-title" className="mb-3 font-bold text-[var(--text-primary)]">{t("sign-pdf.create.signature.stamp.e32443")}</h3>
 
             <div className="mb-3">
               <SegmentedControl
-                label="Signature source"
+                label={t("sign-pdf.signature.source.c6f4f2")}
                 value={signatureMode}
                 columns={3}
                 options={[
-                  { value: 'draw', label: 'Draw' },
-                  { value: 'upload', label: 'Upload' },
-                  { value: 'type', label: 'Type' },
+                  { value: 'draw', label: t("sign-pdf.draw.61517c") },
+                  { value: 'upload', label: t("sign-pdf.upload.865e89") },
+                  { value: 'type', label: t("sign-pdf.type.baaddf") },
                 ]}
                 onChange={setSignatureMode}
               />
@@ -998,29 +1036,25 @@ export const SignPDF: React.FC = () => {
                   className="h-[220px] w-full touch-none rounded-[var(--radius-field)] border border-[var(--border-strong)] bg-white"
                 />
                 <div className="mt-2 flex justify-end">
-                  <label className="mr-auto inline-flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)]">Ink color<input type="color" value={inkColor} onChange={(event) => setInkColor(event.target.value)} className="h-8 w-10 rounded border-0 bg-transparent" /></label>
+                  <label className="mr-auto inline-flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)]">{t("sign-pdf.ink.color.6ca8e0")}<input type="color" value={inkColor} onChange={(event) => setInkColor(event.target.value)} className="h-8 w-10 rounded border-0 bg-transparent" /></label>
                   <button
                     onClick={clearSignatureCanvas}
                     className="chef-hit-y rounded-[var(--radius-control)] border border-[var(--border-strong)] px-3 py-1.5 text-sm font-medium text-[var(--text-primary)]"
-                  >
-                    Clear
-                  </button>
+                  >{t("sign-pdf.clear.83b12c")}</button>
                 </div>
               </div>
             ) : signatureMode === 'type' ? (
               <div className="mb-3 space-y-2.5">
-                <label className="block text-sm font-semibold text-[var(--text-secondary)]">Signature text<input value={typedSignature} onChange={(event) => setTypedSignature(event.target.value)} placeholder="Your name" className="chef-field mt-2 text-2xl italic" /></label>
-                <label className="inline-flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)]">Ink color<input type="color" value={inkColor} onChange={(event) => setInkColor(event.target.value)} className="h-8 w-10 rounded border-0 bg-transparent" /></label>
-                {typedSignature.trim() && <div className="rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-white p-3"><img src={typedSignatureImage(typedSignature, inkColor)} alt="Typed signature preview" className="max-h-28" /></div>}
+                <label className="block text-sm font-semibold text-[var(--text-secondary)]">{t("sign-pdf.signature.text.9e82cf")}<input value={typedSignature} onChange={(event) => setTypedSignature(event.target.value)} placeholder={t("sign-pdf.your.name.2c6b2e")} className="chef-field mt-2 text-2xl italic" /></label>
+                <label className="inline-flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)]">{t("sign-pdf.ink.color.6ca8e0")}<input type="color" value={inkColor} onChange={(event) => setInkColor(event.target.value)} className="h-8 w-10 rounded border-0 bg-transparent" /></label>
+                {typedSignature.trim() && <div className="rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-white p-3"><img src={typedSignatureImage(typedSignature, inkColor)} alt={t("sign-pdf.typed.signature.preview.450d64")} className="max-h-28" /></div>}
               </div>
             ) : (
               <div className="mb-3 space-y-2.5">
-                <label className="chef-target block w-full cursor-pointer content-center rounded-[var(--radius-field)] border-2 border-dashed border-[var(--border-strong)] p-3 text-center text-sm text-[var(--text-secondary)] hover:border-[var(--accent-rest)]">
-                  Choose signature image
-                  <input type="file" accept="image/*" onChange={handleSignatureUpload} className="hidden" />
+                <label className="chef-target block w-full cursor-pointer content-center rounded-[var(--radius-field)] border-2 border-dashed border-[var(--border-strong)] p-3 text-center text-sm text-[var(--text-secondary)] hover:border-[var(--accent-rest)]">{t("sign-pdf.choose.signature.image.070cdf")}<input type="file" accept="image/*" onChange={handleSignatureUpload} className="hidden" />
                 </label>
                 <label className="flex items-center justify-between gap-3 rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)] px-3 py-2.5 text-sm text-[var(--text-secondary)]">
-                  <span className="font-medium">Transparent background</span>
+                  <span className="font-medium">{t("sign-pdf.transparent.background.0fcc9d")}</span>
                   <input
                     type="checkbox"
                     checked={transparentUpload}
@@ -1039,29 +1073,23 @@ export const SignPDF: React.FC = () => {
                       backgroundPosition: '0 0, 0 9px, 9px -9px, -9px 0px',
                     }}
                   >
-                    <img src={uploadedSignature} alt="Uploaded signature" className="max-h-28 object-contain" />
+                    <img src={uploadedSignature} alt={t("sign-pdf.uploaded.signature.6fe731")} className="max-h-28 object-contain" />
                   </div>
                 )}
                 {isPreparingUpload && (
                   <div className="flex items-center justify-center gap-2 text-sm text-[var(--text-secondary)]">
-                    <Loader2 className="animate-spin" size={14} />
-                    Preparing transparent preview...
-                  </div>
+                    <Loader2 className="animate-spin" size={14} />{t("sign-pdf.preparing.transparent.preview.5149d8")}</div>
                 )}
               </div>
             )}
 
             <div className="flex justify-end gap-2">
-              <button onClick={() => setShowModal(false)} className="chef-target chef-pressable rounded-[var(--radius-control)] px-4 font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)]">
-                Cancel
-              </button>
+              <button onClick={() => setShowModal(false)} className="chef-target chef-pressable rounded-[var(--radius-control)] px-4 font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)]">{t("sign-pdf.cancel.19766e")}</button>
               <button
                 onClick={applySignatureFromModal}
                 disabled={signatureMode === 'upload' ? !uploadedSignature || isPreparingUpload : signatureMode === 'type' ? !typedSignature.trim() : !hasDrawnSignature}
                 className="chef-target chef-pressable rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 font-semibold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-55"
-              >
-                Add Stamp
-              </button>
+              >{t("sign-pdf.add.stamp.3f11eb")}</button>
             </div>
           </div>
         </div>

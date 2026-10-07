@@ -82,7 +82,9 @@ test('a redrawn paragraph is repainted before it is redrawn, and before any anno
   const redraw = reflow.indexOf('page.drawText(piece.text');
   assert.ok(patch >= 0 && redraw > patch, 'the paragraph area must be painted out before new text lands on it');
   // Each stretch is drawn in the face it carries, so a bold lead-in survives a redraw.
-  assert.match(reflow, /font: fonts\[paragraphStandardFontKey\(piece\.face\)\]/);
+  assert.match(reflow, /let font = fonts\[paragraphStandardFontKey\(piece\.face\)\]/);
+  assert.match(reflow, /if \(piece\.face\.embeddedFontId\)/);
+  assert.match(reflow, /page\.drawText\(piece\.text,[\s\S]*?font,/);
 
   // A page whose drawing operations cannot be reconstructed falls back to the sampled paper
   // colour rather than an assumed white rectangle.

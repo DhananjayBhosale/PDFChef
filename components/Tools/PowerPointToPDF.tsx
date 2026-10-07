@@ -1,3 +1,7 @@
+import { formatPercent } from '../../services/i18n/core.ts';
+import { localizeError } from '../../services/i18n/errors.ts';
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useRef, useState } from 'react';
 import { Download, FileSliders } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -15,6 +19,7 @@ const idleStatus = (): ProcessingStatus => ({ isProcessing: false, progress: 0, 
 const isAbortError = (error: unknown) => error instanceof Error && error.name === 'AbortError';
 
 export const PowerPointToPDF: React.FC = () => {
+  useI18n();
   const [file, setFile] = useState<File | null>(null);
   const [rotation, setRotation] = useState<PptxPageRotation>('keep');
   const [status, setStatus] = useState<ProcessingStatus>(idleStatus);
@@ -28,12 +33,12 @@ export const PowerPointToPDF: React.FC = () => {
     const selected = files[0];
     if (!selected) return;
     if (!selected.name.toLowerCase().endsWith('.pptx')) {
-      setStatus({ ...idleStatus(), error: 'Choose a .pptx PowerPoint file. Older .ppt files are not supported.' });
+      setStatus({ ...idleStatus(), error: t("power-point-to-pdf.choose.a.pptx.powerpoint.file.older.ppt.e54210") });
       return;
     }
     if (
       shouldWarnForFiles([selected]) &&
-      !window.confirm('This is a large presentation and may use substantial browser memory. Continue?')
+      !window.confirm(t("power-point-to-pdf.this.is.a.large.presentation.and.may.797adf"))
     ) {
       return;
     }
@@ -47,37 +52,37 @@ export const PowerPointToPDF: React.FC = () => {
     if (!file) return;
     const runId = activeRun.current + 1;
     activeRun.current = runId;
-    setStatus({ isProcessing: true, progress: 5, message: 'Opening presentation…' });
+    setStatus({ isProcessing: true, progress: 5, message: t("power-point-to-pdf.opening.presentation.0efdbf") });
 
     try {
       const { convertPptxToPdf } = await import('../../services/officeDocument');
       const bytes = await convertPptxToPdf(file, rotation, (current, total) => {
-        if (activeRun.current !== runId) throw new DOMException('Operation cancelled.', 'AbortError');
+        if (activeRun.current !== runId) throw new DOMException(t("power-point-to-pdf.operation.cancelled.386cf3"), 'AbortError');
         const progress = Math.round(5 + (current / Math.max(1, total)) * 90);
         setStatus({
           isProcessing: true,
           progress,
-          message: `Rendering slide ${current} of ${total}…`,
+          message: t("power-point-to-pdf.rendering.slide.of.f9574b", { v0: current, v1: total }),
         });
       });
       if (activeRun.current !== runId) return;
 
       downloadBytes(bytes, `${file.name.replace(/\.pptx$/i, '')}.pdf`, 'application/pdf');
-      setStatus({ isProcessing: false, progress: 100, message: 'PDF ready.' });
+      setStatus({ isProcessing: false, progress: 100, message: t("power-point-to-pdf.pdf.ready.cf5972") });
     } catch (error) {
       if (activeRun.current !== runId || isAbortError(error)) return;
       setStatus({
         isProcessing: false,
         progress: 0,
         message: '',
-        error: error instanceof Error && error.message ? error.message : 'PowerPoint to PDF conversion failed.',
+        error: error instanceof Error && error.message ? localizeError(error) : t("power-point-to-pdf.powerpoint.to.pdf.conversion.failed.8ad688"),
       });
     }
   };
 
   const cancel = () => {
     activeRun.current += 1;
-    setStatus({ isProcessing: false, progress: 0, message: 'Conversion cancelled. Nothing was saved.' });
+    setStatus({ isProcessing: false, progress: 0, message: t("power-point-to-pdf.conversion.cancelled.nothing.was.saved.44e2e7") });
   };
 
   const chooseAnother = () => {
@@ -90,14 +95,14 @@ export const PowerPointToPDF: React.FC = () => {
 
   return (
     <ToolShell centered={!file}>
-      <ToolHeader title={<>PowerPoint to PDF <Badge tone="caution" className="align-middle">Beta</Badge></>} />
+      <ToolHeader title={<>{t("power-point-to-pdf.powerpoint.to.pdf.7f2bc0")}<Badge tone="caution" className="align-middle">{t("power-point-to-pdf.beta.703390")}</Badge></>} />
 
       <div>
         {!file ? (
           <FileUpload
             onFilesSelected={select}
             accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-            label="Choose a .pptx presentation"
+            label={t("power-point-to-pdf.choose.a.pptx.presentation.b0468b")}
           />
         ) : (
           <section className="rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 sm:p-4">
@@ -107,18 +112,16 @@ export const PowerPointToPDF: React.FC = () => {
               </div>
               <div className="min-w-0">
                 <h2 className="chef-filename text-sm font-semibold text-[var(--text-primary)]">{file.name}</h2>
-                <p className="type-caption text-[var(--text-tertiary)]">
-                  {formatBytes(file.size)} · .pptx
-                </p>
+                <p className="type-caption text-[var(--text-tertiary)]">{t("power-point-to-pdf.message.ee74da6d62", { v0: formatBytes(file.size) })}</p>
               </div>
             </div>
 
             <fieldset className="mt-3" disabled={status.isProcessing}>
-              <legend className="type-footnote font-semibold text-[var(--text-secondary)]">Page orientation</legend>
+              <legend className="type-footnote font-semibold text-[var(--text-secondary)]">{t("power-point-to-pdf.page.orientation.6a6e01")}</legend>
               <div className="mt-1 grid grid-cols-2 gap-2">
                 {([
-                  ['keep', 'Keep', 'A 16:9 slide stays a 16:9 PDF page.'],
-                  ['rotate_clockwise', 'Rotate', 'Turn pages without stretching or cropping.'],
+                  ['keep', t("power-point-to-pdf.keep.183f00"), t("power-point-to-pdf.a.16.9.slide.stays.a.16.57bd28")],
+                  ['rotate_clockwise', t("power-point-to-pdf.rotate.c3613b"), t("power-point-to-pdf.turn.pages.without.stretching.or.cropping.9361e1")],
                 ] as const).map(([value, label, detail]) => (
                   <label
                     key={value}
@@ -143,19 +146,17 @@ export const PowerPointToPDF: React.FC = () => {
               </div>
             </fieldset>
 
-            <p className="mt-2.5 border-t border-[var(--border-hairline)] pt-2.5 type-footnote text-[var(--text-secondary)]">
-              Slides become page images, so text is not selectable.
-            </p>
+            <p className="mt-2.5 border-t border-[var(--border-hairline)] pt-2.5 type-footnote text-[var(--text-secondary)]">{t("power-point-to-pdf.slides.become.page.images.so.text.is.432ba2")}</p>
 
             {status.isProcessing && (
               <div role="status" aria-live="polite" className="mt-3 rounded-[var(--radius-field)] border border-orange-200 bg-orange-50 p-3 dark:border-orange-400 dark:bg-orange-500/10">
                 <div className="flex items-center justify-between gap-3 text-sm font-semibold text-orange-900 dark:text-orange-100">
                   <span>{status.message || 'Converting…'}</span>
-                  <span className="tabular-nums">{status.progress}%</span>
+                  <span className="tabular-nums">{formatPercent(status.progress)}</span>
                 </div>
                 <div
                   role="progressbar"
-                  aria-label="PowerPoint to PDF progress"
+                  aria-label={t("power-point-to-pdf.powerpoint.to.pdf.progress.9809f6")}
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={status.progress}
@@ -168,7 +169,7 @@ export const PowerPointToPDF: React.FC = () => {
 
             {status.error && (
               <div role="alert" className="mt-3 rounded-[var(--radius-field)] border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-400 dark:bg-rose-500/10 dark:text-rose-200">
-                <p className="font-bold">{unsupported ? 'Presentation not supported' : 'Conversion failed'}</p>
+                <p className="font-bold">{unsupported ? t("power-point-to-pdf.presentation.not.supported.b3641f") : t("power-point-to-pdf.conversion.failed.7e3dcd")}</p>
                 <p className="mt-1 leading-relaxed">{status.error}</p>
               </div>
             )}
@@ -181,7 +182,7 @@ export const PowerPointToPDF: React.FC = () => {
 
             <div className="mt-3 grid gap-2 sm:flex sm:flex-wrap">
               {status.isProcessing ? (
-                <Button tone="secondary" block onClick={cancel}>Cancel</Button>
+                <Button tone="secondary" block onClick={cancel}>{t("power-point-to-pdf.cancel.19766e")}</Button>
               ) : (
                 !unsupported && (
                   <Button
@@ -191,7 +192,7 @@ export const PowerPointToPDF: React.FC = () => {
                     icon={<Download aria-hidden size={18} />}
                     onClick={() => void convert()}
                   >
-                    {status.error ? 'Try again' : 'Save PDF'}
+                    {status.error ? t("power-point-to-pdf.try.again.d8b839") : t("power-point-to-pdf.save.pdf.2462a8")}
                   </Button>
                 )
               )}
@@ -201,9 +202,7 @@ export const PowerPointToPDF: React.FC = () => {
                 className="sm:w-auto"
                 disabled={status.isProcessing}
                 onClick={chooseAnother}
-              >
-                Choose another
-              </Button>
+              >{t("power-point-to-pdf.choose.another.8a2bca")}</Button>
             </div>
           </section>
         )}

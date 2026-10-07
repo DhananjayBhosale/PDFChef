@@ -1,3 +1,5 @@
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, CheckCircle2, FileText, Loader2, Wrench } from 'lucide-react';
@@ -20,6 +22,7 @@ interface RepairPreview {
 const emptyStatus = (): ProcessingStatus => ({ isProcessing: false, progress: 0, message: '' });
 
 export const RepairPDF: React.FC = () => {
+  useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
   const [preview, setPreview] = useState<RepairPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -42,7 +45,7 @@ export const RepairPDF: React.FC = () => {
     if (files.length === 0) return;
     const selected = files[0];
     if (!isPdfFile(selected)) {
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'Choose a PDF file.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("repair-pdf.choose.a.pdf.file.c2a7df") });
       return;
     }
 
@@ -62,7 +65,7 @@ export const RepairPDF: React.FC = () => {
     let pdfDocument: any = null;
     try {
       pdfDocument = await loadPDFDocument(selected);
-      if (pdfDocument.numPages < 1) throw new Error('The PDF has no pages.');
+      if (pdfDocument.numPages < 1) throw new Error(t("repair-pdf.the.pdf.has.no.pages.264071"));
       const rendered = await renderPageAsImage(pdfDocument, 0, {
         format: 'image/jpeg',
         quality: 0.88,
@@ -77,7 +80,7 @@ export const RepairPDF: React.FC = () => {
     } catch (error) {
       console.error(error);
       if (selectionVersion === selectionVersionRef.current) {
-        setPreviewError('First-page preview is unavailable, but you can still re-save this PDF.');
+        setPreviewError(t("repair-pdf.first.page.preview.is.unavailable.but.you.652fb7"));
       }
     } finally {
       try {
@@ -99,7 +102,7 @@ export const RepairPDF: React.FC = () => {
 
   const handleRepair = async () => {
     if (!file) return;
-    setStatus({ isProcessing: true, progress: 10, message: 'Re-saving the PDF on your device…' });
+    setStatus({ isProcessing: true, progress: 10, message: t("repair-pdf.re.saving.the.pdf.on.your.device.e6995d") });
     try {
       const bytes = await repairPDF(file.file);
       downloadBlob(
@@ -110,7 +113,7 @@ export const RepairPDF: React.FC = () => {
       setStatus({
         isProcessing: false,
         progress: 100,
-        message: 'Re-saved copy created.',
+        message: t("repair-pdf.re.saved.copy.created.5997a8"),
       });
     } catch (error) {
       console.error(error);
@@ -118,7 +121,7 @@ export const RepairPDF: React.FC = () => {
         isProcessing: false,
         progress: 0,
         message: '',
-        error: 'This PDF could not be repaired. If it has a password, remove it with Unlock PDF first; otherwise the file is too damaged to fix here.',
+        error: t("repair-pdf.this.pdf.could.not.be.repaired.if.d256c8"),
       });
     }
   };
@@ -127,36 +130,34 @@ export const RepairPDF: React.FC = () => {
     <ToolShell centered={!file}>
       {/* The scope limit is stated once, beside the export button, where it
           changes whether to press it. */}
-      <ToolHeader title="Repair PDF" />
+      <ToolHeader title={t("repair-pdf.repair.pdf.43faa0")} />
 
       <AnimatePresence mode="wait">
         {!file ? (
           <motion.div key="upload" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label="Choose a PDF to re-save" />
+            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("repair-pdf.choose.a.pdf.to.re.save.02a5c9")} />
           </motion.div>
         ) : (
           <motion.div key="repair" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
             <section
-              aria-label="Selected PDF"
+              aria-label={t("repair-pdf.selected.pdf.ed0ff3")}
               className="flex items-center justify-between gap-3 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3"
             >
               <div className="min-w-0">
                 <p className="chef-filename text-sm font-semibold text-[var(--text-primary)]">{file.name}</p>
                 <p className="type-caption text-[var(--text-tertiary)]">{formatBytes(file.size)}</p>
               </div>
-              <Button tone="quiet" onClick={chooseAnotherFile} disabled={status.isProcessing} className="shrink-0">
-                Change
-              </Button>
+              <Button tone="quiet" onClick={chooseAnotherFile} disabled={status.isProcessing} className="shrink-0">{t("repair-pdf.change.c0bf75")}</Button>
             </section>
 
             <section className="rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 sm:p-4">
               <div className="mx-auto flex max-w-sm flex-col items-center">
                 <div className="relative flex aspect-[210/297] w-[46%] min-w-32 items-center justify-center overflow-hidden rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)]">
-                  {previewLoading && <Loader2 aria-label="Loading first-page preview" className="h-6 w-6 animate-spin text-[var(--accent-text)]" />}
+                  {previewLoading && <Loader2 aria-label={t("repair-pdf.loading.first.page.preview.9e97d7")} className="h-6 w-6 animate-spin text-[var(--accent-text)]" />}
                   {!previewLoading && preview && (
                     <img
                       src={preview.objectUrl}
-                      alt={`First page of ${file.name}`}
+                      alt={t("repair-pdf.first.page.of.3789b9", { v0: file.name })}
                       className="h-full w-full object-contain"
                     />
                   )}
@@ -165,7 +166,7 @@ export const RepairPDF: React.FC = () => {
                   )}
                 </div>
                 <p className="type-footnote mt-1.5 font-medium text-[var(--text-secondary)]">
-                  {preview ? `Page 1 of ${preview.pageCount}` : previewLoading ? 'Loading preview…' : 'Preview unavailable'}
+                  {preview ? t("repair-pdf.page.1.of.d9604d", { v0: preview.pageCount }) : previewLoading ? t("repair-pdf.loading.preview.c4cf2b") : t("repair-pdf.preview.unavailable.b99fa6")}
                 </p>
                 {previewError && <p className="mt-1 text-center text-sm text-[var(--text-secondary)]">{previewError}</p>}
               </div>
@@ -174,9 +175,7 @@ export const RepairPDF: React.FC = () => {
                   do. Matches the Android footer summary. */}
               <div className="mt-3 flex items-start gap-2 rounded-[var(--radius-field)] bg-[var(--status-caution-quiet)] px-3 py-2 text-[var(--status-caution-text)]">
                 <Wrench aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
-                <p className="type-footnote">
-                  Re-saving fixes minor compatibility issues; it cannot recover missing content or badly damaged files.
-                </p>
+                <p className="type-footnote">{t("repair-pdf.re.saving.fixes.minor.compatibility.issues.it.48a32c")}</p>
               </div>
 
               {status.isProcessing && (
@@ -207,9 +206,7 @@ export const RepairPDF: React.FC = () => {
                   busy={status.isProcessing}
                   onClick={handleRepair}
                   className="w-full sm:w-auto"
-                >
-                  Save repaired PDF
-                </Button>
+                >{t("repair-pdf.save.repaired.pdf.ac389a")}</Button>
               </div>
             </section>
           </motion.div>

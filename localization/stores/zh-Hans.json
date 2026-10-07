@@ -1,0 +1,52 @@
+{
+  "appLocale": "zh-Hans",
+  "appleLocale": "zh-Hans",
+  "googleLocale": "zh-CN",
+  "apple": {
+    "name": "PDF Chef",
+    "subtitle": "编辑、合并、压缩 PDF",
+    "promotionalText": "在设备上阅读、编辑和整理 PDF。合并文件、管理页面并添加手写签名。",
+    "description": "PDF Chef 可帮助你在设备上阅读、编辑、合并、拆分、压缩和签名 PDF。\n\n整理页面、添加文本与图片、添加手写签名、添加水印或页码，并使用密码保护 PDF。转换支持的图片与文档，以及提取文本。处理效果取决于源文件和所选工具。\n\n常规 PDF 处理均在你的设备上完成。你的文档不会上传至 PDF Chef 服务器进行处理。离线工具在其资源加载完成后即可继续使用。\n\nPDF Chef 无需注册账号。在共享或导出前，请先预览处理结果。\n\n在 iOS 上，每个连续 7 天的使用限额周期内，前 5 次成功的处理任务均为完整任务，可进行保存、共享和导出。该周期自首次成功完成任务起计算。5 次任务之后，处理与预览功能依然可用，但保存、共享和导出需要 Pro，直至限额重置。\n\nPro 包月方案将自动续订，直至取消。Pro 终身版为一次性购买，非订阅。两种选项均支持 Apple“家人共享”。价格与购买详情会在购买前于应用内显示。可在“设置”中恢复购买。\n\nTerms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+    "whatsNew": "版本 {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro 按月订阅",
+      "description": "完整导出。自动续订，直至取消。"
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro 终身版",
+      "description": "完整导出。一次性购买。"
+    },
+    "screenshot": {
+      "1": "PDF 工具，尽在一处",
+      "2": "编辑文本与添加图片",
+      "3": "合并文件与整理页面",
+      "4": "保存前先预览",
+      "5": "添加你的手写签名",
+      "6": "在你的设备上处理"
+    },
+    "keywords": "拆分,扫描,签名,转换,阅读,水印,密码,解锁,旋转,提取"
+  },
+  "google": {
+    "name": "PDF Chef",
+    "shortDescription": "在设备上编辑、合并、压缩和签名 PDF。",
+    "fullDescription": "PDF Chef 可帮助你在设备上阅读、编辑、合并、拆分、压缩和签名 PDF。\n\n整理页面、添加文本与图片、添加手写签名、添加水印或页码，并使用密码保护 PDF。转换支持的图片与文档，以及提取文本。处理效果取决于源文件和所选工具。\n\n常规 PDF 处理均在你的设备上完成。你的文档不会上传至 PDF Chef 服务器进行处理。离线工具在其资源加载完成后即可继续使用。\n\nPDF Chef 无需注册账号。在共享或导出前，请先预览处理结果。",
+    "whatsNew": "版本 {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro 按月订阅",
+      "description": "保存、共享和导出所有结果。按月自动续订，直至取消。",
+      "benefit": "保存并共享所有结果"
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro 终身版",
+      "description": "一次性购买，即可保存、共享和导出所有结果。"
+    },
+    "screenshot": {
+      "1": "PDF 工具，尽在一处",
+      "2": "编辑文本与添加图片",
+      "3": "合并文件与整理页面",
+      "4": "保存前先预览",
+      "5": "添加你的手写签名",
+      "6": "在你的设备上处理"
+    }
+  }
+}

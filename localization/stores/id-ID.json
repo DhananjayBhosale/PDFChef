@@ -1,0 +1,52 @@
+{
+  "appLocale": "id-ID",
+  "appleLocale": "id",
+  "googleLocale": "id",
+  "apple": {
+    "name": "PDF Chef",
+    "subtitle": "Edit, gabung, kompres PDF",
+    "promotionalText": "Baca, edit, dan kelola PDF di perangkat Anda. Gabungkan file, atur halaman, dan tambahkan tanda tangan tulisan tangan.",
+    "description": "PDF Chef membantu Anda membaca, mengedit, menggabungkan, memisahkan, mengompres, dan menandatangani PDF di perangkat Anda.\n\nAtur halaman, tambahkan teks dan gambar, bubuhkan tanda tangan tulisan tangan, tambahkan tanda air atau nomor halaman, dan lindungi PDF dengan kata sandi. Konversikan gambar dan dokumen yang didukung, serta ekstrak teks. Hasil bergantung pada file sumber dan alat yang dipilih.\n\nPemrosesan PDF normal berjalan di perangkat Anda. Dokumen Anda tidak diunggah ke server PDF Chef untuk diproses. Alat offline tetap tersedia setelah asetnya dimuat.\n\nPDF Chef tidak memerlukan akun. Tinjau hasil Anda sebelum membagikan atau mengekspornya.\n\nDi iOS, lima tugas pertama yang berhasil dalam setiap periode kuota tujuh hari bergulir adalah tugas lengkap yang dapat Anda simpan, bagikan, dan ekspor. Periode dimulai dengan tugas pertama yang berhasil. Setelah lima tugas, pemrosesan dan pratinjau tetap tersedia, tetapi menyimpan, membagikan, dan mengekspor memerlukan Pro hingga kuota direset.\n\nPro Bulanan diperpanjang secara otomatis hingga dibatalkan. Pro Seumur Hidup adalah pembelian satu kali, bukan langganan. Kedua opsi mendukung Berbagi Keluarga Apple. Harga dan detail pembelian muncul di aplikasi sebelum Anda membeli. Pulihkan pembelian dari Pengaturan.\n\nTerms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+    "whatsNew": "Versi {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Bulanan",
+      "description": "Ekspor penuh. Diperpanjang hingga dibatalkan."
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Seumur Hidup",
+      "description": "Ekspor penuh. Pembelian satu kali."
+    },
+    "screenshot": {
+      "1": "Alat PDF Anda di satu tempat",
+      "2": "Edit teks dan tambahkan gambar",
+      "3": "Gabungkan file dan atur halaman",
+      "4": "Pratinjau sebelum Anda menyimpan",
+      "5": "Tambahkan tanda tangan tulisan tangan Anda",
+      "6": "Bekerja di perangkat Anda"
+    },
+    "keywords": "pisahkan,pindai,tanda tangan,konversi,pembaca,tanda air,kata sandi,buka kunci"
+  },
+  "google": {
+    "name": "PDF Chef",
+    "shortDescription": "Edit, gabung, kompres, dan tanda tangani PDF di perangkat Anda.",
+    "fullDescription": "PDF Chef membantu Anda membaca, mengedit, menggabungkan, memisahkan, mengompres, dan menandatangani PDF di perangkat Anda.\n\nAtur halaman, tambahkan teks dan gambar, bubuhkan tanda tangan tulisan tangan, tambahkan tanda air atau nomor halaman, dan lindungi PDF dengan kata sandi. Konversikan gambar dan dokumen yang didukung, serta ekstrak teks. Hasil bergantung pada file sumber dan alat yang dipilih.\n\nPemrosesan PDF normal berjalan di perangkat Anda. Dokumen Anda tidak diunggah ke server PDF Chef untuk diproses. Alat offline tetap tersedia setelah asetnya dimuat.\n\nPDF Chef tidak memerlukan akun. Tinjau hasil Anda sebelum membagikan atau mengekspornya.",
+    "whatsNew": "Versi {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Bulanan",
+      "description": "Simpan, bagikan, dan ekspor setiap hasil. Diperpanjang setiap bulan hingga dibatalkan.",
+      "benefit": "Simpan dan bagikan setiap hasil"
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Seumur Hidup",
+      "description": "Simpan, bagikan, dan ekspor setiap hasil dengan pembelian satu kali."
+    },
+    "screenshot": {
+      "1": "Alat PDF Anda di satu tempat",
+      "2": "Edit teks dan tambahkan gambar",
+      "3": "Gabungkan file dan atur halaman",
+      "4": "Pratinjau sebelum Anda menyimpan",
+      "5": "Tambahkan tanda tangan tulisan tangan Anda",
+      "6": "Bekerja di perangkat Anda"
+    }
+  }
+}

@@ -1,3 +1,5 @@
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useDeferredValue, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Search, ShieldCheck, X } from 'lucide-react';
@@ -6,7 +8,8 @@ import type { ToolCardData, ToolCategory } from './toolCatalog';
 import { matchesToolSearchQuery, toolSearchScore } from '../../services/toolSearch';
 import { TabHeader } from '../Layout/AppShell';
 import { Badge, Button, EmptyState, cx } from '../UI/Primitives';
-import { useHaptics } from '../../hooks/useWorkspaceRuntime';
+import { useHaptics, useWorkspacePlatform } from '../../hooks/useWorkspaceRuntime';
+import { useMonetization } from '../../hooks/useMonetization';
 import { ToolIdentity } from './ToolIdentity';
 
 type CategoryFilter = 'All' | ToolCategory;
@@ -96,46 +99,46 @@ const CATEGORY_WEIGHT: Record<CategoryFilter, number> = {
  * The row is a name and a mark. The subtitle under each one restated what the
  * name already said, thirty-four times down a phone screen.
  */
-/**
- * The subtitle under each row in the tool list. It started as an exact copy of
- * Android's home catalogue, and a few of those lines named parts of the file
- * format ('fillable fields', 'bakes form fields') rather than the job. This is
- * the list everyone browses, so it reads as the job.
- */
+/** The Android home catalogue wording, kept byte-for-byte for shared identity. */
 const ANDROID_HOME_SUBTITLES: Record<string, string> = {
-  MAKE_PDF: 'Scan paper with the camera',
-  COMPRESS: 'Same pages, smaller file',
-  MERGE: 'Several files in, one out',
-  SPLIT: 'One file in, several files out',
-  EDIT_PDF: 'Retype text, add shapes and images',
-  MAKE_FILLABLE: 'Adds boxes people can type into',
-  SIGN_PDF: 'Your handwriting, not a legal seal',
-  WATERMARK: 'Stamps your mark on every page',
-  PROTECT: 'Adds a password to open it',
-  UNLOCK: 'Needs the current password',
-  DELETE_PAGES: 'Drops the pages you pick',
-  PAGE_NUMBERS: 'Numbers every page for you',
-  REORDER_PAGES: 'Drag pages into a better order',
-  ROTATE_PAGES: 'For pages that came out sideways',
-  FLATTEN_PDF: 'Locks filled answers for good',
-  EXTRACT_PAGES: 'Keeps only the pages you pick',
-  JPG_TO_PDF: 'Photos in, one tidy PDF out',
-  PDF_TO_JPG: 'Every page becomes a picture',
-  PDF_TO_DOC: 'A Word file; needs real words, not a scan',
-  DOC_TO_PDF: 'Text only, and .docx files only',
-  PPTX_TO_PDF: '.pptx slides only; some fonts may change',
-  OCR_TEXT: 'Lifts the words out as plain text',
-  METADATA: 'Title, author and other quiet details',
-  REPAIR_PDF: 'Fixes minor issues only',
-  COMPARE_PDF: 'A quick overview, not a page-by-page check',
+  get MAKE_PDF() { return t("dashboard.scan.paper.with.the.camera.3eef24"); },
+  get COMPRESS() { return t("dashboard.same.pages.smaller.file.06c228"); },
+  get MERGE() { return t("dashboard.several.files.in.one.out.e4229a"); },
+  get SPLIT() { return t("dashboard.chops.one.file.into.several.2ad879"); },
+  get EDIT_PDF() { return t("dashboard.retype.text.add.shapes.and.images.39d7b7"); },
+  get MAKE_FILLABLE() { return t("dashboard.detects.and.adds.fillable.fields.0bb856"); },
+  get SIGN_PDF() { return t("dashboard.handwritten.not.a.certificate.d06a2e"); },
+  get WATERMARK() { return t("dashboard.stamps.your.mark.on.every.page.73057d"); },
+  get PROTECT() { return t("dashboard.adds.a.password.to.open.it.f7c2c9"); },
+  get UNLOCK() { return t("dashboard.needs.the.current.password.97bbe6"); },
+  get DELETE_PAGES() { return t("dashboard.drops.the.pages.you.pick.2e1c86"); },
+  get PAGE_NUMBERS() { return t("dashboard.numbers.every.page.for.you.87e1ba"); },
+  get REORDER_PAGES() { return t("dashboard.drag.pages.into.a.better.order.154b84"); },
+  get ROTATE_PAGES() { return t("dashboard.for.pages.that.came.out.sideways.b91873"); },
+  get FLATTEN_PDF() { return t("dashboard.bakes.form.fields.into.the.page.9b32b7"); },
+  get EXTRACT_PAGES() { return t("dashboard.keeps.only.the.pages.you.pick.e0d67e"); },
+  get JPG_TO_PDF() { return t("dashboard.photos.in.one.tidy.pdf.out.a7716d"); },
+  get PDF_TO_JPG() { return t("dashboard.every.page.becomes.a.picture.c57b65"); },
+  get PDF_TO_DOC() { return t("dashboard.a.word.file.needs.real.text.not.4eda1d"); },
+  get DOC_TO_PDF() { return t("dashboard.text.only.and.docx.files.only.3f3c4e"); },
+  get PPTX_TO_PDF() { return t("dashboard.pptx.slides.only.review.font.substitutions.87078d"); },
+  get OCR_TEXT() { return t("dashboard.lifts.the.words.out.as.plain.text.cf5602"); },
+  get METADATA() { return t("dashboard.title.author.and.other.quiet.details.6115d1"); },
+  get REPAIR_PDF() { return t("dashboard.fixes.minor.issues.only.79af0d"); },
+  get COMPARE_PDF() { return t("dashboard.a.quick.overview.not.a.page.by.13efce"); },
 };
 
 const subtitleFor = (tool: ToolCardData) =>
   tool.androidTool ? ANDROID_HOME_SUBTITLES[tool.androidTool] ?? tool.description : tool.description;
 
-const ToolRow: React.FC<{ tool: ToolCardData; eager?: boolean }> = ({ tool, eager = false }) => {
+const ToolRow: React.FC<{
+  tool: ToolCardData;
+  eager?: boolean;
+  availableOnDevice?: boolean;
+}> = ({ tool, eager = false, availableOnDevice = true }) => {
+  useI18n();
   const haptic = useHaptics();
-  const displayName = tool.path === '/view' ? 'Read PDF' : tool.name;
+  const displayName = tool.path === '/view' ? t("dashboard.read.pdf.b00d88") : tool.name;
   const subtitle = subtitleFor(tool);
 
   return (
@@ -164,31 +167,32 @@ const ToolRow: React.FC<{ tool: ToolCardData; eager?: boolean }> = ({ tool, eage
             {displayName}
           </span>
           {tool.beta && (
-            <Badge tone="caution" className="!px-1.5 !text-[0.75rem] !tracking-[0.06em]">
-              Beta
-            </Badge>
+            <Badge tone="caution" className="!px-1.5 !text-[0.75rem] !tracking-[0.06em]">{t("dashboard.beta.703390")}</Badge>
           )}
-          {tool.availability === 'android-only' && (
-            <Badge tone="neutral" className="!px-1.5 !text-[0.75rem] !tracking-[0.06em]">
-              Not available
-            </Badge>
+          {tool.availability === 'native-only' && !availableOnDevice && (
+            <Badge tone="neutral" className="!px-1.5 !text-[0.75rem] !tracking-[0.06em]">{t("dashboard.not.available.67a926")}</Badge>
           )}
         </span>
         {/* One quiet line under the name, as on the Android home screen. Regular
             weight rather than medium: thirty-four of these stacked at 12px were
             competing with the titles they sit under. */}
-        <span className="chef-clamp-2 mt-0.5 block text-[0.75rem] font-normal leading-[1.3333] text-[var(--text-secondary)]">
-          {subtitle}
-        </span>
+        {subtitle && (
+          <span className="chef-clamp-2 mt-0.5 block text-[0.75rem] font-normal leading-[1.3333] text-[var(--text-secondary)]">
+            {subtitle}
+          </span>
+        )}
       </span>
       {/* Android draws this at 0.72 alpha. Thirty-four of them make a column of
           their own, and at full strength that column competes with the titles. */}
-      <ChevronRight aria-hidden size={22} className="shrink-0 text-[var(--text-tertiary)] opacity-70" />
+      <ChevronRight aria-hidden size={22} className="rtl:rotate-180 shrink-0 text-[var(--text-tertiary)] opacity-70" />
     </Link>
   );
 };
 
 export const Dashboard: React.FC = () => {
+  const { revision } = useI18n();
+  const platform = useWorkspacePlatform();
+  const { available: monetizationAvailable, access, freeRemaining } = useMonetization();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<CategoryFilter>('All');
   const deferredQuery = useDeferredValue(query);
@@ -216,7 +220,7 @@ export const Dashboard: React.FC = () => {
       if (scoreDelta !== 0) return scoreDelta;
       return tools.indexOf(left) - tools.indexOf(right);
     });
-  }, [category, searching, trimmed]);
+  }, [category, searching, trimmed, revision]);
 
   const reset = useCallback(() => {
     setQuery('');
@@ -227,7 +231,7 @@ export const Dashboard: React.FC = () => {
   // Now that this line is read as well as announced, it has to parse as a
   // sentence and it has to say which query it is reporting on.
   const resultSummary = searching
-    ? `${filteredTools.length} ${filteredTools.length === 1 ? 'tool matches' : 'tools match'} “${trimmed}”`
+    ? t("dashboard..357c24", { v2: trimmed, count: filteredTools.length })
     : '';
 
   return (
@@ -279,10 +283,25 @@ export const Dashboard: React.FC = () => {
               <ShieldCheck size={14} className="h-[0.875rem] w-[0.875rem]" />
             </span>
             <p className="chef-wrap-words min-w-0 text-[0.8125rem] leading-[1.4]">
-              <span className="font-semibold text-[var(--status-success-text)]">Processed on this device.</span>{' '}
-              <span className="font-medium text-[var(--text-secondary)]">Nothing is uploaded.</span>
+              <span className="font-semibold text-[var(--status-success-text)]">{t("dashboard.processed.on.this.device.6f6da5")}</span>{' '}
+              <span className="font-medium text-[var(--text-secondary)]">{t("dashboard.nothing.is.uploaded.a8596d")}</span>
             </p>
           </div>
+          {monetizationAvailable && (
+            <p className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-0 text-xs leading-5 text-[var(--text-secondary)]">
+              <span>
+                {access?.unlocked
+                  ? t("dashboard.pro.access.is.active.194781")
+                  : t("dashboard.full.job.left.in.this.7.day.252761", { v0: freeRemaining ?? 0, count: freeRemaining })}
+              </span>
+              <Link
+                to="/settings"
+                className="chef-pressable relative font-semibold text-[var(--accent-text)] underline underline-offset-2 before:absolute before:-inset-x-2 before:-inset-y-3.5 before:content-['']"
+              >
+                {access?.unlocked ? t("dashboard.manage.pro.9af89a") : t("dashboard.unlock.pro.3d173f")}
+              </Link>
+            </p>
+          )}
         </div>
       </div>
 
@@ -314,7 +333,7 @@ export const Dashboard: React.FC = () => {
             <Search
               aria-hidden
               size={20}
-              className="pointer-events-none absolute left-[16px] top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]"
+              className="pointer-events-none absolute start-[16px] top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]"
             />
             <input
               ref={searchRef}
@@ -325,26 +344,26 @@ export const Dashboard: React.FC = () => {
               autoComplete="off"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search"
-              aria-label={`Search ${tools.length} ${tools.length === 1 ? 'tool' : 'tools'}`}
+              placeholder={t("dashboard.search.49c266")}
+              aria-label={t("dashboard.search.2fba3d", { count: tools.length })}
               aria-describedby="tool-search-status"
               className={cx(
                 // Android's field is 16sp Medium, and so is its prompt. Bold
                 // was making an empty field read as a heading rather than as
                 // something to type into.
-                'w-full rounded-[22px] border border-[var(--border-strong)] bg-[var(--surface-raised)] py-[0.4375rem] pl-[46px] text-[1rem] font-medium leading-[1.375] text-[var(--text-primary)] outline-none transition-colors duration-transition ease-settle placeholder:font-medium placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-rest)]',
+                'w-full rounded-[22px] border border-[var(--border-strong)] bg-[var(--surface-raised)] py-[0.4375rem] ps-[46px] text-[1rem] font-medium leading-[1.375] text-[var(--text-primary)] outline-none transition-colors duration-transition ease-settle placeholder:font-medium placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-rest)]',
                 // The trailing 44px is reserved only while the clear control is
                 // actually there, so the empty field gives that width back to
                 // the prompt at large text sizes.
-                query ? 'pr-[46px]' : 'pr-[16px]',
+                query ? 'pe-[46px]' : 'pe-[16px]',
               )}
             />
             {query && (
               <button
                 type="button"
                 onClick={reset}
-                aria-label="Clear search"
-                className="chef-pressable chef-target absolute right-0 top-1/2 grid -translate-y-1/2 place-items-center rounded-[var(--radius-pill)] text-[var(--text-secondary)]"
+                aria-label={t("dashboard.clear.search.3b7ea5")}
+                className="chef-pressable chef-target absolute end-0 top-1/2 grid -translate-y-1/2 place-items-center rounded-[var(--radius-pill)] text-[var(--text-secondary)]"
               >
                 <X aria-hidden size={20} />
               </button>
@@ -389,7 +408,7 @@ export const Dashboard: React.FC = () => {
               five fit on one line and the row gap never appears. */}
           <div
             role="group"
-            aria-label="Filter tools by category"
+            aria-label={t("dashboard.filter.tools.by.category.72789b")}
             className="mt-3 flex w-full flex-wrap items-stretch gap-x-[2px] gap-y-[10px] rounded-[20px] border border-[var(--border-hairline)] bg-[var(--surface-sunken)] p-[3px] md:w-fit md:max-w-full"
           >
             {categoryOrder.map((item) => {
@@ -400,18 +419,18 @@ export const Dashboard: React.FC = () => {
                   key={item}
                   type="button"
                   aria-pressed={selected}
-                  aria-label={`${item}, ${count} ${count === 1 ? 'tool' : 'tools'}`}
+                  aria-label={t("dashboard..baa7b4", { v0: t(`category.${item}`), count: count })}
                   onClick={() => setCategory(item)}
                   style={{ flexGrow: CATEGORY_WEIGHT[item] }}
                   className={cx(
-                    'chef-pressable chef-hit-y flex min-h-[38px] min-w-touch grow basis-0 items-center justify-center whitespace-nowrap rounded-[var(--radius-row)] px-[5px] py-1 md:grow-0 md:basis-auto',
+                    'chef-pressable chef-hit-y flex min-h-[38px] min-w-touch max-w-full grow shrink-0 basis-auto items-center justify-center whitespace-normal rounded-[var(--radius-row)] px-[5px] py-1 md:grow-0',
                     'text-[0.75rem] leading-[1.3333] transition-colors duration-transition ease-settle min-[360px]:text-[0.8125rem] min-[420px]:text-[0.875rem]',
                     selected
                       ? 'bg-[var(--surface-raised)] font-semibold text-[var(--accent-on-quiet)] shadow-[var(--elevation-raised)] ring-1 ring-inset ring-[var(--border-strong)]'
                       : 'font-medium text-[var(--text-secondary)]',
                   )}
                 >
-                  <span aria-hidden>{item}</span>
+                  <span aria-hidden>{t(`category.${item}`)}</span>
                 </button>
               );
             })}
@@ -424,12 +443,10 @@ export const Dashboard: React.FC = () => {
           {filteredTools.length === 0 ? (
             <EmptyState
               icon={<Search size={30} />}
-              title="No tool matches that"
-              body="Try a plainer word for what you want to do — like smaller, sign, password, or photo."
+              title={t("dashboard.no.tool.matches.that.918414")}
+              body={t("dashboard.try.a.plainer.word.for.what.you.4c542c")}
               action={
-                <Button tone="secondary" onClick={reset}>
-                  Clear search and filter
-                </Button>
+                <Button tone="secondary" onClick={reset}>{t("dashboard.clear.search.and.filter.747a23")}</Button>
               }
             />
           ) : (
@@ -438,7 +455,14 @@ export const Dashboard: React.FC = () => {
                 <li key={tool.id}>
                   {/* Only the rows that can be on screen at first paint fetch
                       eagerly; the rest of the catalog decodes as it is reached. */}
-                  <ToolRow tool={tool} eager={index < 5} />
+                  <ToolRow
+                    tool={tool}
+                    eager={index < 5}
+                    availableOnDevice={
+                      tool.path !== '/verify-signatures'
+                      || platform.pdfReader?.supportsSignatureVerification === true
+                    }
+                  />
                 </li>
               ))}
             </ul>

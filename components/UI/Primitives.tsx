@@ -1,3 +1,5 @@
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Loader2, X } from 'lucide-react';
@@ -72,7 +74,7 @@ export const Badge: React.FC<{ tone?: BadgeTone; children: React.ReactNode; clas
   tone = 'neutral',
   children,
   className,
-}) => (
+}) => { return (
   <span
     className={cx(
       'type-caption inline-flex shrink-0 items-center gap-1 rounded-[var(--radius-pill)] border px-2 py-0.5 uppercase tracking-[0.08em]',
@@ -82,7 +84,7 @@ export const Badge: React.FC<{ tone?: BadgeTone; children: React.ReactNode; clas
   >
     {children}
   </span>
-);
+); };
 
 /* --------------------------------------------------- Segmented control --- */
 
@@ -120,7 +122,8 @@ export function SegmentedControl<T extends string>({
   // means the old option stops being focusable the moment the value changes, so
   // focus has to follow the selection or it lands back on the document.
   const onKeyDown = (event: React.KeyboardEvent) => {
-    const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0;
+    const rtl = group.current && getComputedStyle(group.current).direction === 'rtl';
+    const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : event.key === 'ArrowRight' ? (rtl ? -1 : 1) : event.key === 'ArrowLeft' ? (rtl ? 1 : -1) : 0;
     if (step === 0) return;
     event.preventDefault();
     const index = options.findIndex((option) => option.value === value);
@@ -231,9 +234,9 @@ export const Switch: React.FC<{
           aria-hidden
           className={cx(
             // Transform, not `left`: the knob must not run a layout animation.
-            'absolute left-[2px] top-1/2 block h-[25px] w-[25px] rounded-full bg-[var(--surface-raised)] shadow-[var(--elevation-raised)]',
+            'absolute start-[2px] top-1/2 block h-[25px] w-[25px] rounded-full bg-[var(--surface-raised)] shadow-[var(--elevation-raised)]',
             'transition-transform duration-transition ease-settle',
-            checked ? '-translate-y-1/2 translate-x-[20px]' : '-translate-y-1/2 translate-x-0',
+            checked ? '-translate-y-1/2 translate-x-[20px] rtl:-translate-x-[20px]' : '-translate-y-1/2 translate-x-0',
           )}
         />
       </button>
@@ -253,7 +256,7 @@ export const Switch: React.FC<{
  * above the shell chrome.
  */
 export const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) =>
-  typeof document === 'undefined' ? null : createPortal(<>{children}</>, document.body);
+  { return typeof document === 'undefined' ? null : createPortal(<>{children}</>, document.body); };
 
 /* --------------------------------------------------------------- Sheet --- */
 
@@ -272,6 +275,7 @@ export const Sheet: React.FC<{
   /** Hides the close affordance for a first-run flow that has its own exit. */
   dismissible?: boolean;
 }> = ({ open, onClose, title, description, children, footer, dismissible = true }) => {
+  useI18n();
   const panel = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const descriptionId = useId();
@@ -347,8 +351,8 @@ export const Sheet: React.FC<{
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close"
-              className="chef-pressable chef-target -mr-2 -mt-2 grid place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
+              aria-label={t("primitives.close.7d9eb7")}
+              className="chef-pressable chef-target -me-2 -mt-2 grid place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
             >
               <X aria-hidden size={20} />
             </button>
@@ -377,6 +381,7 @@ export const ConfirmSheet: React.FC<{
   onConfirm: () => void | Promise<void>;
   onCancel: () => void;
 }> = ({ open, title, description, confirmLabel, onConfirm, onCancel }) => {
+  useI18n();
   const [busy, setBusy] = useState(false);
 
   const confirm = useCallback(async () => {
@@ -396,9 +401,7 @@ export const ConfirmSheet: React.FC<{
       description={description}
       footer={
         <>
-          <Button tone="secondary" onClick={onCancel} disabled={busy}>
-            Cancel
-          </Button>
+          <Button tone="secondary" onClick={onCancel} disabled={busy}>{t("primitives.cancel.19766e")}</Button>
           <Button tone="destructive" busy={busy} onClick={() => void confirm()}>
             {confirmLabel}
           </Button>
@@ -416,7 +419,7 @@ export const EmptyState: React.FC<{
   title: string;
   body?: string;
   action?: React.ReactNode;
-}> = ({ icon, title, body, action }) => (
+}> = ({ icon, title, body, action }) => { return (
   <div className="flex flex-col items-center px-5 py-9 text-center sm:py-12">
     <div aria-hidden className="mb-3 text-[var(--text-tertiary)]">
       {icon}
@@ -425,7 +428,7 @@ export const EmptyState: React.FC<{
     {body && <p className="mt-1.5 max-w-measure text-[var(--text-secondary)]">{body}</p>}
     {action && <div className="mt-4">{action}</div>}
   </div>
-);
+); };
 
 /* --------------------------------------------------------- Status line --- */
 
@@ -451,7 +454,7 @@ export const StatusLine: React.FC<{
 
 /* ------------------------------------------------------------- Skeleton --- */
 
-export const SkeletonRow: React.FC = () => (
+export const SkeletonRow: React.FC = () => { return (
   <div className="flex items-center gap-3 px-4 py-4" aria-hidden>
     <div className="h-10 w-10 shrink-0 rounded-[var(--radius-control)] bg-[var(--surface-sunken)]" />
     <div className="min-w-0 flex-1 space-y-2">
@@ -459,11 +462,11 @@ export const SkeletonRow: React.FC = () => (
       <div className="h-3 w-3/5 rounded-[var(--radius-pill)] bg-[var(--surface-sunken)]" />
     </div>
   </div>
-);
+); };
 
 /* ------------------------------------------------------------ Checkmark --- */
 
 export const SelectedMark: React.FC<{ selected: boolean }> = ({ selected }) =>
-  selected ? <Check aria-hidden size={18} className="shrink-0 text-[var(--accent-text)]" /> : null;
+  { return selected ? <Check aria-hidden size={18} className="shrink-0 text-[var(--accent-text)]" /> : null; };
 
 export { cx };

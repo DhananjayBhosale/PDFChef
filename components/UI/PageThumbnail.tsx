@@ -1,3 +1,5 @@
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Check, RotateCw } from 'lucide-react';
@@ -21,6 +23,7 @@ export const PageThumbnail: React.FC<PageThumbnailProps> = ({
   disabled = false,
   rotation = 0
 }) => {
+  useI18n();
   const rootRef = useRef<HTMLDivElement>(null);
   const currentUrlRef = useRef<string | null>(imageUrl ?? null);
   const ownsUrlRef = useRef(false);
@@ -96,7 +99,7 @@ export const PageThumbnail: React.FC<PageThumbnailProps> = ({
       } catch (error) {
         console.error(error);
         if (!cancelled) {
-          setLoadError('Preview failed');
+          setLoadError(t("page-thumbnail.preview.failed.97ce52"));
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -129,7 +132,7 @@ export const PageThumbnail: React.FC<PageThumbnailProps> = ({
       tabIndex={0}
       aria-pressed={isSelected}
       aria-disabled={disabled || undefined}
-      aria-label={`Page ${pageIndex + 1}${isSelected ? ', selected' : ''}`}
+      aria-label={t("page-thumbnail.page.8b21ee", { v0: pageIndex + 1, v1: isSelected ? t("page-thumbnail.selected.bd44f3") : '' })}
       onClick={disabled ? undefined : onToggle}
       onKeyDown={(event: React.KeyboardEvent) => {
         if (disabled) return;
@@ -152,7 +155,7 @@ export const PageThumbnail: React.FC<PageThumbnailProps> = ({
         {displayUrl ? (
           <img
             src={displayUrl}
-            alt={`Page ${pageIndex + 1}`}
+            alt={t("page-thumbnail.page.c140ba", { v0: pageIndex + 1 })}
             className="w-full h-full object-contain p-2 transition-transform duration-300 ease-out"
             style={{
               transform: `rotate(${rotation}deg) scale(${isSideways ? 0.72 : 1})`,
@@ -204,7 +207,7 @@ export const PageThumbnail: React.FC<PageThumbnailProps> = ({
           : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400'
         }
       `}>
-        <span>Page {pageIndex + 1}</span>
+        <span>{t("page-thumbnail.message.c140ba4857", { v0: pageIndex + 1 })}</span>
         {rotation !== 0 && (
           <span className="flex items-center gap-1 opacity-80">
             <RotateCw size={10} /> {rotation}°

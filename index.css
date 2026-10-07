@@ -405,6 +405,8 @@ html[data-text-scale='larger'] .chef-chrome {
    native, and the shared hook keeps trackpad and touch zoom on the document
    instead of scaling the entire application viewport. */
 .chef-pdf-zoom-viewport {
+  /* PDF coordinates and scroll offsets stay physical, even in an RTL interface. */
+  direction: ltr;
   touch-action: pan-x pan-y;
   overscroll-behavior: contain;
 }

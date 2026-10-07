@@ -1,3 +1,4 @@
+import { LocalizedError } from '../../i18n/errors.ts';
 import type { WorkspacePlatform } from '../contracts.ts';
 
 /** Only a validated external-intent event calls this; picker imports stay in their tool. */
@@ -8,7 +9,7 @@ export const openIncomingAndroidPdf = async (
 ): Promise<void> => {
   const record = (await platform.records.list()).find(item => item.document?.ref === ref);
   if (!record?.available || record.document?.mimeType !== 'application/pdf') {
-    throw new Error('The incoming PDF is unavailable.');
+    throw new LocalizedError("open-incoming-pdf.error.c42046a644");
   }
   let toolPath = '/view';
   if (platform.pdfReader?.isEligible(record.document)) {

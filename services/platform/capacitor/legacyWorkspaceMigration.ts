@@ -1,3 +1,4 @@
+import { LocalizedError } from '../../i18n/errors.ts';
 import type { DurableDocumentRef, RecentEntry, StoredDocument } from '../../domain/workspaceModels.ts';
 import type { RecentRepository } from '../contracts.ts';
 import type { LocalStringStorage } from '../local/localWorkspaceRepositories.ts';
@@ -43,14 +44,14 @@ export interface LegacyWorkspaceMigrationDependencies {
 
 const storageOrThrow = (): LocalStringStorage => {
   if (typeof localStorage === 'undefined') {
-    throw new Error('Legacy workspace migration storage is unavailable.');
+    throw new LocalizedError("legacy-workspace-migration.error.7a9a0e1dfc");
   }
   return localStorage;
 };
 
 const requestValue = <T>(request: IDBRequest<T>): Promise<T> => new Promise((resolve, reject) => {
   request.onsuccess = () => resolve(request.result);
-  request.onerror = () => reject(request.error ?? new Error('Unable to read the legacy workspace.'));
+  request.onerror = () => reject(request.error ?? new LocalizedError("legacy-workspace-migration.error.289a151a01"));
 });
 
 const openLegacyDatabase = (): Promise<IDBDatabase | null> => new Promise((resolve, reject) => {
@@ -81,7 +82,7 @@ const openLegacyDatabase = (): Promise<IDBDatabase | null> => new Promise((resol
       resolve(null);
       return;
     }
-    reject(request.error ?? new Error('Unable to open the legacy workspace.'));
+    reject(request.error ?? new LocalizedError("legacy-workspace-migration.error.cc98a49d51"));
   };
 });
 
@@ -150,7 +151,7 @@ const nullableCount = (value: unknown): number | null =>
   Number.isSafeInteger(value) && (value as number) >= 0 ? value as number : null;
 
 const markerFor = async (legacyId: string): Promise<string> => {
-  if (!globalThis.crypto?.subtle) throw new Error('Legacy workspace migration hashing is unavailable.');
+  if (!globalThis.crypto?.subtle) throw new LocalizedError("legacy-workspace-migration.error.f451a86553");
   const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(legacyId));
   const hash = [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
   return `.pdfchef-legacy-${hash}.pending`;

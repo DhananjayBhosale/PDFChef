@@ -6,9 +6,18 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
 
-const catalog = read('components/Tools/toolCatalog.ts');
+const englishSource = read('services/i18n/en-US.ts');
+const english = JSON.parse(englishSource.slice(englishSource.indexOf('{'), englishSource.lastIndexOf('}') + 1));
+const resolveEnglishGetters = (source) => source.replace(
+  /get (name|title|description|androidTitle|androidSubtitle)\(\) \{ return t\("([^"]+)"\); \}/g,
+  (_, property, key) => {
+    if (typeof english[key] !== 'string') throw new Error(`Missing English catalog string: ${key}`);
+    return `${property}: '${english[key].replaceAll("'", "\\'")}'`;
+  },
+);
+const catalog = resolveEnglishGetters(read('components/Tools/toolCatalog.ts'));
 const app = read('App.tsx');
-const seo = read('components/SEO/RouteSEO.tsx');
+const seo = resolveEnglishGetters(read('components/SEO/RouteSEO.tsx'));
 const middleware = read('functions/_middleware.js');
 const sitemap = read('public/sitemap.xml');
 
@@ -151,7 +160,7 @@ if (androidTools.length === claimedAndroidTools.length) {
 // Every entry must declare whether it actually runs in the browser, so a tool that only
 // exists on Android is never presented as if it works here.
 for (const entry of catalogEntries) {
-  if (!/availability:\s*'(web|android-only)'/.test(entry)) {
+  if (!/availability:\s*'(web|native-only)'/.test(entry)) {
     const name = entry.match(/name:\s*'([^']+)'/);
     failures.push(`Catalog entry is missing a valid availability: ${name ? name[1] : entry.trim()}`);
   }
@@ -162,19 +171,22 @@ for (const entry of catalogEntries) {
 // and keep working — they render the same component and now canonicalise onto
 // /privacy and /terms — but listing them here as well would ask search engines
 // to index three originals of one document.
+/** Native-only tools stay reachable in the app but are not advertised as browser tools. */
+const deviceOnlyRoutes = ['/verify-signatures'];
+
 const requiredRoutes = Array.from(new Set([
   ...catalogRoutes,
   '/',
   '/help',
   '/privacy',
   '/terms',
-])).sort();
+])).filter(route => !deviceOnlyRoutes.includes(route)).sort();
 
 /** Live, reachable, and deliberately absent from the sitemap. */
 const canonicalisedAliases = ['/privacy-policy', '/pdf-chef-privacy', '/terms-and-conditions'];
 
 /** Device-local surfaces: reachable in the app, never a search result. */
-const noindexRoutes = ['/recent', '/history', '/settings'];
+const noindexRoutes = ['/recent', '/history', '/settings', ...deviceOnlyRoutes];
 
 for (const route of catalogRoutes) {
   if (!appRoutes.includes(route)) failures.push(`Catalog route is missing in App.tsx: ${route}`);

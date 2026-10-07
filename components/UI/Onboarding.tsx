@@ -1,32 +1,37 @@
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useState } from 'react';
 import { CloudOff, HardDrive, ShieldCheck, WifiOff } from 'lucide-react';
 import { getWorkspaceSettings, updateWorkspaceSettings } from '../../services/workspace';
 import { Button, Sheet } from './Primitives';
 import { useHaptics } from '../../hooks/useWorkspaceRuntime';
+import { useMonetization } from '../../hooks/useMonetization';
 
 /** First run. Four short facts about local processing and retention. */
 const POINTS = [
   {
     icon: ShieldCheck,
-    title: 'Your documents stay on this device.',
+    get title() { return t("onboarding.your.documents.stay.on.this.device.2dc8b1"); },
   },
   {
     icon: CloudOff,
-    title: 'Nothing is uploaded. No account is needed.',
+    get title() { return t("onboarding.nothing.is.uploaded.no.account.is.needed.58a6e1"); },
   },
   {
     icon: WifiOff,
-    title: 'Tools work offline after the app loads.',
+    get title() { return t("onboarding.tools.work.offline.after.the.app.loads.b100fa"); },
   },
   {
     icon: HardDrive,
-    title: 'Results stay here until you delete them.',
+    get title() { return t("onboarding.you.choose.when.eligible.results.are.kept.e76303"); },
   },
 ] as const;
 
 export const Onboarding: React.FC = () => {
+  useI18n();
   const [open, setOpen] = useState(() => !getWorkspaceSettings().onboardingComplete);
   const haptic = useHaptics();
+  const { available: monetizationAvailable } = useMonetization();
 
   const finish = () => {
     updateWorkspaceSettings({ onboardingComplete: true });
@@ -38,15 +43,13 @@ export const Onboarding: React.FC = () => {
     <Sheet
       open={open}
       onClose={finish}
-      title="Before you start"
+      title={t("onboarding.before.you.start.74e492")}
       footer={
-        <Button tone="primary" block onClick={finish}>
-          Start using PDF Chef
-        </Button>
+        <Button tone="primary" block onClick={finish}>{t("onboarding.start.using.pdf.chef.b2a8f1")}</Button>
       }
     >
       <ul className="space-y-2">
-        {POINTS.map(({ icon: Icon, title }) => (
+        {[...POINTS, ...(monetizationAvailable ? [{ icon: ShieldCheck, title: t("onboarding.on.ios.each.7.day.allowance.starts.c4855a") }] : [])].map(({ icon: Icon, title }) => (
           <li key={title} className="flex items-center gap-3">
             <span
               aria-hidden

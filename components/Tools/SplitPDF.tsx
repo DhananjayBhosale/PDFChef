@@ -1,3 +1,7 @@
+import { formatPercent } from '../../services/i18n/core.ts';
+import { localizeError } from '../../services/i18n/errors.ts';
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FileUpload } from '../UI/FileUpload';
 import { PDFFile, ProcessingStatus } from '../../types';
@@ -15,8 +19,9 @@ import { Download, FileText, Loader2, RefreshCw, Scissors } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
 import { PageThumbnail } from '../UI/PageThumbnail';
+import { PageRangeSelector } from '../UI/PageRangeSelector';
 import { StatusToast } from '../UI/StatusToast';
-import { SegmentedControl } from '../UI/Primitives';
+import { Button, SegmentedControl } from '../UI/Primitives';
 import { ToolHeader, ToolPanel, ToolSelectionBar, ToolShell } from '../UI/ToolLayout';
 import { formatBytes } from '../UI/format';
 
@@ -26,9 +31,12 @@ type ActiveJob = 'split' | 'extract' | null;
 const idleStatus = (): ProcessingStatus => ({ isProcessing: false, progress: 0, message: '' });
 
 export const SplitPDF: React.FC = () => {
+  useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
   const [previews, setPreviews] = useState<string[]>([]);
   const [selectedPages, setSelectedPages] = useState<number[]>([]);
+  const [rangePending, setRangePending] = useState(false);
+  const [selectionRevision, setSelectionRevision] = useState(0);
   const [splitMode, setSplitMode] = useState<SplitMode>('pageCount');
   const [pagesPerSplit, setPagesPerSplit] = useState('1');
   const [maximumSizeMb, setMaximumSizeMb] = useState('10');
@@ -60,7 +68,6 @@ export const SplitPDF: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
 
-    setSelectedPages([]);
     setPreviewError('');
     if (!file) {
       setLoadingPreviews(false);
@@ -84,7 +91,7 @@ export const SplitPDF: React.FC = () => {
       .catch((error) => {
         if (cancelled) return;
         console.error('Failed to load previews', error);
-        setPreviewError(error instanceof Error && error.message ? error.message : 'The pages could not be shown. You can still split by page numbers, or choose another file.');
+        setPreviewError(error instanceof Error && error.message ? localizeError(error) : t("split-pdf.the.pages.could.not.be.shown.you.33159a"));
         setLoadingPreviews(false);
       });
 
@@ -108,7 +115,7 @@ export const SplitPDF: React.FC = () => {
     ) return;
     const selected = files[0];
     if (!isPdfFile(selected)) {
-      setStatus({ ...idleStatus(), error: 'Choose a PDF file.' });
+      setStatus({ ...idleStatus(), error: t("split-pdf.choose.a.pdf.file.c2a7df") });
       return;
     }
 
@@ -117,9 +124,12 @@ export const SplitPDF: React.FC = () => {
     try {
       const pageCount = await getPDFPageCount(selected);
       if (pageCount < 1) {
-        setStatus({ ...idleStatus(), error: 'Selected PDF has no pages.' });
+        setStatus({ ...idleStatus(), error: t("split-pdf.selected.pdf.has.no.pages.3882f9") });
         return;
       }
+      setSelectedPages([]);
+      setRangePending(false);
+      setSelectionRevision(0);
       setFile({
         id: uuidv4(),
         file: selected,
@@ -131,7 +141,7 @@ export const SplitPDF: React.FC = () => {
       console.error(error);
       setStatus({
         ...idleStatus(),
-        error: error instanceof Error && error.message ? error.message : 'Unable to open this PDF.',
+        error: error instanceof Error && error.message ? localizeError(error) : t("split-pdf.unable.to.open.this.pdf.9c2826"),
       });
     } finally {
       fileInspectionRef.current = false;
@@ -140,6 +150,8 @@ export const SplitPDF: React.FC = () => {
 
   const togglePage = (index: number) => {
     if (status.isProcessing || totalPages <= 0) return;
+    setRangePending(false);
+    setSelectionRevision((current) => current + 1);
     setSelectedPages((current) => {
       const explicitSelection = current.length === 0 ? allPageIndices : current;
       if (explicitSelection.includes(index)) {
@@ -155,19 +167,27 @@ export const SplitPDF: React.FC = () => {
   const useAllPages = () => {
     if (status.isProcessing) return;
     setSelectedPages([]);
+    setRangePending(false);
+    setSelectionRevision((current) => current + 1);
+  };
+
+  const applyPageRange = (pages: number[]) => {
+    if (status.isProcessing) return;
+    setSelectedPages(pages.length === totalPages ? [] : pages);
+    setRangePending(false);
   };
 
   const parsedPagesPerSplit = Number(pagesPerSplit);
   const parsedMaximumSizeMb = Number(maximumSizeMb);
   const pagesPerSplitError = !pagesPerSplit
-    ? 'Enter pages per file.'
+    ? t("split-pdf.enter.pages.per.file.c0df04")
     : !Number.isSafeInteger(parsedPagesPerSplit) || parsedPagesPerSplit < 1
-      ? 'Pages per file must be a positive whole number.'
+      ? t("split-pdf.pages.per.file.must.be.a.positive.85ff63")
       : '';
   const maximumSizeError = !maximumSizeMb
-    ? 'Enter a maximum file size in whole MB.'
+    ? t("split-pdf.enter.a.maximum.file.size.in.whole.0ae395")
     : !Number.isSafeInteger(parsedMaximumSizeMb) || parsedMaximumSizeMb < 1
-      ? 'Maximum file size must be at least 1 MB.'
+      ? t("split-pdf.maximum.file.size.must.be.at.least.9404a7")
       : '';
   const settingsError = splitMode === 'pageCount' ? pagesPerSplitError : maximumSizeError;
   const estimatedPartCount = !pagesPerSplitError && effectiveSelectedPages.length > 0
@@ -178,6 +198,7 @@ export const SplitPDF: React.FC = () => {
     totalPages > 0 &&
     effectiveSelectedPages.length > 0 &&
     !settingsError &&
+    !rangePending &&
     !status.isProcessing,
   );
   const canExtractSelection = Boolean(
@@ -204,7 +225,7 @@ export const SplitPDF: React.FC = () => {
       isProcessing: false,
       progress: 0,
       message: '',
-      error: error instanceof Error && error.message ? error.message : fallback,
+      error: error instanceof Error && error.message ? localizeError(error) : fallback,
     });
   };
 
@@ -215,7 +236,7 @@ export const SplitPDF: React.FC = () => {
     setStatus((current) => ({
       ...current,
       isProcessing: true,
-      message: activeJob === 'extract' ? 'Cancelling extraction...' : 'Cancelling split...',
+      message: activeJob === 'extract' ? t("split-pdf.cancelling.extraction.aeb50e") : t("split-pdf.cancelling.split.9acb39"),
     }));
   };
 
@@ -231,8 +252,8 @@ export const SplitPDF: React.FC = () => {
       isProcessing: true,
       progress: 5,
       message: mode === 'pageCount'
-        ? `Splitting ${parsedPagesPerSplit} page${parsedPagesPerSplit === 1 ? '' : 's'} per file...`
-        : `Measuring parts up to ${parsedMaximumSizeMb} MB...`,
+        ? t("split-pdf.splitting.page.per.file.8e33d8", { count: parsedPagesPerSplit })
+        : t("split-pdf.measuring.parts.up.to.mb.ba2367", { v0: parsedMaximumSizeMb }),
     });
 
     try {
@@ -246,7 +267,7 @@ export const SplitPDF: React.FC = () => {
             setStatus({
               isProcessing: true,
               progress: Math.max(5, Math.round((current / Math.max(1, total)) * 95)),
-              message: `Writing part ${current} of ${total}...`,
+              message: t("split-pdf.writing.part.of.cfb774", { v0: current, v1: total }),
             });
           },
           controller.signal,
@@ -260,7 +281,7 @@ export const SplitPDF: React.FC = () => {
             setStatus({
               isProcessing: true,
               progress: Math.max(5, Math.round((current / Math.max(1, total)) * 95)),
-              message: `Measuring page ${current} of ${total}...`,
+              message: t("split-pdf.measuring.page.of.7fd068", { v0: current, v1: total }),
             });
           },
           controller.signal,
@@ -272,15 +293,15 @@ export const SplitPDF: React.FC = () => {
       setStatus({
         isProcessing: false,
         progress: 100,
-        message: result.partCount === 1 ? 'One split PDF is ready.' : `${result.partCount} split PDFs are ready.`,
+        message: t('split.ready', { count: result.partCount }),
       });
     } catch (error) {
       if (activeJobControllerRef.current !== controller) return;
       if (controller.signal.aborted) {
         setActiveJob(null);
-        setStatus({ ...idleStatus(), message: 'Split cancelled.' });
+        setStatus({ ...idleStatus(), message: t("split-pdf.split.cancelled.14898b") });
       } else {
-        reportFailure(error, 'Split failed.', controller);
+        reportFailure(error, t("split-pdf.split.failed.81d4dd"), controller);
       }
     } finally {
       if (activeJobControllerRef.current === controller) {
@@ -290,19 +311,19 @@ export const SplitPDF: React.FC = () => {
   };
 
   const handleExtractSelected = async () => {
-    if (!file || !canExtractSelection || activeJobControllerRef.current) return;
+    if (!file || !canExtractSelection || rangePending || activeJobControllerRef.current) return;
     const sourceFile = file;
     const pagesToExtract = [...effectiveSelectedPages];
     const controller = new AbortController();
     activeJobControllerRef.current = controller;
     setActiveJob('extract');
-    setStatus({ isProcessing: true, progress: 15, message: 'Extracting selected pages...' });
+    setStatus({ isProcessing: true, progress: 15, message: t("split-pdf.extracting.selected.pages.3ee72b") });
 
     try {
       const pdfBytes = await extractPages(
         sourceFile.file,
         pagesToExtract,
-        'Pages to extract',
+        t("split-pdf.pages.to.extract.693228"),
         controller.signal,
       );
       if (controller.signal.aborted || activeJobControllerRef.current !== controller) return;
@@ -314,15 +335,15 @@ export const SplitPDF: React.FC = () => {
       setStatus({
         isProcessing: false,
         progress: 100,
-        message: `Extracted ${pagesToExtract.length} ${pagesToExtract.length === 1 ? 'page' : 'pages'}.`,
+        message: t("split-pdf.extracted.38699c", { count: pagesToExtract.length }),
       });
     } catch (error) {
       if (activeJobControllerRef.current !== controller) return;
       if (controller.signal.aborted) {
         setActiveJob(null);
-        setStatus({ ...idleStatus(), message: 'Extraction cancelled.' });
+        setStatus({ ...idleStatus(), message: t("split-pdf.extraction.cancelled.d9b217") });
       } else {
-        reportFailure(error, 'Extraction failed.', controller);
+        reportFailure(error, t("split-pdf.extraction.failed.73c701"), controller);
       }
     } finally {
       if (activeJobControllerRef.current === controller) {
@@ -335,19 +356,21 @@ export const SplitPDF: React.FC = () => {
     if (status.isProcessing) return;
     setActiveJob(null);
     setFile(null);
+    setSelectedPages([]);
+    setRangePending(false);
     setStatus(idleStatus());
   };
 
   // Only the non-obvious consequence survives: more than one part arrives as a
   // single ZIP, not as several PDFs. Everything else the controls already say.
   const footerSummary = splitMode === 'pageCount' && estimatedPartCount > 1
-    ? `${estimatedPartCount} PDFs download together in one ZIP.`
+    ? t("split-pdf.pdfs.download.together.in.one.zip.795019", { v0: estimatedPartCount })
     : '';
 
   return (
     <ToolShell width="full" centered={!file}>
 
-      <ToolHeader title="Split PDF" />
+      <ToolHeader title={t("split-pdf.split.pdf.4f1b84")} />
 
       <AnimatePresence mode="wait">
         {!file ? (
@@ -357,7 +380,7 @@ export const SplitPDF: React.FC = () => {
             exit={{ opacity: 0 }}
             className="mx-auto max-w-3xl"
           >
-            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label="Choose a PDF to split" />
+            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("split-pdf.choose.a.pdf.to.split.90f382")} />
           </motion.div>
         ) : (
           <motion.div
@@ -373,7 +396,7 @@ export const SplitPDF: React.FC = () => {
                 <div className="min-w-0 flex-1">
                   <h2 className="chef-filename text-sm font-semibold text-[var(--text-primary)]">{file.name}</h2>
                   <p className="type-caption text-[var(--text-tertiary)]">
-                    {totalPages} {totalPages === 1 ? 'page' : 'pages'} · {formatBytes(file.size)}
+                    {t('format.pageCount', { count: totalPages })} · {formatBytes(file.size)}
                   </p>
                 </div>
                 <button
@@ -381,24 +404,38 @@ export const SplitPDF: React.FC = () => {
                   onClick={changeFile}
                   disabled={status.isProcessing}
                   className="chef-pressable chef-hit-y shrink-0 rounded-[var(--radius-pill)] px-2.5 py-1.5 text-sm font-semibold text-[var(--accent-text)] hover:bg-[var(--accent-quiet)] disabled:cursor-not-allowed disabled:opacity-55"
-                >
-                  Change
-                </button>
+                >{t("split-pdf.change.c0bf75")}</button>
               </div>
+              <PageRangeSelector
+                key={`${file.id}-${selectionRevision}`}
+                totalPages={totalPages}
+                disabled={status.isProcessing}
+                onApply={applyPageRange}
+                onPendingChange={setRangePending}
+              />
               <ToolSelectionBar
                 summary={allPagesIncluded
-                  ? `All ${totalPages} pages included`
-                  : `${effectiveSelectedPages.length} of ${totalPages} pages included`}
+                  ? t("split-pdf.all.pages.included.6d0a41", { v0: totalPages })
+                  : t("split-pdf.of.pages.included.d15033", { v0: effectiveSelectedPages.length, v1: totalPages })}
                 actions={[
                   {
                     key: 'all-pages',
-                    label: 'Use all pages',
+                    label: t("split-pdf.use.all.pages.7dd824"),
                     hidden: allPagesIncluded,
                     disabled: status.isProcessing,
                     onClick: useAllPages,
                   },
                 ]}
               />
+              {selectedPages.length > 0 && effectiveSelectedPages.length < totalPages && (
+                <Button
+                  tone="secondary"
+                  block
+                  disabled={!canExtractSelection || rangePending}
+                  icon={<Download aria-hidden size={18} />}
+                  onClick={() => void handleExtractSelected()}
+                >{t("split-pdf.message.eff1a10749", { count: effectiveSelectedPages.length })}</Button>
+              )}
             </ToolPanel>
 
             {/* A two-choice method is a strip, not two padded cards with a
@@ -406,17 +443,17 @@ export const SplitPDF: React.FC = () => {
                 means, so the hints were saying it twice. */}
             <ToolPanel className="flex flex-col gap-2.5">
               <SegmentedControl
-                label="Split method"
+                label={t("split-pdf.split.method.400c8a")}
                 value={splitMode}
                 options={[
-                  { value: 'pageCount', label: 'Pages per file' },
-                  { value: 'maximumSize', label: 'Max file size' },
+                  { value: 'pageCount', label: t("split-pdf.pages.per.file.436b5b") },
+                  { value: 'maximumSize', label: t("split-pdf.max.file.size.5a4e0f") },
                 ]}
                 onChange={(next) => { if (!status.isProcessing) setSplitMode(next as SplitMode); }}
               />
               {splitMode === 'pageCount' ? (
                 <label className="block">
-                  <span className="type-footnote font-semibold text-[var(--text-secondary)]">Pages per output PDF</span>
+                  <span className="type-footnote font-semibold text-[var(--text-secondary)]">{t("split-pdf.pages.per.output.pdf.b5ce50")}</span>
                   <input
                     value={pagesPerSplit}
                     onChange={(event) => setPagesPerSplit(event.target.value.replace(/[^\d]/g, ''))}
@@ -429,7 +466,7 @@ export const SplitPDF: React.FC = () => {
                 </label>
               ) : (
                 <label className="block">
-                  <span className="type-footnote font-semibold text-[var(--text-secondary)]">Maximum file size (MB)</span>
+                  <span className="type-footnote font-semibold text-[var(--text-secondary)]">{t("split-pdf.maximum.file.size.mb.85e619")}</span>
                   <input
                     value={maximumSizeMb}
                     onChange={(event) => setMaximumSizeMb(event.target.value.replace(/[^\d]/g, ''))}
@@ -441,9 +478,7 @@ export const SplitPDF: React.FC = () => {
                   />
                   {/* Kept: a single page can exceed the limit on its own, and the
                       only way out is another tool. */}
-                  <span className="type-caption mt-1 block text-[var(--text-tertiary)]">
-                    If one page is larger than the limit on its own, compress it first.
-                  </span>
+                  <span className="type-caption mt-1 block text-[var(--text-tertiary)]">{t("split-pdf.if.one.page.is.larger.than.the.098718")}</span>
                 </label>
               )}
               {settingsError && <p role="alert" className="type-footnote font-medium text-[var(--status-caution-text)]">{settingsError}</p>}
@@ -455,11 +490,11 @@ export const SplitPDF: React.FC = () => {
                   <Loader2 aria-hidden className="shrink-0 animate-spin text-[var(--accent-text)]" size={22} />
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-[var(--text-primary)]">
-                      {activeJob === 'extract' ? 'Extracting pages' : 'Processing your PDF'}
+                      {activeJob === 'extract' ? t("split-pdf.extracting.pages.7e290c") : t("split-pdf.processing.your.pdf.b14adc")}
                     </p>
                     <p className="truncate text-sm text-[var(--text-secondary)]">{status.message}</p>
                   </div>
-                  <span className="text-sm font-semibold tabular-nums text-[var(--text-secondary)]">{status.progress}%</span>
+                  <span className="text-sm font-semibold tabular-nums text-[var(--text-secondary)]">{formatPercent(status.progress)}</span>
                 </div>
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--surface-sunken)]">
                   <div className="h-full rounded-full bg-[var(--accent-rest)] transition-[width]" style={{ width: `${status.progress}%` }} />
@@ -470,7 +505,7 @@ export const SplitPDF: React.FC = () => {
                   disabled={activeJobControllerRef.current?.signal.aborted}
                   className="chef-pressable chef-target mt-2 w-full rounded-[var(--radius-control)] border border-[var(--border-strong)] px-4 text-sm font-semibold text-[var(--text-primary)] hover:border-[var(--accent-rest)] disabled:opacity-55"
                 >
-                  {activeJobControllerRef.current?.signal.aborted ? 'Cancelling...' : 'Cancel'}
+                  {activeJobControllerRef.current?.signal.aborted ? t("split-pdf.cancelling.7b2613") : t("split-pdf.cancel.19766e")}
                 </button>
               </div>
             ) : (
@@ -483,32 +518,29 @@ export const SplitPDF: React.FC = () => {
                   className="chef-pressable chef-target flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 text-sm font-semibold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-55"
                 >
                   <Scissors aria-hidden size={18} />
-                  <span>Save the split files</span>
+                  <span>{t("split-pdf.save.the.split.files.33c422")}</span>
                 </button>
               </div>
             )}
             <section aria-labelledby="split-pages-heading" className="flex flex-col gap-2">
               {/* The selection bar above already states the count. */}
-              <h2 id="split-pages-heading" className="text-sm font-semibold text-[var(--text-primary)]">Pages to include</h2>
+              <h2 id="split-pages-heading" className="text-sm font-semibold text-[var(--text-primary)]">{t("split-pdf.pages.to.include.225127")}</h2>
 
               {loadingPreviews ? (
                 <div role="status" className="flex flex-col items-center justify-center gap-2 py-6 text-[var(--text-tertiary)]">
                   <Loader2 aria-hidden className="animate-spin" size={24} />
-                  <p className="text-sm">Generating page previews...</p>
+                  <p className="text-sm">{t("split-pdf.generating.page.previews.83467f")}</p>
                 </div>
               ) : previewError ? (
                 <div role="status" className="flex flex-col items-center justify-center px-4 py-6 text-center">
-                  <p className="font-semibold text-[var(--text-primary)]">Page previews are unavailable</p>
-                  <p className="mt-1 max-w-measure text-sm text-[var(--text-secondary)]">
-                    You can still split all pages. {previewError}
-                  </p>
+                  <p className="font-semibold text-[var(--text-primary)]">{t("split-pdf.page.previews.are.unavailable.318997")}</p>
+                  <p className="mt-1 max-w-measure text-sm text-[var(--text-secondary)]">{t("split-pdf.message.a68d961425", { v0: previewError })}</p>
                   <button
                     type="button"
                     onClick={() => setPreviewReloadKey((current) => current + 1)}
                     className="chef-pressable chef-target mt-3 flex items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-4 text-sm font-semibold text-[var(--text-primary)] hover:border-[var(--accent-rest)]"
                   >
-                    <RefreshCw aria-hidden size={17} /> Retry previews
-                  </button>
+                    <RefreshCw aria-hidden size={17} />{t("split-pdf.retry.previews.7e9483")}</button>
                 </div>
               ) : previews.length > 0 ? (
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
@@ -519,24 +551,14 @@ export const SplitPDF: React.FC = () => {
                       imageUrl={url}
                       isSelected={selectedPageSet.has(index)}
                       onToggle={() => togglePage(index)}
+                      disabled={status.isProcessing}
                     />
                   ))}
                 </div>
               ) : (
-                <p className="py-4 text-center text-sm text-[var(--text-secondary)]">The pages could not be shown here. You can still split by page numbers above.</p>
+                <p className="py-4 text-center text-sm text-[var(--text-secondary)]">{t("split-pdf.the.pages.could.not.be.shown.here.a4b115")}</p>
               )}
             </section>
-
-            {canExtractSelection && (
-              <button
-                type="button"
-                onClick={handleExtractSelected}
-                className="chef-pressable chef-target flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-4 text-sm font-semibold text-[var(--accent-text)] hover:border-[var(--accent-rest)]"
-              >
-                <Download aria-hidden size={18} />
-                Extract {effectiveSelectedPages.length} {effectiveSelectedPages.length === 1 ? 'page' : 'pages'} as one PDF
-              </button>
-            )}
 
           </motion.div>
         )}

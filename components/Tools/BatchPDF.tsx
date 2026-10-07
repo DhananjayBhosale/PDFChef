@@ -1,3 +1,7 @@
+import { formatPercent, formatNumber } from '../../services/i18n/core.ts';
+import { localizeError } from '../../services/i18n/errors.ts';
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useMemo, useRef, useState } from 'react';
 import JSZip from 'jszip';
 import { reserveArchiveName } from '../../services/pdfToolResults';
@@ -34,19 +38,19 @@ interface BatchItemStatus {
 
 /** `detail` is set only where the label leaves out an output format or a consequence. */
 const actions: Array<{ value: BatchAction; label: string; detail?: string }> = [
-  { value: 'compress', label: 'Compress PDF' },
-  { value: 'split', label: 'Split PDF' },
-  { value: 'pdf-to-image', label: 'PDF to Image', detail: 'JPG pages in one ZIP per PDF' },
-  { value: 'pdf-to-word', label: 'PDF to Word', detail: 'One Word file per PDF' },
-  { value: 'rotate', label: 'Rotate Pages' },
-  { value: 'protect', label: 'Protect PDF', detail: 'One password for every PDF' },
-  { value: 'unlock', label: 'Unlock PDF', detail: 'One password for every PDF' },
-  { value: 'metadata', label: 'Remove hidden info', detail: 'Author, dates and app names' },
-  { value: 'flatten', label: 'Flatten PDF', detail: 'Locks filled answers' },
-  { value: 'extract-text', label: 'Extract Text', detail: 'One plain text file per PDF' },
-  { value: 'watermark', label: 'Watermark PDF' },
-  { value: 'page-numbers', label: 'Page Numbers' },
-  { value: 'repair', label: 'Repair PDF' },
+  { value: 'compress', get label() { return t("batch-pdf.compress.pdf.932c3c"); } },
+  { value: 'split', get label() { return t("batch-pdf.split.pdf.4f1b84"); } },
+  { value: 'pdf-to-image', get label() { return t("batch-pdf.pdf.to.image.185e0a"); }, get detail() { return t("batch-pdf.jpg.pages.in.one.zip.per.pdf.28ce0d"); } },
+  { value: 'pdf-to-word', get label() { return t("batch-pdf.pdf.to.word.283553"); }, get detail() { return t("batch-pdf.one.word.file.per.pdf.49a461"); } },
+  { value: 'rotate', get label() { return t("batch-pdf.rotate.pages.0cbe65"); } },
+  { value: 'protect', get label() { return t("batch-pdf.protect.pdf.dae6c6"); }, get detail() { return t("batch-pdf.one.password.for.every.pdf.896d5c"); } },
+  { value: 'unlock', get label() { return t("batch-pdf.unlock.pdf.893947"); }, get detail() { return t("batch-pdf.one.password.for.every.pdf.896d5c"); } },
+  { value: 'metadata', get label() { return t("batch-pdf.remove.hidden.info.fa4793"); }, get detail() { return t("batch-pdf.author.dates.and.app.names.f6aef5"); } },
+  { value: 'flatten', get label() { return t("batch-pdf.flatten.pdf.86c838"); }, get detail() { return t("batch-pdf.locks.filled.answers.e753dd"); } },
+  { value: 'extract-text', get label() { return t("batch-pdf.extract.text.9ab592"); }, get detail() { return t("batch-pdf.one.plain.text.file.per.pdf.a7eb0d"); } },
+  { value: 'watermark', get label() { return t("batch-pdf.watermark.pdf.903ce9"); } },
+  { value: 'page-numbers', get label() { return t("batch-pdf.page.numbers.78c8fa"); } },
+  { value: 'repair', get label() { return t("batch-pdf.repair.pdf.43faa0"); } },
 ];
 
 const baseName = (name: string) => name.replace(/\.pdf$/i, '');
@@ -57,17 +61,17 @@ const clampProgress = (value: number) => Math.max(0, Math.min(100, Math.round(va
 
 class BatchCanceledError extends Error {
   constructor() {
-    super('Batch canceled.');
+    super(t("batch-pdf.batch.canceled.8d9616"));
     this.name = 'AbortError';
   }
 }
 
 const phaseLabel = (status: BatchItemStatus): string => {
-  if (status.phase === 'processing') return `${status.progress}%`;
-  if (status.phase === 'completed') return 'Completed';
-  if (status.phase === 'failed') return 'Failed';
-  if (status.phase === 'canceled') return 'Canceled';
-  return 'Queued';
+  if (status.phase === 'processing') return `${formatPercent(status.progress)}`;
+  if (status.phase === 'completed') return t("batch-pdf.completed.22a970");
+  if (status.phase === 'failed') return t("batch-pdf.failed.031a8f");
+  if (status.phase === 'canceled') return t("batch-pdf.canceled.13ca2e");
+  return t('batch.queued');
 };
 
 const phaseClasses: Record<BatchItemPhase, string> = {
@@ -79,6 +83,7 @@ const phaseClasses: Record<BatchItemPhase, string> = {
 };
 
 export const BatchPDF: React.FC = () => {
+  useI18n();
   const [files, setFiles] = useState<File[]>([]);
   const [action, setAction] = useState<BatchAction>('compress');
   const [password, setPassword] = useState('');
@@ -93,11 +98,11 @@ export const BatchPDF: React.FC = () => {
   const selectedAction = useMemo(() => actions.find((item) => item.value === action)!, [action]);
   const totalSize = useMemo(() => files.reduce((sum, file) => sum + file.size, 0), [files]);
   const validationMessage = useMemo(() => {
-    if (!files.length) return 'Add at least one PDF to start.';
+    if (!files.length) return t("batch-pdf.add.at.least.one.pdf.to.start.8ab537");
     if ((action === 'protect' || action === 'unlock') && password.length === 0) {
-      return 'Enter the password exactly as it should be used.';
+      return t("batch-pdf.enter.the.password.exactly.as.it.should.aae08d");
     }
-    if (action === 'watermark' && watermark.trim().length === 0) return 'Enter visible watermark text.';
+    if (action === 'watermark' && watermark.trim().length === 0) return t("batch-pdf.enter.visible.watermark.text.7de701");
     return '';
   }, [action, files.length, password, watermark]);
 
@@ -113,19 +118,19 @@ export const BatchPDF: React.FC = () => {
     const skippedUnsupported = selected.length - pdfs.length;
     if (!pdfs.length) {
       setSelectionNotice('');
-      setStatus({ ...idleStatus(), error: 'Choose one or more PDF files.' });
+      setStatus({ ...idleStatus(), error: t("batch-pdf.choose.one.or.more.pdf.files.69411e") });
       return;
     }
 
     const merged = [...files, ...pdfs].filter((file, index, all) => (
       all.findIndex((candidate) => fileKey(candidate) === fileKey(file)) === index
     ));
-    if (shouldWarnForFiles(merged) && !window.confirm('These PDFs may use substantial browser memory. Continue adding them?')) return;
+    if (shouldWarnForFiles(merged) && !window.confirm(t("batch-pdf.these.pdfs.may.use.substantial.browser.memory.982c0c"))) return;
 
     const duplicateCount = pdfs.length - (merged.length - files.length);
     const noticeParts: string[] = [];
-    if (skippedUnsupported > 0) noticeParts.push(`${skippedUnsupported} unsupported file${skippedUnsupported === 1 ? '' : 's'} skipped`);
-    if (duplicateCount > 0) noticeParts.push(`${duplicateCount} duplicate${duplicateCount === 1 ? '' : 's'} skipped`);
+    if (skippedUnsupported > 0) noticeParts.push(t("batch-pdf.unsupported.file.skipped.8ac142", { count: skippedUnsupported }));
+    if (duplicateCount > 0) noticeParts.push(t("batch-pdf.duplicate.skipped.90f0fe", { count: duplicateCount }));
 
     setFiles(merged);
     setItemStatuses({});
@@ -182,7 +187,7 @@ export const BatchPDF: React.FC = () => {
         analysis.isTextHeavy,
       );
       checkCanceled();
-      if (result.status !== 'success') throw new Error('Compression was blocked by the readability safety limit.');
+      if (result.status !== 'success') throw new Error(t("batch-pdf.compression.was.blocked.by.the.readability.safety.99233a"));
       recordSavings(file.size, result.data.length);
       return { blob: bytesBlob(result.data), filename: `${baseName(file.name)}-compressed.pdf` };
     }
@@ -252,7 +257,7 @@ export const BatchPDF: React.FC = () => {
       fileKey(file),
       { phase: 'queued', progress: 0 } satisfies BatchItemStatus,
     ])));
-    setStatus({ isProcessing: true, progress: 1, message: 'Starting batch…' });
+    setStatus({ isProcessing: true, progress: 1, message: t("batch-pdf.starting.batch.ae96f9") });
 
     const zip = new JSZip();
     const archiveNames = new Set<string>(['failures.txt']);
@@ -271,7 +276,7 @@ export const BatchPDF: React.FC = () => {
             setStatus({
               isProcessing: true,
               progress: Math.max(1, Math.round(((index + progress / 100) / files.length) * 88)),
-              message: `${selectedAction.label}: ${file.name} (${index + 1}/${files.length})`,
+              message: t("batch-pdf..192b74", { v0: selectedAction.label, v1: file.name, v2: index + 1, v3: files.length }),
             });
           }
         };
@@ -288,7 +293,7 @@ export const BatchPDF: React.FC = () => {
             setItemStatuses((current) => ({ ...current, [key]: { phase: 'canceled', progress: 0 } }));
             break;
           }
-          const message = error instanceof Error ? error.message : 'This file could not be processed. Skip it, or run Repair PDF on it first.';
+          const message = error instanceof Error ? localizeError(error) : t("batch-pdf.this.file.could.not.be.processed.skip.c11e2e");
           failures.push(`${file.name}: ${message}`);
           setItemStatuses((current) => ({ ...current, [key]: { phase: 'failed', progress: 0, message } }));
         }
@@ -308,25 +313,25 @@ export const BatchPDF: React.FC = () => {
         setStatus({
           isProcessing: false,
           progress: 0,
-          message: `Canceled after ${completedCount} of ${files.length} files; no ZIP was created.`,
+          message: t("batch-pdf.canceled.after.of.files.no.zip.was.8f7cb1", { v0: completedCount, v1: files.length }),
         });
         return;
       }
 
       if (failures.length) zip.file('failures.txt', failures.join('\n'));
       if (failures.length === files.length) {
-        setStatus({ ...idleStatus(), error: `All ${files.length} files failed; review the queue for details.` });
+        setStatus({ ...idleStatus(), error: t("batch-pdf.all.files.failed.review.the.queue.for.943af6", { v0: files.length }) });
         return;
       }
 
       const archive = await zip.generateAsync({ type: 'blob' }, (metadata) => {
-        setStatus({ isProcessing: true, progress: 88 + Math.round(metadata.percent * 0.12), message: 'Packing outputs…' });
+        setStatus({ isProcessing: true, progress: 88 + Math.round(metadata.percent * 0.12), message: t("batch-pdf.packing.outputs.ae3157") });
       });
       if (cancelRequestedRef.current) {
         setStatus({
           isProcessing: false,
           progress: 0,
-          message: `Canceled after ${completedCount} of ${files.length} files; no ZIP was created.`,
+          message: t("batch-pdf.canceled.after.of.files.no.zip.was.8f7cb1", { v0: completedCount, v1: files.length }),
         });
         return;
       }
@@ -336,12 +341,12 @@ export const BatchPDF: React.FC = () => {
         isProcessing: false,
         progress: 100,
         message: failures.length
-          ? `Created ${outputName} with ${completedCount} outputs and ${failures.length} failure${failures.length === 1 ? '' : 's'} listed in failures.txt.`
-          : `Created ${outputName} with ${completedCount} outputs.`,
+          ? t("batch-pdf.created.with.outputs.and.failure.listed.in.44f091", { v0: outputName, v1: completedCount, count: failures.length })
+          : t("batch-pdf.created.with.outputs.f2644b", { v0: outputName, v1: completedCount }),
       });
     } catch (error) {
       console.error(error);
-      setStatus({ ...idleStatus(), error: 'Unable to create the batch ZIP; review the queue and try again.' });
+      setStatus({ ...idleStatus(), error: t("batch-pdf.unable.to.create.the.batch.zip.review.146ef1") });
     } finally {
       setCancelPending(false);
     }
@@ -351,14 +356,14 @@ export const BatchPDF: React.FC = () => {
     if (!status.isProcessing || cancelPending) return;
     cancelRequestedRef.current = true;
     setCancelPending(true);
-    setStatus((current) => ({ ...current, message: 'Canceling after the current file step…' }));
+    setStatus((current) => ({ ...current, message: t("batch-pdf.canceling.after.the.current.file.step.52a454") }));
   };
 
   return (
     <ToolShell width="wide" centered={files.length === 0}>
       {/* Kept: the ZIP is the one thing the Operation control and the Process
           button do not say. */}
-      <ToolHeader title="Batch Processing" note="Every result is returned in one ZIP." />
+      <ToolHeader title={t("batch-pdf.batch.processing.36bf5b")} note={t("batch-pdf.every.result.is.returned.in.one.zip.5e9c36")} />
 
       <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
         <aside className="order-1 h-fit rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 sm:p-4 lg:order-1">
@@ -366,13 +371,11 @@ export const BatchPDF: React.FC = () => {
             <div className="mb-3">
               {files.length > 0 ? (
                 <label className="chef-target chef-pressable flex w-full cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-field)] border border-dashed border-[var(--border-strong)] px-4 text-sm font-semibold text-[var(--accent-text)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--focus-ring)]">
-                  <Plus aria-hidden size={18} />
-                  Add PDFs
-                  <input
+                  <Plus aria-hidden size={18} />{t("batch-pdf.add.pdfs.e2f591")}<input
                     type="file"
                     accept=".pdf,application/pdf"
                     multiple
-                    aria-label="Add PDFs to the batch"
+                    aria-label={t("batch-pdf.add.pdfs.to.the.batch.c7745d")}
                     className="sr-only"
                     onChange={(event) => {
                       const picked = Array.from(event.target.files ?? []) as File[];
@@ -382,12 +385,11 @@ export const BatchPDF: React.FC = () => {
                   />
                 </label>
               ) : (
-                <FileUpload onFilesSelected={addFiles} accept=".pdf,application/pdf" multiple label="Add PDFs to the batch" />
+                <FileUpload onFilesSelected={addFiles} accept=".pdf,application/pdf" multiple label={t("batch-pdf.add.pdfs.to.the.batch.c7745d")} />
               )}
             </div>
           )}
-          <label className="block text-sm font-bold text-[var(--text-body)]">Operation
-            <select
+          <label className="block text-sm font-bold text-[var(--text-body)]">{t("batch-pdf.operation.0f044f")}<select
               value={action}
               onChange={(event) => {
                 setAction(event.target.value as BatchAction);
@@ -404,8 +406,7 @@ export const BatchPDF: React.FC = () => {
           )}
 
           {action === 'split' && (
-            <label className="mt-3 block text-sm font-bold text-[var(--text-body)]">Pages per part
-              <input
+            <label className="mt-3 block text-sm font-bold text-[var(--text-body)]">{t("batch-pdf.pages.per.part.889bc1")}<input
                 type="number"
                 min={1}
                 max={1000}
@@ -421,8 +422,7 @@ export const BatchPDF: React.FC = () => {
             </label>
           )}
           {action === 'rotate' && (
-            <label className="mt-3 block text-sm font-bold text-[var(--text-body)]">Rotation
-              <select
+            <label className="mt-3 block text-sm font-bold text-[var(--text-body)]">{t("batch-pdf.rotation.57b5e2")}<select
                 value={rotation}
                 onChange={(event) => {
                   clearRunFeedback();
@@ -431,15 +431,14 @@ export const BatchPDF: React.FC = () => {
                 disabled={status.isProcessing}
                 className="chef-field mt-2 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <option value={90}>90° clockwise</option>
+                <option value={90}>{t("batch-pdf.90.clockwise.999bed")}</option>
                 <option value={180}>180°</option>
-                <option value={270}>90° counter-clockwise</option>
+                <option value={270}>{t("batch-pdf.90.counter.clockwise.6e82c5")}</option>
               </select>
             </label>
           )}
           {(action === 'protect' || action === 'unlock') && (
-            <label className="mt-3 block text-sm font-bold text-[var(--text-body)]">Password
-              <input
+            <label className="mt-3 block text-sm font-bold text-[var(--text-body)]">{t("batch-pdf.password.e7cf3e")}<input
                 type="password"
                 value={password}
                 onChange={(event) => {
@@ -450,12 +449,11 @@ export const BatchPDF: React.FC = () => {
                 disabled={status.isProcessing}
                 className="chef-field mt-2 disabled:cursor-not-allowed disabled:opacity-60"
               />
-              <span className="mt-1 block text-xs font-normal text-[var(--text-tertiary)]">Spaces are preserved exactly.</span>
+              <span className="mt-1 block text-xs font-normal text-[var(--text-tertiary)]">{t("batch-pdf.spaces.are.preserved.exactly.876f4a")}</span>
             </label>
           )}
           {action === 'watermark' && (
-            <label className="mt-3 block text-sm font-bold text-[var(--text-body)]">Watermark text
-              <input
+            <label className="mt-3 block text-sm font-bold text-[var(--text-body)]">{t("batch-pdf.watermark.text.9429e8")}<input
                 value={watermark}
                 onChange={(event) => {
                   clearRunFeedback();
@@ -471,11 +469,11 @@ export const BatchPDF: React.FC = () => {
             <div role="status" aria-live="polite" className="mt-3 rounded-[var(--radius-field)] bg-[var(--surface-sunken)] px-3 py-2.5">
               <div className="flex items-start justify-between gap-3 text-sm font-semibold text-[var(--text-body)]">
                 <span className="min-w-0 break-words">{status.message}</span>
-                <span className="shrink-0 tabular-nums">{status.progress}%</span>
+                <span className="shrink-0 tabular-nums">{formatPercent(status.progress)}</span>
               </div>
               <div
                 role="progressbar"
-                aria-label="Batch progress"
+                aria-label={t("batch-pdf.batch.progress.17a0e5")}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={status.progress}
@@ -492,9 +490,7 @@ export const BatchPDF: React.FC = () => {
             disabled={status.isProcessing || Boolean(validationMessage)}
             className="chef-target chef-pressable mt-3 inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-transparent bg-[var(--accent-rest)] px-4 text-sm font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:border-[var(--border-hairline)] disabled:bg-[var(--surface-sunken)] disabled:text-[var(--text-tertiary)] disabled:opacity-100"
           >
-            {status.isProcessing ? <Loader2 aria-hidden className="animate-spin" size={18} /> : <Files aria-hidden size={18} />}
-            Process {files.length} file{files.length === 1 ? '' : 's'}
-          </button>
+            {status.isProcessing ? <Loader2 aria-hidden className="animate-spin" size={18} /> : <Files aria-hidden size={18} />}{t("batch-pdf.message.cc8a61d63f", { count: files.length })}</button>
           {!status.isProcessing && validationMessage && files.length > 0 && (
             <p className="mt-2 text-sm text-[var(--text-secondary)]">{validationMessage}</p>
           )}
@@ -506,7 +502,7 @@ export const BatchPDF: React.FC = () => {
               className="chef-target chef-pressable mt-2 inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-4 text-sm font-semibold text-[var(--text-primary)] hover:border-[var(--accent-rest)] disabled:cursor-not-allowed disabled:opacity-55"
             >
               <XCircle aria-hidden size={18} />
-              {cancelPending ? 'Canceling…' : 'Cancel batch'}
+              {cancelPending ? t("batch-pdf.canceling.7d0901") : t("batch-pdf.cancel.batch.db540a")}
             </button>
           )}
         </aside>
@@ -523,10 +519,8 @@ export const BatchPDF: React.FC = () => {
               {/* "Files run from top to bottom" is what a numbered queue with
                   move-up and move-down controls already shows. */}
               <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
-                <h2 id="batch-queue-heading" className="text-sm font-bold text-[var(--text-primary)]">Ordered queue</h2>
-                <p className="type-footnote font-semibold text-[var(--text-secondary)]">
-                  {files.length} file{files.length === 1 ? '' : 's'} · {formatBytes(totalSize)}
-                </p>
+                <h2 id="batch-queue-heading" className="text-sm font-bold text-[var(--text-primary)]">{t("batch-pdf.ordered.queue.0d6495")}</h2>
+                <p className="type-footnote font-semibold text-[var(--text-secondary)]">{t("batch-pdf.message.ab18fb4c2c", { v2: formatBytes(totalSize), count: files.length })}</p>
               </div>
               <ol className="divide-y divide-[var(--border-hairline)] overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)]">
                 {files.map((file, index) => {
@@ -535,7 +529,7 @@ export const BatchPDF: React.FC = () => {
                     <li key={fileKey(file)} className="p-2.5 sm:p-3">
                       <div className="flex items-start gap-2.5">
                         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-[var(--accent-quiet)] text-sm font-bold text-[var(--accent-on-quiet)]">
-                          {index + 1}
+                          {formatNumber(index + 1)}
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="chef-filename text-sm font-semibold text-[var(--text-primary)]">{file.name}</p>
@@ -543,7 +537,7 @@ export const BatchPDF: React.FC = () => {
                         </div>
                         <button
                           type="button"
-                          aria-label={`Remove ${file.name}`}
+                          aria-label={t("batch-pdf.remove.9fc927", { v0: file.name })}
                           onClick={() => removeFile(file)}
                           disabled={status.isProcessing}
                           className="chef-target chef-pressable inline-flex shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--status-danger-quiet)] hover:text-[var(--status-danger-text)] disabled:cursor-not-allowed disabled:opacity-55"
@@ -559,8 +553,8 @@ export const BatchPDF: React.FC = () => {
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
-                            aria-label={`Move ${file.name} up`}
-                            title="Move up"
+                            aria-label={t("batch-pdf.move.up.6cabe2", { v0: file.name })}
+                            title={t("batch-pdf.move.up.c66feb")}
                             onClick={() => moveFile(index, index - 1)}
                             disabled={status.isProcessing || index === 0}
                             className="chef-hit-y chef-pressable inline-flex h-11 w-touch items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-55"
@@ -569,8 +563,8 @@ export const BatchPDF: React.FC = () => {
                           </button>
                           <button
                             type="button"
-                            aria-label={`Move ${file.name} down`}
-                            title="Move down"
+                            aria-label={t("batch-pdf.move.down.ab5f2b", { v0: file.name })}
+                            title={t("batch-pdf.move.down.40bb50")}
                             onClick={() => moveFile(index, index + 1)}
                             disabled={status.isProcessing || index === files.length - 1}
                             className="chef-hit-y chef-pressable inline-flex h-11 w-touch items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-55"
@@ -583,7 +577,7 @@ export const BatchPDF: React.FC = () => {
                       {itemStatus.phase === 'processing' && (
                         <div
                           role="progressbar"
-                          aria-label={`${file.name} progress`}
+                          aria-label={t("batch-pdf.progress.459332", { v0: file.name })}
                           aria-valuemin={0}
                           aria-valuemax={100}
                           aria-valuenow={itemStatus.progress}

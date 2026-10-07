@@ -42,3 +42,7 @@ pdf-chef-ios-*.png
 # Local PDF corpus used for editor QA runs (downloaded fixtures, not source)
 corpus/
 corpus2/
+
+# Local scratch documents and App Store Connect CLI reports; never committed.
+tmp/
+.asc/

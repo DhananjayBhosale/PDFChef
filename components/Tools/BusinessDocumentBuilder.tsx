@@ -1,3 +1,6 @@
+import { localizeError } from '../../services/i18n/errors.ts';
+import { formatDate, t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, Image as ImageIcon, Plus, Save, Trash2, X } from 'lucide-react';
 import { PDFPreviewModal } from '../UI/PDFPreviewModal';
@@ -11,7 +14,6 @@ import {
   BusinessDocumentValidationError,
   lineAmountOf,
   parseDocumentNumber,
-  documentWording,
   formatMoney,
   renderBusinessDocument,
   totalsOf,
@@ -78,7 +80,7 @@ const readRemembered = (): RememberedSender => {
 };
 
 const today = () =>
-  new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+  formatDate(new Date(), { day: 'numeric', month: 'long', year: 'numeric' });
 
 /**
  * A line as it is being typed, not as it is meant.
@@ -108,16 +110,21 @@ const Field: React.FC<{
   label: string;
   hint?: string;
   children: React.ReactNode;
-}> = ({ label, hint, children }) => (
+}> = ({ label, hint, children }) => { useI18n(); return (
   <label className="block">
     <span className="block text-sm font-semibold text-[var(--text-primary)]">{label}</span>
     {hint ? <span className="type-footnote mb-1.5 block text-[var(--text-secondary)]">{hint}</span> : null}
     <span className={hint ? 'block' : 'mt-1.5 block'}>{children}</span>
   </label>
-);
+); };
 
-export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> = ({ kind }) => {
-  const wording = documentWording(kind);
+export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> = ({ kind }: { kind: BusinessDocumentKind }) => {
+  useI18n();
+  const wording = {
+    title: t(`business.${kind}.title`), reference: t(`business.${kind}.reference`),
+    issued: t(`business.${kind}.issued`), settled: t(`business.${kind}.settled`),
+    recipient: t(`business.${kind}.recipient`), total: t(`business.${kind}.total`),
+  };
   const remembered = useMemo(readRemembered, []);
 
   const [sender, setSender] = useState<RememberedSender>(remembered);
@@ -188,7 +195,7 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
         isProcessing: false,
         progress: 0,
         message: '',
-        error: 'That picture could not be read. Try a JPG or PNG instead.',
+        error: t("business-document-builder.that.picture.could.not.be.read.try.6ca5a1"),
       });
     }
   };
@@ -201,7 +208,7 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
   }, [document]);
 
   const handlePreview = async () => {
-    setStatus({ isProcessing: true, progress: 40, message: `Drawing your ${wording.title.toLowerCase()}…` });
+    setStatus({ isProcessing: true, progress: 40, message: t(`business.${kind}.drawing`) });
     try {
       setPreview(await build());
       setStatus({ isProcessing: false, progress: 100, message: '' });
@@ -211,20 +218,28 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
         isProcessing: false,
         progress: 0,
         message: '',
-        error: error instanceof BusinessDocumentValidationError ? error.message : `This ${wording.title.toLowerCase()} could not be drawn. Check the amounts, then try again.`,
+        error: error instanceof BusinessDocumentValidationError ? localizeError(error) : t(`business.${kind}.cannotDraw`),
       });
     }
   };
 
   const handleSave = async () => {
-    setStatus({ isProcessing: true, progress: 40, message: `Drawing your ${wording.title.toLowerCase()}…` });
+    setStatus({ isProcessing: true, progress: 40, message: t(`business.${kind}.drawing`) });
     try {
       const file = await build();
-      await deliverBlob(file, file.name, 'application/pdf');
-      setStatus({ isProcessing: false, progress: 100, message: `${wording.title} ready.` });
+      const delivery = await deliverBlob(file, file.name, 'application/pdf');
+      if (delivery.status === 'preview') {
+        setStatus({
+          isProcessing: false,
+          progress: 100,
+          message: t(`business.${kind}.preview`),
+        });
+        return;
+      }
+      setStatus({ isProcessing: false, progress: 100, message: t(`business.${kind}.ready`) });
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        setStatus({ isProcessing: false, progress: 0, message: 'Save cancelled.' });
+        setStatus({ isProcessing: false, progress: 0, message: t("business-document-builder.save.cancelled.1d024f") });
         return;
       }
       console.error(error);
@@ -232,26 +247,22 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
         isProcessing: false,
         progress: 0,
         message: '',
-        error: error instanceof BusinessDocumentValidationError ? error.message : `This ${wording.title.toLowerCase()} could not be saved. Try Save again or choose another destination.`,
+        error: error instanceof BusinessDocumentValidationError ? localizeError(error) : t(`business.${kind}.cannotSave`),
       });
     }
   };
 
   return (
     <ToolShell>
-      <ToolHeader title={`${wording.title} maker`} />
+      <ToolHeader title={t(`business.${kind}.maker`)} />
 
       <div className="space-y-3">
         {/* -------------------------------------------------- your details -- */}
-        <ToolPanel as="section" aria-label="Your details">
-          <h2 className="mb-2.5 text-sm font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
-            Your details
-          </h2>
-          <p className="type-footnote mb-3 text-[var(--text-secondary)]">
-            Filled in for you next time, on this device only.
-          </p>
+        <ToolPanel as="section" aria-label={t("business-document-builder.your.details.c0bcd4")}>
+          <h2 className="mb-2.5 text-sm font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">{t("business-document-builder.your.details.c0bcd4")}</h2>
+          <p className="type-footnote mb-3 text-[var(--text-secondary)]">{t("business-document-builder.filled.in.for.you.next.time.on.833430")}</p>
           <div className="space-y-2.5">
-            <Field label="Your name or business">
+            <Field label={t("business-document-builder.your.name.or.business.5a3dbc")}>
               <input
                 className="chef-field"
                 value={sender.name}
@@ -259,7 +270,7 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
                 autoComplete="organization"
               />
             </Field>
-            <Field label="Address" hint="One line each, as you would write it on an envelope">
+            <Field label={t("business-document-builder.address.56ef8f")} hint={t("business-document-builder.one.line.each.as.you.would.write.8ae47d")}>
               <textarea
                 className="chef-field min-h-[76px] resize-y"
                 value={sender.address}
@@ -267,7 +278,7 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
               />
             </Field>
             <div className="grid gap-2.5 sm:grid-cols-2">
-              <Field label="Email">
+              <Field label={t("business-document-builder.email.969ccb")}>
                 <input
                   className="chef-field"
                   type="email"
@@ -276,7 +287,7 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
                   autoComplete="email"
                 />
               </Field>
-              <Field label="Phone">
+              <Field label={t("business-document-builder.phone.63dceb")}>
                 <input
                   className="chef-field"
                   type="tel"
@@ -287,25 +298,25 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
               </Field>
             </div>
             <div className="grid gap-2.5 sm:grid-cols-2">
-              <Field label="Money symbol" hint="A symbol like $ or £, or a code like USD">
+              <Field label={t("business-document-builder.money.symbol.e4928f")} hint={t("business-document-builder.a.symbol.like.or.or.a.code.4bfcd9")}>
                 <input
                   className="chef-field"
                   value={sender.currency}
                   onChange={(event) => setSender({ ...sender, currency: event.target.value })}
                 />
               </Field>
-              <Field label="Colour" hint="Used for the title and the total">
+              <Field label={t("business-document-builder.colour.3a9dfa")} hint={t("business-document-builder.used.for.the.title.and.the.total.0c24ce")}>
                 <span className="flex items-center gap-2">
                   <input
                     type="color"
-                    aria-label="Pick your colour"
+                    aria-label={t("business-document-builder.pick.your.colour.8b6765")}
                     className="chef-target h-11 w-14 shrink-0 cursor-pointer rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] p-1"
                     value={/^#[0-9a-f]{6}$/i.test(sender.accentColor) ? sender.accentColor : '#c0392b'}
                     onChange={(event) => setSender({ ...sender, accentColor: event.target.value })}
                   />
                   <input
                     className="chef-field"
-                    aria-label="Colour code"
+                    aria-label={t("business-document-builder.colour.code.3a26d6")}
                     value={sender.accentColor}
                     onChange={(event) => setSender({ ...sender, accentColor: event.target.value })}
                   />
@@ -313,10 +324,8 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
               </Field>
             </div>
             <div>
-              <span className="block text-sm font-semibold text-[var(--text-primary)]">Logo</span>
-              <span className="type-footnote mb-1.5 block text-[var(--text-secondary)]">
-                A JPG or PNG. It sits at the top, in place of your name.
-              </span>
+              <span className="block text-sm font-semibold text-[var(--text-primary)]">{t("business-document-builder.logo.d707dc")}</span>
+              <span className="type-footnote mb-1.5 block text-[var(--text-secondary)]">{t("business-document-builder.a.jpg.or.png.it.sits.at.fa7de7")}</span>
               <input
                 ref={logoInputRef}
                 type="file"
@@ -334,7 +343,7 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
                   icon={<ImageIcon aria-hidden size={16} />}
                   onClick={() => logoInputRef.current?.click()}
                 >
-                  {logo ? 'Change logo' : 'Choose a logo'}
+                  {logo ? t("business-document-builder.change.logo.a1ab83") : t("business-document-builder.choose.a.logo.6c5e0f")}
                 </Button>
                 {logo ? (
                   <>
@@ -348,9 +357,7 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
                         setLogo(null);
                         setLogoName('');
                       }}
-                    >
-                      Remove
-                    </Button>
+                    >{t("business-document-builder.remove.c3812f")}</Button>
                   </>
                 ) : null}
               </div>
@@ -364,14 +371,14 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
             {wording.recipient}
           </h2>
           <div className="space-y-2.5">
-            <Field label="Name">
+            <Field label={t("business-document-builder.name.dcd1d5")}>
               <input
                 className="chef-field"
                 value={recipient.name}
                 onChange={(event) => setRecipient({ ...recipient, name: event.target.value })}
               />
             </Field>
-            <Field label="Address">
+            <Field label={t("business-document-builder.address.56ef8f")}>
               <textarea
                 className="chef-field min-h-[76px] resize-y"
                 value={recipient.address}
@@ -379,7 +386,7 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
               />
             </Field>
             <div className="grid gap-2.5 sm:grid-cols-2">
-              <Field label="Email">
+              <Field label={t("business-document-builder.email.969ccb")}>
                 <input
                   className="chef-field"
                   type="email"
@@ -387,7 +394,7 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
                   onChange={(event) => setRecipient({ ...recipient, email: event.target.value })}
                 />
               </Field>
-              <Field label="Phone">
+              <Field label={t("business-document-builder.phone.63dceb")}>
                 <input
                   className="chef-field"
                   type="tel"
@@ -400,12 +407,10 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
         </ToolPanel>
 
         {/* ------------------------------------------------- the numbers --- */}
-        <ToolPanel as="section" aria-label="Dates and numbering">
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
-            Dates and numbering
-          </h2>
+        <ToolPanel as="section" aria-label={t("business-document-builder.dates.and.numbering.128e9a")}>
+          <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">{t("business-document-builder.dates.and.numbering.128e9a")}</h2>
           <div className="grid gap-2.5 sm:grid-cols-2">
-            <Field label={wording.reference} hint="Anything you like, as long as you do not reuse it">
+            <Field label={wording.reference} hint={t("business-document-builder.anything.you.like.as.long.as.you.fa8131")}>
               <input
                 className="chef-field"
                 value={reference}
@@ -427,7 +432,7 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
               />
             </Field>
             {kind === 'receipt' ? (
-              <Field label="Paid by" hint="Card, cash, bank transfer">
+              <Field label={t("business-document-builder.paid.by.a891cb")} hint={t("business-document-builder.card.cash.bank.transfer.348c71")}>
                 <input
                   className="chef-field"
                   value={paymentMethod}
@@ -439,26 +444,24 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
         </ToolPanel>
 
         {/* ---------------------------------------------------- the lines -- */}
-        <ToolPanel as="section" aria-label="What it is for">
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
-            What it is for
-          </h2>
+        <ToolPanel as="section" aria-label={t("business-document-builder.what.it.is.for.1ad944")}>
+          <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">{t("business-document-builder.what.it.is.for.1ad944")}</h2>
           <div className="space-y-3">
             {items.map((item, index) => (
               <div
                 key={index}
                 className="rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)] p-2.5"
               >
-                <Field label={`Line ${index + 1}`}>
+                <Field label={t("business-document-builder.line.257307", { v0: index + 1 })}>
                   <input
                     className="chef-field"
-                    placeholder="What you did, or what you sold"
+                    placeholder={t("business-document-builder.what.you.did.or.what.you.sold.8b241f")}
                     value={item.description}
                     onChange={(event) => setItem(index, { description: event.target.value })}
                   />
                 </Field>
                 <div className="mt-2.5 grid grid-cols-[1fr_1fr_auto] items-end gap-2">
-                  <Field label="How many">
+                  <Field label={t("business-document-builder.how.many.e2a6ff")}>
                     <input
                       className="chef-field"
                       inputMode="decimal"
@@ -466,7 +469,7 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
                       onChange={(event) => setItem(index, { quantity: event.target.value })}
                     />
                   </Field>
-                  <Field label="Price each">
+                  <Field label={t("business-document-builder.price.each.df302a")}>
                     <input
                       className="chef-field"
                       inputMode="decimal"
@@ -476,13 +479,13 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
                   </Field>
                   <Button
                     tone="quiet"
-                    aria-label={`Remove line ${index + 1}`}
+                    aria-label={t("business-document-builder.remove.line.fe6393", { v0: index + 1 })}
                     icon={<Trash2 aria-hidden size={18} />}
                     onClick={() => setItems((current) =>
                       current.length === 1 ? [blankItem()] : current.filter((_, at) => at !== index))}
                   />
                 </div>
-                <p className="type-footnote mt-2 text-right text-[var(--text-secondary)]">
+                <p className="type-footnote mt-2 text-end text-[var(--text-secondary)]">
                   {formatMoney(lineAmountOf(itemOf(item)), sender.currency)}
                 </p>
               </div>
@@ -491,20 +494,18 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
               icon={<Plus aria-hidden size={16} />}
               onClick={() => setItems((current) => [...current, blankItem()])}
               block
-            >
-              Add another line
-            </Button>
+            >{t("business-document-builder.add.another.line.f2daca")}</Button>
           </div>
 
           <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
-            <Field label="Tax name" hint="VAT, GST, Sales tax — or leave it blank">
+            <Field label={t("business-document-builder.tax.name.ae6611")} hint={t("business-document-builder.vat.gst.sales.tax.or.leave.it.56a53b")}>
               <input
                 className="chef-field"
                 value={sender.taxLabel}
                 onChange={(event) => setSender({ ...sender, taxLabel: event.target.value })}
               />
             </Field>
-            <Field label="Tax %" hint="Leave blank for no tax">
+            <Field label={t("business-document-builder.tax.ce793a")} hint={t("business-document-builder.leave.blank.for.no.tax.044e69")}>
               <input
                 className="chef-field"
                 inputMode="decimal"
@@ -516,12 +517,12 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
 
           <dl className="mt-3 space-y-1 rounded-[var(--radius-field)] bg-[var(--surface-sunken)] p-3 text-sm">
             <div className="flex justify-between">
-              <dt className="text-[var(--text-secondary)]">Subtotal</dt>
+              <dt className="text-[var(--text-secondary)]">{t("business-document-builder.subtotal.8c0f2c")}</dt>
               <dd className="tabular font-medium">{formatMoney(totals.subtotal, sender.currency)}</dd>
             </div>
             {totals.tax ? (
               <div className="flex justify-between">
-                <dt className="text-[var(--text-secondary)]">{sender.taxLabel || 'Tax'}</dt>
+                <dt className="text-[var(--text-secondary)]">{sender.taxLabel || t("business-document-builder.tax.47e288")}</dt>
                 <dd className="tabular font-medium">{formatMoney(totals.tax, sender.currency)}</dd>
               </div>
             ) : null}
@@ -533,8 +534,8 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
         </ToolPanel>
 
         {/* -------------------------------------------------------- notes -- */}
-        <ToolPanel as="section" aria-label="Notes">
-          <Field label="Notes" hint="Payment terms, a thank you, anything else worth saying">
+        <ToolPanel as="section" aria-label={t("business-document-builder.notes.8a7525")}>
+          <Field label={t("business-document-builder.notes.8a7525")} hint={t("business-document-builder.payment.terms.a.thank.you.anything.else.113c30")}>
             <textarea
               className="chef-field min-h-[88px] resize-y"
               value={notes}
@@ -544,18 +545,14 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
         </ToolPanel>
 
         <div className="grid gap-2 sm:grid-cols-2">
-          <Button icon={<Eye aria-hidden size={18} />} onClick={() => void handlePreview()} block>
-            See it first
-          </Button>
+          <Button icon={<Eye aria-hidden size={18} />} onClick={() => void handlePreview()} block>{t("business-document-builder.see.it.first.04adbf")}</Button>
           <Button
             tone="primary"
             icon={<Save aria-hidden size={18} />}
             busy={status.isProcessing}
             onClick={() => void handleSave()}
             block
-          >
-            Save {wording.title.toLowerCase()}
-          </Button>
+          >{t(`business.${kind}.save`)}</Button>
         </div>
       </div>
 
@@ -573,6 +570,6 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
   );
 };
 
-export const CreateInvoice: React.FC = () => <BusinessDocumentBuilder kind="invoice" />;
-export const CreateReceipt: React.FC = () => <BusinessDocumentBuilder kind="receipt" />;
-export const CreateQuote: React.FC = () => <BusinessDocumentBuilder kind="quote" />;
+export const CreateInvoice: React.FC = () => { useI18n(); return <BusinessDocumentBuilder kind="invoice" />; };
+export const CreateReceipt: React.FC = () => { useI18n(); return <BusinessDocumentBuilder kind="receipt" />; };
+export const CreateQuote: React.FC = () => { useI18n(); return <BusinessDocumentBuilder kind="quote" />; };

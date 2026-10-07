@@ -1,0 +1,52 @@
+{
+  "appLocale": "pt-PT",
+  "appleLocale": "pt-PT",
+  "googleLocale": "pt-PT",
+  "apple": {
+    "name": "PDF Chef",
+    "subtitle": "Editar, juntar e comprimir PDF",
+    "promotionalText": "Leia, edite e organize PDFs no seu dispositivo. Junte ficheiros, faça a gestão de páginas e adicione uma assinatura manuscrita.",
+    "description": "O PDF Chef ajuda-o a ler, editar, juntar, dividir, comprimir e assinar PDFs no seu dispositivo.\n\nOrganize páginas, adicione texto e imagens, insira uma assinatura manuscrita, adicione marcas de água ou números de página e proteja PDFs com palavra-passe. Converta imagens e documentos compatíveis e extraia texto. Os resultados dependem do ficheiro de origem e da ferramenta selecionada.\n\nO processamento normal de PDFs é executado no seu dispositivo. Os seus documentos não são enviados para um servidor do PDF Chef para processamento. As ferramentas offline permanecem disponíveis após o carregamento dos respetivos recursos.\n\nO PDF Chef não requer uma conta. Reveja o seu resultado antes de o partilhar ou exportar.\n\nNo iOS, as primeiras cinco tarefas concluídas com êxito em cada período rotativo de tolerância de sete dias são tarefas completas que pode guardar, partilhar e exportar. O período tem início com a primeira tarefa concluída com êxito. Após cinco tarefas, o processamento e a pré-visualização continuam disponíveis, mas guardar, partilhar e exportar requerem o Pro até à reposição da tolerância.\n\nO Pro Mensal renova-se automaticamente até ser cancelado. O Pro Vitalício é uma compra única, não uma subscrição. Ambas as opções suportam a Partilha com a família da Apple. Os preços e os detalhes de compra são apresentados na app antes de comprar. Restaure compras a partir das Definições.\n\nTerms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+    "whatsNew": "Versão {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Mensal",
+      "description": "Exportações completas. Renova até cancelar."
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Vitalício",
+      "description": "Exportações completas. Compra única."
+    },
+    "screenshot": {
+      "1": "As suas ferramentas de PDF num só lugar",
+      "2": "Edite texto e adicione imagens",
+      "3": "Junte ficheiros e organize páginas",
+      "4": "Pré-visualize antes de guardar",
+      "5": "Adicione a sua assinatura manuscrita",
+      "6": "Trabalhe no seu dispositivo"
+    },
+    "keywords": "dividir,digitalizar,assinar,converter,leitor,marca de água,palavra-passe,desbloquear"
+  },
+  "google": {
+    "name": "PDF Chef",
+    "shortDescription": "Edite, junte, comprima e assine PDFs no seu dispositivo.",
+    "fullDescription": "O PDF Chef ajuda-o a ler, editar, juntar, dividir, comprimir e assinar PDFs no seu dispositivo.\n\nOrganize páginas, adicione texto e imagens, insira uma assinatura manuscrita, adicione marcas de água ou números de página e proteja PDFs com palavra-passe. Converta imagens e documentos compatíveis e extraia texto. Os resultados dependem do ficheiro de origem e da ferramenta selecionada.\n\nO processamento normal de PDFs é executado no seu dispositivo. Os seus documentos não são enviados para um servidor do PDF Chef para processamento. As ferramentas offline permanecem disponíveis após o carregamento dos respetivos recursos.\n\nO PDF Chef não requer uma conta. Reveja o seu resultado antes de o partilhar ou exportar.",
+    "whatsNew": "Versão {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Mensal",
+      "description": "Guarde, partilhe e exporte todos os resultados. Renova mensalmente até ser cancelado.",
+      "benefit": "Guarde e partilhe todos os resultados"
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Vitalício",
+      "description": "Guarde, partilhe e exporte todos os resultados com uma compra única."
+    },
+    "screenshot": {
+      "1": "As suas ferramentas de PDF num só lugar",
+      "2": "Edite texto e adicione imagens",
+      "3": "Junte ficheiros e organize páginas",
+      "4": "Pré-visualize antes de guardar",
+      "5": "Adicione a sua assinatura manuscrita",
+      "6": "Trabalhe no seu dispositivo"
+    }
+  }
+}

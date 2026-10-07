@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import english from '../../services/i18n/en-US.ts';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
@@ -14,6 +15,14 @@ const blockLayer = read('components/Tools/PdfTextBlockLayer.tsx');
 const paragraphInspector = read('components/Tools/PdfParagraphInspector.tsx');
 const findReplace = read('components/Tools/PdfFindReplace.tsx');
 const shell = read('components/Layout/AppShell.tsx');
+
+// Copy contracts follow the catalog keys actually referenced by the UI. Geometry contracts
+// continue to inspect the implementation itself. Missing keys are also checked globally.
+const localizedCopy = (source: string): string[] => Object.entries(english)
+  .filter(([key]) => source.includes(JSON.stringify(key)) || source.includes(`'${key}'`))
+  .flatMap(([, value]) => typeof value === 'string' ? [value] : Object.values(value));
+const copyText = (source: string) => localizedCopy(source).join('\n');
+
 
 test('Edit PDF runs inside the data router required by the navigation blocker', () => {
   assert.match(app, /createBrowserRouter/);
@@ -60,14 +69,16 @@ test('added elements support movement and resizing from the keyboard', () => {
   assert.match(editor, /if \(clampedWidth === width && clampedHeight === height\) return/);
   assert.equal((editor.match(/if \(!event\.repeat\) onBeginChange\(\)/g) ?? []).length, 2);
   assert.match(editor, /onKeyDown=\{handleResizeKeyDown\}/);
-  assert.match(editor, /aria-label="Resize selected element with arrow keys"/);
-  assert.match(editor, /use arrow keys to move/);
+  assert.match(editor, /aria-label=\{t\("edit-pdf\.resize\.selected\.element\.with\.arrow\.keys\.2e1370"\)\}/);
+  assert.match(copyText(editor), /Resize selected element with arrow keys/);
+  assert.match(editor, /elementAnnouncement\(element\.type/);
+  assert.match(english['editor.text.selectedAria'], /use arrow keys to move/);
 });
 
 test('selected text annotations edit directly on the page with one history snapshot per focus session', () => {
   assert.match(editor, /const inlineTextEditorRef = useRef<HTMLTextAreaElement>\(null\)/);
   assert.match(editor, /inlineTextEditor\.setSelectionRange\(0, inlineTextEditor\.value\.length\)/);
-  assert.match(editor, /aria-label=\{`Edit text on page \$\{element\.pageIndex \+ 1\}`\}/);
+  assert.match(editor, /aria-label=\{t\("edit-pdf\.edit\.text\.on\.page\.4a02ed", \{ v0: element\.pageIndex \+ 1 \}\)\}/);
   assert.match(editor, /if \(!inlineTextChanged\.current\) \{\s*onBeginChange\(\);\s*inlineTextChanged\.current = true;/);
   assert.match(editor, /onUpdate\(element\.id, \{ content: event\.currentTarget\.value \}\)/);
   assert.match(editor, /onBlur=\{\(event\) => \{\s*inlineTextChanged\.current = false;\s*event\.currentTarget\.scrollLeft = 0;\s*event\.currentTarget\.scrollTop = 0;/);
@@ -91,7 +102,7 @@ test('paragraphs, not single words, are the editable unit on the page', () => {
   assert.match(editor, /<PdfTextBlockLayer/);
   assert.match(blockLayer, /contentEditable=\{enabled \? 'plaintext-only' : false\}/);
   assert.match(blockLayer, /data-testid="pdf-text-block"/);
-  assert.match(blockLayer, /aria-label=\{`Paragraph on page \$\{block\.pageIndex \+ 1\}/);
+  assert.match(blockLayer, /aria-label=\{t\("pdf-text-block-layer\.paragraph\.on\.page\.b6bd50", \{ v0: block\.pageIndex \+ 1/);
   assert.match(blockLayer, /role="textbox"/);
   assert.match(blockLayer, /aria-multiline="true"/);
   // The word-at-a-time targets and their replacement drafts are gone entirely.
@@ -119,14 +130,14 @@ test('each run keeps the face the PDF drew it in, in the overlay and on export',
   assert.match(blockLayer, /const fontsByKey = new Map<string, ResolvedFont>\(\)/);
   assert.match(blockLayer, /export const readStyledSegments/);
   // The edited paragraph is reported back as styled segments so a redraw can reproduce them.
-  assert.match(blockLayer, /readStyledSegments\(element, block\.fontKey, keepsNonBreakingSpace\)/);
+  assert.match(blockLayer, /readStyledSegments\(element, block\.fontKey, keepsNonBreakingSpace, block\.fontSize\)/);
   // Browsers swap in a non-breaking space while typing; a document that never used one gets a
   // plain space back, so an untouched paragraph does not read as edited.
   assert.match(blockLayer, /const keepsNonBreakingSpace = block\.text\.includes/);
   assert.doesNotMatch(editor, /wrapStyledText\(/, 'existing text may only break at explicit newlines');
   assert.match(editor, /lineOrigins: reflow\.lineOrigins/);
   assert.match(read('services/pdfDocument.ts'), /lineOrigins: edit\.lineOrigins/);
-  assert.match(editor, /const toFace = \(fontKey: string\): ParagraphFace/);
+  assert.match(editor, /const toFace = \(fontKey: string, text(?: = edit\.text|: string)\): ParagraphFace/);
 });
 
 test('leaving a page mid-render stops the draw instead of letting it finish', () => {
@@ -139,13 +150,13 @@ test('leaving a page mid-render stops the draw instead of letting it finish', ()
 test('a rewrite that the document cannot express falls back to a clean redraw first', () => {
   // A rewrite in place uses the document's own font, so only new characters can be a problem
   // there; a redraw is checked run by run, against the face that will actually draw each one.
-  assert.match(editor, /const unencodable = plan\.mode === 'reflow'/);
-  assert.match(editor, /unencodableCharacters\(edit\.text, FALLBACK_RESOLVED_FONT\)/);
+  assert.match(editor, /const unencodable = devanagari \? \[\] : plan\.mode === 'reflow'/);
+  assert.match(editor, /unencodableCharacters\(segment\.text, FALLBACK_RESOLVED_FONT\)/);
   assert.match(editor, /unencodableCharacters\(introduced, font \?\? FALLBACK_RESOLVED_FONT, descriptor\)/);
   // The redraw is aimed at the paragraphs that actually refused, not at every edited one.
   assert.match(editor, /buildParagraphSaveEdits\(\{ forceReflow: stubborn, plans: \[\.\.\.redrawable\] \}\)/);
   assert.match(editor, /buildParagraphSaveEdits\(\{ forceReflow: stubborn, deleteOriginalRuns: false, plans: \[\.\.\.redrawable\] \}\)/);
-  assert.match(editor, /your old wording is still in the file underneath the new text/);
+  assert.match(copyText(editor), /your old wording is still in the file underneath the new text/);
 });
 
 test('one paragraph the engine will not rewrite does not redraw the others', () => {
@@ -224,17 +235,19 @@ test('a paragraph edit states whether it rewrites the PDF or redraws the paragra
   assert.match(editor, /planBlockEdit\(block, edit\.text/);
   assert.match(editor, /mode: 'direct'/);
   assert.match(editor, /mode: 'reflow'/);
-  assert.match(paragraphInspector, /goes straight into the document/);
-  assert.match(paragraphInspector, /redrawn with a matching typeface/);
-  assert.match(paragraphInspector, /line breaks are kept/);
+  assert.match(copyText(paragraphInspector), /goes straight into the document/);
+  assert.match(copyText(paragraphInspector), /redrawn with a matching typeface/);
+  assert.match(copyText(paragraphInspector), /line breaks are kept/);
   assert.match(paragraphInspector, /data-testid="pdf-paragraph-provenance"/);
   // "Original" is a selectable state, so a paragraph is never silently restyled.
-  assert.match(paragraphInspector, /\{ value: 'original', label: 'Original' \}/);
+  assert.match(paragraphInspector, /\{ value: 'original', get label\(\) \{ return t\("pdf-paragraph-inspector\.original\./);
+  assert.ok(localizedCopy(paragraphInspector).includes('Original'));
   // A phone lays the controls out in two rows rather than a strip that scrolls sideways.
   assert.match(paragraphInspector, /\{compact \? \(\s*<div className="flex flex-col gap-1\.5">/);
   assert.doesNotMatch(paragraphInspector, /overflow-x-auto/);
   assert.match(paragraphInspector, /prettyFontName\(descriptor\)/);
-  assert.match(paragraphInspector, /Substituted \$\{font\?\.klass/);
+  assert.match(copyText(paragraphInspector), /Substituted \{v0\}/);
+  assert.match(paragraphInspector, /font\.class\./);
   // A paragraph that cannot be saved says so from anywhere, not only while it is selected.
   assert.match(editor, /const blockedNotice = blockedParagraphs\.length > 0/);
   assert.equal((editor.match(/\{blockedNotice\}/g) ?? []).length, 2);
@@ -261,7 +274,8 @@ test('find and replace covers the whole document, not just the visible page', ()
   assert.match(findReplace, /data-testid="pdf-find-replace"/);
   assert.match(findReplace, /data-testid="pdf-find-count"/);
   // Replace-all reports what it did, because it can change pages the reader never opened.
-  assert.match(editor, /Replaced \$\{total\.toLocaleString\(\)\}/);
+  assert.match(editor, /t\('editor\.replaced\.multipleParagraphs', \{ count: total, paragraphCount: updates\.length \}\)/);
+  assert.match(copyText(editor), /Replaced \{count\}/);
   // Every match on the page is painted at once, through the browser's highlight registry rather
   // than by wrapping matches in elements the browser owns while someone types.
   assert.match(blockLayer, /export const paintFindHighlights/);
@@ -283,7 +297,8 @@ test('the find bar stacks its rows on a phone so the query field keeps its width
 test('the one action a reader cannot guess at keeps its word on every phone', () => {
   // Save is spelled out at every width. A lone disk glyph is the icon a reader who did not grow up
   // with it has to guess at, and guessing wrong here means losing the edit.
-  assert.match(editor, /aria-label="Save"[\s\S]*?<span>Save<\/span>/);
+  assert.match(editor, /aria-label=\{t\("edit-pdf\.save\.1509f5"\)\}[\s\S]*?<span>\{t\("edit-pdf\.save\.1509f5"\)\}<\/span>/);
+  assert.equal(english["edit-pdf.save.1509f5"], "Save");
   assert.doesNotMatch(editor, /max-\[400px\]:sr-only/, 'the Save label must not be hidden on narrow phones');
   // The badge is what gives up its width instead; it says something useful but nothing urgent.
   assert.match(editor, /Badge tone="caution" className="shrink-0 max-\[400px\]:hidden"/);
@@ -291,18 +306,18 @@ test('the one action a reader cannot guess at keeps its word on every phone', ()
 
 test('a page that is only a picture says so and offers the two ways forward', () => {
   assert.match(editor, /const scannedNotice = pagesWithoutText\.includes\(targetPageIndex\)/);
-  assert.match(editor, /is a picture, so its words cannot be edited/);
-  assert.match(editor, /Add a text box over\s+it instead/);
+  assert.match(copyText(editor), /is a picture, so its words cannot be edited/);
+  assert.match(copyText(editor), /Add a text box over\s+it instead/);
   assert.match(editor, /to="\/ocr"/);
   assert.equal((editor.match(/\{scannedNotice\}/g) ?? []).length, 2);
 });
 
 test('an edit the document cannot draw is refused while it is being typed', () => {
-  assert.match(editor, /const unencodable = plan\.mode === 'reflow'/);
-  assert.match(editor, /no font available here can draw/);
+  assert.match(editor, /const unencodable = devanagari \? \[\] : plan\.mode === 'reflow'/);
+  assert.match(copyText(editor), /no font available here can draw/);
   // A character the reader did not type is one only the document's own font ever had, and the
   // paragraph can still be shortened or replaced even though it cannot be made longer.
-  assert.match(editor, /shortened or replaced in place, but not made longer/);
+  assert.match(copyText(editor), /shortened or replaced in place, but not made longer/);
   // A document with no usable character map decodes to invisible controls; quoting those verbatim
   // produced refusals that read as "cannot be saved:      can only be drawn by".
   assert.match(read('services/pdfFontResolution.ts'), /export const describeCharacter = /);
@@ -310,7 +325,9 @@ test('an edit the document cannot draw is refused while it is being typed', () =
   // Typography with a plain equivalent is written as that, rather than refused.
   assert.match(read('services/pdfFontResolution.ts'), /export const substituteForStandardFont/);
   assert.match(read('services/pdfDocument.ts'), /layoutParagraphLines\(edit\.lines/);
-  assert.match(read('services/pdfParagraphLayout.ts'), /exportText\(piece\.text\)/);
+  assert.match(read('services/pdfParagraphLayout.ts'), /normalizeText\(piece\.text, piece\.face\)/);
+  assert.match(read('services/pdfParagraphLayout.ts'), /piece\.face\.embeddedFontId \? normalizeParagraphLineBreaks\(piece\.text\)/);
+  assert.match(read('services/pdfParagraphLayout.ts'), /: exportText\(piece\.text\)/);
   // The refusal is an answer the editor chose, so it is not also logged as a fault.
   assert.match(editor, /const chosen = error instanceof Error && error\.name === 'PdfChefRefusal'/);
   assert.match(editor, /if \(!chosen && message !== PDF_EDIT_PERMISSION_MESSAGE\)/);
@@ -318,14 +335,14 @@ test('an edit the document cannot draw is refused while it is being typed', () =
 
 test('a password-protected PDF is explained rather than reported as broken', () => {
   assert.match(editor, /PasswordException/);
-  assert.match(editor, /password protected/);
-  assert.match(editor, /Unlock PDF tool/);
+  assert.match(copyText(editor), /password protected/);
+  assert.match(copyText(editor), /Unlock PDF tool/);
   // A damaged file is not a mystery either.
   assert.match(editor, /InvalidPDFException/);
-  assert.match(editor, /Repair PDF tool/);
+  assert.match(copyText(editor), /Repair PDF tool/);
   // A document that permits reading but not changes says so on open, not after the work is done.
   assert.match(editor, /doc\.getPermissions\?\.\(\)/);
-  assert.match(editor, /allows reading but not changes/);
+  assert.match(copyText(editor), /allows reading but not changes/);
   assert.match(read('services/pdfDocument.ts'), /PDF_EDIT_PERMISSION_MESSAGE/);
 });
 
@@ -386,10 +403,8 @@ test('what the editor tells a reader is said in their words, not ours', () => {
   // Someone correcting a name on a form should not have to know how a PDF is built. These are the
   // sentences everyone meets — the plan shown while typing, and the result shown after saving.
   const ours = /text object|content stream|glyph|encoding|serializ|reflow|raster|operator|CID|subset/i;
-  const shown = [
-    ...paragraphInspector.matchAll(/^\s*[?:]\s*'([^']{40,})'/gm),
-    ...editor.matchAll(/`(Edited PDF ready[^`]{20,})`/g),
-  ].map(match => match[1]);
+  const shown = [...localizedCopy(paragraphInspector), ...localizedCopy(editor)]
+    .filter(sentence => /^(?:Your change |This paragraph will be redrawn|Edited PDF ready)/.test(sentence));
   assert.ok(shown.length >= 3, `expected to find the reader-facing sentences, found ${shown.length}`);
   shown.forEach(sentence => {
     assert.doesNotMatch(sentence, ours, `this is shown to a reader and uses our vocabulary: ${sentence.slice(0, 90)}`);
@@ -424,10 +439,8 @@ test('a refusal is one short sentence that ends with what to do instead', () => 
   // Someone who cannot edit a paragraph needs two things: to know it, and to know the way round it.
   // Why the file will not take the change is about font encodings, which is ours to log, not theirs
   // to read.
-  const shown = [
-    ...editor.matchAll(/`?(This paragraph[^`'\n]*cannot be changed[^`'\n]*)`?/g),
-    ...paragraphInspector.matchAll(/'(This paragraph[^']*)'/g),
-  ].map(match => match[1]);
+  const shown = [...localizedCopy(editor), ...localizedCopy(paragraphInspector)]
+    .filter(sentence => /^This paragraph.*cannot be changed/.test(sentence));
   assert.ok(shown.length >= 2, `expected the refusals, found ${shown.length}`);
   shown.forEach((sentence) => {
     assert.match(sentence, /text box/, `a refusal must say what to do instead: ${sentence}`);
@@ -452,7 +465,8 @@ test('save marks only its captured edits clean and prevents concurrent exports',
 
 test('clearance failure cannot claim the original wording was removed', () => {
   const service = read('services/pdfDocument.ts');
-  assert.match(service, /if \(cleared\.uncleared > 0\) \{[\s\S]*?throw new Error\('Direct text edit failed:/);
+  assert.match(service, /if \(cleared\.uncleared > 0\) \{[\s\S]*?throw new LocalizedError\("pdf-document\.direct\.text\.edit\.failed\.some\.original\.text\.0b7352"\)/);
+  assert.match(english["pdf-document.direct.text.edit.failed.some.original.text.0b7352"], /^Direct text edit failed:/);
 });
 
 test('document form controls retain paper colours when the app uses dark appearance', () => {

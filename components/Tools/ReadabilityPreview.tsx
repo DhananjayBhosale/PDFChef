@@ -1,3 +1,7 @@
+import { formatPercent } from '../../services/i18n/core.ts';
+import { formatBytes as formatSize } from '../UI/format';
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useId, useState, useRef, useCallback, useMemo } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
@@ -24,7 +28,21 @@ interface Props {
   onConfirm: (config: AdaptiveConfig) => void;
 }
 
+type TouchGesture =
+  | { kind: 'pan'; startX: number; startY: number; startPan: { x: number; y: number }; currentPan: { x: number; y: number } }
+  | {
+      kind: 'pinch';
+      startDistance: number;
+      startZoom: number;
+      startPan: { x: number; y: number };
+      startMidpoint: { x: number; y: number };
+      paneCenter: { x: number; y: number };
+      currentZoom: number;
+      currentPan: { x: number; y: number };
+    };
+
 export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initialConfig, isTextHeavy, onClose, onConfirm }) => {
+  useI18n();
   const [images, setImages] = useState<{ original: string; compressed: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -48,6 +66,7 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
   const dragStartRef = useRef<{ clientX: number; clientY: number; panX: number; panY: number } | null>(null);
+  const touchGestureRef = useRef<TouchGesture | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const reduceMotion = useReducedMotion();
@@ -255,7 +274,7 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
   }, [handleWheelZoom]);
 
   const startPan = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (zoom <= 1) return;
+    if (zoom <= 1 || event.pointerType === 'touch') return;
     setIsPanning(true);
     dragStartRef.current = {
       clientX: event.clientX,
@@ -266,7 +285,7 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
   };
 
   useEffect(() => {
-    if (!isPanning) return;
+    if (!isPanning || !dragStartRef.current) return;
 
     const onMove = (event: PointerEvent) => {
       const dragStart = dragStartRef.current;
@@ -295,6 +314,77 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
       window.removeEventListener('pointerup', onUp);
     };
   }, [clampPanToBounds, isPanning]);
+
+  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (!images) return;
+    if (event.touches.length === 2) {
+      const [first, second] = [event.touches[0], event.touches[1]];
+      const rect = event.currentTarget.getBoundingClientRect();
+      touchGestureRef.current = {
+        kind: 'pinch',
+        startDistance: Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY),
+        startZoom: zoom,
+        startPan: pan,
+        startMidpoint: { x: (first.clientX + second.clientX) / 2, y: (first.clientY + second.clientY) / 2 },
+        paneCenter: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+        currentZoom: zoom,
+        currentPan: pan,
+      };
+      setIsPanning(true);
+    } else if (event.touches.length === 1 && zoom > 1) {
+      touchGestureRef.current = {
+        kind: 'pan',
+        startX: event.touches[0].clientX,
+        startY: event.touches[0].clientY,
+        startPan: pan,
+        currentPan: pan,
+      };
+      setIsPanning(true);
+    }
+  };
+
+  const handleTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+    const gesture = touchGestureRef.current;
+    if (!gesture) return;
+    if (gesture.kind === 'pinch' && event.touches.length === 2 && gesture.startDistance > 0) {
+      const [first, second] = [event.touches[0], event.touches[1]];
+      const distance = Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+      const nextZoom = Math.max(1, Math.min(10, gesture.startZoom * distance / gesture.startDistance));
+      const midpoint = { x: (first.clientX + second.clientX) / 2, y: (first.clientY + second.clientY) / 2 };
+      const scale = nextZoom / gesture.startZoom;
+      const nextPan = clampPanToBounds({
+        x: midpoint.x - gesture.paneCenter.x - (gesture.startMidpoint.x - gesture.paneCenter.x - gesture.startPan.x) * scale,
+        y: midpoint.y - gesture.paneCenter.y - (gesture.startMidpoint.y - gesture.paneCenter.y - gesture.startPan.y) * scale,
+      }, nextZoom);
+      gesture.currentZoom = nextZoom;
+      gesture.currentPan = nextPan;
+      setZoom(nextZoom);
+      setPan(nextPan);
+    } else if (gesture.kind === 'pan' && event.touches.length === 1) {
+      const nextPan = clampPanToBounds({
+        x: gesture.startPan.x + event.touches[0].clientX - gesture.startX,
+        y: gesture.startPan.y + event.touches[0].clientY - gesture.startY,
+      });
+      gesture.currentPan = nextPan;
+      setPan(nextPan);
+    }
+  };
+
+  const handleTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    const gesture = touchGestureRef.current;
+    if (event.touches.length === 1 && gesture?.kind === 'pinch' && gesture.currentZoom > 1) {
+      touchGestureRef.current = {
+        kind: 'pan',
+        startX: event.touches[0].clientX,
+        startY: event.touches[0].clientY,
+        startPan: gesture.currentPan,
+        currentPan: gesture.currentPan,
+      };
+      return;
+    }
+    touchGestureRef.current = null;
+    setIsPanning(false);
+  };
 
   const requestPage = (nextIndex: number) => {
     const clamped = Math.max(0, Math.min(pageCount - 1, nextIndex));
@@ -339,11 +429,6 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
   const dpi = currentConfig.projectedDPI;
   // Always-MB read "0.00 MB" for anything under about 5 KB, which is the size a
   // heavily compressed page most wants to show off.
-  const formatSize = (bytes: number) => {
-    if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
-    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${Math.round(bytes)} B`;
-  };
 
   return (
     <Portal>
@@ -378,21 +463,19 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
                   onClick={() => requestFile(activeFileIndex - 1)}
                   disabled={loading || activeFileIndex <= 0}
                   className="chef-pressable chef-target grid place-items-center rounded-md text-paper-300 transition hover:bg-paper-800 disabled:opacity-55"
-                  aria-label="Previous file"
+                  aria-label={t("readability-preview.previous.file.1db0d0")}
                 >
-                  <ChevronLeft size={18} />
+                  <ChevronLeft size={18} className="rtl:rotate-180" />
                 </button>
-                <div className="rounded-lg bg-paper-800 px-3 py-2 text-xs font-semibold text-paper-200">
-                  File {activeFileIndex + 1} / {previewFiles.length}
-                </div>
+                <div className="rounded-lg bg-paper-800 px-3 py-2 text-xs font-semibold text-paper-200">{t("readability-preview.message.849db32933", { v0: activeFileIndex + 1, v1: previewFiles.length })}</div>
                 <button
                   type="button"
                   onClick={() => requestFile(activeFileIndex + 1)}
                   disabled={loading || activeFileIndex >= previewFiles.length - 1}
                   className="chef-pressable chef-target grid place-items-center rounded-md text-paper-300 transition hover:bg-paper-800 disabled:opacity-55"
-                  aria-label="Next file"
+                  aria-label={t("readability-preview.next.file.96a748")}
                 >
-                  <ChevronRight size={18} />
+                  <ChevronRight size={18} className="rtl:rotate-180" />
                 </button>
               </div>
             )}
@@ -403,21 +486,19 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
                 onClick={() => requestPage(pageIndex - 1)}
                 disabled={loading || pageIndex <= 0}
                 className="chef-pressable chef-target grid place-items-center rounded-md text-paper-300 transition hover:bg-paper-800 disabled:opacity-55"
-                aria-label="Previous page"
+                aria-label={t("readability-preview.previous.page.1208ec")}
               >
-                <ChevronLeft size={18} />
+                <ChevronLeft size={18} className="rtl:rotate-180" />
               </button>
-              <div className="rounded-lg bg-paper-800 px-3 py-2 text-xs font-semibold text-paper-200">
-                Page {pageIndex + 1} / {pageCount}
-              </div>
+              <div className="rounded-lg bg-paper-800 px-3 py-2 text-xs font-semibold text-paper-200">{t("readability-preview.message.61ebc290b6", { v0: pageIndex + 1, v1: pageCount })}</div>
               <button
                 type="button"
                 onClick={() => requestPage(pageIndex + 1)}
                 disabled={loading || pageIndex >= pageCount - 1}
                 className="chef-pressable chef-target grid place-items-center rounded-md text-paper-300 transition hover:bg-paper-800 disabled:opacity-55"
-                aria-label="Next page"
+                aria-label={t("readability-preview.next.page.c08ac7")}
               >
-                <ChevronRight size={18} />
+                <ChevronRight size={18} className="rtl:rotate-180" />
               </button>
             </div>
 
@@ -427,17 +508,17 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
                 onClick={() => setZoomByDelta(-0.25)}
                 disabled={zoom <= 1}
                 className="chef-pressable chef-target grid place-items-center rounded-md text-paper-300 transition hover:bg-paper-800 disabled:opacity-55"
-                aria-label="Zoom out"
+                aria-label={t("readability-preview.zoom.out.bc7b63")}
               >
                 <Minus size={16} />
               </button>
-              <span className="tabular w-12 text-center text-sm font-bold text-paper-25">{Math.round(zoom * 100)}%</span>
+              <span className="tabular w-12 text-center text-sm font-bold text-paper-25">{formatPercent(Math.round(zoom * 100))}</span>
               <button
                 type="button"
                 onClick={() => setZoomByDelta(0.25)}
                 disabled={zoom >= 10}
                 className="chef-pressable chef-target grid place-items-center rounded-md text-paper-300 transition hover:bg-paper-800 disabled:opacity-55"
-                aria-label="Zoom in"
+                aria-label={t("readability-preview.zoom.in.0e47f0")}
               >
                 <Plus size={16} />
               </button>
@@ -448,13 +529,13 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
                   setPan({ x: 0, y: 0 });
                 }}
                 className="chef-pressable chef-target grid place-items-center rounded-md text-paper-300 transition hover:bg-paper-800"
-                aria-label="Reset zoom"
+                aria-label={t("readability-preview.reset.zoom.91a661")}
               >
                 <RotateCcw size={16} />
               </button>
             </div>
 
-            <button type="button" aria-label="Close readability preview" onClick={onClose} className="chef-pressable chef-target ml-auto grid place-items-center rounded-lg text-paper-400 transition hover:bg-paper-800 hover:text-paper-25 lg:ml-0">
+            <button type="button" aria-label={t("readability-preview.close.readability.preview.af5860")} onClick={onClose} className="chef-pressable chef-target ml-auto grid place-items-center rounded-lg text-paper-400 transition hover:bg-paper-800 hover:text-paper-25 lg:ml-0">
               <X size={22} />
             </button>
           </div>
@@ -467,17 +548,21 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
               zoom > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
             }`}
             onPointerDown={startPan}
-            style={{ touchAction: zoom > 1 ? 'none' : 'auto' }}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
+            data-testid="compression-original-preview"
+            data-preview-zoom={zoom}
+            style={{ touchAction: 'none' }}
           >
             {images ? (
               <>
-                <div className="pointer-events-none absolute left-4 top-4 z-10 rounded-full border border-white/10 bg-black/65 px-3 py-1 text-xs font-bold text-paper-25">
-                  Original
-                </div>
+                <div className="pointer-events-none absolute left-4 top-4 z-10 rounded-full border border-white/10 bg-black/65 px-3 py-1 text-xs font-bold text-paper-25">{t("readability-preview.original.88d759")}</div>
                 <img
                   ref={imageRef}
                   src={images.original}
-                  alt="Original"
+                  alt={t("readability-preview.original.88d759")}
                   onLoad={updateBounds}
                   className="h-auto max-h-full w-auto max-w-full select-none object-contain shadow-2xl will-change-transform"
                   style={{
@@ -489,7 +574,7 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
                 />
               </>
             ) : (
-              <div className="text-sm text-paper-400">Loading…</div>
+              <div className="text-sm text-paper-400">{t("readability-preview.loading.ba3bbb")}</div>
             )}
           </div>
 
@@ -498,23 +583,29 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
               zoom > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
             }`}
             onPointerDown={startPan}
-            style={{ touchAction: zoom > 1 ? 'none' : 'auto' }}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
+            data-testid="compression-compressed-preview"
+            data-preview-zoom={zoom}
+            style={{ touchAction: 'none' }}
           >
             {images ? (
               <>
                 <div className="pointer-events-none absolute left-4 top-4 z-10 flex gap-2">
-                  <div className="rounded-full bg-ink-600 px-3 py-1 text-xs font-bold text-paper-25">Compressed</div>
+                  <div className="rounded-full bg-ink-600 px-3 py-1 text-xs font-bold text-paper-25">{t("readability-preview.compressed.e2d1ca")}</div>
                   <div
                     className={`rounded-full border border-white/10 px-3 py-1 text-xs font-bold text-paper-25 shadow-lg ${
                       dpi < 100 ? 'bg-danger-600' : 'bg-black/65'
                     }`}
                   >
-                    {dpi < 100 ? 'Low detail' : dpi < 175 ? 'Medium detail' : 'High detail'}
+                    {dpi < 100 ? t("readability-preview.low.detail.09e3c5") : dpi < 175 ? t("readability-preview.medium.detail.1c7539") : t("readability-preview.high.detail.b6a390")}
                   </div>
                 </div>
                 <img
                   src={images.compressed}
-                  alt="Compressed"
+                  alt={t("readability-preview.compressed.e2d1ca")}
                   className={`h-auto max-h-full w-auto max-w-full select-none object-contain shadow-2xl ${
                     loading ? 'opacity-60 blur-[1px]' : 'opacity-100'
                   } will-change-transform`}
@@ -527,7 +618,7 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
                 />
               </>
             ) : (
-              <div className="text-sm text-paper-400">Loading…</div>
+              <div className="text-sm text-paper-400">{t("readability-preview.loading.ba3bbb")}</div>
             )}
           </div>
         </div>
@@ -537,28 +628,26 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
               saying, and the scale and JPEG quality behind it are numbers the
               two panes above already show the effect of. */}
           <div className="flex w-full items-center gap-3 lg:w-[52%]">
-            <span className="text-xs font-medium text-paper-400">Low</span>
+            <span className="text-xs font-medium text-paper-400">{t("readability-preview.low.f793de")}</span>
             <ChefSlider
               min={0}
               max={100}
               step={0.1}
               value={sliderValue}
               onChange={applyQualitySlider}
-              ariaLabel="Compression quality"
+              ariaLabel={t("readability-preview.compression.quality.4038b0")}
               className="flex-1"
             />
-            <span className="text-xs font-medium text-paper-400">High</span>
+            <span className="text-xs font-medium text-paper-400">{t("readability-preview.high.c4ebc6")}</span>
           </div>
 
           {dpi < 100 && (
-            <p role="status" className="w-full text-sm font-medium text-caution-300">
-              At this setting small print may be hard to read. Drag the slider towards High for more detail.
-            </p>
+            <p role="status" className="w-full text-sm font-medium text-caution-300">{t("readability-preview.at.this.setting.small.print.may.be.669b7a")}</p>
           )}
 
           <div className="flex w-full flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-end">
             {sizeEstimate && (
-              <div className={`text-right ${loading ? 'opacity-60' : 'opacity-100'}`}>
+              <div className={`text-end ${loading ? 'opacity-60' : 'opacity-100'}`}>
                 <div className="tabular flex items-center justify-end gap-2 text-xl font-bold text-paper-25">
                   <HardDrive aria-hidden size={18} className="text-paper-400" />~{formatSize(sizeEstimate.estimatedSize)}
                   <span
@@ -566,7 +655,7 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
                       sizeEstimate.ratio >= 1 ? 'bg-caution-900 text-caution-300' : 'bg-success-900 text-success-300'
                     }`}
                   >
-                    {sizeEstimate.ratio >= 1 ? 'Not smaller' : `${Math.round((1 - sizeEstimate.ratio) * 100)}% smaller`}
+                    {sizeEstimate.ratio >= 1 ? t("readability-preview.not.smaller.0b2dbd") : t("readability-preview.smaller.c2af4b", { v0: Math.round((1 - sizeEstimate.ratio) * 100) })}
                   </span>
                 </div>
               </div>
@@ -579,9 +668,7 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
             >
               {/* Below 100 DPI the output can be hard to read, which is the one
                   thing the two panes might not make obvious at a glance. */}
-              {dpi < 100 && <AlertTriangle aria-hidden size={18} />}
-              Compress
-            </button>
+              {dpi < 100 && <AlertTriangle aria-hidden size={18} />}{t("readability-preview.compress.033fc0")}</button>
           </div>
         </div>
       </motion.div>

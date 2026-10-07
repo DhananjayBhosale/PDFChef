@@ -1,3 +1,5 @@
+import { LocalizedError } from './i18n/errors.ts';
+import { t } from './i18n/core.ts';
 import JSZip from 'jszip';
 import { PDFDocument, rgb, type PDFFont } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
@@ -77,7 +79,7 @@ type StreamableZipEntry = JSZip.JSZipObject & {
 const readZipEntryWithinLimit = (entry: JSZip.JSZipObject, maxBytes: number): Promise<Uint8Array> => {
   const streamable = entry as StreamableZipEntry;
   if ((streamable._data?.uncompressedSize ?? 0) > maxBytes) {
-    return Promise.reject(new Error('This Word document is too large to convert safely in this browser.'));
+    return Promise.reject(new LocalizedError("office-document.this.word.document.is.too.large.to.725db2"));
   }
 
   return new Promise((resolve, reject) => {
@@ -94,7 +96,7 @@ const readZipEntryWithinLimit = (entry: JSZip.JSZipObject, maxBytes: number): Pr
           settled = true;
           chunks.length = 0;
           stream.pause();
-          reject(new Error('This Word document is too large to convert safely in this browser.'));
+          reject(new LocalizedError("office-document.this.word.document.is.too.large.to.725db2"));
           return;
         }
         chunks.push(chunk);
@@ -162,30 +164,30 @@ const readParagraph = (paragraph: Element): DocxBlock[] => {
 
 export const extractDocxBlocks = async (file: File): Promise<DocxBlock[]> => {
   if (!file.name.toLowerCase().endsWith('.docx')) {
-    throw new Error('Choose a .docx Word file. Legacy .doc files are not supported.');
+    throw new LocalizedError("office-document.choose.a.docx.word.file.legacy.doc.13e79e");
   }
   if (file.size > MAX_DOCX_BYTES) {
-    throw new Error('This Word document is too large to convert safely in this browser.');
+    throw new LocalizedError("office-document.this.word.document.is.too.large.to.725db2");
   }
 
   let zip: JSZip;
   try {
     zip = await JSZip.loadAsync(await file.arrayBuffer());
   } catch {
-    throw new Error('This is not a readable Word file. Make sure it ends in .docx, then try again.');
+    throw new LocalizedError("office-document.this.is.not.a.readable.word.file.c2c4ca");
   }
   if (Object.keys(zip.files).length > MAX_DOCX_ENTRIES) {
-    throw new Error('This Word document contains too many files to convert safely.');
+    throw new LocalizedError("office-document.this.word.document.contains.too.many.files.fbc137");
   }
 
   const documentPart = zip.file('word/document.xml');
-  if (!documentPart) throw new Error('This package does not contain a Word document.');
+  if (!documentPart) throw new LocalizedError("office-document.this.package.does.not.contain.a.word.4f3f48");
 
   const documentXmlBytes = await readZipEntryWithinLimit(documentPart, MAX_DOCX_XML_BYTES);
   const xml = new TextDecoder().decode(documentXmlBytes);
 
   const documentXml = new DOMParser().parseFromString(xml, 'application/xml');
-  if (documentXml.querySelector('parsererror')) throw new Error('This Word file is damaged, so its text could not be read. Try re-saving it from Word and converting again.');
+  if (documentXml.querySelector('parsererror')) throw new LocalizedError("office-document.this.word.file.is.damaged.so.its.022ba7");
 
   const paragraphs = Array.from(documentXml.getElementsByTagNameNS(WORD_NAMESPACE, 'p'))
     .filter((paragraph) => {
@@ -199,7 +201,7 @@ export const extractDocxBlocks = async (file: File): Promise<DocxBlock[]> => {
 
   const blocks = paragraphs.flatMap(readParagraph);
   if (!blocks.some((block) => block.text.trim())) {
-    throw new Error('There is no readable text in this Word file. If the pages are pictures or shapes, they cannot be converted here.');
+    throw new LocalizedError("office-document.there.is.no.readable.text.in.this.65b5c1");
   }
   return blocks;
 };
@@ -274,7 +276,7 @@ export const convertDocxToPdf = async (
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   const fontBytes = await fetch(notoSansUrl).then((response) => {
-    if (!response.ok) throw new Error('The font needed for the PDF could not be loaded. Check you are online for a moment, then try again.');
+    if (!response.ok) throw new LocalizedError("office-document.the.font.needed.for.the.pdf.could.10b58d");
     return response.arrayBuffer();
   });
   const font = await pdf.embedFont(fontBytes, { subset: true });
@@ -286,7 +288,7 @@ export const convertDocxToPdf = async (
     blocks,
   );
   if (unsupported.length) {
-    throw new Error(`PDF text cannot be exported exactly. Unsupported characters: ${unsupported.join(' ')}.`);
+    throw new LocalizedError("office-document.pdf.text.cannot.be.exported.exactly.unsupported.624412", { v0: unsupported.join(' ') });
   }
 
   const pageWidth = 612;
@@ -333,16 +335,16 @@ const renderPresentation = async (
   buildPresentation: (files: PptxFiles) => PresentationData,
   zipLimits: Readonly<ZipParseLimits>,
 ): Promise<PresentationData> => {
-  if (!file.name.toLowerCase().endsWith('.pptx')) throw new Error('Choose a .pptx PowerPoint file.');
-  if (file.size > MAX_PPTX_BYTES) throw new Error('This presentation is too large to convert safely in this browser.');
+  if (!file.name.toLowerCase().endsWith('.pptx')) throw new LocalizedError("office-document.choose.a.pptx.powerpoint.file.4f366c");
+  if (file.size > MAX_PPTX_BYTES) throw new LocalizedError("office-document.this.presentation.is.too.large.to.convert.8fae01");
   const files = stripExternalPptxRelationships(await parseZip(await file.arrayBuffer(), {
     ...zipLimits,
     maxConcurrency: 2,
   }));
   const presentation = buildPresentation(files);
-  if (!presentation.slides.length) throw new Error('This presentation does not contain any slides.');
-  if (presentation.slides.length > MAX_PPTX_SLIDES) throw new Error('This presentation has too many slides to convert safely.');
-  if (!(presentation.width > 0) || !(presentation.height > 0)) throw new Error('This presentation does not say how big its slides are, so it cannot be converted. Try re-saving it from PowerPoint.');
+  if (!presentation.slides.length) throw new LocalizedError("office-document.this.presentation.does.not.contain.any.slides.53aa4d");
+  if (presentation.slides.length > MAX_PPTX_SLIDES) throw new LocalizedError("office-document.this.presentation.has.too.many.slides.to.157f30");
+  if (!(presentation.width > 0) || !(presentation.height > 0)) throw new LocalizedError("office-document.this.presentation.does.not.say.how.big.cbe9a6");
   return presentation;
 };
 
@@ -351,8 +353,8 @@ export const convertPptxToPdf = async (
   rotation: PptxPageRotation,
   onProgress?: (current: number, total: number) => void,
 ): Promise<Uint8Array> => {
-  if (!file.name.toLowerCase().endsWith('.pptx')) throw new Error('Choose a .pptx PowerPoint file.');
-  if (file.size > MAX_PPTX_BYTES) throw new Error('This presentation is too large to convert safely in this browser.');
+  if (!file.name.toLowerCase().endsWith('.pptx')) throw new LocalizedError("office-document.choose.a.pptx.powerpoint.file.4f366c");
+  if (file.size > MAX_PPTX_BYTES) throw new LocalizedError("office-document.this.presentation.is.too.large.to.convert.8fae01");
 
   const [html2canvasModule, renderer, jsPdfModule] = await Promise.all([
     import('html2canvas'),
@@ -430,7 +432,7 @@ export const convertPptxToPdf = async (
           rotatedCanvas.width = canvas.height;
           rotatedCanvas.height = canvas.width;
           const context = rotatedCanvas.getContext('2d');
-          if (!context) throw new Error('A slide could not be turned the right way up. Try re-saving the file from PowerPoint.');
+          if (!context) throw new LocalizedError("office-document.a.slide.could.not.be.turned.the.d9c142");
           context.translate(rotatedCanvas.width, 0);
           context.rotate(Math.PI / 2);
           context.drawImage(canvas, 0, 0);

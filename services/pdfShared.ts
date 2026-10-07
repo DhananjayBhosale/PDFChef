@@ -1,4 +1,7 @@
+import { LocalizedError } from './i18n/errors.ts';
+import { t } from './i18n/core.ts';
 import type { OutputDeliveryHandler } from './platform/contracts.ts';
+import type { RecentRecord } from './domain/workspaceModels.ts';
 import { Capacitor } from '@capacitor/core';
 import {
   announceOutput,
@@ -15,7 +18,62 @@ interface InstalledOutputDeliveryHandler {
 export interface OutputReadyRecord extends OutputRecord {
   deliveryIssue?: 'cancelled' | 'failed';
   historyRetained?: boolean;
+  /** True only after a platform actually wrote a copy outside the app. */
+  externallyExported?: boolean;
+  /** A metered iOS preview is intentionally visible only in this transient event. */
+  accessLocked?: boolean;
+  /** Native scanner results already live in Recent; load bytes only for an action that needs them. */
+  recentRecord?: RecentRecord;
 }
+
+export interface OutputAccessRequest {
+  readonly operationId: string;
+  readonly blob: Blob;
+  readonly name: string;
+  readonly mimeType: string;
+  readonly toolPath: string;
+}
+
+export type OutputAccessDisposition =
+  | { readonly status: 'deliver' }
+  | { readonly status: 'preview' };
+
+export type OutputDeliveryDisposition =
+  | { readonly status: 'delivered' }
+  | { readonly status: 'preview' };
+
+export type OutputAccessHandler = (request: OutputAccessRequest) => Promise<OutputAccessDisposition>;
+
+export interface OutputDeliveryOptions {
+  /** Reuse one native quota decision across preview, copy, and delivery retries. */
+  readonly operationId?: string;
+  /** Unchanged source files are not processing jobs and never consume the iOS allowance. */
+  readonly accessScope?: 'generated' | 'source';
+}
+
+let outputAccessHandler: OutputAccessHandler | null = null;
+const outputOperationIds = new WeakMap<Blob, string>();
+
+const outputOperationId = (blob: Blob): string => {
+  const existing = outputOperationIds.get(blob);
+  if (existing) return existing;
+  const next = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  outputOperationIds.set(blob, next);
+  return next;
+};
+
+/** Installs the optional native entitlement seam. Without it all existing delivery stays unchanged. */
+export const installOutputAccessHandler = (handler: OutputAccessHandler): (() => void) => {
+  outputAccessHandler = handler;
+  let installed = true;
+  return () => {
+    if (!installed) return;
+    installed = false;
+    if (outputAccessHandler === handler) outputAccessHandler = null;
+  };
+};
 
 const announceRetryableOutput = (record: OutputRecord, error: unknown, historyRetained = false) => {
   const retry: OutputReadyRecord = {
@@ -60,7 +118,7 @@ export const getSafeBuffer = (buffer: ArrayBuffer): Uint8Array => {
 const canvasDataUrlToBlob = (canvas: HTMLCanvasElement, type: string, quality?: number) => {
   const dataUrl = canvas.toDataURL(type, quality);
   const separator = dataUrl.indexOf(',');
-  if (separator < 0) throw new Error('Canvas export failed');
+  if (separator < 0) throw new LocalizedError("pdf-shared.canvas.export.failed.dc7043");
 
   const header = dataUrl.slice(0, separator);
   const payload = dataUrl.slice(separator + 1);
@@ -84,7 +142,7 @@ export const canvasToBlob = (canvas: HTMLCanvasElement, type: string, quality?: 
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (!blob) {
-        reject(new Error('Canvas export failed'));
+        reject(new LocalizedError("pdf-shared.canvas.export.failed.dc7043"));
         return;
       }
       resolve(blob);
@@ -131,6 +189,35 @@ const createOutputRecord = (
   blob,
 });
 
+const checkOutputAccess = async (
+  blob: Blob,
+  filename: string,
+  mimeType: string,
+  toolPath: string,
+  options?: OutputDeliveryOptions,
+): Promise<{ disposition: OutputDeliveryDisposition; preview?: OutputReadyRecord }> => {
+  const handler = outputAccessHandler;
+  if (!handler) return { disposition: { status: 'delivered' } };
+  const record = {
+    ...createOutputRecord(blob, filename, mimeType, toolPath),
+    id: options?.operationId?.trim() || outputOperationId(blob),
+  };
+  const result = await handler({
+    operationId: record.id,
+    blob,
+    name: filename,
+    mimeType,
+    toolPath,
+  });
+  if (result.status === 'preview') {
+    return {
+      disposition: { status: 'preview' },
+      preview: { ...record, historyRetained: false, accessLocked: true },
+    };
+  }
+  return { disposition: { status: 'delivered' } };
+};
+
 const deliverWithInstalledHandler = async (
   installation: InstalledOutputDeliveryHandler,
   blob: Blob,
@@ -152,7 +239,11 @@ const deliverWithInstalledHandler = async (
     const ready: OutputReadyRecord = {
       ...record,
       historyRetained: settings.keepLocalHistory,
-      ...(outcome ? { deliveryIssue: outcome.exportIssue } : {}),
+      ...(outcome && outcome.exportIssue ? { deliveryIssue: outcome.exportIssue } : {}),
+      ...(outcome && typeof outcome.externallyExported === 'boolean'
+        ? { externallyExported: outcome.externallyExported }
+        : {}),
+      ...(outcome && outcome.recentRecord ? { recentRecord: outcome.recentRecord } : {}),
     };
     announceOutput(ready);
   } catch (error) {
@@ -163,10 +254,31 @@ const deliverWithInstalledHandler = async (
   }
 };
 
-export const downloadBlob = (blob: Blob, filename: string, mimeType = blob.type) => {
+export const downloadBlob = (
+  blob: Blob,
+  filename: string,
+  mimeType = blob.type,
+  options?: OutputDeliveryOptions,
+) => {
   const resolvedMimeType = mimeType || blob.type || 'application/octet-stream';
   const toolPath = typeof window !== 'undefined' ? window.location.pathname : '';
   const installation = outputDeliveryHandler;
+  const access = options?.accessScope === 'source' ? null : outputAccessHandler;
+  if (access) {
+    void checkOutputAccess(blob, filename, resolvedMimeType, toolPath, options)
+      .then(result => {
+        if (result.disposition.status === 'preview') {
+          announceOutput(result.preview!);
+          return;
+        }
+        if (installation) {
+          return deliverWithInstalledHandler(installation, blob, filename, resolvedMimeType, toolPath);
+        }
+        void downloadBlobWithoutAccess(blob, filename, resolvedMimeType, toolPath);
+      })
+      .catch(error => console.warn('Unable to check output access.', error));
+    return null;
+  }
   if (installation) {
     void deliverWithInstalledHandler(installation, blob, filename, resolvedMimeType, toolPath)
       .catch((error) => {
@@ -208,7 +320,7 @@ export const downloadBlob = (blob: Blob, filename: string, mimeType = blob.type)
           types: mimeType
             ? [
                 {
-                  description: 'Document export',
+                  description: t("pdf-shared.document.export.5cf1c6"),
                   accept: { [mimeType]: [`.${filename.split('.').pop() || ''}`] },
                 },
               ]
@@ -244,6 +356,43 @@ export const downloadBlob = (blob: Blob, filename: string, mimeType = blob.type)
   }
 };
 
+const downloadBlobWithoutAccess = (
+  blob: Blob,
+  filename: string,
+  resolvedMimeType: string,
+  toolPath: string,
+) => {
+  const settings = getWorkspaceSettings();
+  const recorded = recordOutput(blob, filename, resolvedMimeType, toolPath)
+    .then(record => ({ record, retained: settings.keepLocalHistory, historyError: undefined as unknown }))
+    .catch(historyError => ({
+      record: createOutputRecord(blob, filename, resolvedMimeType, toolPath),
+      retained: false,
+      historyError,
+    }));
+  const announceResult = async (deliveryError?: unknown) => {
+    const { record, retained, historyError } = await recorded;
+    const issue = deliveryError ?? (!settings.autoDownload ? historyError : undefined);
+    if (issue !== undefined) announceRetryableOutput(record, issue, retained);
+    else {
+      const ready: OutputReadyRecord = { ...record, historyRetained: retained };
+      announceOutput(ready);
+    }
+  };
+  if (!settings.autoDownload) {
+    void announceResult();
+    return null;
+  }
+  try {
+    const url = triggerBrowserDownload(blob, filename);
+    void announceResult();
+    return url;
+  } catch (error) {
+    void announceResult(error);
+    throw error;
+  }
+};
+
 /**
  * Delivers one output and resolves only after the result is recoverable.
  *
@@ -255,13 +404,19 @@ export const deliverBlob = async (
   blob: Blob,
   filename: string,
   mimeType = blob.type,
-): Promise<void> => {
+  options?: OutputDeliveryOptions,
+): Promise<OutputDeliveryDisposition> => {
   const resolvedMimeType = mimeType || blob.type || 'application/octet-stream';
   const toolPath = typeof window !== 'undefined' ? window.location.pathname : '';
   const installation = outputDeliveryHandler;
+  const access = await checkOutputAccess(blob, filename, resolvedMimeType, toolPath, options);
+  if (access.disposition.status === 'preview') {
+    announceOutput(access.preview!);
+    return access.disposition;
+  }
   if (installation) {
     await deliverWithInstalledHandler(installation, blob, filename, resolvedMimeType, toolPath);
-    return;
+    return { status: 'delivered' };
   }
 
   const settings = getWorkspaceSettings();
@@ -294,7 +449,7 @@ export const deliverBlob = async (
       throw historyError;
     }
     announceSuccess();
-    return;
+    return { status: 'delivered' };
   }
 
   if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
@@ -304,7 +459,7 @@ export const deliverBlob = async (
         types: resolvedMimeType
           ? [
               {
-                description: 'Document export',
+                description: t("pdf-shared.document.export.5cf1c6"),
                 accept: { [resolvedMimeType]: [`.${filename.split('.').pop() || ''}`] },
               },
             ]
@@ -314,19 +469,20 @@ export const deliverBlob = async (
       await writable.write(blob);
       await writable.close();
       announceSuccess();
-      return;
+      return { status: 'delivered' };
     } catch (error: any) {
       if (error?.name === 'AbortError') {
         announceRetryableOutput(recoverable, error, historyRetained);
-        if (historyRetained) return;
+        if (historyRetained) return { status: 'delivered' };
         throw historyError ?? error;
       }
       download();
-      return;
+      return { status: 'delivered' };
     }
   }
 
   download();
+  return { status: 'delivered' };
 };
 
 export const downloadBytes = (

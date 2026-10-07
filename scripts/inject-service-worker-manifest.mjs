@@ -8,7 +8,7 @@ const dist = process.env.PDF_CHEF_DIST_DIR
   ? resolve(process.env.PDF_CHEF_DIST_DIR)
   : resolve(root, 'dist');
 const serviceWorkerPath = resolve(dist, 'sw.js');
-const DEPLOYMENT_CONTROL_FILES = new Set(['_headers', '_redirects']);
+const DEPLOYMENT_CONTROL_FILES = new Set(['_headers', '_redirects', '_routes.json']);
 const IGNORED_METADATA_FILES = new Set(['.DS_Store']);
 
 const walk = async (directory) => {

@@ -1,0 +1,194 @@
+[
+  {
+    "locale": "en-US",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "en-GB",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "en-CA",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "fr-CA",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "en-AU",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "de-DE",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "fr-FR",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "ja-JP",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "pt-BR",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "ko-KR",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "es-ES",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "zh-Hans",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "it-IT",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "nl-NL",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "pt-PT",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "zh-Hant",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "hi-IN",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "pl-PL",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "id-ID",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "es-419",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "ar-SA",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "tr-TR",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "sv-SE",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  },
+  {
+    "locale": "da-DK",
+    "storeFields": 31,
+    "nativeFields": 136,
+    "nativeMissing": [],
+    "reviewStatus": "DRAFT: exact-current required model review complete; native-speaker/legal review and platform-owner integration still required; not published",
+    "geminiMissingAssetFields": []
+  }
+]

@@ -1,3 +1,5 @@
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
 import { FileUpload } from '../UI/FileUpload';
@@ -96,6 +98,7 @@ const DraggableResizableImage: React.FC<{
    zoom: number,
    isDraggingGlobally: boolean
 }> = ({ element, pageId, containerRef, onUpdate, onRemove, onRotate, onDragStart, zoom, isDraggingGlobally }) => {
+  useI18n();
   const [resizingHandle, setResizingHandle] = useState<string | null>(null);
   const startRef = useRef({ x: 0, y: 0, ex: 0, ey: 0, w: 0, h: 0 });
 
@@ -183,14 +186,14 @@ const DraggableResizableImage: React.FC<{
            touchAction: 'none'
         }}
      >
-        <img src={element.previewUrl} alt="Image placed on PDF page" className="w-full h-full object-contain pointer-events-none" />
+        <img src={element.previewUrl} alt={t("image-to-pdf.image.placed.on.pdf.page.74b8c9")} className="w-full h-full object-contain pointer-events-none" />
         
         {/* Controls */}
         <div className="absolute right-1 top-1 z-20 flex gap-1 sm:-right-3 sm:-top-3 sm:hidden sm:group-hover:flex">
-           <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onRotate(); }} aria-label="Rotate image clockwise" className="grid min-h-11 min-w-11 place-items-center rounded-full bg-[var(--accent-rest)] text-[var(--text-on-accent)] shadow-[var(--elevation-panel)] transition-colors hover:bg-[var(--accent-hover)] sm:min-h-0 sm:min-w-0 sm:p-1.5">
+           <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onRotate(); }} aria-label={t("image-to-pdf.rotate.image.clockwise.f4d156")} className="grid min-h-11 min-w-11 place-items-center rounded-full bg-[var(--accent-rest)] text-[var(--text-on-accent)] shadow-[var(--elevation-panel)] transition-colors hover:bg-[var(--accent-hover)] sm:min-h-0 sm:min-w-0 sm:p-1.5">
               <RotateCw size={14}/>
            </button>
-           <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onRemove(); }} aria-label="Remove image" className="grid min-h-11 min-w-11 place-items-center rounded-full bg-[var(--status-danger-text)] text-white shadow-[var(--elevation-panel)] transition-opacity hover:opacity-90 sm:min-h-0 sm:min-w-0 sm:p-1.5">
+           <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onRemove(); }} aria-label={t("image-to-pdf.remove.image.da7aca")} className="grid min-h-11 min-w-11 place-items-center rounded-full bg-[var(--status-danger-text)] text-white shadow-[var(--elevation-panel)] transition-opacity hover:opacity-90 sm:min-h-0 sm:min-w-0 sm:p-1.5">
               <X size={14}/>
            </button>
         </div>
@@ -232,6 +235,7 @@ const CanvasPage: React.FC<{
   onImageDragStart: (e: React.PointerEvent, pageId: string, element: ImageElement, containerRef: React.RefObject<HTMLDivElement>) => void,
   activeImageDragId: string | null
 }> = ({ page, zoom, updateElement, removeElement, rotateElement, onImageDragStart, activeImageDragId }) => {
+  useI18n();
   const pageRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -260,6 +264,7 @@ const CanvasPage: React.FC<{
 };
 
 export const ImageToPDF: React.FC = () => {
+  useI18n();
   const [pages, setPages] = useState<PageData[]>([]);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const { zoom, zoomIn, zoomOut, resetZoom } = useZoom(1.0, 0.5, 1.5, 0.25);
@@ -425,7 +430,7 @@ export const ImageToPDF: React.FC = () => {
     const availableSlots = Math.max(0, MAX_IMAGE_TO_PDF_FILES - currentImageCount);
     const acceptedImages = images.slice(0, availableSlots);
     if (acceptedImages.length === 0) {
-      setStatus({ isProcessing: false, progress: 0, message: '', error: `Image to PDF supports up to ${MAX_IMAGE_TO_PDF_FILES} images at a time.` });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("image-to-pdf.image.to.pdf.supports.up.to.images.f8e117", { v0: MAX_IMAGE_TO_PDF_FILES }) });
       return;
     }
     
@@ -440,11 +445,11 @@ export const ImageToPDF: React.FC = () => {
         isProcessing: false,
         progress: 0,
         message: acceptedImages.length < images.length
-          ? `Added ${acceptedImages.length} images. The ${MAX_IMAGE_TO_PDF_FILES}-image limit has been reached.`
+          ? t("image-to-pdf.added.images.the.image.limit.has.been.83b23e", { count: acceptedImages.length, v1: MAX_IMAGE_TO_PDF_FILES })
           : '',
       });
     } catch {
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'One or more selected images could not be opened.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("image-to-pdf.one.or.more.selected.images.could.not.349e50") });
     }
   };
 
@@ -488,13 +493,13 @@ export const ImageToPDF: React.FC = () => {
       });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'This picture could not be turned. Try removing it and adding it again.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("image-to-pdf.this.picture.could.not.be.turned.try.2c4843") });
     }
   }, [updateElement]);
 
   const handleConvert = async () => {
     if (pages.length === 0) return;
-    setStatus({ isProcessing: true, progress: 10, message: 'Building PDF...' });
+    setStatus({ isProcessing: true, progress: 10, message: t("image-to-pdf.building.pdf.7b0776") });
     try {
       const layout: PDFPageLayout[] = pages.map(p => ({
          width: 595.28,
@@ -509,17 +514,17 @@ export const ImageToPDF: React.FC = () => {
       }));
       
       const pdfBytes = await createPDFFromLayout(layout);
-      setStatus({ isProcessing: true, progress: 90, message: 'Preparing PDF...' });
+      setStatus({ isProcessing: true, progress: 90, message: t("image-to-pdf.preparing.pdf.cbcaaa") });
       const firstImage = pages.flatMap((page) => page.elements)[0];
       downloadBlob(
         new Blob([pdfBytes], { type: 'application/pdf' }),
         imagePdfOutputName(firstImage?.file.name || 'images'),
         'application/pdf',
       );
-      setStatus({ isProcessing: false, progress: 100, message: 'PDF is ready.' });
+      setStatus({ isProcessing: false, progress: 100, message: t("image-to-pdf.pdf.is.ready.34a5a8") });
     } catch (e) {
       console.error(e);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: 'The PDF could not be created from these images.' });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: t("image-to-pdf.the.pdf.could.not.be.created.from.b4534e") });
     }
   };
 
@@ -537,8 +542,8 @@ export const ImageToPDF: React.FC = () => {
   if (pages.length === 0) {
     return (
       <ToolShell centered>
-        <ToolHeader title="Image to PDF" />
-        <FileUpload onFilesSelected={handleFilesSelected} accept="image/*" multiple label="Choose images for your PDF" />
+        <ToolHeader title={t("image-to-pdf.image.to.pdf.966eba")} />
+        <FileUpload onFilesSelected={handleFilesSelected} accept="image/*" multiple label={t("image-to-pdf.choose.images.for.your.pdf.58f369")} />
         {status.error && (
           <StatusLine tone="danger" icon={<AlertTriangle aria-hidden size={16} />}>
             {status.error}
@@ -555,7 +560,7 @@ export const ImageToPDF: React.FC = () => {
            status-bar inset itself rather than painting under the clock. */}
        <div className="chef-safe-top z-30 flex flex-shrink-0 flex-col gap-3 border-b border-[var(--border-hairline)] bg-[var(--surface-raised)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-            <Link to="/" aria-label="Back to dashboard" className="chef-target grid place-items-center rounded-full text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-sunken)]">
+            <Link to="/" aria-label={t("image-to-pdf.back.to.dashboard.b59e0c")} className="chef-target grid place-items-center rounded-full text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-sunken)]">
                <Undo2 size={20} />
             </Link>
             <div className="flex min-w-0 items-center gap-2">
@@ -563,25 +568,23 @@ export const ImageToPDF: React.FC = () => {
                  <ToolIdentity tool={IMAGE_TO_PDF_TOOL} size={20} assetSize={30} assetClassName="h-[30px] w-[30px] shrink-0 object-contain" />
                )}
                <div className="min-w-0">
-                 <h1 className="break-words text-lg font-bold leading-none text-[var(--text-primary)]">Image to PDF</h1>
+                 <h1 className="break-words text-lg font-bold leading-none text-[var(--text-primary)]">{t("image-to-pdf.image.to.pdf.966eba")}</h1>
                  {pages.length > 0 && (
-                   <p className="type-caption mt-1 text-[var(--text-tertiary)]">{pages.length} {pages.length === 1 ? 'page' : 'pages'}</p>
+                   <p className="type-caption mt-1 text-[var(--text-tertiary)]">{t('format.pageCount', { count: pages.length })}</p>
                  )}
                </div>
             </div>
          </div>
          {pages.length > 0 && (
          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-3">
-            <button type="button" onClick={() => { setPages([]); setStatus({ isProcessing: false, progress: 0, message: '' }); }} className="chef-target chef-pressable flex-1 rounded-[var(--radius-control)] px-3 text-sm font-bold text-[var(--status-danger-text)] transition-colors hover:bg-[var(--status-danger-quiet)] sm:flex-none">
-              Clear all
-            </button>
+            <button type="button" onClick={() => { setPages([]); setStatus({ isProcessing: false, progress: 0, message: '' }); }} className="chef-target chef-pressable flex-1 rounded-[var(--radius-control)] px-3 text-sm font-bold text-[var(--status-danger-text)] transition-colors hover:bg-[var(--status-danger-quiet)] sm:flex-none">{t("image-to-pdf.clear.all.29a390")}</button>
             <button 
                onClick={handleConvert} 
                disabled={status.isProcessing || pages.length === 0}
                className="chef-target chef-pressable flex flex-1 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 font-bold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-55 sm:flex-none sm:px-6"
             >
                {status.isProcessing ? <Loader2 className="animate-spin" size={18}/> : <ArrowDown size={18}/>} 
-               <span>Save PDF</span>
+               <span>{t("image-to-pdf.save.pdf.2462a8")}</span>
             </button>
          </div>
          )}
@@ -592,25 +595,23 @@ export const ImageToPDF: React.FC = () => {
             <div className="chef-scroller chef-edge-fade-y z-20 flex h-auto max-h-[min(60vh,max(46vh,20rem))] w-full flex-col overflow-y-auto border-b border-[var(--border-hairline)] bg-[var(--surface-raised)] lg:h-full lg:max-h-none lg:w-72 lg:border-b-0 lg:border-r">
                <div className="custom-scrollbar flex-1 space-y-3 overflow-y-auto p-3">
                   <section>
-                     <h3 className="type-caption mb-1.5 text-[var(--text-secondary)]">Document actions</h3>
+                     <h3 className="type-caption mb-1.5 text-[var(--text-secondary)]">{t("image-to-pdf.document.actions.97fa07")}</h3>
                      <div className="grid grid-cols-2 gap-2">
                         <label className="chef-target chef-pressable flex w-full cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] text-sm font-bold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--focus-ring)]">
-                           <FileImage aria-hidden size={18}/> Add pages
-                           <input type="file" multiple accept="image/*" aria-label="Add new pages from images" className="sr-only" onChange={e => e.target.files && handleFilesSelected(Array.from(e.target.files))} />
+                           <FileImage aria-hidden size={18}/>{t("image-to-pdf.add.pages.6a7668")}<input type="file" multiple accept="image/*" aria-label={t("image-to-pdf.add.new.pages.from.images.b8c579")} className="sr-only" onChange={e => e.target.files && handleFilesSelected(Array.from(e.target.files))} />
                         </label>
                         <button type="button" onClick={addEmptyPage} className="chef-target chef-pressable flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] text-sm font-bold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]">
-                           <Plus aria-hidden size={18}/> Blank page
-                        </button>
+                           <Plus aria-hidden size={18}/>{t("image-to-pdf.blank.page.81bf3a")}</button>
                      </div>
                   </section>
 
                   <section>
-                     <h3 className="type-caption mb-1.5 text-[var(--text-secondary)]">View</h3>
+                     <h3 className="type-caption mb-1.5 text-[var(--text-secondary)]">{t("image-to-pdf.view.dcc839")}</h3>
                      <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} />
                   </section>
 
                   <section>
-                     <h3 className="type-caption mb-1.5 text-[var(--text-secondary)]">Pages</h3>
+                     <h3 className="type-caption mb-1.5 text-[var(--text-secondary)]">{t("image-to-pdf.pages.9046da")}</h3>
                      <div className="space-y-2">
                         {pages.map((p, i) => (
                            <div 
@@ -618,10 +619,8 @@ export const ImageToPDF: React.FC = () => {
                               className={`p-2 rounded-lg border text-xs font-medium flex items-center justify-between transition-colors ${activeId === p.id ? 'border-[var(--accent-rest)] bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'border-[var(--border-hairline)] bg-[var(--surface-raised)] text-[var(--text-secondary)]'}`}
                            >
                               <span className="flex items-center gap-2">
-                                 <Move size={12} className="opacity-40" />
-                                 Page {i + 1}
-                              </span>
-                              <button onClick={() => removePage(p.id)} aria-label={`Remove page ${i + 1}`} className="chef-target grid place-items-center text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)] rounded-[var(--radius-control)]"><Trash2 size={14}/></button>
+                                 <Move size={12} className="opacity-40" />{t("image-to-pdf.message.c140ba4857", { v0: i + 1 })}</span>
+                              <button onClick={() => removePage(p.id)} aria-label={t("image-to-pdf.remove.page.0a72af", { v0: i + 1 })} className="chef-target grid place-items-center text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)] rounded-[var(--radius-control)]"><Trash2 size={14}/></button>
                            </div>
                         ))}
                      </div>
@@ -655,17 +654,15 @@ export const ImageToPDF: React.FC = () => {
                                  onPointerDown={(e) => dragHandlers.onPointerDown(e, page.id)}
                                  style={{ touchAction: 'none' }}
                               >
-                                 <Move aria-hidden size={14} /> Page {i + 1}
-                              </div>
+                                 <Move aria-hidden size={14} />{t("image-to-pdf.message.7647bcf3a2", { v0: i + 1 })}</div>
                               <label
                                  className="chef-target flex cursor-pointer items-center gap-2 rounded-full border border-[var(--border-strong)] bg-[var(--surface-raised)] px-3 text-xs font-bold text-[var(--text-secondary)] transition-colors hover:text-[var(--accent-text)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--focus-ring)]"
                               >
-                                 <Plus aria-hidden size={14} /> Add image
-                                 <input 
+                                 <Plus aria-hidden size={14} />{t("image-to-pdf.add.image.29139e")}<input
                                     type="file" 
                                     multiple 
                                     accept="image/*" 
-                                    aria-label="Add an image to this page"
+                                    aria-label={t("image-to-pdf.add.an.image.to.this.page.20871a")}
                                     className="sr-only" 
                                     onChange={async e => {
                                        if (e.target.files) {
@@ -681,7 +678,7 @@ export const ImageToPDF: React.FC = () => {
                                  />
                               </label>
                            </div>
-                           <button type="button" onClick={() => removePage(page.id)} aria-label={`Remove page ${i + 1}`} className="chef-target grid place-items-center rounded-full border border-[var(--border-strong)] bg-[var(--surface-raised)] text-[var(--status-danger-text)] transition-colors hover:bg-[var(--status-danger-quiet)]">
+                           <button type="button" onClick={() => removePage(page.id)} aria-label={t("image-to-pdf.remove.page.0a72af", { v0: i + 1 })} className="chef-target grid place-items-center rounded-full border border-[var(--border-strong)] bg-[var(--surface-raised)] text-[var(--status-danger-text)] transition-colors hover:bg-[var(--status-danger-quiet)]">
                               <Trash2 size={16}/>
                            </button>
                         </div>
@@ -713,9 +710,7 @@ export const ImageToPDF: React.FC = () => {
             }}
          >
              {/* Simplified preview for performance */}
-             <div className="flex h-full w-full items-center justify-center border border-dashed border-paper-400 bg-paper-50 text-xl font-bold text-paper-600">
-                Moving Page...
-             </div>
+             <div className="flex h-full w-full items-center justify-center border border-dashed border-paper-400 bg-paper-50 text-xl font-bold text-paper-600">{t("image-to-pdf.moving.page.bd8dad")}</div>
          </div>,
          document.body
       )}

@@ -1,0 +1,52 @@
+{
+  "appLocale": "de-DE",
+  "appleLocale": "de-DE",
+  "googleLocale": "de-DE",
+  "apple": {
+    "name": "PDF Chef",
+    "subtitle": "PDF bearbeiten & zusammenfügen",
+    "promotionalText": "PDFs auf Ihrem Gerät lesen, bearbeiten und organisieren. Dateien zusammenfügen, Seiten verwalten und eine handschriftliche Unterschrift hinzufügen.",
+    "description": "PDF Chef hilft Ihnen, PDFs auf Ihrem Gerät zu lesen, zu bearbeiten, zusammenzufügen, zu teilen, zu komprimieren und zu signieren.\n\nOrganisieren Sie Seiten, fügen Sie Text und Bilder hinzu, platzieren Sie eine handschriftliche Unterschrift, ergänzen Sie Wasserzeichen oder Seitenzahlen und schützen Sie PDFs mit einem Passwort. Konvertieren Sie unterstützte Bilder und Dokumente und extrahieren Sie Text. Die Ergebnisse hängen von der Quelldatei und dem ausgewählten Werkzeug ab.\n\nDie normale PDF-Verarbeitung erfolgt auf Ihrem Gerät. Ihre Dokumente werden zur Verarbeitung nicht auf einen PDF Chef-Server hochgeladen. Offline-Werkzeuge bleiben verfügbar, nachdem ihre Ressourcen geladen wurden.\n\nPDF Chef erfordert kein Konto. Überprüfen Sie Ihr Ergebnis, bevor Sie es teilen oder exportieren.\n\nUnter iOS sind die ersten fünf erfolgreichen Aufträge in jedem fortlaufenden 7-tägigen Kontingentzeitraum vollständige Aufträge, die Sie speichern, teilen und exportieren können. Der Zeitraum beginnt mit dem ersten erfolgreichen Auftrag. Nach fünf Aufträgen bleiben Verarbeitung und Vorschau verfügbar, das Speichern, Teilen und Exportieren erfordert jedoch Pro, bis das Kontingent zurückgesetzt wird.\n\nPro Monthly verlängert sich automatisch bis zur Kündigung. Pro Lifetime ist ein einmaliger Kauf, kein Abonnement. Beide Optionen unterstützen Apples Familienfreigabe. Preise und Kaufdetails werden vor dem Kauf in der App angezeigt. Käufe können in den Einstellungen wiederhergestellt werden.\n\nTerms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+    "whatsNew": "Version {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Monthly",
+      "description": "Alle Exporte. Verlängerung bis zur Kündigung."
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Lifetime",
+      "description": "Volle Exporte. Einmaliger Kauf."
+    },
+    "screenshot": {
+      "1": "Ihre PDF-Werkzeuge an einem Ort",
+      "2": "Text bearbeiten und Bilder hinzufügen",
+      "3": "Dateien zusammenfügen und Seiten ordnen",
+      "4": "Vorschau vor dem Speichern",
+      "5": "Handschriftliche Unterschrift hinzufügen",
+      "6": "Auf Ihrem Gerät arbeiten"
+    },
+    "keywords": "komprimieren,teilen,scannen,signieren,konvertieren,reader,wasserzeichen,passwort"
+  },
+  "google": {
+    "name": "PDF Chef",
+    "shortDescription": "PDFs auf Ihrem Gerät bearbeiten, zusammenfügen, komprimieren und signieren.",
+    "fullDescription": "PDF Chef hilft Ihnen, PDFs auf Ihrem Gerät zu lesen, zu bearbeiten, zusammenzufügen, zu teilen, zu komprimieren und zu signieren.\n\nOrganisieren Sie Seiten, fügen Sie Text und Bilder hinzu, platzieren Sie eine handschriftliche Unterschrift, ergänzen Sie Wasserzeichen oder Seitenzahlen und schützen Sie PDFs mit einem Passwort. Konvertieren Sie unterstützte Bilder und Dokumente und extrahieren Sie Text. Die Ergebnisse hängen von der Quelldatei und dem ausgewählten Werkzeug ab.\n\nDie normale PDF-Verarbeitung erfolgt auf Ihrem Gerät. Ihre Dokumente werden zur Verarbeitung nicht auf einen PDF Chef-Server hochgeladen. Offline-Werkzeuge bleiben verfügbar, nachdem ihre Ressourcen geladen wurden.\n\nPDF Chef erfordert kein Konto. Überprüfen Sie Ihr Ergebnis, bevor Sie es teilen oder exportieren.",
+    "whatsNew": "Version {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Monthly",
+      "description": "Speichern, teilen und exportieren Sie jedes Ergebnis. Verlängert sich monatlich bis zur Kündigung.",
+      "benefit": "Jedes Ergebnis speichern und teilen"
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Lifetime",
+      "description": "Speichern, teilen und exportieren Sie jedes Ergebnis mit einem einmaligen Kauf."
+    },
+    "screenshot": {
+      "1": "Ihre PDF-Werkzeuge an einem Ort",
+      "2": "Text bearbeiten und Bilder hinzufügen",
+      "3": "Dateien zusammenfügen und Seiten ordnen",
+      "4": "Vorschau vor dem Speichern",
+      "5": "Handschriftliche Unterschrift hinzufügen",
+      "6": "Auf Ihrem Gerät arbeiten"
+    }
+  }
+}

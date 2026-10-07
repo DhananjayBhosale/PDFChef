@@ -1,3 +1,5 @@
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 
@@ -11,202 +13,207 @@ interface RouteMeta {
 }
 
 const defaultMeta: RouteMeta = {
-  title: 'PDF Chef - Private PDF Tools',
-  description: 'Private PDF tools that run in your browser. Merge, split, convert, edit, secure, and optimize PDFs locally.',
+  get title() { return t("route-seo.pdf.chef.private.pdf.tools.8f06d0"); },
+  get description() { return t("route-seo.private.pdf.tools.that.run.in.your.92337d"); },
 };
 
 const routeMeta: Record<string, RouteMeta> = {
   '/': defaultMeta,
   '/view': {
-    title: 'View PDF Online | PDF Chef',
-    description: 'Open and view PDFs privately in PDF Chef, then send the current file into editing, signing, compression, and other tools.',
+    get title() { return t("route-seo.view.pdf.online.pdf.chef.8d526d"); },
+    get description() { return t("route-seo.open.and.view.pdfs.privately.in.pdf.0bdd7c"); },
   },
   '/compress': {
-    title: 'Compress PDF - Reduce File Size Online | PDF Chef',
-    description: 'Reduce PDF size with browser-based compression and readability preview controls. Private and client-side.',
+    get title() { return t("route-seo.compress.pdf.reduce.file.size.online.pdf.45750e"); },
+    get description() { return t("route-seo.reduce.pdf.size.with.browser.based.compression.07a74b"); },
   },
   '/merge': {
-    title: 'Merge PDF Files Online - Free & Private | PDF Chef',
-    description: 'Combine multiple PDFs into one document instantly with local processing. No upload required.',
+    get title() { return t("route-seo.merge.pdf.files.online.free.private.pdf.75355f"); },
+    get description() { return t("route-seo.combine.multiple.pdfs.into.one.document.instantly.53813c"); },
   },
   '/split': {
-    title: 'Split PDF Pages - Extract & Separate Online | PDF Chef',
-    description: 'Split PDFs by selected pages, all pages, or by custom page groups, fully in-browser.',
+    get title() { return t("route-seo.split.pdf.pages.extract.separate.online.pdf.535bfe"); },
+    get description() { return t("route-seo.split.pdfs.by.selected.pages.all.pages.5ddd0b"); },
   },
   '/edit': {
-    title: 'Edit PDF - Fill Form Fields and Add Text | PDF Chef',
-    description: 'Fill detected PDF form fields or place text overlays on a page, then save the updated document privately on your device.',
+    get title() { return t("route-seo.edit.pdf.fill.form.fields.and.add.489eb2"); },
+    get description() { return t("route-seo.fill.detected.pdf.form.fields.or.place.5c191e"); },
   },
   '/pdf-to-jpg': {
-    title: 'PDF to JPG Converter - Export Pages to Images | PDF Chef',
-    description: 'Convert PDF pages to JPG, PNG, or WebP images with live quality and DPI controls.',
+    get title() { return t("route-seo.pdf.to.jpg.converter.export.pages.to.8e2e3a"); },
+    get description() { return t("route-seo.convert.pdf.pages.to.jpg.png.or.91fd7b"); },
   },
   '/pdf-to-word': {
-    title: 'PDF to Word - Export PDF Text to DOCX | PDF Chef',
-    description: 'Convert the searchable text layer of a PDF into a .docx file in your browser. No upload, no account.',
+    get title() { return t("route-seo.pdf.to.word.export.pdf.text.to.11ecae"); },
+    get description() { return t("route-seo.convert.the.searchable.text.layer.of.a.f239f6"); },
   },
   '/word-to-pdf': {
-    title: 'Word to PDF - Convert DOCX Locally | PDF Chef',
-    description: 'Convert text from .docx Word files into PDF pages entirely in your browser. No upload or account.',
+    get title() { return t("route-seo.word.to.pdf.convert.docx.locally.pdf.5834d7"); },
+    get description() { return t("route-seo.convert.text.from.docx.word.files.into.fbf55b"); },
   },
   '/powerpoint-to-pdf': {
-    title: 'PowerPoint to PDF - Convert PPTX Locally | PDF Chef',
-    description: 'Render .pptx slides to PDF at their native aspect ratio with local browser processing.',
+    get title() { return t("route-seo.powerpoint.to.pdf.convert.pptx.locally.pdf.38f12d"); },
+    get description() { return t("route-seo.render.pptx.slides.to.pdf.at.their.13b0cf"); },
   },
   '/make-fillable': {
-    title: 'Make PDF Fillable - Form Field Detection | PDF Chef',
-    description: 'Suggest, draw, review, and export real fillable PDF fields locally in your browser.',
+    get title() { return t("route-seo.make.pdf.fillable.form.field.detection.pdf.bc57bc"); },
+    get description() { return t("route-seo.suggest.draw.review.and.export.real.fillable.a5c2be"); },
   },
   '/image-to-pdf': {
-    title: 'JPG to PDF Converter - Create PDFs from Images | PDF Chef',
-    description: 'Create PDFs from images with drag-and-drop layout controls and local export.',
+    get title() { return t("route-seo.jpg.to.pdf.converter.create.pdfs.from.b8e2b1"); },
+    get description() { return t("route-seo.create.pdfs.from.images.with.drag.and.78e3d3"); },
   },
   '/make-pdf': {
-    title: 'Create PDF from Photos - Camera or Gallery | PDF Chef',
-    description: 'Capture or import photos and build a scanned PDF directly in your browser.',
+    get title() { return t("route-seo.create.pdf.from.photos.camera.or.gallery.eaa4b3"); },
+    get description() { return t("route-seo.capture.or.import.photos.and.build.a.f7b8c8"); },
   },
   '/sign': {
-    title: 'Sign PDF - Add Signature Image | PDF Chef',
-    description: 'Draw or upload your signature, place it on pages, and export a signed PDF locally.',
+    get title() { return t("route-seo.sign.pdf.add.signature.image.pdf.chef.7b24df"); },
+    get description() { return t("route-seo.draw.or.upload.your.signature.place.it.7ee9e2"); },
+  },
+  '/verify-signatures': {
+    noindex: true,
+    get title() { return t("route-seo.verify.pdf.signatures.pdf.chef.5d0a3e"); },
+    get description() { return t("route-seo.check.pdf.digital.signatures.signer.trust.8b41c7"); },
   },
   '/delete-pages': {
-    title: 'Delete PDF Pages - Remove Unwanted Pages | PDF Chef',
-    description: 'Select and remove PDF pages visually with thumbnail previews and instant export.',
+    get title() { return t("route-seo.delete.pdf.pages.remove.unwanted.pages.pdf.453f32"); },
+    get description() { return t("route-seo.select.and.remove.pdf.pages.visually.with.1bcc36"); },
   },
   '/reorder': {
-    title: 'Reorder PDF Pages - Drag and Drop Sort | PDF Chef',
-    description: 'Rearrange PDF pages with drag-and-drop ordering and page-level previews.',
+    get title() { return t("route-seo.reorder.pdf.pages.drag.and.drop.sort.370395"); },
+    get description() { return t("route-seo.rearrange.pdf.pages.with.drag.and.drop.b7d468"); },
   },
   '/rotate': {
-    title: 'Rotate PDF Pages - Batch Page Rotation | PDF Chef',
-    description: 'Rotate selected or all PDF pages by 90-degree increments and download the updated file.',
+    get title() { return t("route-seo.rotate.pdf.pages.batch.page.rotation.pdf.c98347"); },
+    get description() { return t("route-seo.rotate.selected.or.all.pdf.pages.by.ce1d56"); },
   },
   '/protect': {
-    title: 'Protect PDF with Password | PDF Chef',
-    description: 'Encrypt PDF documents with a password locally and keep your files private.',
+    get title() { return t("route-seo.protect.pdf.with.password.pdf.chef.38812c"); },
+    get description() { return t("route-seo.encrypt.pdf.documents.with.a.password.locally.aff156"); },
   },
   '/unlock': {
-    title: 'Unlock PDF - Remove Password | PDF Chef',
-    description: 'Decrypt password-protected PDFs locally after entering the correct password.',
+    get title() { return t("route-seo.unlock.pdf.remove.password.pdf.chef.769a95"); },
+    get description() { return t("route-seo.decrypt.password.protected.pdfs.locally.after.entering.a02e52"); },
   },
   '/extract': {
-    title: 'Extract PDF Pages - Export Selected Pages | PDF Chef',
-    description: 'Choose exact pages and export them into a new PDF file with local-only processing.',
+    get title() { return t("route-seo.extract.pdf.pages.export.selected.pages.pdf.425388"); },
+    get description() { return t("route-seo.choose.exact.pages.and.export.them.into.3fac54"); },
   },
   '/metadata': {
-    title: 'PDF Metadata Editor - Title, Author, Keywords | PDF Chef',
-    description: 'View and update PDF metadata fields like title, author, subject, and keywords.',
+    get title() { return t("route-seo.pdf.metadata.editor.title.author.keywords.pdf.f17df0"); },
+    get description() { return t("route-seo.view.and.update.pdf.metadata.fields.like.8f87cc"); },
   },
   '/flatten': {
-    title: 'Flatten PDF Forms - Lock Form Fields | PDF Chef',
-    description: 'Flatten form fields into static content to make documents non-editable.',
+    get title() { return t("route-seo.flatten.pdf.forms.lock.form.fields.pdf.6dd71f"); },
+    get description() { return t("route-seo.flatten.form.fields.into.static.content.to.6e88e3"); },
   },
   '/compare': {
-    title: 'Compare PDF Files - Multi-page Comparison Report | PDF Chef',
-    description: 'Compare two PDFs page by page and export a detailed text comparison report.',
+    get title() { return t("route-seo.compare.pdf.files.multi.page.comparison.report.6cc472"); },
+    get description() { return t("route-seo.compare.two.pdfs.page.by.page.and.b0da6e"); },
   },
   '/ocr': {
-    title: 'OCR PDF - Extract Text Layer or Run OCR | PDF Chef',
-    description: 'Extract text from PDF text layers or run OCR on image-based pages directly in-browser.',
+    get title() { return t("route-seo.ocr.pdf.extract.text.layer.or.run.f712c9"); },
+    get description() { return t("route-seo.extract.text.from.pdf.text.layers.or.23f545"); },
   },
   '/watermark': {
-    title: 'Watermark PDF - Add Custom Text Watermark | PDF Chef',
-    description: 'Apply text watermarks with custom size, opacity, color, and rotation.',
+    get title() { return t("route-seo.watermark.pdf.add.custom.text.watermark.pdf.f0df6a"); },
+    get description() { return t("route-seo.apply.text.watermarks.with.custom.size.opacity.d73a7c"); },
   },
   '/page-numbers': {
-    title: 'Add Page Numbers to PDF | PDF Chef',
-    description: 'Add custom page numbering with flexible format, position, and page range controls.',
+    get title() { return t("route-seo.add.page.numbers.to.pdf.pdf.chef.a31ac5"); },
+    get description() { return t("route-seo.add.custom.page.numbering.with.flexible.format.59b82c"); },
   },
   '/repair': {
-    title: 'Repair PDF - Re-save for Compatibility | PDF Chef',
-    description: 'Rebuild and re-save PDFs to improve compatibility with strict PDF readers.',
+    get title() { return t("route-seo.repair.pdf.re.save.for.compatibility.pdf.4b07f3"); },
+    get description() { return t("route-seo.rebuild.and.re.save.pdfs.to.improve.4221a0"); },
   },
   '/crop': {
-    title: 'Crop PDF - Trim Page Margins | PDF Chef',
-    description: 'Crop PDF page margins privately in your browser by applying a new crop box.',
+    get title() { return t("route-seo.crop.pdf.trim.page.margins.pdf.chef.dc79f2"); },
+    get description() { return t("route-seo.crop.pdf.page.margins.privately.in.your.a9a309"); },
   },
   '/header-footer': {
-    title: 'Add Header and Footer to PDF | PDF Chef',
-    description: 'Add repeated header and footer text with page numbering tokens directly in your browser.',
+    get title() { return t("route-seo.add.header.and.footer.to.pdf.pdf.447991"); },
+    get description() { return t("route-seo.add.repeated.header.and.footer.text.with.098c26"); },
   },
   '/remove-metadata': {
-    title: 'Remove PDF Metadata | PDF Chef',
-    description: 'Strip title, author, dates, viewer preferences, and hidden metadata from PDFs locally.',
+    get title() { return t("route-seo.remove.pdf.metadata.pdf.chef.0cb227"); },
+    get description() { return t("route-seo.strip.title.author.dates.viewer.preferences.and.1e7a08"); },
   },
   '/remove-annotations': {
-    title: 'Remove PDF Annotations | PDF Chef',
-    description: 'Remove comments, annotations, markup, and page-level actions from PDF files without uploading.',
+    get title() { return t("route-seo.remove.pdf.annotations.pdf.chef.1ce315"); },
+    get description() { return t("route-seo.remove.comments.annotations.markup.and.page.level.9f6df7"); },
   },
   '/remove-blank-pages': {
-    title: 'Remove Blank Pages from PDF | PDF Chef',
-    description: 'Detect mostly empty PDF pages and export a cleaned copy with local processing.',
+    get title() { return t("route-seo.remove.blank.pages.from.pdf.pdf.chef.bf1b58"); },
+    get description() { return t("route-seo.detect.mostly.empty.pdf.pages.and.export.e35113"); },
   },
   '/extract-images': {
-    title: 'Extract Images from PDF | PDF Chef',
-    description: 'Find embedded images in PDF files and download them as PNG files in a ZIP archive.',
+    get title() { return t("route-seo.extract.images.from.pdf.pdf.chef.b0ea47"); },
+    get description() { return t("route-seo.find.embedded.images.in.pdf.files.and.225edc"); },
   },
   '/sanitize': {
-    title: 'Sanitize PDF - Clean Hidden Data | PDF Chef',
-    description: 'Clean metadata and annotations from PDFs in one privacy-focused browser pass.',
+    get title() { return t("route-seo.sanitize.pdf.clean.hidden.data.pdf.chef.7144ab"); },
+    get description() { return t("route-seo.clean.metadata.and.annotations.from.pdfs.in.92ed55"); },
   },
   '/batch': {
-    title: 'Batch PDF Processing - Private Bulk Tools | PDF Chef',
-    description: 'Run compression, conversion, security, metadata, page, and repair operations across several PDFs locally.',
+    get title() { return t("route-seo.batch.pdf.processing.private.bulk.tools.pdf.28b30b"); },
+    get description() { return t("route-seo.run.compression.conversion.security.metadata.page.and.1d8e45"); },
   },
   '/invoice': {
-    title: 'Free Invoice Maker - Create an Invoice PDF | PDF Chef',
-    description: 'Make a professional invoice PDF in your browser. Add your logo, colour and tax, and nothing is uploaded.',
+    get title() { return t("route-seo.free.invoice.maker.create.an.invoice.pdf.85bc0e"); },
+    get description() { return t("route-seo.make.a.professional.invoice.pdf.in.your.c07941"); },
   },
   '/receipt': {
-    title: 'Free Receipt Maker - Create a Receipt PDF | PDF Chef',
-    description: 'Make a receipt PDF that proves a payment was made. Add your logo and colour, entirely on your device.',
+    get title() { return t("route-seo.free.receipt.maker.create.a.receipt.pdf.27f657"); },
+    get description() { return t("route-seo.make.a.receipt.pdf.that.proves.a.a20157"); },
   },
   '/quote': {
-    title: 'Free Quote Maker - Create a Quote or Estimate PDF | PDF Chef',
-    description: 'Make a quote or estimate PDF for a job. Add your logo, colour and tax, with nothing uploaded anywhere.',
+    get title() { return t("route-seo.free.quote.maker.create.a.quote.or.a610f8"); },
+    get description() { return t("route-seo.make.a.quote.or.estimate.pdf.for.211740"); },
   },
   '/recent': {
     noindex: true,
-    title: 'Local Output History | PDF Chef',
-    description: 'Re-download and manage PDF Chef outputs stored only in this browser.',
+    get title() { return t("route-seo.local.output.history.pdf.chef.37c6f0"); },
+    get description() { return t("route-seo.re.download.and.manage.pdf.chef.outputs.012332"); },
   },
   '/history': {
     noindex: true,
     canonical: '/recent',
-    title: 'Local Output History | PDF Chef',
-    description: 'Re-download and manage PDF Chef outputs stored only in this browser.',
+    get title() { return t("route-seo.local.output.history.pdf.chef.37c6f0"); },
+    get description() { return t("route-seo.re.download.and.manage.pdf.chef.outputs.012332"); },
   },
   '/settings': {
     noindex: true,
-    title: 'Settings | PDF Chef',
-    description: 'Control local history, download behavior, and large-file safety preferences for PDF Chef.',
+    get title() { return t("route-seo.settings.pdf.chef.4b3556"); },
+    get description() { return t("route-seo.control.local.history.download.behavior.and.large.e227f1"); },
   },
   '/help': {
-    title: 'PDF Chef Help - Frequently Asked Questions',
-    description: 'Answers about PDF Chef: whether files are uploaded, how compression affects quality, offline use, merging and splitting limits, and where results are kept.',
+    get title() { return t("route-seo.pdf.chef.help.frequently.asked.questions.0c6d0c"); },
+    get description() { return t("route-seo.answers.about.pdf.chef.whether.files.are.982c42"); },
   },
   '/privacy-policy': {
     canonical: '/privacy',
-    title: 'Privacy Policy | PDF Chef',
-    description: 'Read the PDF Chef privacy policy.',
+    get title() { return t("route-seo.privacy.policy.pdf.chef.f0035d"); },
+    get description() { return t("route-seo.read.the.pdf.chef.privacy.policy.3812af"); },
   },
   '/privacy': {
-    title: 'Privacy Policy | PDF Chef',
-    description: 'Read the PDF Chef privacy policy for the Android app and web app.',
+    get title() { return t("route-seo.privacy.policy.pdf.chef.f0035d"); },
+    get description() { return t("route-seo.read.the.pdf.chef.privacy.policy.for.a89265"); },
   },
   '/pdf-chef-privacy': {
     canonical: '/privacy',
-    title: 'Privacy Policy | PDF Chef',
-    description: 'Read the PDF Chef privacy policy covering the web app, Android app and iOS app.',
+    get title() { return t("route-seo.privacy.policy.pdf.chef.f0035d"); },
+    get description() { return t("route-seo.read.the.pdf.chef.privacy.policy.covering.0cdf8e"); },
   },
   '/terms': {
-    title: 'Terms and Conditions | PDF Chef',
-    description: 'Read the PDF Chef terms and conditions.',
+    get title() { return t("route-seo.terms.and.conditions.pdf.chef.bff6d8"); },
+    get description() { return t("route-seo.read.the.pdf.chef.terms.and.conditions.09c956"); },
   },
   '/terms-and-conditions': {
     canonical: '/terms',
-    title: 'Terms and Conditions | PDF Chef',
-    description: 'Read the PDF Chef terms and conditions.',
+    get title() { return t("route-seo.terms.and.conditions.pdf.chef.bff6d8"); },
+    get description() { return t("route-seo.read.the.pdf.chef.terms.and.conditions.09c956"); },
   },
 };
 
@@ -225,6 +232,7 @@ const upsertMetaTag = (name: string, content: string, property = false) => {
 };
 
 export const RouteSEO: React.FC = () => {
+  const { revision } = useI18n();
   const location = useLocation();
 
   const normalizedPath = useMemo(() => {
@@ -261,7 +269,7 @@ export const RouteSEO: React.FC = () => {
     }
     linkCanonical.setAttribute('href', canonicalUrl);
     upsertMetaTag('robots', meta.noindex ? 'noindex, follow' : 'index, follow');
-  }, [normalizedPath, meta]);
+  }, [normalizedPath, meta, revision]);
 
   return null;
 };

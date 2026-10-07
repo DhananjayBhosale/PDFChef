@@ -1,0 +1,43 @@
+{
+  "checkedOn": "2026-09-18",
+  "limits": {
+    "apple.name": 30,
+    "apple.subtitle": 30,
+    "apple.promotionalText": 170,
+    "apple.description": 4000,
+    "apple.whatsNew": 4000,
+    "apple.monthly.name": 30,
+    "apple.monthly.description": 45,
+    "apple.lifetime.name": 30,
+    "apple.lifetime.description": 45,
+    "google.name": 30,
+    "google.shortDescription": 80,
+    "google.fullDescription": 4000,
+    "google.whatsNew": 500,
+    "google.monthly.name": 55,
+    "google.monthly.description": 200,
+    "google.monthly.benefit": 40,
+    "google.lifetime.name": 55,
+    "google.lifetime.description": 200
+  },
+  "appleKeywords": {
+    "characters": 100,
+    "utf8Bytes": 100
+  },
+  "projectCaptionLimit": 80,
+  "notes": {
+    "google.monthly.description": "200 is a conservative project limit. Google documents this subscription field as internal, with no public limit on the cited page.",
+    "screenshots": "Captions are text for artwork, not a separate store metadata field. 80 is a project limit.",
+    "whatsNew": "Templates must be filled with verified release changes, then validated again."
+  },
+  "sources": [
+    "https://developer.apple.com/help/app-store-connect/reference/app-information/app-information",
+    "https://developer.apple.com/help/app-store-connect/reference/app-information/platform-version-information",
+    "https://developer.apple.com/help/app-store-connect/reference/in-app-purchases-and-subscriptions/in-app-purchase-information",
+    "https://support.google.com/googleplay/android-developer/answer/9859152",
+    "https://support.google.com/googleplay/android-developer/answer/9898842",
+    "https://support.google.com/googleplay/android-developer/answer/9859348",
+    "https://support.google.com/googleplay/android-developer/answer/1153481",
+    "https://support.google.com/googleplay/android-developer/answer/140504"
+  ]
+}

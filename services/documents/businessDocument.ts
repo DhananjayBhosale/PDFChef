@@ -1,3 +1,4 @@
+import { LocalizedError } from '../i18n/errors.ts';
 /**
  * Invoices, receipts and quotes, drawn from what someone typed.
  *
@@ -103,7 +104,7 @@ const round = (value: number) => Math.sign(value) * Math.round((Math.abs(value) 
 const MAX_AMOUNT = Number.MAX_SAFE_INTEGER / 100;
 const finiteOrZero = (value: number) => Number.isFinite(value) ? value : 0;
 
-export class BusinessDocumentValidationError extends Error {}
+export class BusinessDocumentValidationError extends LocalizedError {}
 
 /** Accept decimal amounts (including grouped thousands), never reinterpret text. */
 export const parseDocumentNumber = (value: string): number => {
@@ -157,7 +158,7 @@ export const formatUnitPrice = (amount: number, currency: string): string => {
   const [mantissa, exponent = '0'] = String(amount).split('e');
   const precision = Math.max(2, (mantissa.split('.')[1]?.length ?? 0) - Number(exponent));
   if (precision > 20) {
-    throw new BusinessDocumentValidationError('A unit price has too many decimal places to display. Use at most 20 decimal places.');
+    throw new BusinessDocumentValidationError("business-document.error.8eb8807e13");
   }
   return formatMoney(amount, currency, precision);
 };
@@ -257,7 +258,7 @@ const fittedRightText = (
   const width = widthOf(font, value, size);
   const fittedSize = width > maxWidth ? size * maxWidth / width : size;
   if (fittedSize < 6) {
-    throw new BusinessDocumentValidationError('An amount, currency or tax label is too long to fit legibly. Shorten it before saving.');
+    throw new BusinessDocumentValidationError("business-document.error.3d41df31ef");
   }
   rightText(page, value, right, y, font, fittedSize, color);
 };
@@ -325,21 +326,21 @@ export const renderBusinessDocument = async (
     for (const character of drawable(value ?? '')) {
       if (!coverage.has(character.codePointAt(0)!)) {
         const code = character.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0');
-        throw new BusinessDocumentValidationError(`This PDF font cannot display ${JSON.stringify(character)} (U+${code}). Replace that character or use a supported spelling before previewing or saving; your text has not been removed.`);
+        throw new BusinessDocumentValidationError("business-document.error.b7890f176a", { v0: JSON.stringify(character), v1: code });
       }
     }
   }
   if (document.items.some(item => !Number.isFinite(item.quantity) || !Number.isFinite(item.unitPrice) ||
       !Number.isFinite(item.quantity * item.unitPrice)) ||
       (document.taxRate !== undefined && !Number.isFinite(document.taxRate))) {
-    throw new BusinessDocumentValidationError('Enter valid decimal quantities, prices and tax rates, such as 12.50. Letters and currency symbols do not belong in amount fields.');
+    throw new BusinessDocumentValidationError("business-document.error.875bd9ac91");
   }
   const accent = accentOf(document.accentColor);
   const wording = WORDING[document.kind];
   const totals = totalsOf(document);
   if (!Object.values(totals).every(value => Number.isFinite(value) && Math.abs(value) <= MAX_AMOUNT) ||
       document.items.some(item => Math.abs(item.unitPrice) > MAX_AMOUNT || Math.abs(item.quantity * item.unitPrice) > MAX_AMOUNT)) {
-    throw new BusinessDocumentValidationError('These amounts are too large. Reduce them before saving.');
+    throw new BusinessDocumentValidationError("business-document.error.ee57a4151e");
   }
 
   let page = pdf.addPage([A4.width, A4.height]);
@@ -363,7 +364,7 @@ export const renderBusinessDocument = async (
       headerBottom = top - scaled.height - 12;
       logoDrawn = true;
     } catch {
-      throw new BusinessDocumentValidationError('The logo could not be read as a JPG or PNG. Replace it or remove it before saving.');
+      throw new BusinessDocumentValidationError("business-document.error.dc4e508e0a");
     }
   }
   const headerPage = page;

@@ -1,3 +1,6 @@
+import { formatPercent } from '../../services/i18n/core.ts';
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 
 import React from 'react';
 import { Minus, Plus, RotateCcw } from 'lucide-react';
@@ -29,6 +32,7 @@ const controlClass =
 export const ZoomControls: React.FC<ZoomControlsProps> = ({
   zoom, onZoomIn, onZoomOut, onReset, min = 0.5, max = 2.0, className = ''
 }) => {
+  useI18n();
   return (
     <div
       className={`inline-flex w-fit max-w-full items-center rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-0.5 ${className}`}
@@ -38,13 +42,13 @@ export const ZoomControls: React.FC<ZoomControlsProps> = ({
         onClick={onZoomOut}
         disabled={zoom <= min}
         className={controlClass}
-        aria-label="Zoom out"
+        aria-label={t("zoom-controls.zoom.out.bc7b63")}
       >
         <Minus aria-hidden size={18} />
       </button>
 
       <span className="tabular w-11 text-center text-xs font-semibold text-[var(--text-primary)] select-none">
-        {Math.round(zoom * 100)}%
+        {formatPercent(Math.round(zoom * 100))}
       </span>
 
       <button
@@ -52,7 +56,7 @@ export const ZoomControls: React.FC<ZoomControlsProps> = ({
         onClick={onZoomIn}
         disabled={zoom >= max}
         className={controlClass}
-        aria-label="Zoom in"
+        aria-label={t("zoom-controls.zoom.in.0e47f0")}
       >
         <Plus aria-hidden size={18} />
       </button>
@@ -64,7 +68,7 @@ export const ZoomControls: React.FC<ZoomControlsProps> = ({
         onClick={onReset}
         disabled={zoom === 1}
         className={controlClass}
-        aria-label="Reset zoom to 100%"
+        aria-label={t("zoom-controls.reset.zoom.to.100.39cdc8")}
       >
         <RotateCcw aria-hidden size={16} />
       </button>

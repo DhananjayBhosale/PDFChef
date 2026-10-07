@@ -1,3 +1,5 @@
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 export interface SelectableTextLine {
@@ -39,6 +41,7 @@ export const SelectablePagePreview: React.FC<SelectablePagePreviewProps> = ({
   previewHeight,
   lines,
 }) => {
+  useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const hasPreviewSize = previewWidth > 0 && previewHeight > 0;
@@ -77,17 +80,13 @@ export const SelectablePagePreview: React.FC<SelectablePagePreviewProps> = ({
 
   if (!hasPreviewSize) {
     return (
-      <div className="w-full rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)] p-3 text-sm text-[var(--text-secondary)]">
-        Preview unavailable for page {pageNumber}.
-      </div>
+      <div className="w-full rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)] p-3 text-sm text-[var(--text-secondary)]">{t("selectable-page-preview.message.cb764d7bcb", { v0: pageNumber })}</div>
     );
   }
 
   return (
     <div className="w-full">
-      <div className="mb-1.5 text-xs font-medium text-[var(--text-secondary)]">
-        Drag over the page preview to copy text directly from page {pageNumber}.
-      </div>
+      <div className="mb-1.5 text-xs font-medium text-[var(--text-secondary)]">{t("selectable-page-preview.message.a09e9f528e", { v0: pageNumber })}</div>
       <div
         ref={containerRef}
         data-selectable-preview="true"
@@ -101,17 +100,15 @@ export const SelectablePagePreview: React.FC<SelectablePagePreviewProps> = ({
             {imageUrl ? (
               <img
                 src={imageUrl}
-                alt={`Page ${pageNumber} preview`}
+                alt={t("selectable-page-preview.page.preview.7f7e5e", { v0: pageNumber })}
                 className="pointer-events-none absolute inset-0 h-full w-full select-none object-contain"
                 draggable={false}
               />
             ) : (
-              <div className="absolute inset-0 flex items-center justify-center text-sm text-[var(--text-secondary)]">
-                Preview unavailable
-              </div>
+              <div className="absolute inset-0 flex items-center justify-center text-sm text-[var(--text-secondary)]">{t("selectable-page-preview.preview.unavailable.b99fa6")}</div>
             )}
 
-            <div className="absolute inset-0 cursor-text select-text">
+            <div dir="ltr" className="absolute inset-0 cursor-text select-text">
               {displayLines.map((line) => (
                 <div
                   key={line.id}

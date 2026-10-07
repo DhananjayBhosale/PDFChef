@@ -1,3 +1,5 @@
+import { t } from '../services/i18n/core.ts';
+import { useI18n } from '../services/i18n/react';
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
@@ -5,7 +7,7 @@ import type { PDFFile } from '../types';
 
 interface OpenedPdfContextValue {
   openedPdf: PDFFile | null;
-  setOpenedPdfFile: (file: File) => PDFFile;
+  setOpenedPdfFile: (file: File, options?: { provenance?: PDFFile['provenance']; previewOnly?: boolean }) => PDFFile;
   stageProtectedPdfPassword: (openedPdfId: string, password: string) => void;
   takeProtectedPdfPassword: (openedPdfId: string) => string | null;
   clearOpenedPdf: () => void;
@@ -22,16 +24,22 @@ const isPdfFile = (file: File) =>
   file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
 export const OpenedPdfProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  useI18n();
   const [openedPdf, setOpenedPdf] = useState<PDFFile | null>(null);
   const protectedPasswordHandoffRef = useRef<{ openedPdfId: string; password: string } | null>(null);
   const navigate = useNavigate();
 
-  const setOpenedPdfFile = (file: File) => {
+  const setOpenedPdfFile = (
+    file: File,
+    options: { provenance?: PDFFile['provenance']; previewOnly?: boolean } = {},
+  ) => {
     const nextPdf: PDFFile = {
       id: uuidv4(),
       file,
       name: file.name,
       size: file.size,
+      provenance: options.provenance ?? (options.previewOnly ? 'preview' : 'imported'),
+      previewOnly: options.previewOnly ?? options.provenance === 'preview',
     };
 
     protectedPasswordHandoffRef.current = null;
@@ -89,7 +97,7 @@ export const OpenedPdfProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 export const useOpenedPdf = () => {
   const context = useContext(OpenedPdfContext);
   if (!context) {
-    throw new Error('useOpenedPdf must be used inside OpenedPdfProvider');
+    throw new Error(t("use-opened-pdf.useopenedpdf.must.be.used.inside.openedpdfprovider.4b1a84"));
   }
   return context;
 };

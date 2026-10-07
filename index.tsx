@@ -1,3 +1,4 @@
+import { initializeLocale } from './services/i18n/core';
 import { installReadableStreamAsyncIteration } from './services/readableStreamAsyncIteration';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -146,12 +147,13 @@ if (!rootElement) {
 
 const root = ReactDOM.createRoot(rootElement);
 
+const localeReady = initializeLocale();
 const render = (platform?: AppRootProps['platform']) => {
-  root.render(
+  void localeReady.then(() => root.render(
     <React.StrictMode>
       <AppRoot platform={platform} />
     </React.StrictMode>
-  );
+  ));
 };
 
 /**

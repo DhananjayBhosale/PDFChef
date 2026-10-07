@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import english from '../../services/i18n/en-US.ts';
 
 /**
  * T024. The Home surface was rebuilt to the live Android app's phone rhythm, and
@@ -81,7 +82,7 @@ test('every category is reachable without the page scrolling sideways', () => {
   assert.doesNotMatch(appCss, /\.chef-hit-y::before \{[^}]*min-width:/);
   // Counted filters keep their count in the accessible name too, so the numeral
   // is never the only place the total is stated.
-  assert.match(strip, /aria-label=\{`\$\{item\}, \$\{count\} \$\{count === 1 \? 'tool' : 'tools'\}`\}/);
+  assert.match(strip, /aria-label=\{t\("dashboard\.\.baa7b4", \{ v0: t\(`category\.\$\{item\}`\), count: count \}\)\}/);
 });
 
 test('the search field is 38px of visual inside a 48px target', () => {
@@ -89,22 +90,23 @@ test('the search field is 38px of visual inside a 48px target', () => {
   assert.match(dashboard, /-my-\[5px\] flex min-h-touch w-full items-center/);
   // Android's field is 16sp Medium and so is its prompt. Bold made an empty
   // field read as a heading rather than as something to type into.
-  assert.match(dashboard, /py-\[0\.4375rem\] pl-\[46px\] text-\[1rem\] font-medium leading-\[1\.375\]/);
+  assert.match(dashboard, /py-\[0\.4375rem\] ps-\[46px\] text-\[1rem\] font-medium leading-\[1\.375\]/);
   assert.match(dashboard, /placeholder:font-medium/);
   assert.doesNotMatch(dashboard, /placeholder:font-bold/);
   // The 20px glyph is positioned in px, like the padding it sits inside, so the
   // two do not drift apart when the reader scales the text.
-  assert.match(dashboard, /absolute left-\[16px\] top-1\/2/);
+  assert.match(dashboard, /absolute start-\[16px\] top-1\/2/);
 });
 
 test('the visible search prompt survives 200% text and the accessible name follows the catalog', () => {
   // A 320px screen at 200% leaves roughly 190px of field for the prompt, and
   // the interface font is a Settings choice, so the prompt is one word. The
   // trailing 46px is reserved only while the clear control exists.
-  assert.match(dashboard, /placeholder="Search"/);
+  assert.equal(english["dashboard.search.49c266"], 'Search');
+  assert.match(dashboard, /placeholder=\{t\("dashboard\.search\.49c266"\)\}/);
   assert.doesNotMatch(dashboard, /placeholder="Smart search tools\.\.\."/);
-  assert.match(dashboard, /aria-label=\{`Search \$\{tools\.length\} \$\{tools\.length === 1 \? 'tool' : 'tools'\}`\}/);
-  assert.match(dashboard, /query \? 'pr-\[46px\]' : 'pr-\[16px\]'/);
+  assert.match(dashboard, /aria-label=\{t\("dashboard\.search\.2fba3d", \{ count: tools\.length \}\)\}/);
+  assert.match(dashboard, /query \? 'pe-\[46px\]' : 'pe-\[16px\]'/);
 });
 
 test('the result line is visible as well as announced once a query exists', () => {
@@ -113,7 +115,7 @@ test('the result line is visible as well as announced once a query exists', () =
   assert.match(dashboard, /role="status"\s*\n\s*aria-live="polite"/);
   assert.match(dashboard, /searching\s*\n\s*\? 'chef-wrap-words mt-2/);
   assert.match(dashboard, /: 'sr-only'/);
-  assert.match(dashboard, /'tool matches' : 'tools match'/);
+  assert.match(dashboard, /t\("dashboard\.\.357c24", \{ v2: trimmed, count: filteredTools\.length \}\)/);
 });
 
 test('the two-line subtitle clamp is released once the reader asks for larger text', () => {
@@ -128,7 +130,8 @@ test('the default order still opens with Create PDF and Read PDF', () => {
   assert.match(order, /tools\.filter\(\(tool\) => tool\.path === '\/make-pdf'\)/);
   assert.match(order, /tools\.filter\(\(tool\) => tool\.path === '\/view'\)/);
   assert.ok(order.indexOf("'/make-pdf'") < order.indexOf("'/view'"));
-  assert.match(dashboard, /tool\.path === '\/view' \? 'Read PDF' : tool\.name/);
+  assert.equal(english["dashboard.read.pdf.b00d88"], 'Read PDF');
+  assert.match(dashboard, /tool\.path === '\/view' \? t\("dashboard\.read\.pdf\.b00d88"\) : tool\.name/);
 });
 
 test('press feedback is restrained and reduced-motion safe', () => {
@@ -185,8 +188,8 @@ test('category selection is a raised chip on a sunken track, not a flat accent f
   assert.doesNotMatch(strip, /bg-\[var\(--accent-quiet\)\]/);
   // Counts remain available to assistive technology without crowding the five
   // labels into an unreadable phone row.
-  assert.match(strip, /aria-label=\{`\$\{item\}, \$\{count\} \$\{count === 1 \? 'tool' : 'tools'\}`\}/);
-  assert.match(strip, /<span aria-hidden>\{item\}<\/span>/);
+  assert.match(strip, /aria-label=\{t\("dashboard\.\.baa7b4", \{ v0: t\(`category\.\$\{item\}`\), count: count \}\)\}/);
+  assert.match(strip, /<span aria-hidden>\{t\(`category\.\$\{item\}`\)\}<\/span>/);
   assert.doesNotMatch(strip, /tabular text-\[0\.6875rem\]/);
 });
 
@@ -195,11 +198,13 @@ test('the privacy claim is a line under the title, not a third lozenge', () => {
   // field and a bordered 46px strip: three near-identical shapes and no
   // hierarchy. `items-start` is what keeps the glyph beside the first line
   // rather than centred against four wrapped ones at 200% text.
-  const note = dashboard.slice(dashboard.indexOf('role="note"'), dashboard.indexOf('Processed on this device.'));
+  const note = dashboard.slice(dashboard.indexOf('role="note"'), dashboard.indexOf('{monetizationAvailable && ('));
   assert.match(note, /role="note" className="flex items-start gap-2"/);
   assert.doesNotMatch(note, /border|shadow-|surface-raised/);
-  assert.match(dashboard, /Processed on this device\./);
-  assert.match(dashboard, /Nothing is uploaded\./);
+  assert.equal(english["dashboard.processed.on.this.device.6f6da5"], 'Processed on this device.');
+  assert.equal(english["dashboard.nothing.is.uploaded.a8596d"], 'Nothing is uploaded.');
+  assert.match(note, /t\("dashboard\.processed\.on\.this\.device\.6f6da5"\)/);
+  assert.match(note, /t\("dashboard\.nothing\.is\.uploaded\.a8596d"\)/);
   // The trailing padlock was a second glyph making the same claim, and it was
   // the thing left floating mid-air once the sentence wrapped.
   assert.doesNotMatch(dashboard, /\bLock\b/);
@@ -222,5 +227,5 @@ test('the brand mark yields room to the product name as the reader text grows', 
   // was taking a third of a 320px line away from the name itself.
   assert.match(dashboard, /clamp\(32px, calc\(50px \/ var\(--text-scale, 1\)\), 50px\)/);
   // The chevron column is thirty-four glyphs deep. Android draws it at 0.72.
-  assert.match(dashboard, /ChevronRight aria-hidden size=\{22\} className="shrink-0 text-\[var\(--text-tertiary\)\] opacity-70"/);
+  assert.match(dashboard, /ChevronRight aria-hidden size=\{22\} className="rtl:rotate-180 shrink-0 text-\[var\(--text-tertiary\)\] opacity-70"/);
 });

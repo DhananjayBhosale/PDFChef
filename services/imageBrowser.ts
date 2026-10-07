@@ -1,3 +1,5 @@
+import { LocalizedError } from './i18n/errors.ts';
+import { t } from './i18n/core.ts';
 import { canvasToBlob } from './pdfShared';
 
 export interface PreparedPdfImageAsset {
@@ -13,7 +15,7 @@ const loadImageElement = (file: File): Promise<{ image: HTMLImageElement; url: s
     image.onload = () => resolve({ image, url });
     image.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error('Image could not be decoded'));
+      reject(new LocalizedError("image-browser.image.could.not.be.decoded.7984a8"));
     };
     image.src = url;
   });
@@ -31,7 +33,7 @@ const normalizeImageAsset = async (file: File, rotation = 0) => {
   const context = canvas.getContext('2d');
   if (!context) {
     URL.revokeObjectURL(url);
-    throw new Error('Canvas context unavailable');
+    throw new LocalizedError("image-browser.canvas.context.unavailable.f925e4");
   }
 
   try {

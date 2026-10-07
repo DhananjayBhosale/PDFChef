@@ -1,3 +1,5 @@
+import { t, formatPercent } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, Loader2 } from 'lucide-react';
@@ -19,6 +21,7 @@ const SUCCESS_CLEAR_MS = 3500;
 const OUTPUT_HANDOFF_MS = 1500;
 
 export const StatusToast: React.FC<{ status: ProcessingStatus }> = ({ status }) => {
+  useI18n();
   const [dismissedSuccess, setDismissedSuccess] = useState(false);
   const outputAt = useRef(0);
 
@@ -49,17 +52,17 @@ export const StatusToast: React.FC<{ status: ProcessingStatus }> = ({ status }) 
         role="status"
         aria-live="polite"
         aria-busy="true"
-        className="chef-enter chef-safe-x fixed inset-x-2 bottom-[calc(var(--size-tab-bar-readable)+env(safe-area-inset-bottom)+0.5rem)] z-40 sm:inset-x-auto sm:right-4 sm:w-80 md:bottom-4"
+        className="chef-enter chef-safe-x fixed inset-x-2 bottom-[calc(var(--size-tab-bar-readable)+env(safe-area-inset-bottom)+0.5rem)] z-40 sm:inset-x-auto sm:end-4 sm:w-80 md:bottom-4"
       >
         <div className="rounded-[var(--radius-field)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-3 py-2.5 shadow-[var(--elevation-panel)]">
           <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
             <Loader2 aria-hidden size={16} className="shrink-0 animate-spin text-[var(--accent-text)]" />
-            <span className="min-w-0 flex-1 truncate">{status.message || 'Working on this device…'}</span>
-            {determinate && <span className="tabular shrink-0 text-[var(--text-secondary)]">{Math.round(progress)}%</span>}
+            <span className="min-w-0 flex-1 truncate">{status.message || t("status-toast.working.on.this.device.b4ed58")}</span>
+            {determinate && <span className="tabular shrink-0 text-[var(--text-secondary)]">{formatPercent(progress)}</span>}
           </div>
           <div
             role="progressbar"
-            aria-label="Processing progress"
+            aria-label={t("status-toast.processing.progress.8a3009")}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={determinate ? Math.round(progress) : undefined}
@@ -90,7 +93,7 @@ export const StatusToast: React.FC<{ status: ProcessingStatus }> = ({ status }) 
     <div
       role="status"
       aria-live="polite"
-      className="chef-enter chef-safe-x fixed inset-x-2 bottom-[calc(var(--size-tab-bar-readable)+env(safe-area-inset-bottom)+0.5rem)] z-40 sm:inset-x-auto sm:right-4 sm:max-w-sm md:bottom-4"
+      className="chef-enter chef-safe-x fixed inset-x-2 bottom-[calc(var(--size-tab-bar-readable)+env(safe-area-inset-bottom)+0.5rem)] z-40 sm:inset-x-auto sm:end-4 sm:max-w-sm md:bottom-4"
     >
       <p
         className="flex items-start gap-2 rounded-[var(--radius-field)] border px-3 py-2.5 text-sm font-medium shadow-[var(--elevation-panel)]"

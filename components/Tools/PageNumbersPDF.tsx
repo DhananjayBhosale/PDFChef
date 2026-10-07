@@ -1,3 +1,6 @@
+import { localizeError } from '../../services/i18n/errors.ts';
+import { t } from '../../services/i18n/core.ts';
+import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -41,6 +44,7 @@ const parsePageInput = (value: string) => {
 
 
 export const PageNumbersPDF: React.FC = () => {
+  useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
   const [previewFont, setPreviewFont] = useState<PDFFont | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
@@ -127,7 +131,7 @@ export const PageNumbersPDF: React.FC = () => {
     } catch (error) {
       if (requestId !== previewRequestRef.current) return;
       console.error(error);
-      setPreviewError('The preview could not be shown. You can still add page numbers, or choose another file.');
+      setPreviewError(t("page-numbers-pdf.the.preview.could.not.be.shown.you.e766b7"));
     } finally {
       if (requestId === previewRequestRef.current) setPreviewLoading(false);
     }
@@ -158,11 +162,11 @@ export const PageNumbersPDF: React.FC = () => {
     const start = parsePageInput(startPage);
     const end = parsePageInput(endPage);
 
-    if (startPage.trim() !== '' && start === null) return 'Start page must be a whole number.';
-    if (endPage.trim() !== '' && end === null) return 'End page must be a whole number.';
-    if (start !== null && start > totalPages) return `Start page must be within 1-${totalPages}.`;
-    if (end !== null && end > totalPages) return `End page must be within 1-${totalPages}.`;
-    if (start !== null && end !== null && start > end) return 'Start page must be less than or equal to end page.';
+    if (startPage.trim() !== '' && start === null) return t("page-numbers-pdf.start.page.must.be.a.whole.number.4ab1c4");
+    if (endPage.trim() !== '' && end === null) return t("page-numbers-pdf.end.page.must.be.a.whole.number.13a8fe");
+    if (start !== null && start > totalPages) return t("page-numbers-pdf.start.page.must.be.within.1.cd1c4d", { v0: totalPages });
+    if (end !== null && end > totalPages) return t("page-numbers-pdf.end.page.must.be.within.1.af1f39", { v0: totalPages });
+    if (start !== null && end !== null && start > end) return t("page-numbers-pdf.start.page.must.be.less.than.or.28c57b");
 
     return null;
   }, [endPage, startPage, totalPages]);
@@ -255,7 +259,7 @@ export const PageNumbersPDF: React.FC = () => {
 
   const handleApply = async () => {
     if (!file || validationMessage) return;
-    setStatus({ isProcessing: true, progress: 10, message: 'Applying page numbers...' });
+    setStatus({ isProcessing: true, progress: 10, message: t("page-numbers-pdf.applying.page.numbers.e12e84") });
 
     try {
       const bytes = await addPageNumbersToPDF(file.file, {
@@ -271,14 +275,14 @@ export const PageNumbersPDF: React.FC = () => {
         new Blob([bytes], { type: 'application/pdf' }),
         androidExportFileName('page_numbers', file.name, 'pdf'),
       );
-      setStatus({ isProcessing: false, progress: 100, message: 'Numbered PDF ready.' });
+      setStatus({ isProcessing: false, progress: 100, message: t("page-numbers-pdf.numbered.pdf.ready.ff0828") });
     } catch (error) {
       console.error(error);
       setStatus({
         isProcessing: false,
         progress: 0,
         message: '',
-        error: error instanceof Error ? error.message : 'Failed to add page numbers.',
+        error: error instanceof Error ? localizeError(error) : t("page-numbers-pdf.failed.to.add.page.numbers.57d338"),
       });
     }
   };
@@ -291,28 +295,26 @@ export const PageNumbersPDF: React.FC = () => {
 
   return (
     <ToolShell width="full" centered={!file}>
-      <ToolHeader title="Page Numbers" />
+      <ToolHeader title={t("page-numbers-pdf.page.numbers.78c8fa")} />
 
       <AnimatePresence mode="wait">
         {!file ? (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mx-auto max-w-3xl">
-            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label="Choose a PDF for page numbers" />
+            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("page-numbers-pdf.choose.a.pdf.for.page.numbers.b73bd2")} />
           </motion.div>
         ) : (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
             <ToolPanel className="space-y-2.5">
               <div className="flex items-center justify-between">
                 {/* The rendered page is the preview; only its position needs saying. */}
-                <div className="text-sm font-semibold text-[var(--text-primary)]">
-                  Page {previewPageIndex + 1} of {totalPages}{previewLoading ? ' · Rendering…' : ''}
-                </div>
+                <div className="text-sm font-semibold text-[var(--text-primary)]">{t("page-numbers-pdf.message.8693d5b8c4", { v0: previewPageIndex + 1, v1: totalPages, v2: previewLoading ? " · Rendering…" : "" })}</div>
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onPointerDown={(event) => startEditing(event, 'resize')}
                     disabled={previewLoading || !previewUrl || !previewIsNumbered}
                     className="chef-hit-y flex h-10 w-touch items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:opacity-55"
-                    aria-label="Resize page number"
+                    aria-label={t("page-numbers-pdf.resize.page.number.ce2930")}
                   >
                     <Expand aria-hidden size={17} />
                   </button>
@@ -320,17 +322,17 @@ export const PageNumbersPDF: React.FC = () => {
                     onClick={() => jumpPreviewPage(previewPageIndex - 1)}
                     disabled={previewLoading || previewPageIndex <= 0}
                     className="chef-hit-y flex h-10 w-touch items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:opacity-55"
-                    aria-label="Previous preview page"
+                    aria-label={t("page-numbers-pdf.previous.preview.page.030555")}
                   >
-                    <ChevronLeft aria-hidden size={18} />
+                    <ChevronLeft aria-hidden size={18} className="rtl:rotate-180" />
                   </button>
                   <button
                     onClick={() => jumpPreviewPage(previewPageIndex + 1)}
                     disabled={previewLoading || previewPageIndex >= totalPages - 1}
                     className="chef-hit-y flex h-10 w-touch items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:opacity-55"
-                    aria-label="Next preview page"
+                    aria-label={t("page-numbers-pdf.next.preview.page.48ae03")}
                   >
-                    <ChevronRight aria-hidden size={18} />
+                    <ChevronRight aria-hidden size={18} className="rtl:rotate-180" />
                   </button>
                 </div>
               </div>
@@ -338,8 +340,7 @@ export const PageNumbersPDF: React.FC = () => {
               <div className="rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)] p-2">
                 {previewLoading && !previewUrl && (
                   <div className="flex items-center justify-center py-6 text-sm text-[var(--text-secondary)]">
-                    <Loader2 aria-hidden className="mr-2 animate-spin" size={18} /> Rendering preview...
-                  </div>
+                    <Loader2 aria-hidden className="mr-2 animate-spin" size={18} />{t("page-numbers-pdf.rendering.preview.f0a8e2")}</div>
                 )}
 
                 {previewError && !previewUrl && <div className="p-4 text-sm text-[var(--status-danger-text)]">{previewError}</div>}
@@ -350,7 +351,7 @@ export const PageNumbersPDF: React.FC = () => {
                     className="relative w-full overflow-hidden rounded-lg bg-white"
                     style={{ aspectRatio: `${previewDimensions.width} / ${previewDimensions.height}` }}
                   >
-                    <img src={previewUrl} alt="Page preview" className="absolute inset-0 h-full w-full object-contain" />
+                    <img src={previewUrl} alt={t("page-numbers-pdf.page.preview.39a278")} className="absolute inset-0 h-full w-full object-contain" />
 
                     {previewIsNumbered && layout && (
                       <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${previewDimensions.width} ${previewDimensions.height}`} aria-hidden>
@@ -368,7 +369,7 @@ export const PageNumbersPDF: React.FC = () => {
                     {previewIsNumbered && (
                       <div
                         className={`absolute border-2 border-dashed ${editing ? 'border-ink-600' : 'border-ink-500'}`}
-                        aria-label="Drag page number to reposition"
+                        aria-label={t("page-numbers-pdf.drag.page.number.to.reposition.ff2e2e")}
                         style={{
                           left: overlayLeft,
                           top: overlayTop,
@@ -389,13 +390,13 @@ export const PageNumbersPDF: React.FC = () => {
                   sliders below do the same job with visible labels. Only the
                   case the preview cannot explain itself is kept. */}
               {!previewIsNumbered && (
-                <p className="type-caption text-[var(--text-secondary)]">This preview page is outside the selected numbering range.</p>
+                <p className="type-caption text-[var(--text-secondary)]">{t("page-numbers-pdf.this.preview.page.is.outside.the.selected.d7d778")}</p>
               )}
             </ToolPanel>
 
             <ToolPanel className="space-y-3">
               <div>
-                <label htmlFor="page-numbers-format" className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">Format</label>
+                <label htmlFor="page-numbers-format" className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">{t("page-numbers-pdf.format.2f3436")}</label>
                 <input id="page-numbers-format"
                   value={format}
                   onChange={(event) => setFormat(event.target.value)}
@@ -404,13 +405,12 @@ export const PageNumbersPDF: React.FC = () => {
                 />
                 {/* Kept: the token syntax is not guessable from the field. */}
                 <p className="type-caption mt-1 text-[var(--text-tertiary)]">
-                  <code>{'{n}'}</code> is the page number, <code>{'{total}'}</code> the total.
-                </p>
+                  <code>{'{n}'}</code>{t("page-numbers-pdf.is.the.page.number.cc3209")}<code>{'{total}'}</code>{t("page-numbers-pdf.the.total.fa2f83")}</p>
               </div>
 
               <div>
                 <ChefSliderField
-                  label="Font size"
+                  label={t("page-numbers-pdf.font.size.6d784d")}
                   suffix="pt"
                   decimals={1}
                   min={MIN_PAGE_NUMBER_FONT_SIZE}
@@ -418,22 +418,22 @@ export const PageNumbersPDF: React.FC = () => {
                   step={0.5}
                   value={fontSize}
                   onChange={setFontSize}
-                  ariaLabel="Page number font size"
+                  ariaLabel={t("page-numbers-pdf.page.number.font.size.23be36")}
                 />
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">
                 <div>
-                  <ChefSliderField label="Horizontal" suffix="%" decimals={2} min={0} max={100} step={0.25} value={xPercent * 100} onChange={(next) => setXPercent(next / 100)} ariaLabel="Page number horizontal position" />
+                  <ChefSliderField label={t("page-numbers-pdf.horizontal.0abba4")} suffix="%" decimals={2} min={0} max={100} step={0.25} value={xPercent * 100} onChange={(next) => setXPercent(next / 100)} ariaLabel={t("page-numbers-pdf.page.number.horizontal.position.8e73c1")} />
                 </div>
                 <div>
-                  <ChefSliderField label="From bottom" suffix="%" decimals={2} min={0} max={100} step={0.25} value={yPercent * 100} onChange={(next) => setYPercent(next / 100)} ariaLabel="Page number vertical position" />
+                  <ChefSliderField label={t("page-numbers-pdf.from.bottom.9104dd")} suffix="%" decimals={2} min={0} max={100} step={0.25} value={yPercent * 100} onChange={(next) => setYPercent(next / 100)} ariaLabel={t("page-numbers-pdf.page.number.vertical.position.876aaa")} />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label htmlFor="page-numbers-start" className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">Start page</label>
+                  <label htmlFor="page-numbers-start" className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">{t("page-numbers-pdf.start.page.d0b3b9")}</label>
                   <input id="page-numbers-start"
                     value={startPage}
                     onChange={(event) => setStartPage(event.target.value.replace(/[^\d]/g, ''))}
@@ -442,7 +442,7 @@ export const PageNumbersPDF: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label htmlFor="page-numbers-end" className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">End page</label>
+                  <label htmlFor="page-numbers-end" className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">{t("page-numbers-pdf.end.page.54dbe3")}</label>
                   <input id="page-numbers-end"
                     value={endPage}
                     onChange={(event) => setEndPage(event.target.value.replace(/[^\d]/g, ''))}
@@ -468,7 +468,7 @@ export const PageNumbersPDF: React.FC = () => {
                 icon={<Hash aria-hidden size={18} />}
                 onClick={() => void handleApply()}
               >
-                {status.isProcessing ? status.message || 'Applying page numbers...' : 'Save numbered PDF'}
+                {status.isProcessing ? status.message || t("page-numbers-pdf.applying.page.numbers.e12e84") : t("page-numbers-pdf.save.numbered.pdf.5815aa")}
               </Button>
 
               <button
@@ -482,9 +482,7 @@ export const PageNumbersPDF: React.FC = () => {
                   setPreviewUrl(null);
                 }}
                 className="chef-pressable chef-hit-y w-full rounded-[var(--radius-control)] py-2 text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)]"
-              >
-                Choose another file
-              </button>
+              >{t("page-numbers-pdf.choose.another.file.26eac8")}</button>
             </ToolPanel>
           </motion.div>
         )}

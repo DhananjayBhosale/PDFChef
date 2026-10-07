@@ -1,0 +1,52 @@
+{
+  "appLocale": "da-DK",
+  "appleLocale": "da",
+  "googleLocale": "da-DK",
+  "apple": {
+    "name": "PDF Chef",
+    "subtitle": "Rediger, flet og komprimer PDF",
+    "promotionalText": "Læs, rediger og organiser PDF-filer på din enhed. Flet filer, administrer sider og tilføj en håndskreven underskrift.",
+    "description": "PDF Chef hjælper dig med at læse, redigere, flette, opdele, komprimere og underskrive PDF-filer på din enhed.\n\nOrganiser sider, tilføj tekst og billeder, indsæt en håndskreven underskrift, tilføj vandmærker eller sidenumre, og beskyt PDF-filer med en adgangskode. Konverter understøttede billeder og dokumenter, og udtræk tekst. Resultaterne afhænger af kildefilen og det valgte værktøj.\n\nNormal PDF-behandling foregår på din enhed. Dine dokumenter uploades ikke til en PDF Chef-server til behandling. Offlineværktøjer forbliver tilgængelige, efter deres ressourcer er indlæst.\n\nPDF Chef kræver ikke en konto. Gennemse dit resultat, før du deler eller eksporterer det.\n\nPå iOS er de første fem vellykkede opgaver i hver rullende syvdages kvoteperiode komplette opgaver, som du kan gemme, dele og eksportere. Perioden starter med den første vellykkede opgave. Efter fem opgaver er behandling og forhåndsvisning fortsat tilgængelige, men at gemme, dele og eksportere kræver Pro, indtil kvoten nulstilles.\n\nPro Månedlig fornys automatisk, indtil det opsiges. Pro Livstid er et engangskøb, ikke et abonnement. Begge muligheder understøtter Apple Familiedeling. Priser og købsoplysninger vises i appen, før du køber. Gendan køb fra Indstillinger.\n\nTerms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+    "whatsNew": "Version {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Månedlig",
+      "description": "Fuld eksport. Fornys, indtil det opsiges."
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Livstid",
+      "description": "Fuld eksport. Engangskøb."
+    },
+    "screenshot": {
+      "1": "Dine PDF-værktøjer samlet ét sted",
+      "2": "Rediger tekst og tilføj billeder",
+      "3": "Flet filer og organiser sider",
+      "4": "Se forhåndsvisning, før du gemmer",
+      "5": "Tilføj din håndskrevne underskrift",
+      "6": "Arbejd på din enhed"
+    },
+    "keywords": "opdel,scan,underskriv,konverter,læser,vandmærke,adgangskode,roter,udtræk"
+  },
+  "google": {
+    "name": "PDF Chef",
+    "shortDescription": "Rediger, flet, komprimer og underskriv PDF-filer på din enhed.",
+    "fullDescription": "PDF Chef hjælper dig med at læse, redigere, flette, opdele, komprimere og underskrive PDF-filer på din enhed.\n\nOrganiser sider, tilføj tekst og billeder, indsæt en håndskreven underskrift, tilføj vandmærker eller sidenumre, og beskyt PDF-filer med en adgangskode. Konverter understøttede billeder og dokumenter, og udtræk tekst. Resultaterne afhænger af kildefilen og det valgte værktøj.\n\nNormal PDF-behandling foregår på din enhed. Dine dokumenter uploades ikke til en PDF Chef-server til behandling. Offlineværktøjer forbliver tilgængelige, efter deres ressourcer er indlæst.\n\nPDF Chef kræver ikke en konto. Gennemse dit resultat, før du deler eller eksporterer det.",
+    "whatsNew": "Version {version}\n{releaseHighlights}",
+    "monthly": {
+      "name": "PDF Chef Pro Månedlig",
+      "description": "Gem, del og eksporter hvert resultat. Fornys månedligt, indtil det opsiges.",
+      "benefit": "Gem og del hvert resultat"
+    },
+    "lifetime": {
+      "name": "PDF Chef Pro Livstid",
+      "description": "Gem, del og eksporter hvert resultat med et engangskøb."
+    },
+    "screenshot": {
+      "1": "Dine PDF-værktøjer samlet ét sted",
+      "2": "Rediger tekst og tilføj billeder",
+      "3": "Flet filer og organiser sider",
+      "4": "Se forhåndsvisning, før du gemmer",
+      "5": "Tilføj din håndskrevne underskrift",
+      "6": "Arbejd på din enhed"
+    }
+  }
+}

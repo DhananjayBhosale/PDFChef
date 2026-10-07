@@ -1,3 +1,4 @@
+import { getLocale } from './i18n/core.ts';
 /**
  * Dashboard tool search.
  *
@@ -256,9 +257,10 @@ const QUERY_PHRASE_EXPANSIONS: Record<string, string[]> = {
 
 export const normalizeSearchText = (value: string): string =>
   value
-    .toLowerCase()
+    .toLocaleLowerCase(getLocale())
     .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, ' ')
+    .normalize('NFKC')
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ')
     .trim()
     .replace(/\s+/g, ' ');
 
@@ -312,11 +314,11 @@ interface ToolSearchProfile {
   priorityTokens: Set<string>;
 }
 
-const profileCache = new WeakMap<ToolCardData, ToolSearchProfile>();
+const profileCache = new WeakMap<ToolCardData, { locale: string; profile: ToolSearchProfile }>();
 
 const searchProfileFor = (tool: ToolCardData): ToolSearchProfile => {
   const cached = profileCache.get(tool);
-  if (cached) return cached;
+  if (cached?.locale === getLocale()) return cached.profile;
 
   const title = normalizeSearchText(tool.name);
   const subtitle = normalizeSearchText(tool.description);
@@ -341,7 +343,7 @@ const searchProfileFor = (tool: ToolCardData): ToolSearchProfile => {
   const priorityTokens = new Set([...priorityTerms].flatMap(tokenizeSearchText));
 
   const profile: ToolSearchProfile = { title, subtitle, terms, tokens, priorityTerms, priorityTokens };
-  profileCache.set(tool, profile);
+  profileCache.set(tool, { locale: getLocale(), profile });
   return profile;
 };
 

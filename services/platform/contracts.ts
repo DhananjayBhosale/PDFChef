@@ -36,7 +36,10 @@ export interface ImportedDocument {
 }
 
 export interface DocumentImportService {
-  importDocuments(options?: { acceptedMimeTypes?: readonly string[] }): Promise<readonly ImportedDocument[]>;
+  importDocuments(options?: {
+    acceptedMimeTypes?: readonly string[];
+    maximumItems?: number;
+  }): Promise<readonly ImportedDocument[]>;
   takePendingImports(): Promise<readonly ImportedDocument[]>;
 }
 
@@ -111,8 +114,30 @@ export type PdfReaderResult = Readonly<
 >;
 
 export interface PdfReaderService {
+  /** True only when this reader can open directly into its signature report. */
+  readonly supportsSignatureVerification?: boolean;
   isEligible(document: StoredDocument): boolean;
-  open(document: StoredDocument): Promise<PdfReaderResult>;
+  open(
+    document: StoredDocument,
+    options?: { readonly initialAction?: 'verify-signatures' },
+  ): Promise<PdfReaderResult>;
+}
+
+/** A native-opened PDF that should continue in one of the existing web tool routes. */
+export interface PdfOpenHandoff {
+  readonly record: RecentRecord;
+  readonly toolPath: string;
+}
+
+/**
+ * Buffered native-to-web continuation for Open-In PDFs.
+ *
+ * Native reading does not copy the document through the JavaScript bridge. Only
+ * when the reader chooses a web tool does the platform hand the durable record
+ * back to React, which can reopen it through the existing bounded bridge.
+ */
+export interface PdfOpenHandoffService {
+  start(consume: (handoff: PdfOpenHandoff) => Promise<void> | void): Promise<() => Promise<void>>;
 }
 
 /** Native-only signature details for the exact retained File returned by reopen. */
@@ -126,6 +151,8 @@ export interface WorkspaceCapabilities {
   persistentRename: boolean;
   durableDocuments: boolean;
   separateClearActions: boolean;
+  /** False when the platform cannot write externally without presenting a picker. */
+  automaticExternalExport?: boolean;
 }
 
 /**
@@ -197,7 +224,11 @@ export interface OutputDeliveryRequest {
 
 /** A retained result is saved even when its optional external export needs retry. */
 export interface OutputDeliveryResult {
-  readonly exportIssue: 'cancelled' | 'failed';
+  readonly exportIssue?: 'cancelled' | 'failed';
+  /** Whether this delivery already wrote a copy outside the app. */
+  readonly externallyExported?: boolean;
+  /** The exact durable record retained for this output, when history is enabled. */
+  readonly recentRecord?: RecentRecord;
 }
 
 export type OutputDeliveryHandler = (request: OutputDeliveryRequest) => Promise<void | OutputDeliveryResult>;
@@ -219,6 +250,7 @@ export interface WorkspacePlatform {
   applicationMetadata?: ApplicationMetadataService;
   documentScanner?: DocumentScannerService;
   pdfReader?: PdfReaderService;
+  pdfOpenHandoffs?: PdfOpenHandoffService;
   pdfSignatureVerification?: PdfSignatureVerificationService;
   pendingImports?: PendingImportDeliveryService;
   recordRecovery?: RecordRecoveryService;
@@ -227,6 +259,7 @@ export interface WorkspacePlatform {
   reopen(record: RecentRecord): Promise<File>;
   rename?: (record: RecentRecord, name: string) => Promise<void>;
   saveFresh(result: FreshResult): Promise<void>;
+  keepFresh?: (result: FreshResult) => Promise<void>;
   shareFresh?: (result: FreshResult) => Promise<void>;
 }
 
