@@ -34,6 +34,8 @@ import {
   getOutput,
   listOutputs,
   recordOutput,
+  OUTPUT_EVENT,
+  RECORDS_CHANGED_EVENT,
   type OutputRecord,
 } from '../services/workspace';
 import { triggerBrowserDownload } from '../services/pdfShared';
@@ -330,6 +332,7 @@ export const useRecentRecords = () => {
   const platform = useWorkspacePlatform();
   const [state, setState] = useState<AsyncState<readonly RecentRecord[]>>({ status: 'loading' });
   const alive = useRef(true);
+  const latestRead = useRef(0);
 
   useEffect(() => {
     alive.current = true;
@@ -339,18 +342,27 @@ export const useRecentRecords = () => {
   }, []);
 
   const refresh = useCallback(async () => {
+    const read = ++latestRead.current;
     try {
       const value = await platform.records.list();
-      if (alive.current) setState({ status: 'ready', value });
+      if (alive.current && read === latestRead.current) setState({ status: 'ready', value });
     } catch (caught) {
-      if (alive.current) {
+      if (alive.current && read === latestRead.current) {
         setState({ status: 'error', message: messageFrom(caught, t("use-workspace-runtime.local.records.could.not.be.read.on.2e67b3")) });
       }
     }
   }, [platform]);
 
   useEffect(() => {
+    const onRecordsChanged = () => { void refresh(); };
+    window.addEventListener(OUTPUT_EVENT, onRecordsChanged);
+    window.addEventListener(RECORDS_CHANGED_EVENT, onRecordsChanged);
     void refresh();
+    return () => {
+      window.removeEventListener(OUTPUT_EVENT, onRecordsChanged);
+      window.removeEventListener(RECORDS_CHANGED_EVENT, onRecordsChanged);
+      latestRead.current += 1;
+    };
   }, [refresh]);
 
   return { state, refresh };

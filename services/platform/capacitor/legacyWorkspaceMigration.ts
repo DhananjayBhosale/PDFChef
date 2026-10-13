@@ -187,16 +187,18 @@ export const migrateLegacyWorkspace = async (
   const legacyOutputs = await source.list();
 
   for (const legacy of legacyOutputs) {
-    const marker = await markerFor(legacy.id);
     let journalEntry = await journal.get(legacy.id);
+    // A completed import belongs to the native workspace now. Replaying its
+    // legacy snapshot would undo later renames, deletions, or a deliberate clear.
+    // Only interrupted imports are repaired here; records.list recovers native
+    // files whose Recent metadata is missing without replaying legacy state.
+    if (journalEntry?.status === 'complete') continue;
+
+    const marker = await markerFor(legacy.id);
     let document: StoredDocument | null = null;
 
     if (journalEntry?.documentRef && await bridge.exists(journalEntry.documentRef)) {
       document = await bridge.stat(journalEntry.documentRef);
-      const expected = recentEntry(legacy, document);
-      if (journalEntry.status === 'complete' && sameRecentEntry(await recent.get(legacy.id), expected)) {
-        continue;
-      }
     }
 
     if (!document) {

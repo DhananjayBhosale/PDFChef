@@ -213,7 +213,7 @@ test('Recent failure leaves a pending ref and restart reuses it to repair metada
   assert.equal(state.journal.entries.get(state.output.id)?.status, 'complete');
 });
 
-test('a complete journal repairs deleted Recent metadata without retaining again', async () => {
+test('a complete import does not replay legacy metadata after Recent is cleared', async () => {
   const state = harness();
   await migrateLegacyWorkspace(state);
   state.recent.entries.clear();
@@ -221,8 +221,59 @@ test('a complete journal repairs deleted Recent metadata without retaining again
   await migrateLegacyWorkspace(state);
 
   assert.equal(state.bridge.retainedBytes.length, 1);
-  assert.equal(state.recent.entries.get(state.output.id)?.documentRef, ref('native-1'));
+  assert.equal(state.recent.entries.has(state.output.id), false);
   assert.equal(state.journal.entries.get(state.output.id)?.status, 'complete');
+});
+
+test('a completed import preserves a later native rename', async () => {
+  const state = harness();
+  await migrateLegacyWorkspace(state);
+  const entry = state.recent.entries.get(state.output.id)!;
+  await state.bridge.rename(entry.documentRef!, 'renamed.pdf');
+  await state.recent.save({ ...entry, name: 'renamed.pdf' });
+
+  await migrateLegacyWorkspace(state);
+
+  assert.equal(state.recent.entries.get(state.output.id)?.name, 'renamed.pdf');
+  assert.equal((await state.bridge.stat(entry.documentRef!)).name, 'renamed.pdf');
+  assert.equal(state.bridge.retainedBytes.length, 1);
+});
+
+test('a completed import does not recreate a file deleted from the native workspace', async () => {
+  const state = harness();
+  await migrateLegacyWorkspace(state);
+  state.bridge.documents.clear();
+  state.recent.entries.clear();
+
+  await migrateLegacyWorkspace(state);
+
+  assert.equal(state.bridge.documents.size, 0);
+  assert.equal(state.recent.entries.size, 0);
+  assert.equal(state.bridge.retainedBytes.length, 1);
+});
+
+test('native reconciliation still recovers an existing file after completed import metadata is lost', async () => {
+  const state = harness();
+  await migrateLegacyWorkspace(state);
+  await state.bridge.rename(ref('native-1'), 'current-name.pdf');
+  state.recent.entries.clear();
+  const platform = createIOSWorkspacePlatform({
+    bridge: state.bridge,
+    recent: state.recent,
+    settings: { async load() { return null; }, async save() {}, async clear() {} },
+    legacyWorkspaceSource: state.source,
+    legacyWorkspaceJournal: state.journal,
+  });
+  try {
+    await platform.ready;
+    const records = await platform.records.list();
+    assert.equal(records.length, 1);
+    assert.equal(records[0].entry.name, 'current-name.pdf');
+    assert.equal(records[0].entry.documentRef, ref('native-1'));
+    assert.equal(state.bridge.retainedBytes.length, 1);
+  } finally {
+    await platform.dispose();
+  }
 });
 
 test('native startup registers pending-import delivery before reading legacy IndexedDB', async () => {

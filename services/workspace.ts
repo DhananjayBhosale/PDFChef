@@ -39,6 +39,7 @@ export const ANDROID_LEGACY_INTERFACE_FONT_CHECK_KEY = 'pdfchef.android.legacy-i
 export const RECENT_TOOLS_KEY = 'pdfchef.workspace.recent-tools.v1';
 export const SAVINGS_TALLY_KEY = 'pdfchef.workspace.savings.v1';
 export const OUTPUT_EVENT = 'pdfchef:output-ready';
+export const RECORDS_CHANGED_EVENT = 'pdfchef:records-changed';
 
 const DEFAULT_SETTINGS: WorkspaceSettings = {
   autoDownload: true,
@@ -299,4 +300,9 @@ export const recordOutput = async (
 
 export const announceOutput = (record: OutputRecord) => {
   window.dispatchEvent(new CustomEvent<OutputRecord>(OUTPUT_EVENT, { detail: record }));
+};
+
+/** Refresh retained-file lists without opening another result action sheet. */
+export const announceRecordsChanged = () => {
+  window.dispatchEvent(new Event(RECORDS_CHANGED_EVENT));
 };

@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { CheckCircle2, Clock, Download, ExternalLink, MoreHorizontal, Pencil, Share2, Wrench, X } from 'lucide-react';
 import type { OutputReadyRecord } from '../../services/pdfShared';
-import { OUTPUT_EVENT, getWorkspaceSettings } from '../../services/workspace';
+import { OUTPUT_EVENT, announceRecordsChanged, getWorkspaceSettings } from '../../services/workspace';
 import { Button, Sheet, StatusLine, cx } from './Primitives';
 import { formatBytes, sanitizeFilenameStem, splitFilename } from './format';
 import {
@@ -147,7 +147,8 @@ export const OutputCenter: React.FC = () => {
     if (!platform.keepFresh || !result) return false;
     const keep = async () => {
       await platform.keepFresh!(result);
-      setRetained(true);
+      announceRecordsChanged();
+      if (recordRef.current?.id === record.id) setRetained(true);
     };
     if (!accessLocked) return keep();
     const accessResult = await runWithExportAccess(keep, { operationId: record.id });
