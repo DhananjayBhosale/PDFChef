@@ -1,5 +1,5 @@
 {
-  "originHash" : "b52bb767645b197044295a3a0b203664cefcb4ee4d8a09f2cafa01281a8f5934",
+  "originHash" : "5868599bffd6bcdf17f8733b736a0bb47cfda217fbd1b3d18c1841e3ce47ce73",
   "pins" : [
     {
       "identity" : "capacitor-swift-pm",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "4f71d0b979f2f957326f04353eca7604ee937e1e",
         "version" : "8.5.0"
+      }
+    },
+    {
+      "identity" : "openssl-package",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/krzyzanowskim/OpenSSL-Package.git",
+      "state" : {
+        "revision" : "a3809db22a45e3ff658377a24da252982a306b9b",
+        "version" : "3.6.3000"
       }
     }
   ],

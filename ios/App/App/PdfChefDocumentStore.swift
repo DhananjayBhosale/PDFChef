@@ -321,7 +321,11 @@ final class PdfChefDocumentStore {
     func makePresentationCopy(ref: String, name: String?) throws -> URL {
         try queue.sync {
             let document = try statUnlocked(ref: ref)
-            let filename = try presentationFilename(name ?? document.name, fallback: ref)
+            var filename = try presentationFilename(name ?? document.name, fallback: ref)
+            if document.mimeType?.lowercased() == "application/pdf"
+                && !filename.lowercased().hasSuffix(".pdf") {
+                filename += ".pdf"
+            }
             let container = presentationURL.appendingPathComponent(UUID().uuidString, isDirectory: true)
             try fileManager.createDirectory(at: container, withIntermediateDirectories: false)
             try protect(container)
@@ -337,6 +341,15 @@ final class PdfChefDocumentStore {
                 try? fileManager.removeItem(at: container)
                 throw error
             }
+        }
+    }
+
+    /// Returns the verified retained file only to native readers. The URL never
+    /// crosses the Capacitor boundary, and no second whole-file copy is made.
+    func readerURL(ref: String) throws -> URL {
+        try queue.sync {
+            _ = try statUnlocked(ref: ref)
+            return contentURL(for: ref)
         }
     }
 
@@ -356,7 +369,7 @@ final class PdfChefDocumentStore {
     func rename(ref: String, name: String) throws -> PdfChefStoredDocument {
         try queue.sync {
             var document = try statUnlocked(ref: ref)
-            document.name = clean(name)
+            document.name = try presentationFilename(name, fallback: ref)
             try writeMetadata(document)
             return document
         }

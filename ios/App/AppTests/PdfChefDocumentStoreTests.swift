@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import UniformTypeIdentifiers
 import XCTest
 @testable import App
 
@@ -93,6 +94,8 @@ final class PdfChefDocumentStoreTests: XCTestCase {
         let renamed = try store.rename(ref: first.ref, name: "renamed.pdf")
         XCTAssertEqual(renamed.name, "renamed.pdf")
         XCTAssertEqual(try store.stat(ref: first.ref).name, "renamed.pdf")
+        XCTAssertThrowsError(try store.rename(ref: first.ref, name: "../bad.pdf"))
+        XCTAssertEqual(try store.stat(ref: first.ref).name, "renamed.pdf")
 
         try store.delete(ref: first.ref)
         XCTAssertFalse(store.exists(ref: first.ref))
@@ -125,10 +128,31 @@ final class PdfChefDocumentStoreTests: XCTestCase {
         XCTAssertEqual(copy.lastPathComponent, "export.pdf")
         XCTAssertEqual(try Data(contentsOf: copy), Data("present".utf8))
         XCTAssertTrue(copy.path.hasPrefix(rootURL.appendingPathComponent("Presentation").path + "/"))
+        let provider = PdfChefDocumentPresentation.itemProvider(for: copy)
+        XCTAssertEqual(provider.suggestedName, "export.pdf")
+        XCTAssertEqual(provider.registeredTypeIdentifiers, [UTType.pdf.identifier])
+        let loaded = expectation(description: "PDF file representation")
+        provider.loadFileRepresentation(forTypeIdentifier: UTType.pdf.identifier) { url, error in
+            XCTAssertNil(error)
+            XCTAssertEqual(url?.pathExtension.lowercased(), "pdf")
+            XCTAssertEqual(url?.lastPathComponent, "export.pdf")
+            if let url {
+                XCTAssertEqual(try? Data(contentsOf: url), Data("present".utf8))
+            } else {
+                XCTFail("The PDF representation did not provide a file")
+            }
+            loaded.fulfill()
+        }
+        wait(for: [loaded], timeout: 5)
+
+        let renamedCopy = try store.makePresentationCopy(ref: retained.ref, name: "renamed.bin")
+        XCTAssertEqual(renamedCopy.lastPathComponent, "renamed.bin.pdf")
+        XCTAssertEqual(try Data(contentsOf: renamedCopy), Data("present".utf8))
 
         XCTAssertThrowsError(try store.makePresentationCopy(ref: retained.ref, name: "../escape.pdf"))
         XCTAssertThrowsError(try store.removePresentationCopy(at: rootURL.appendingPathComponent("outside.pdf")))
         try store.removePresentationCopy(at: copy)
+        try store.removePresentationCopy(at: renamedCopy)
         XCTAssertFalse(FileManager.default.fileExists(atPath: copy.path))
     }
 
@@ -237,6 +261,25 @@ final class PdfChefDocumentStoreTests: XCTestCase {
 
         XCTAssertTrue(inbox.acceptSynchronously(url: source))
         XCTAssertEqual(try store.takePendingImports().count, 1)
+    }
+
+    func testInboxRemovesOnlyTheOwnedOpenInCopyAfterDurableImport() throws {
+        let inboxDirectory = rootURL.appendingPathComponent("AppDocuments/Inbox", isDirectory: true)
+        try FileManager.default.createDirectory(at: inboxDirectory, withIntermediateDirectories: true)
+        let ownedSource = inboxDirectory.appendingPathComponent("owned.pdf")
+        let providerSource = rootURL.appendingPathComponent("provider.pdf")
+        try Data("%PDF owned".utf8).write(to: ownedSource)
+        try Data("%PDF provider".utf8).write(to: providerSource)
+        let inbox = PdfChefDocumentInbox(
+            storeProvider: { self.store },
+            inboxDirectoryProvider: { inboxDirectory }
+        )
+
+        XCTAssertTrue(inbox.acceptSynchronously(url: ownedSource))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: ownedSource.path))
+        XCTAssertTrue(inbox.acceptSynchronously(url: providerSource))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: providerSource.path))
+        XCTAssertEqual(try store.takePendingImports().count, 2)
     }
 
     func testWarmInboxSignalsOnlyAfterPendingImportIsDurable() throws {

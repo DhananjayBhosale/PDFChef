@@ -25,11 +25,15 @@ final class PdfChefDocumentsPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "pickDocuments", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "exportDocument", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "shareDocument", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "signatureVerificationAvailable", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "presentSignatureReport", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openReader", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "signalHaptic", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getApplicationMetadata", returnType: CAPPluginReturnPromise)
     ]
 
     private let workQueue = DispatchQueue(label: "com.dhananjaytech.pdfchef.documents-plugin", qos: .userInitiated)
+    private let batchQueue = DispatchQueue(label: "com.dhananjaytech.pdfchef.pdf-batching", qos: .userInitiated)
     private let presentation = PdfChefDocumentPresentation()
     private static let pickerMimeTypes: Set<String> = [
         "application/pdf",
@@ -194,6 +198,10 @@ final class PdfChefDocumentsPlugin: CAPPlugin, CAPBridgedPlugin {
             guard let mimeTypes = call.getArray("acceptedMimeTypes", String.self), !mimeTypes.isEmpty else {
                 throw PluginInputError(message: "acceptedMimeTypes must be a non-empty array")
             }
+            guard let maximumItems = call.getInt("maximumItems"),
+                  (1...100).contains(maximumItems) else {
+                throw PluginInputError(message: "maximumItems must be an integer from 1 through 100")
+            }
             let contentTypes = try mimeTypes.map { value -> UTType in
                 guard Self.pickerMimeTypes.contains(value), let type = UTType(mimeType: value) else {
                     throw PluginInputError(message: "acceptedMimeTypes contains an invalid MIME type")
@@ -206,11 +214,22 @@ final class PdfChefDocumentsPlugin: CAPPlugin, CAPBridgedPlugin {
             }
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
-                self.presentation.pick(from: presenter, contentTypes: contentTypes) { result in
+                self.presentation.pick(
+                    from: presenter,
+                    contentTypes: contentTypes,
+                    maximumItems: maximumItems
+                ) { result in
                     switch result {
                     case .failure(let error):
                         self.reject(call, error: error)
                     case .success(let urls):
+                        guard urls.count <= maximumItems else {
+                            self.reject(
+                                call,
+                                error: PluginInputError(message: "The picker returned too many documents")
+                            )
+                            return
+                        }
                         self.copyPickedDocuments(urls, acceptedTypes: contentTypes, call: call)
                     }
                 }
@@ -226,6 +245,173 @@ final class PdfChefDocumentsPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func shareDocument(_ call: CAPPluginCall) {
         presentDocument(call, share: true)
+    }
+
+    @objc func signatureVerificationAvailable(_ call: CAPPluginCall) {
+        call.resolve(["available": PdfChefSignatureVerifier.isAvailable])
+    }
+
+    @objc func presentSignatureReport(_ call: CAPPluginCall) {
+        workQueue.async {
+            do {
+                guard PdfChefSignatureVerifier.isAvailable else {
+                    call.reject("Signature verification is unavailable.", "SIGNATURE_VERIFICATION_UNAVAILABLE")
+                    return
+                }
+                let store = try PdfChefDocumentStore.sharedResult.get()
+                let ref = try Self.requiredString("ref", from: call)
+                let document = try store.stat(ref: ref)
+                let isPDF = document.mimeType?.caseInsensitiveCompare("application/pdf") == .orderedSame
+                    || document.name?.lowercased().hasSuffix(".pdf") == true
+                guard isPDF else { throw PluginInputError(message: "ref must identify a PDF") }
+                guard document.sizeBytes > 0,
+                      document.sizeBytes <= PdfChefSignatureVerifier.maximumFileSizeBytes else {
+                    throw PluginInputError(message: "ref identifies a PDF that is too large to verify")
+                }
+                let documentURL = try store.readerURL(ref: ref)
+                let displayName = try Self.readerDisplayName(
+                    call.getString("name") ?? document.name ?? "Document.pdf"
+                )
+                DispatchQueue.main.async {
+                    guard let presenter = self.bridge?.viewController else {
+                        self.reject(call, error: PdfChefDocumentPresentationError.presenterUnavailable)
+                        return
+                    }
+                    self.presentation.presentSignatureReport(
+                        documentURL: documentURL,
+                        displayName: displayName,
+                        from: presenter
+                    ) { result in
+                        switch result {
+                        case .success(let completed): call.resolve(["completed": completed])
+                        case .failure(let error): self.reject(call, error: error)
+                        }
+                    }
+                }
+            } catch {
+                self.reject(call, error: error)
+            }
+        }
+    }
+
+    @objc func openReader(_ call: CAPPluginCall) {
+        workQueue.async { [self] in
+            do {
+                let store = try PdfChefDocumentStore.sharedResult.get()
+                let ref = try Self.requiredString("ref", from: call)
+                let document = try store.stat(ref: ref)
+                let isPDF = document.mimeType?.caseInsensitiveCompare("application/pdf") == .orderedSame
+                    || document.name?.lowercased().hasSuffix(".pdf") == true
+                guard isPDF else { throw PluginInputError(message: "ref must identify a PDF") }
+                let displayName = try Self.readerDisplayName(
+                    call.getString("displayName") ?? document.name ?? "Document.pdf"
+                )
+                let documentURL = try store.readerURL(ref: ref)
+                DispatchQueue.main.async {
+                    guard let presenter = self.bridge?.viewController else {
+                        self.reject(call, error: PdfChefDocumentPresentationError.presenterUnavailable)
+                        return
+                    }
+                    self.presentation.presentReader(
+                        documentURL: documentURL,
+                        displayName: displayName,
+                        documentSizeBytes: document.sizeBytes,
+                        from: presenter,
+                        share: { [weak self] reader in
+                            self?.shareReaderDocument(
+                                ref: ref,
+                                displayName: displayName,
+                                from: reader
+                            )
+                        },
+                        canVerifySignatures: PdfChefSignatureVerifier.isAvailable,
+                        verifySignatures: { [weak self] reader in
+                            self?.presentation.presentSignatureReport(
+                                documentURL: documentURL,
+                                displayName: displayName,
+                                from: reader,
+                                completion: { _ in }
+                            )
+                        },
+                        prepareLargeDocument: { [weak self] cancellation, progress, completion in
+                            guard let self else {
+                                completion(.failure(PdfChefDocumentPresentationError.presentationFailed))
+                                return
+                            }
+                            self.prepareGeneratedParts(
+                                for: ref,
+                                documentURL: documentURL,
+                                displayName: displayName,
+                                store: store,
+                                cancellation: cancellation,
+                                progress: progress,
+                                completion: completion
+                            )
+                        }
+                    ) { result in
+                        switch result {
+                        case .failure(let error):
+                            self.reject(call, error: error)
+                        case .success(.closed):
+                            call.resolve(["action": "closed"])
+                        case .success(.tool(let toolPath)):
+                            call.resolve(["action": "tool", "toolPath": toolPath])
+                        case .success(.batched(let partCount)):
+                            call.resolve(["action": "batched", "partCount": partCount])
+                        }
+                    }
+                }
+            } catch {
+                self.reject(call, error: error)
+            }
+        }
+    }
+
+    private func prepareGeneratedParts(
+        for ref: String,
+        documentURL: URL,
+        displayName: String,
+        store: PdfChefDocumentStore,
+        cancellation: PdfChefPdfBatchCancellationToken,
+        progress: @escaping (PdfChefPdfBatchProgress) -> Void,
+        completion: @escaping (Result<Int, Error>) -> Void
+    ) {
+        Task { @MainActor [self] in
+            guard let purchases = bridge?.plugin(withName: "PdfChefPurchases") as? PdfChefPurchasesPlugin else {
+                completion(.failure(PdfChefDocumentPresentationError.presentationFailed))
+                return
+            }
+            let authorization = await purchases.reserveGeneratedJob(operationID: "split:\(ref)")
+            guard case .allowed(let reservation) = authorization else {
+                completion(.failure(PdfChefPdfBatcherError.freeJobsExhausted))
+                return
+            }
+            let finishReservation: @MainActor @Sendable (Bool) -> Void = { succeeded in
+                purchases.finishGeneratedJob(reservation: reservation, succeeded: succeeded)
+            }
+            batchQueue.async {
+                let result: Result<Int, Error> = Result {
+                    let parts = try PdfChefPdfBatcher().split(
+                        documentURL: documentURL,
+                        baseName: displayName,
+                        store: store,
+                        cancellation: cancellation,
+                        progress: progress
+                    )
+                    if cancellation.isCancelled {
+                        for part in parts { try? store.delete(ref: part.ref) }
+                        throw PdfChefPdfBatcherError.cancelled
+                    }
+                    return parts.count
+                }
+                Task { @MainActor in
+                    let succeeded: Bool
+                    if case .success = result { succeeded = true } else { succeeded = false }
+                    finishReservation(succeeded)
+                    completion(result)
+                }
+            }
+        }
     }
 
     @objc func signalHaptic(_ call: CAPPluginCall) {
@@ -287,6 +473,43 @@ final class PdfChefDocumentsPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.resolve(["imports": documents.map { ["document": Self.documentObject($0)] }])
             } catch {
                 self.reject(call, error: error)
+            }
+        }
+    }
+
+    private func shareReaderDocument(ref: String, displayName: String, from presenter: UIViewController) {
+        workQueue.async {
+            do {
+                let store = try PdfChefDocumentStore.sharedResult.get()
+                let copyURL = try store.makePresentationCopy(ref: ref, name: displayName)
+                DispatchQueue.main.async {
+                    self.presentation.share(copyURL: copyURL, from: presenter) { result in
+                        self.workQueue.async {
+                            try? store.removePresentationCopy(at: copyURL)
+                            if case .failure = result {
+                                DispatchQueue.main.async {
+                                    let alert = UIAlertController(
+                                        title: "Couldn’t share PDF",
+                                        message: "Please try again.",
+                                        preferredStyle: .alert
+                                    )
+                                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                                    presenter.present(alert, animated: !UIAccessibility.isReduceMotionEnabled)
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    let alert = UIAlertController(
+                        title: "Couldn’t share PDF",
+                        message: "Please try again.",
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    presenter.present(alert, animated: !UIAccessibility.isReduceMotionEnabled)
+                }
             }
         }
     }
@@ -414,6 +637,20 @@ final class PdfChefDocumentsPlugin: CAPPlugin, CAPBridgedPlugin {
     private static func requiredString(_ key: String, from call: CAPPluginCall) throws -> String {
         guard let value = call.getString(key), !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw PluginInputError(message: "\(key) is required")
+        }
+        return value
+    }
+
+    private static func readerDisplayName(_ value: String) throws -> String {
+        guard !value.isEmpty,
+              value.count <= 180,
+              value.utf8.count <= 720,
+              value != ".",
+              value != "..",
+              !value.contains("/"),
+              !value.contains("\\"),
+              !value.contains("\0") else {
+            throw PluginInputError(message: "displayName is invalid")
         }
         return value
     }

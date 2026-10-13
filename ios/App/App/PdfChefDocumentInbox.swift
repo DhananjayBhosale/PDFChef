@@ -9,11 +9,17 @@ extension Notification.Name {
 final class PdfChefDocumentInbox {
     private let workQueue = DispatchQueue(label: "com.dhananjaytech.pdfchef.document-inbox", qos: .userInitiated)
     private let storeProvider: () throws -> PdfChefDocumentStore
+    private let inboxDirectoryProvider: () -> URL?
 
     init(storeProvider: @escaping () throws -> PdfChefDocumentStore = {
         try PdfChefDocumentStore.sharedResult.get()
+    }, inboxDirectoryProvider: @escaping () -> URL? = {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+            .first?
+            .appendingPathComponent("Inbox", isDirectory: true)
     }) {
         self.storeProvider = storeProvider
+        self.inboxDirectoryProvider = inboxDirectoryProvider
     }
 
     func accept(url: URL) {
@@ -62,6 +68,21 @@ final class PdfChefDocumentInbox {
             // Never log provider URLs, filenames, bookmarks, or other document metadata.
             NSLog("PDF Chef could not retain an incoming document.")
         }
+        if committed {
+            removeOwnedInboxSourceIfNeeded(url)
+        }
         return committed
+    }
+
+    /// When iOS gives an app a copied Open-In document, that handoff lives in
+    /// Documents/Inbox. The durable store now owns the bytes, so discard only
+    /// that app-container copy. Provider files and all other URLs remain owned
+    /// by their source and must never be removed here.
+    private func removeOwnedInboxSourceIfNeeded(_ url: URL) {
+        guard let inboxDirectory = inboxDirectoryProvider() else { return }
+        let ownedRoot = inboxDirectory.standardizedFileURL.resolvingSymlinksInPath()
+        let candidate = url.standardizedFileURL.resolvingSymlinksInPath()
+        guard candidate.path.hasPrefix(ownedRoot.path + "/") else { return }
+        try? FileManager.default.removeItem(at: url)
     }
 }

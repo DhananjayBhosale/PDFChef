@@ -14,8 +14,18 @@
 		A10000000000000000000015 /* PdfChefDocumentStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000005 /* PdfChefDocumentStoreTests.swift */; };
 		A10000000000000000000016 /* PdfChefDocumentPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000008 /* PdfChefDocumentPresentation.swift */; };
 		A10000000000000000000017 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000009 /* PrivacyInfo.xcprivacy */; };
+		A20000000000000000000004 /* PdfChefSignatureVerifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* PdfChefSignatureVerifier.swift */; };
+		A20000000000000000000006 /* OpenSSL-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* OpenSSL-LICENSE.txt */; };
+		A20000000000000000000008 /* PdfChefSignatureVerifierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* PdfChefSignatureVerifierTests.swift */; };
+		A20000000000000000000011 /* PdfChefSignatureReportViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* PdfChefSignatureReportViewController.swift */; };
+		A30000000000000000000004 /* PdfChefPurchasesPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000005 /* PdfChefPurchasesPlugin.swift */; };
+		A30000000000000000000008 /* PdfChefPurchasesPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000009 /* PdfChefPurchasesPolicyTests.swift */; };
+		A40000000000000000000001 /* PdfChefReaderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40000000000000000000002 /* PdfChefReaderViewController.swift */; };
+		A50000000000000000000001 /* PdfChefPdfBatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50000000000000000000002 /* PdfChefPdfBatcher.swift */; };
+		A50000000000000000000003 /* PdfChefPdfBatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50000000000000000000004 /* PdfChefPdfBatcherTests.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
+		A20000000000000000000001 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = A20000000000000000000002 /* OpenSSL */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
@@ -23,6 +33,20 @@
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
+		A60000000000000000000001 /* cca_india_2022.der in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000002 /* cca_india_2022.der */; };
+		A60000000000000000000003 /* detached-sha256-rc4.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000004 /* detached-sha256-rc4.pdf */; };
+		A60000000000000000000005 /* cades-sha256-plain.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000006 /* cades-sha256-plain.pdf */; };
+		A60000000000000000000007 /* test-root.der in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000008 /* test-root.der */; };
+		A60000000000000000000009 /* shadow-gap-rc4.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000010 /* shadow-gap-rc4.pdf */; };
+		A60000000000000000000011 /* wide-gap-plain.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000012 /* wide-gap-plain.pdf */; };
+		A60000000000000000000013 /* indirect-comment-plain.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000014 /* indirect-comment-plain.pdf */; };
+		A60000000000000000000015 /* PdfChefVerifiedCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000016 /* PdfChefVerifiedCopy.swift */; };
+		A60000000000000000000017 /* layered-appearance-rc4.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000018 /* layered-appearance-rc4.pdf */; };
+		A60000000000000000000019 /* layered-mixed-offset-rc4.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000020 /* layered-mixed-offset-rc4.pdf */; };
+		A60000000000000000000021 /* layered-hex-status-rc4.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000022 /* layered-hex-status-rc4.pdf */; };
+		A60000000000000000000023 /* shadow-update-plain.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000024 /* shadow-update-plain.pdf */; };
+		A60000000000000000000025 /* layered-owner-only-rc4.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000026 /* layered-owner-only-rc4.pdf */; };
+		A60000000000000000000027 /* layered-state-box-rc4.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000028 /* layered-state-box-rc4.pdf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,6 +58,16 @@
 		A10000000000000000000006 /* AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000008 /* PdfChefDocumentPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefDocumentPresentation.swift; sourceTree = "<group>"; };
 		A10000000000000000000009 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		A20000000000000000000005 /* PdfChefSignatureVerifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefSignatureVerifier.swift; sourceTree = "<group>"; };
+		A20000000000000000000007 /* OpenSSL-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OpenSSL-LICENSE.txt"; sourceTree = "<group>"; };
+		A20000000000000000000009 /* PdfChefSignatureVerifierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefSignatureVerifierTests.swift; sourceTree = "<group>"; };
+		A20000000000000000000010 /* PdfChefSignatureReportViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefSignatureReportViewController.swift; sourceTree = "<group>"; };
+		A30000000000000000000005 /* PdfChefPurchasesPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefPurchasesPlugin.swift; sourceTree = "<group>"; };
+		A30000000000000000000009 /* PdfChefPurchasesPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefPurchasesPolicyTests.swift; sourceTree = "<group>"; };
+		A3000000000000000000000A /* PDFChef.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = PDFChef.storekit; sourceTree = "<group>"; };
+		A40000000000000000000002 /* PdfChefReaderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefReaderViewController.swift; sourceTree = "<group>"; };
+		A50000000000000000000002 /* PdfChefPdfBatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefPdfBatcher.swift; sourceTree = "<group>"; };
+		A50000000000000000000004 /* PdfChefPdfBatcherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefPdfBatcherTests.swift; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -45,6 +79,20 @@
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		A60000000000000000000002 /* cca_india_2022.der */ = {isa = PBXFileReference; lastKnownFileType = file; path = TrustAnchors/cca_india_2022.der; sourceTree = "<group>"; };
+		A60000000000000000000004 /* detached-sha256-rc4.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = detached-sha256-rc4.pdf; path = ../../../tests/fixtures/signatures/detached-sha256-rc4.pdf; sourceTree = "<group>"; };
+		A60000000000000000000006 /* cades-sha256-plain.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = cades-sha256-plain.pdf; path = ../../../tests/fixtures/signatures/cades-sha256-plain.pdf; sourceTree = "<group>"; };
+		A60000000000000000000008 /* test-root.der */ = {isa = PBXFileReference; lastKnownFileType = file; name = test-root.der; path = ../../../tests/fixtures/signatures/test-root.der; sourceTree = "<group>"; };
+		A60000000000000000000010 /* shadow-gap-rc4.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = shadow-gap-rc4.pdf; path = ../../../tests/fixtures/signatures/shadow-gap-rc4.pdf; sourceTree = "<group>"; };
+		A60000000000000000000012 /* wide-gap-plain.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = wide-gap-plain.pdf; path = ../../../tests/fixtures/signatures/wide-gap-plain.pdf; sourceTree = "<group>"; };
+		A60000000000000000000014 /* indirect-comment-plain.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = indirect-comment-plain.pdf; path = ../../../tests/fixtures/signatures/indirect-comment-plain.pdf; sourceTree = "<group>"; };
+		A60000000000000000000016 /* PdfChefVerifiedCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefVerifiedCopy.swift; sourceTree = "<group>"; };
+		A60000000000000000000018 /* layered-appearance-rc4.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = layered-appearance-rc4.pdf; path = ../../../tests/fixtures/signatures/layered-appearance-rc4.pdf; sourceTree = "<group>"; };
+		A60000000000000000000020 /* layered-mixed-offset-rc4.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = layered-mixed-offset-rc4.pdf; path = ../../../tests/fixtures/signatures/layered-mixed-offset-rc4.pdf; sourceTree = "<group>"; };
+		A60000000000000000000022 /* layered-hex-status-rc4.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = layered-hex-status-rc4.pdf; path = ../../../tests/fixtures/signatures/layered-hex-status-rc4.pdf; sourceTree = "<group>"; };
+		A60000000000000000000024 /* shadow-update-plain.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = shadow-update-plain.pdf; path = ../../../tests/fixtures/signatures/shadow-update-plain.pdf; sourceTree = "<group>"; };
+		A60000000000000000000026 /* layered-owner-only-rc4.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = layered-owner-only-rc4.pdf; path = ../../../tests/fixtures/signatures/layered-owner-only-rc4.pdf; sourceTree = "<group>"; };
+		A60000000000000000000028 /* layered-state-box-rc4.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = layered-state-box-rc4.pdf; path = ../../../tests/fixtures/signatures/layered-state-box-rc4.pdf; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXContainerItemProxy section */
@@ -70,6 +118,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
+				A20000000000000000000001 /* OpenSSL in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -99,6 +148,15 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000004 /* PdfChefBridgeViewController.swift */,
+				A30000000000000000000005 /* PdfChefPurchasesPlugin.swift */,
+				A3000000000000000000000A /* PDFChef.storekit */,
+				A20000000000000000000005 /* PdfChefSignatureVerifier.swift */,
+				A20000000000000000000010 /* PdfChefSignatureReportViewController.swift */,
+				A60000000000000000000016 /* PdfChefVerifiedCopy.swift */,
+				A40000000000000000000002 /* PdfChefReaderViewController.swift */,
+				A50000000000000000000002 /* PdfChefPdfBatcher.swift */,
+				A20000000000000000000007 /* OpenSSL-LICENSE.txt */,
+				A60000000000000000000002 /* cca_india_2022.der */,
 				A10000000000000000000002 /* PdfChefDocumentInbox.swift */,
 				A10000000000000000000001 /* PdfChefDocumentStore.swift */,
 				A10000000000000000000003 /* PdfChefDocumentsPlugin.swift */,
@@ -121,6 +179,21 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000005 /* PdfChefDocumentStoreTests.swift */,
+				A50000000000000000000004 /* PdfChefPdfBatcherTests.swift */,
+				A30000000000000000000009 /* PdfChefPurchasesPolicyTests.swift */,
+				A20000000000000000000009 /* PdfChefSignatureVerifierTests.swift */,
+				A60000000000000000000004 /* detached-sha256-rc4.pdf */,
+				A60000000000000000000006 /* cades-sha256-plain.pdf */,
+				A60000000000000000000008 /* test-root.der */,
+				A60000000000000000000010 /* shadow-gap-rc4.pdf */,
+				A60000000000000000000012 /* wide-gap-plain.pdf */,
+				A60000000000000000000014 /* indirect-comment-plain.pdf */,
+				A60000000000000000000018 /* layered-appearance-rc4.pdf */,
+				A60000000000000000000022 /* layered-hex-status-rc4.pdf */,
+				A60000000000000000000024 /* shadow-update-plain.pdf */,
+				A60000000000000000000026 /* layered-owner-only-rc4.pdf */,
+				A60000000000000000000028 /* layered-state-box-rc4.pdf */,
+				A60000000000000000000020 /* layered-mixed-offset-rc4.pdf */,
 			);
 			path = AppTests;
 			sourceTree = "<group>";
@@ -163,6 +236,7 @@
 			name = App;
 			packageProductDependencies = (
 				4D22ABE82AF431CB00220026 /* CapApp-SPM */,
+				A20000000000000000000002 /* OpenSSL */,
 			);
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
@@ -198,6 +272,7 @@
 			mainGroup = 504EC2FB1FED79650016851F;
 			packageReferences = (
 				D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */,
+				A20000000000000000000003 /* XCRemoteSwiftPackageReference "OpenSSL-Package" */,
 			);
 			productRefGroup = 504EC3051FED79650016851F /* Products */;
 			projectDirPath = "";
@@ -214,6 +289,18 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A60000000000000000000003 /* detached-sha256-rc4.pdf in Resources */,
+				A60000000000000000000005 /* cades-sha256-plain.pdf in Resources */,
+				A60000000000000000000007 /* test-root.der in Resources */,
+				A60000000000000000000009 /* shadow-gap-rc4.pdf in Resources */,
+				A60000000000000000000011 /* wide-gap-plain.pdf in Resources */,
+				A60000000000000000000013 /* indirect-comment-plain.pdf in Resources */,
+				A60000000000000000000017 /* layered-appearance-rc4.pdf in Resources */,
+				A60000000000000000000021 /* layered-hex-status-rc4.pdf in Resources */,
+				A60000000000000000000023 /* shadow-update-plain.pdf in Resources */,
+				A60000000000000000000025 /* layered-owner-only-rc4.pdf in Resources */,
+				A60000000000000000000027 /* layered-state-box-rc4.pdf in Resources */,
+				A60000000000000000000019 /* layered-mixed-offset-rc4.pdf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -221,6 +308,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A20000000000000000000006 /* OpenSSL-LICENSE.txt in Resources */,
+				A60000000000000000000001 /* cca_india_2022.der in Resources */,
 				504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */,
 				50B271D11FEDC1A000F3C39B /* public in Resources */,
 				504EC30F1FED79650016851F /* Assets.xcassets in Resources */,
@@ -239,6 +328,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000015 /* PdfChefDocumentStoreTests.swift in Sources */,
+				A50000000000000000000003 /* PdfChefPdfBatcherTests.swift in Sources */,
+				A30000000000000000000008 /* PdfChefPurchasesPolicyTests.swift in Sources */,
+				A20000000000000000000008 /* PdfChefSignatureVerifierTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -247,6 +339,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000014 /* PdfChefBridgeViewController.swift in Sources */,
+				A30000000000000000000004 /* PdfChefPurchasesPlugin.swift in Sources */,
+				A20000000000000000000004 /* PdfChefSignatureVerifier.swift in Sources */,
+				A20000000000000000000011 /* PdfChefSignatureReportViewController.swift in Sources */,
+				A60000000000000000000015 /* PdfChefVerifiedCopy.swift in Sources */,
+				A40000000000000000000001 /* PdfChefReaderViewController.swift in Sources */,
+				A50000000000000000000001 /* PdfChefPdfBatcher.swift in Sources */,
 				A10000000000000000000012 /* PdfChefDocumentInbox.swift in Sources */,
 				A10000000000000000000011 /* PdfChefDocumentStore.swift in Sources */,
 				A10000000000000000000013 /* PdfChefDocumentsPlugin.swift in Sources */,
@@ -436,14 +534,15 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 8;
+				DEVELOPMENT_TEAM = 8YNW6SHRQ8;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.3;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
 				PRODUCT_BUNDLE_IDENTIFIER = com.dhananjaytech.pdfchef;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -458,14 +557,15 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 8;
+				DEVELOPMENT_TEAM = 8YNW6SHRQ8;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dhananjaytech.pdfchef;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
@@ -513,11 +613,27 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		A20000000000000000000003 /* XCRemoteSwiftPackageReference "OpenSSL-Package" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/krzyzanowskim/OpenSSL-Package.git";
+			requirement = {
+				kind = exactVersion;
+				version = 3.6.3000;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		4D22ABE82AF431CB00220026 /* CapApp-SPM */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */;
 			productName = "CapApp-SPM";
+		};
+		A20000000000000000000002 /* OpenSSL */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A20000000000000000000003 /* XCRemoteSwiftPackageReference "OpenSSL-Package" */;
+			productName = OpenSSL;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

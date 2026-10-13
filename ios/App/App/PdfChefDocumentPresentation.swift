@@ -16,10 +16,25 @@ final class PdfChefDocumentPresentation: NSObject, UIDocumentPickerDelegate, UIA
 
     private var pickerOperation: PickerOperation?
     private var sharing = false
+    private var reading = false
+
+    static func itemProvider(for copyURL: URL) -> NSItemProvider {
+        let provider = NSItemProvider()
+        let contentType = copyURL.pathExtension.lowercased() == "pdf"
+            ? UTType.pdf
+            : (UTType(filenameExtension: copyURL.pathExtension) ?? .data)
+        provider.suggestedName = copyURL.lastPathComponent
+        provider.registerFileRepresentation(forTypeIdentifier: contentType.identifier, visibility: .all) { completion in
+            completion(copyURL, false, nil)
+            return nil
+        }
+        return provider
+    }
 
     func pick(
         from presenter: UIViewController,
         contentTypes: [UTType],
+        maximumItems: Int,
         completion: @escaping (Result<[URL], Error>) -> Void
     ) {
         dispatchPrecondition(condition: .onQueue(.main))
@@ -28,7 +43,7 @@ final class PdfChefDocumentPresentation: NSObject, UIDocumentPickerDelegate, UIA
             return
         }
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: contentTypes, asCopy: true)
-        picker.allowsMultipleSelection = true
+        picker.allowsMultipleSelection = maximumItems > 1
         picker.delegate = self
         picker.presentationController?.delegate = self
         pickerOperation = .importing(completion)
@@ -63,7 +78,8 @@ final class PdfChefDocumentPresentation: NSObject, UIDocumentPickerDelegate, UIA
             return
         }
         sharing = true
-        let controller = UIActivityViewController(activityItems: [copyURL], applicationActivities: nil)
+        let configuration = UIActivityItemsConfiguration(itemProviders: [Self.itemProvider(for: copyURL)])
+        let controller = UIActivityViewController(activityItemsConfiguration: configuration)
         if let popover = controller.popoverPresentationController {
             popover.sourceView = presenter.view
             popover.sourceRect = CGRect(
@@ -86,6 +102,73 @@ final class PdfChefDocumentPresentation: NSObject, UIDocumentPickerDelegate, UIA
         presenter.present(controller, animated: true)
     }
 
+    func presentSignatureReport(
+        documentURL: URL,
+        displayName: String,
+        from presenter: UIViewController,
+        completion: @escaping (Result<Bool, Error>) -> Void
+    ) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard canPresent(from: presenter) else {
+            completion(.failure(currentPresentationError(from: presenter)))
+            return
+        }
+        let report = PdfChefSignatureReportViewController(
+            documentURL: documentURL,
+            displayName: displayName,
+            onFinished: { completion(.success(true)) }
+        )
+        let navigation = UINavigationController(rootViewController: report)
+        navigation.modalPresentationStyle = .pageSheet
+        navigation.isModalInPresentation = true
+        if let sheet = navigation.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+            sheet.selectedDetentIdentifier = .large
+        }
+        presenter.present(navigation, animated: !UIAccessibility.isReduceMotionEnabled)
+    }
+
+    func presentReader(
+        documentURL: URL,
+        displayName: String,
+        documentSizeBytes: Int64,
+        from presenter: UIViewController,
+        share: @escaping (UIViewController) -> Void,
+        canVerifySignatures: Bool,
+        verifySignatures: @escaping (UIViewController) -> Void,
+        prepareLargeDocument: @escaping (
+            PdfChefPdfBatchCancellationToken,
+            @escaping (PdfChefPdfBatchProgress) -> Void,
+            @escaping (Result<Int, Error>) -> Void
+        ) -> Void,
+        completion: @escaping (Result<PdfChefReaderResult, Error>) -> Void
+    ) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard !reading, canPresent(from: presenter) else {
+            completion(.failure(currentPresentationError(from: presenter)))
+            return
+        }
+        reading = true
+        let reader = PdfChefReaderViewController(
+            documentURL: documentURL,
+            displayName: displayName,
+            documentSizeBytes: documentSizeBytes,
+            shareDocument: share,
+            canVerifySignatures: canVerifySignatures,
+            verifySignatures: verifySignatures,
+            prepareLargeDocument: prepareLargeDocument,
+            onFinished: { [weak self] result in
+                self?.reading = false
+                completion(.success(result))
+            }
+        )
+        let navigation = UINavigationController(rootViewController: reader)
+        navigation.modalPresentationStyle = .fullScreen
+        navigation.isModalInPresentation = true
+        presenter.present(navigation, animated: !UIAccessibility.isReduceMotionEnabled)
+    }
+
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         finishPicker(urls: urls, completed: true)
     }
@@ -103,7 +186,7 @@ final class PdfChefDocumentPresentation: NSObject, UIDocumentPickerDelegate, UIA
     }
 
     private func currentPresentationError(from presenter: UIViewController) -> Error {
-        if pickerOperation != nil || sharing || presenter.presentedViewController != nil {
+        if pickerOperation != nil || sharing || reading || presenter.presentedViewController != nil {
             return PdfChefDocumentPresentationError.busy
         }
         return PdfChefDocumentPresentationError.presenterUnavailable

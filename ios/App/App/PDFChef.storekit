@@ -1,0 +1,71 @@
+{
+  "identifier" : "9D9D83AF-88C7-4BA4-98D0-47F32CB9CE2E",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "499.00",
+      "familyShareable" : true,
+      "internalID" : "BB8C3790-9906-4EE3-B72B-8E2E60690DA0",
+      "localizations" : [
+        {
+          "description" : "Save, share, and export supported results.",
+          "displayName" : "PDF Chef Pro Lifetime",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.dhananjaytech.pdfchef.pro.lifetime",
+      "referenceName" : "PDF Chef Pro Lifetime",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_IN",
+    "_storefront" : "IND"
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "F03DEB26-5D17-4E91-9F0C-76FEE73B4230",
+      "localizations" : [
+
+      ],
+      "name" : "PDF Chef Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "familyShareable" : true,
+          "groupNumber" : 1,
+          "internalID" : "4E58FB2D-64DC-4F50-B2BA-650E5ACCD45D",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Save, share, and export supported results.",
+              "displayName" : "PDF Chef Pro Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "displayPrice" : "39.00",
+          "productID" : "com.dhananjaytech.pdfchef.pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "PDF Chef Pro Monthly",
+          "subscriptionGroupID" : "F03DEB26-5D17-4E91-9F0C-76FEE73B4230",
+          "type" : "RecurringSubscription",
+          "winBackOffers" : [
+
+          ]
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

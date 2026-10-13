@@ -39,6 +39,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>PDF Chef uses the camera only when you choose Scan from Camera to add pages to a PDF.</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
