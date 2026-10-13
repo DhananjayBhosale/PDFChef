@@ -87,7 +87,7 @@ function expectedComponents(packageName, debug, binary) {
   const catalogue = [];
   if (debug) catalogue.push({ type: 'service', attrs: { exported: bool(false), name: 'com.dhananjaytech.zenpdf_allpdftoolsinoneplace.LegacyThemeCrashService', process: ':legacyThemeCrash' } });
   catalogue.push(
-    { type: 'activity', attrs: { exported: bool(false), name: 'com.dhananjaytech.zenpdf_allpdftoolsinoneplace.reader.PdfReaderActivity', theme: binary ? ANY_RESOURCE : '@style/PdfReaderTheme', windowSoftInputMode: binary ? '0x10' : 'adjustResize' } },
+    { type: 'activity', attrs: { configChanges: binary ? '0xdf0' : 'orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|navigation', exported: bool(false), name: 'com.dhananjaytech.zenpdf_allpdftoolsinoneplace.reader.PdfReaderActivity', theme: binary ? ANY_RESOURCE : '@style/PdfReaderTheme', windowSoftInputMode: binary ? '0x10' : 'adjustResize' } },
     { type: 'activity', attrs: { configChanges: binary ? '0x1ff4' : 'orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density', exported: bool(true), label: binary ? ANY_RESOURCE : '@string/title_activity_main', launchMode: binary ? '0x2' : 'singleTask', name: 'com.dhananjaytech.zenpdf_allpdftoolsinoneplace.MainActivity', theme: binary ? ANY_RESOURCE : '@style/AppTheme.NoActionBarLaunch' } },
     { type: 'provider', attrs: { authorities: `${packageName}.fileprovider`, exported: bool(false), grantUriPermissions: bool(true), name: 'com.dhananjaytech.zenpdf_allpdftoolsinoneplace.documents.ReadOnlyDocumentFileProvider' } },
     { type: 'activity', attrs: { exported: bool(false), name: 'com.google.mlkit.vision.documentscanner.internal.GmsDocumentScanningDelegateActivity', screenOrientation: binary ? '0x1' : 'portrait', theme: binary ? ANY_RESOURCE : '@android:style/Theme.Black.NoTitleBar.Fullscreen' } },
@@ -167,6 +167,9 @@ function assertNoSdkNamespaces(apk, variant) {
 }
 
 const rootBuild = text(paths.rootBuild), appBuild = text(paths.appBuild), sourceManifest = text(paths.sourceManifest);
+const releaseVersionCode = appBuild.match(/\bversionCode\s+(\d+)\b/)?.[1];
+const releaseVersionName = appBuild.match(/\bversionName\s+"([^"]+)"/)?.[1];
+assert(releaseVersionCode && releaseVersionName, 'Gradle release version identity is missing');
 for (const forbidden of ['com.google.gms:google-services', 'com.google.gms.google-services', 'google-services.json', 'crashlytics', 'analytics', 'measurement', 'admob']) assert(!lower(rootBuild).includes(forbidden) && !lower(appBuild).includes(forbidden), `Gradle activates forbidden service: ${forbidden}`);
 for (const required of ['namespace = "com.dhananjaytech.zenpdf_allpdftoolsinoneplace"', 'applicationId "com.dhananjaytech.pdfchef"', 'applicationIdSuffix ".debug"', 'minifyEnabled true', 'shrinkResources true', "getDefaultProguardFile('proguard-android-optimize.txt')", 'JavaVersion.VERSION_21', 'androidx.datastore:datastore-preferences-proto:1.2.1', 'com.google.code.gson:gson:2.13.2', "implementation 'com.google.android.gms:play-services-mlkit-document-scanner:16.0.0'"]) assert(appBuild.includes(required), `Required Gradle invariant missing: ${required}`);
 assert(/compileSdk\s*\{\s*version\s*=\s*release\(36\)\s*\{\s*minorApiLevel\s*=\s*1\s*\}\s*\}/s.test(appBuild),
@@ -201,7 +204,9 @@ for (const [variant, apk] of [['debug', paths.debugApk], ['release', paths.relea
   const absolute = resolve(root, apk);
   const badging = command(aapt, ['dump', 'badging', absolute]);
   const packageName = variant === 'debug' ? 'com.dhananjaytech.pdfchef.debug' : 'com.dhananjaytech.pdfchef';
-  assert(badging.includes(`package: name='${packageName}'`) && badging.includes("versionCode='25'") && badging.includes("versionName='2.2.7'"), `${variant} APK identity/version drifted`);
+  assert(badging.includes(`package: name='${packageName}'`)
+    && badging.includes(`versionCode='${releaseVersionCode}'`)
+    && badging.includes(`versionName='${releaseVersionName}'`), `${variant} APK identity/version drifted`);
   assertXmltreeCatalogue(command(aapt, ['dump', 'xmltree', absolute, 'AndroidManifest.xml']), variant);
   assertNoSdkNamespaces(absolute, variant);
   assert(!dexStrings(absolute).some(value => value.includes('DocumentRecipientProbeService')),

@@ -27,7 +27,8 @@ const packagedMain = read(`android/app/src/main/assets/public/assets/${packagedM
 
 const methods = [
   'readChunk', 'beginWrite', 'appendWrite', 'finishWrite', 'abortWrite',
-  'listOwned', 'renameItem', 'trashOwned', 'restoreOwned', 'deleteOwned', 'clearOwned', 'takePendingImports',
+  'listOwned', 'renameItem', 'trashOwned', 'restoreOwned', 'deleteOwned', 'clearOwned',
+  'clearOwnedPayloads', 'takePendingImports',
   'acknowledgePendingImports', 'pickDocuments', 'exportItem', 'shareItem', 'openReader',
 ];
 assert(count(plugin, /@PluginMethod\b/g) === methods.length

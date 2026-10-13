@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.Set;
+import java.util.HashSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.Test;
@@ -46,6 +47,82 @@ public final class PdfReaderDocumentSessionTest {
         assertFalse(Files.exists(snapshot, LinkOption.NOFOLLOW_LINKS));
     }
 
+    @Test public void largeCopyReusesTheBoundedWindowInsteadOfAllocatingPerChunk()
+            throws Exception {
+        Path files = Files.createTempDirectory("reader-window-reuse");
+        long size = (long) PdfReaderDocumentSession.COPY_CHUNK_BYTES * 3L;
+        Set<Integer> windows = new HashSet<>();
+        AtomicInteger reads = new AtomicInteger();
+        PdfReaderDocumentSession.Source source = new PdfReaderDocumentSession.Source() {
+            @Override public String mimeType() { return "application/pdf"; }
+            @Override public long sizeBytes() { return size; }
+            @Override public int read(long offset, byte[] target) {
+                reads.incrementAndGet();
+                windows.add(System.identityHashCode(target));
+                java.util.Arrays.fill(target, (byte) 'x');
+                if (offset == 0) {
+                    byte[] magic = "%PDF-".getBytes(StandardCharsets.US_ASCII);
+                    System.arraycopy(magic, 0, target, 0, magic.length);
+                }
+                return target.length;
+            }
+        };
+
+        PdfReaderDocumentSession session = PdfReaderDocumentSession.prepare(files,
+                "d1_abcdefghijklmnopqrstuv", "Large.pdf", source, () -> 1_000,
+                () -> "abcdefghijklmnopqrstuv", required -> required + 1_000_000);
+        assertEquals(3, reads.get());
+        assertEquals(1, windows.size());
+        session.close();
+    }
+
+    @Test public void shortReadsReuseTheWindowWithoutWritingStaleTailBytes()
+            throws Exception {
+        Path files = Files.createTempDirectory("reader-window-short-reads");
+        byte[] pdf = new byte[PdfReaderDocumentSession.COPY_CHUNK_BYTES + 37];
+        java.util.Arrays.fill(pdf, (byte) 'x');
+        System.arraycopy("%PDF-".getBytes(StandardCharsets.US_ASCII), 0, pdf, 0, 5);
+        Set<Integer> windows = new HashSet<>();
+        PdfReaderDocumentSession.Source source = new PdfReaderDocumentSession.Source() {
+            @Override public String mimeType() { return "application/pdf"; }
+            @Override public long sizeBytes() { return pdf.length; }
+            @Override public int read(long offset, byte[] target) {
+                windows.add(System.identityHashCode(target));
+                int count = (int) Math.min(7_919L, pdf.length - offset);
+                System.arraycopy(pdf, (int) offset, target, 0, count);
+                return count;
+            }
+        };
+
+        PdfReaderDocumentSession session = PdfReaderDocumentSession.prepare(files,
+                "d1_abcdefghijklmnopqrstuv", "Large.pdf", source, () -> 1_000,
+                () -> "abcdefghijklmnopqrstuv", required -> required + 1_000_000);
+        assertEquals(1, windows.size());
+        assertArrayEquals(pdf, Files.readAllBytes(session.snapshotForTest()));
+        session.close();
+    }
+
+    @Test public void rejectsOneByteAboveTheNativeReaderLimitBeforeReading()
+            throws Exception {
+        Path files = Files.createTempDirectory("reader-size-limit");
+        AtomicInteger reads = new AtomicInteger();
+        PdfReaderDocumentSession.Source source = new PdfReaderDocumentSession.Source() {
+            @Override public String mimeType() { return "application/pdf"; }
+            @Override public long sizeBytes() {
+                return PdfReaderDocumentSession.MAXIMUM_DOCUMENT_BYTES + 1;
+            }
+            @Override public int read(long offset, byte[] target) {
+                reads.incrementAndGet();
+                return 0;
+            }
+        };
+
+        assertFailure("DOCUMENT_INVALID_ARGUMENT", () -> PdfReaderDocumentSession.prepare(files,
+                "d1_abcdefghijklmnopqrstuv", "Too large.pdf", source, () -> 1_000,
+                () -> "abcdefghijklmnopqrstuv", required -> required + 1_000_000));
+        assertEquals(0, reads.get());
+    }
+
     @Test public void stalePartAndSnapshotAreCleanedButUnsafeChildrenFailClosed()
             throws Exception {
         Path files = Files.createTempDirectory("reader-recovery");
@@ -67,7 +144,46 @@ public final class PdfReaderDocumentSessionTest {
         assertFailure("DOCUMENT_UNSAFE_STATE", () -> PdfReaderDocumentSession.prepare(files,
                 "a1_7", "Legacy.pdf", source("%PDF-new".getBytes(StandardCharsets.US_ASCII),
                         new AtomicInteger()), () -> 2_000,
-                () -> "ponmlkjihgfedcbazyxwvu", required -> required + 1_000_000));
+                    () -> "ponmlkjihgfedcbazyxwvu", required -> required + 1_000_000));
+    }
+
+    @Test public void recentSnapshotFromADeadProcessIsReclaimedBeforeOpeningAgain()
+            throws Exception {
+        Path files = Files.createTempDirectory("reader-orphan-recovery");
+        Path root = Files.createDirectories(files.resolve("pdfchef_documents/reader"));
+        Path orphan = Files.write(root.resolve("r1_abcdefghijklmnopqrstuv.pdf"), pdf());
+        Files.setPosixFilePermissions(orphan, Set.of(PosixFilePermission.OWNER_READ));
+        Files.setLastModifiedTime(orphan, FileTime.fromMillis(999));
+
+        PdfReaderDocumentSession session = PdfReaderDocumentSession.prepare(files,
+                "d1_abcdefghijklmnopqrstuv", "Recovered.pdf",
+                source(pdf(), new AtomicInteger()), () -> 1_000,
+                () -> "zyxwvutsrqponmlkjihgfe", required -> required + 1_000_000);
+
+        assertFalse(Files.exists(orphan, LinkOption.NOFOLLOW_LINKS));
+        assertTrue(Files.exists(session.snapshotForTest(), LinkOption.NOFOLLOW_LINKS));
+        session.close();
+    }
+
+    @Test public void openingAnotherSessionDoesNotReclaimALiveSnapshot()
+            throws Exception {
+        Path files = Files.createTempDirectory("reader-live-snapshot");
+        long now = System.currentTimeMillis() + 10_000;
+        PdfReaderDocumentSession first = PdfReaderDocumentSession.prepare(files,
+                "d1_abcdefghijklmnopqrstuv", "First.pdf",
+                source(pdf(), new AtomicInteger()), () -> now,
+                () -> "abcdefghijklmnopqrstuv", required -> required + 1_000_000);
+        Path firstSnapshot = first.snapshotForTest();
+
+        PdfReaderDocumentSession second = PdfReaderDocumentSession.prepare(files,
+                "d1_zyxwvutsrqponmlkjihgfe", "Second.pdf",
+                source(pdf(), new AtomicInteger()), () -> now + 1,
+                () -> "zyxwvutsrqponmlkjihgfe", required -> required + 1_000_000);
+
+        assertTrue(Files.isRegularFile(firstSnapshot, LinkOption.NOFOLLOW_LINKS));
+        assertTrue(Files.isRegularFile(second.snapshotForTest(), LinkOption.NOFOLLOW_LINKS));
+        second.close();
+        first.close();
     }
 
     @Test public void interruptionStopsAtWindowBoundaryAndCleansPartialSnapshot()

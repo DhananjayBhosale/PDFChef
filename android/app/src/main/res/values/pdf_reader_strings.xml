@@ -16,7 +16,17 @@
     <string name="pdf_reader_share_failed">Sharing did not finish. The PDF is still open.</string>
     <string name="pdf_reader_save_failed">The PDF could not be saved. Check you have space on the device, then try again.</string>
     <string name="pdf_reader_saved">Saved to your Downloads.</string>
-    <string name="pdf_reader_search_unavailable">Search is unavailable for this PDF.</string>
+    <string name="pdf_reader_search_unavailable">Search could not finish. The PDF is still open.</string>
+    <string name="pdf_reader_search_title">Search this PDF</string>
+    <string name="pdf_reader_search_hint">Text to find</string>
+    <string name="pdf_reader_search_action">Search</string>
+    <string name="pdf_reader_search_previous">Previous</string>
+    <string name="pdf_reader_search_next">Next</string>
+    <string name="pdf_reader_searching">Searching…</string>
+    <string name="pdf_reader_search_invalid">Enter up to 160 characters.</string>
+    <string name="pdf_reader_search_none">No matches found.</string>
+    <string name="pdf_reader_search_result">Matching page %1$d of %2$d · Page %3$d</string>
+    <string name="pdf_reader_search_result_limited">Matching page %1$d of the first %2$d · Page %3$d</string>
     <string name="pdf_reader_tools_title">Use a PDF tool</string>
     <string name="pdf_reader_tools_body">This PDF is selected automatically.</string>
     <string name="pdf_reader_tools_close">Close the tool list</string>
@@ -48,6 +58,7 @@
     <string name="pdf_reader_signature_unsupported">Unsupported signature format</string>
     <string name="pdf_reader_signature_indeterminate">Could not determine</string>
     <string name="pdf_reader_signature_trusted">Trusted by this device</string>
+    <string name="pdf_reader_signature_trusted_cca">Trusted: chains to India’s CCA root (CCA India 2022), bundled with PDF Chef</string>
     <string name="pdf_reader_signature_untrusted">Not trusted by this device</string>
     <string name="pdf_reader_signature_certificate_valid">Valid now</string>
     <string name="pdf_reader_signature_certificate_expired">Expired</string>
@@ -61,5 +72,13 @@
     <string name="pdf_reader_signature_timestamp_absent">Not present</string>
     <string name="pdf_reader_signature_timestamp_unverified">Present but not validated offline</string>
     <string name="pdf_reader_signature_sha1_warning">Warning: this signature uses legacy SHA-1.</string>
-    <string name="pdf_reader_signature_offline_note">Trust uses this device’s certificate store. Revocation and online certificate status are not checked. A PDF signing date is not treated as a trusted timestamp.</string>
+    <string name="pdf_reader_signature_offline_note">Trust uses this device’s certificate store plus PDF Chef’s bundled CCA India 2022 root. Revocation and online certificate status are not checked. A PDF signing date is not treated as a trusted timestamp.</string>
+    <string name="pdf_reader_verified_copy_action">Print or share verified copy</string>
+    <string name="pdf_reader_verified_copy_print">Print</string>
+    <string name="pdf_reader_verified_copy_share">Share</string>
+    <string name="pdf_reader_verified_copy_progress">Preparing verified copy…</string>
+    <string name="pdf_reader_verified_copy_no_box">This signature has no visible signature box to mark.</string>
+    <string name="pdf_reader_verified_copy_unsupported_box">This signature box can\'t be marked safely.</string>
+    <string name="pdf_reader_verified_copy_password_unsupported">This PDF\'s password can\'t be kept on a shared copy.</string>
+    <string name="pdf_reader_verified_copy_failed">Could not prepare or open the verified copy. Please try again.</string>
 </resources>

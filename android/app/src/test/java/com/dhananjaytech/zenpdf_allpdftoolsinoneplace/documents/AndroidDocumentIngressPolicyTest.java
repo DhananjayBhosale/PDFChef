@@ -81,9 +81,9 @@ public final class AndroidDocumentIngressPolicyTest {
                 List.of(pdf("a", AndroidDocumentIngressPolicy.MAX_ITEM_BYTES + 1))));
 
         AndroidDocumentIngressPolicy.Candidate first = pdf(
-                "a", AndroidDocumentIngressPolicy.MAX_ITEM_BYTES);
+                "a", AndroidDocumentIngressPolicy.MAX_ITEM_BYTES - 1);
         AndroidDocumentIngressPolicy.Candidate second = pdf(
-                "b", AndroidDocumentIngressPolicy.MAX_ITEM_BYTES);
+                "b", 1);
         assertEquals(2, policy.validate(AndroidDocumentIngressPolicy.ACTION_SEND_MULTIPLE,
                 false, List.of(first, second)).items().size());
         assertFailure("DOCUMENT_LIMIT_EXCEEDED", () -> policy.validate(

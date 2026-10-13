@@ -15,6 +15,7 @@
 
         <activity
             android:name=".reader.PdfReaderActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|navigation"
             android:exported="false"
             android:theme="@style/PdfReaderTheme"
             android:windowSoftInputMode="adjustResize" />

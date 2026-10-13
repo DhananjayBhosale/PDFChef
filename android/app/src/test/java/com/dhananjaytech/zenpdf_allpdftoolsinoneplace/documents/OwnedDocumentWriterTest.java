@@ -284,12 +284,19 @@ public final class OwnedDocumentWriterTest {
         Path source = files.resolve("pdfchef_pending_imports/data/abcdefghijklmnopqrstuv.bin");
         Object beforeKey = Files.readAttributes(source, BasicFileAttributes.class).fileKey();
 
+        AtomicInteger targetDigests = new AtomicInteger();
+
         OwnedDocumentWriter writer = writer(files, tokens("zyxwvutsrqponmlkjihgfe"),
-                ignored -> {});
+                checkpoint -> {
+                    if (checkpoint == OwnedDocumentWriter.Checkpoint.AFTER_OWNED_TARGET_DIGEST) {
+                        targetDigests.incrementAndGet();
+                    }
+                });
         OwnedDocumentWriter.OwnedDocument retained = writer.retainPending(ref, pending, () -> false);
         Path target = files.resolve("pdfchef_documents/owned/abcdefghijklmnopqrstuv.bin");
         assertEquals(ref, retained.ref);
         assertEquals(beforeKey, Files.readAttributes(target, BasicFileAttributes.class).fileKey());
+        assertEquals(0, targetDigests.get());
         assertFalse(Files.exists(source));
         assertFalse(Files.exists(files.resolve(
                 "pdfchef_pending_imports/records/abcdefghijklmnopqrstuv.pending")));

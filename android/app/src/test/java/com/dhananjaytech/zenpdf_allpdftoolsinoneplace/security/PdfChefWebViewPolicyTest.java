@@ -1,6 +1,8 @@
 package com.dhananjaytech.zenpdf_allpdftoolsinoneplace.security;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
@@ -35,5 +37,20 @@ public final class PdfChefWebViewPolicyTest {
                 PdfChefWebViewPolicy.decide("tel:+123456789"));
         assertEquals(PdfChefWebViewPolicy.Navigation.BLOCK,
                 PdfChefWebViewPolicy.decide("https://user@example.com/"));
+    }
+
+    @Test public void isolatesOnlyTheObservedBrokenGraphicsDriver() {
+        assertTrue(PdfChefWebViewPolicy.requiresSoftwareRendering("mt6855", ""));
+        assertTrue(PdfChefWebViewPolicy.requiresSoftwareRendering("other", "MT6855"));
+        assertFalse(PdfChefWebViewPolicy.requiresSoftwareRendering("mt6985", "Dimensity 9300"));
+        assertFalse(PdfChefWebViewPolicy.requiresSoftwareRendering(null, null));
+    }
+
+    @Test public void rendererRecoveryCannotLoopImmediately() {
+        assertTrue(PdfChefWebViewPolicy.mayRestartRenderer(0, 10));
+        assertFalse(PdfChefWebViewPolicy.mayRestartRenderer(10,
+                10 + PdfChefWebViewPolicy.RENDERER_RECOVERY_COOLDOWN_MILLIS - 1));
+        assertTrue(PdfChefWebViewPolicy.mayRestartRenderer(10,
+                10 + PdfChefWebViewPolicy.RENDERER_RECOVERY_COOLDOWN_MILLIS));
     }
 }

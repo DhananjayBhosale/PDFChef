@@ -17,8 +17,10 @@ import java.util.regex.Pattern;
 public final class PdfReaderLaunchContract {
     public static final String EXTRA_REF = "pdfchef.reader.ref";
     public static final String EXTRA_DISPLAY_NAME = "pdfchef.reader.displayName";
+    public static final String EXTRA_INITIAL_ACTION = "pdfchef.reader.initialAction";
     public static final String EXTRA_ACTION = "pdfchef.reader.action";
     public static final String EXTRA_TOOL_PATH = "pdfchef.reader.toolPath";
+    public static final String INITIAL_ACTION_VERIFY_SIGNATURES = "verify-signatures";
     public static final String ACTION_CLOSED = "closed";
     public static final String ACTION_TOOL = "tool";
     public static final String ACTIVITY_CLASS_NAME =
@@ -50,6 +52,34 @@ public final class PdfReaderLaunchContract {
         intent.putExtra(EXTRA_REF, ref);
         intent.putExtra(EXTRA_DISPLAY_NAME, displayName);
         return intent;
+    }
+
+    public static Intent createSignatureVerificationIntent(
+            Context context, String ref, String displayName) throws Failure {
+        Intent intent = createIntent(context, ref, displayName);
+        intent.putExtra(EXTRA_INITIAL_ACTION, INITIAL_ACTION_VERIFY_SIGNATURES);
+        return intent;
+    }
+
+    /** Accept only the ordinary reader request or the one allowlisted initial action. */
+    public static boolean requestsSignatureVerification(Intent intent) throws Failure {
+        if (intent == null || intent.getExtras() == null) throw invalid();
+        Bundle extras = intent.getExtras();
+        return requestsSignatureVerification(extras.keySet(), extras.get(EXTRA_INITIAL_ACTION));
+    }
+
+    static boolean requestsSignatureVerification(Set<String> keys, Object action) throws Failure {
+        if (keys == null) throw invalid();
+        Set<String> ordinary = Set.of(EXTRA_REF, EXTRA_DISPLAY_NAME);
+        if (keys.equals(ordinary)) {
+            if (action != null) throw invalid();
+            return false;
+        }
+        if (!keys.equals(Set.of(EXTRA_REF, EXTRA_DISPLAY_NAME, EXTRA_INITIAL_ACTION))) {
+            throw invalid();
+        }
+        if (!INITIAL_ACTION_VERIFY_SIGNATURES.equals(action)) throw invalid();
+        return true;
     }
 
     public static Intent closedResultIntent() {

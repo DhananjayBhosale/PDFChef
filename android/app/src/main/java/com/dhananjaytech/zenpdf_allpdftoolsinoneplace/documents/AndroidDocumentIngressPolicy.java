@@ -23,7 +23,7 @@ public final class AndroidDocumentIngressPolicy {
             "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
     public static final int MAX_ITEMS = 100;
-    public static final long MAX_ITEM_BYTES = 128L * 1024L * 1024L;
+    public static final long MAX_ITEM_BYTES = 256L * 1024L * 1024L;
     public static final long MAX_AGGREGATE_BYTES = 256L * 1024L * 1024L;
 
     private static final Set<String> CLOSED_MIME_TYPES = Set.of(

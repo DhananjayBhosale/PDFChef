@@ -2,8 +2,11 @@ package com.dhananjaytech.zenpdf_allpdftoolsinoneplace.reader;
 
 import android.content.Context;
 
+import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.R;
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader;
+import com.tom_roush.pdfbox.cos.COSBase;
 import com.tom_roush.pdfbox.cos.COSName;
+import com.tom_roush.pdfbox.cos.COSString;
 import com.tom_roush.pdfbox.io.MemoryUsageSetting;
 import com.tom_roush.pdfbox.pdmodel.PDDocument;
 import com.tom_roush.pdfbox.pdmodel.encryption.InvalidPasswordException;
@@ -24,20 +27,28 @@ import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.util.Store;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.MessageDigest;
 import java.security.cert.CertPathBuilder;
+import java.security.cert.CertPathBuilderException;
 import java.security.cert.CertStore;
+import java.security.cert.CertificateFactory;
 import java.security.cert.CollectionCertStoreParameters;
 import java.security.cert.PKIXBuilderParameters;
+import java.security.cert.PKIXCertPathBuilderResult;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509CertSelector;
 import java.security.cert.X509Certificate;
@@ -57,9 +68,12 @@ final class PdfSignatureVerifier {
     static final int MAX_SIGNATURES = 16;
     static final int MAX_CMS_BYTES = 2 * 1024 * 1024;
     static final int BUFFER_BYTES = 64 * 1024;
+    private static final int CONTENTS_KEY_WINDOW = 4096;
     private static final String PKCS7_SHA1 = "adbe.pkcs7.sha1";
     private static final String PKCS7_DETACHED = "adbe.pkcs7.detached";
     private static final String CADES_DETACHED = "ETSI.CAdES.detached";
+    private static final String CCA_INDIA_2022_SHA256 =
+            "9a3fd3176798e842ddcb12c262f11cfacca70a8b84c6ea6fda30842a95a94cd8";
     private static final BouncyCastleProvider BC = new BouncyCastleProvider();
 
     private final Context context;
@@ -67,7 +81,7 @@ final class PdfSignatureVerifier {
     private final TrustEvaluator trustEvaluator;
 
     PdfSignatureVerifier(Context context) {
-        this(context, Clock.systemUTC(), PdfSignatureVerifier::evaluateAndroidTrust);
+        this(context, Clock.systemUTC(), androidTrustEvaluator(context));
     }
 
     PdfSignatureVerifier(Context context, Clock clock, TrustEvaluator trustEvaluator) {
@@ -84,8 +98,8 @@ final class PdfSignatureVerifier {
         try {
             requirePrivateRegularFile(snapshot);
             PDFBoxResourceLoader.init(context);
-            MemoryUsageSetting memory = MemoryUsageSetting.setupMixed(8L * 1024L * 1024L);
-            memory.setTempDir(context.getCacheDir());
+            // Memory only: PDFBox decrypts streams into its scratch storage, which must never be a file.
+            MemoryUsageSetting memory = PdfVerifiedCopy.memory();
             String submittedPassword = password == null ? "" : new String(password);
             try (PDDocument document = PDDocument.load(snapshot.toFile(), submittedPassword, memory)) {
                 List<PDSignature> dictionaries = document.getSignatureDictionaries();
@@ -119,8 +133,17 @@ final class PdfSignatureVerifier {
             return invalid(subFilter, now);
         }
 
-        byte[] cmsBytes = signature.getContents();
+        // The format requires a direct /Contents string, and the unsigned gap may hold nothing but
+        // that string. Otherwise the bytes it leaves unsigned could be visible content.
+        COSBase contents = signature.getCOSObject().getItem(COSName.CONTENTS);
+        if (!(contents instanceof COSString)) return invalid(subFilter, now);
+        byte[] cmsBytes = ((COSString) contents).getBytes();
         if (cmsBytes.length == 0 || cmsBytes.length > MAX_CMS_BYTES) return invalid(subFilter, now);
+        try {
+            if (!MessageDigest.isEqual(cmsBytes, contentsGap(file, range))) return invalid(subFilter, now);
+        } catch (IOException unreadable) {
+            return invalid(subFilter, now);
+        }
         if (!PKCS7_SHA1.equals(subFilter) && !PKCS7_DETACHED.equals(subFilter)
                 && !CADES_DETACHED.equals(subFilter)) {
             return unsupported(subFilter, coverage, now);
@@ -153,8 +176,8 @@ final class PdfSignatureVerifier {
                     .setProvider(BC).getCertificate(holder);
             boolean cmsValid = signer.verify(new JcaSimpleSignerInfoVerifierBuilder()
                     .setProvider(BC).build(certificate));
-            PdfSignatureReport.Integrity integrity = documentBinding && cmsValid
-                    ? PdfSignatureReport.Integrity.VALID : PdfSignatureReport.Integrity.INVALID;
+            // A certificate that has not signed these bytes says nothing about their signer.
+            if (!documentBinding || !cmsValid) return invalid(subFilter, now);
 
             ArrayList<X509Certificate> chainMaterial = new ArrayList<>();
             for (X509CertificateHolder candidate : certificates.getMatches(null)) {
@@ -165,8 +188,8 @@ final class PdfSignatureVerifier {
             PdfSignatureReport.Trust trust = trustEvaluator.evaluate(certificate, chainMaterial, now);
             PdfSignatureReport.CertificateValidity validity = validity(certificate, now);
             PdfSignatureReport.TimestampLtv timestamp = timestampStatus(signer, ltvMaterial);
-            return new PdfSignatureReport.Signature(commonName(certificate), subFilter, integrity,
-                    coverage, trust, validity,
+            return new PdfSignatureReport.Signature(commonName(certificate), subFilter,
+                    PdfSignatureReport.Integrity.VALID, coverage, trust, validity,
                     PdfSignatureReport.Revocation.OFFLINE_NOT_CHECKED, timestamp, now,
                     certificate.getNotAfter().toInstant(), usesWeakAlgorithm(signer, subFilter));
         } catch (Exception invalid) {
@@ -185,6 +208,88 @@ final class PdfSignatureVerifier {
         long end = c + d;
         return end == length ? PdfSignatureReport.Coverage.WHOLE_DOCUMENT
                 : PdfSignatureReport.Coverage.SIGNED_REVISION_WITH_LATER_CHANGES;
+    }
+
+    /** Decodes the gap between the signed ranges; null unless it is exactly one hex string. */
+    static byte[] decodeContentsGap(byte[] gap) {
+        int first = 0;
+        int last = gap.length - 1;
+        while (first <= last && isPdfWhitespace(gap[first])) first++;
+        while (last >= first && isPdfWhitespace(gap[last])) last--;
+        if (last - first < 1 || gap[first] != '<' || gap[last] != '>') return null;
+        ByteArrayOutputStream decoded = new ByteArrayOutputStream((last - first) / 2);
+        int high = -1;
+        for (int index = first + 1; index < last; index++) {
+            if (isPdfWhitespace(gap[index])) continue;
+            int nibble = Character.digit(gap[index], 16);
+            if (nibble < 0) return null;
+            if (high < 0) {
+                high = nibble;
+            } else {
+                decoded.write((high << 4) | nibble);
+                high = -1;
+            }
+        }
+        return high < 0 ? decoded.toByteArray() : null;
+    }
+
+    /**
+     * True when {@code prefix}, the bytes just before the gap, ends with this dictionary's
+     * {@code /Contents} key as syntax. A {@code % /Contents} comment, a key inside a string, or
+     * a line longer than the prefix could otherwise pass another string for the signed value.
+     */
+    static boolean followsContentsKey(byte[] prefix) {
+        byte[] key = "/Contents".getBytes(StandardCharsets.US_ASCII);
+        int end = prefix.length;
+        while (end > 0 && isPdfWhitespace(prefix[end - 1])) end--;
+        int start = end - key.length;
+        if (start < 0) return false;
+        for (int index = 0; index < key.length; index++) {
+            if (prefix[start + index] != key[index]) return false;
+        }
+        int index = start;
+        while (index > 0 && prefix[index - 1] != '\n' && prefix[index - 1] != '\r') index--;
+        if (index == 0) return false;
+        int stringDepth = 0;
+        for (; index < start; index++) {
+            byte value = prefix[index];
+            if (value == '\\' && stringDepth > 0) {
+                index++;
+            } else if (value == '(') {
+                stringDepth++;
+            } else if (value == ')') {
+                if (stringDepth == 0) return false;
+                stringDepth--;
+            } else if (value == '%' && stringDepth == 0) {
+                return false;
+            }
+        }
+        return stringDepth == 0;
+    }
+
+    private static boolean isPdfWhitespace(byte value) {
+        return value == 0 || value == 9 || value == 10 || value == 12 || value == 13 || value == 32;
+    }
+
+    private static byte[] contentsGap(Path file, int[] range) throws IOException {
+        long length = (long) range[2] - range[1];
+        if (length <= 0 || length > 4L * MAX_CMS_BYTES + 64) throw new IOException("Unbounded gap");
+        int prefixLength = (int) Math.min(range[1], CONTENTS_KEY_WINDOW);
+        ByteBuffer buffer = ByteBuffer.allocate(prefixLength + (int) length);
+        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ,
+                LinkOption.NOFOLLOW_LINKS)) {
+            channel.position(range[1] - prefixLength);
+            while (buffer.hasRemaining()) {
+                if (channel.read(buffer) <= 0) throw new IOException("Truncated signature gap");
+            }
+        }
+        byte[] bytes = buffer.array();
+        if (!followsContentsKey(Arrays.copyOfRange(bytes, 0, prefixLength))) {
+            throw new IOException("The signature gap does not follow its dictionary's /Contents key");
+        }
+        byte[] decoded = decodeContentsGap(Arrays.copyOfRange(bytes, prefixLength, bytes.length));
+        if (decoded == null) throw new IOException("The signature gap is not one hex string");
+        return decoded;
     }
 
     private static byte[] digestRanges(Path file, int[] range, String algorithm) throws Exception {
@@ -269,32 +374,69 @@ final class PdfSignatureVerifier {
         return PKCS7_SHA1.equals(subFilter) || "1.3.14.3.2.26".equals(digestOid);
     }
 
-    private static PdfSignatureReport.Trust evaluateAndroidTrust(X509Certificate leaf,
-            List<X509Certificate> certificates, Instant now) {
+    private static TrustEvaluator androidTrustEvaluator(Context context) {
+        List<X509Certificate> bundledAnchors = loadBundledAnchors(context);
+        return (leaf, chain, now) -> evaluateTrust(leaf, chain, now, bundledAnchors, true);
+    }
+
+    private static List<X509Certificate> loadBundledAnchors(Context context) {
+        try (InputStream input = context.getResources().openRawResource(R.raw.cca_india_2022)) {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int read;
+            while ((read = input.read(buffer)) != -1) output.write(buffer, 0, read);
+            byte[] encoded = output.toByteArray();
+            if (!isCcaIndia2022(encoded)) return List.of();
+            X509Certificate anchor = (X509Certificate) CertificateFactory.getInstance("X.509", BC)
+                    .generateCertificate(new ByteArrayInputStream(encoded));
+            return List.of(anchor);
+        } catch (Exception failure) {
+            return List.of();
+        }
+    }
+
+    private static boolean isCcaIndia2022(byte[] encoded) throws GeneralSecurityException {
+        byte[] digest = MessageDigest.getInstance("SHA-256", BC).digest(encoded);
+        StringBuilder fingerprint = new StringBuilder(digest.length * 2);
+        for (byte value : digest) fingerprint.append(String.format("%02x", value));
+        return CCA_INDIA_2022_SHA256.contentEquals(fingerprint);
+    }
+
+    static PdfSignatureReport.Trust evaluateTrust(X509Certificate leaf,
+            List<X509Certificate> chain, Instant now,
+            Collection<X509Certificate> bundledAnchors, boolean includeSystemAnchors) {
         try {
-            KeyStore store = KeyStore.getInstance("AndroidCAStore");
-            store.load(null);
             Set<TrustAnchor> anchors = new HashSet<>();
-            Enumeration<String> aliases = store.aliases();
-            while (aliases.hasMoreElements()) {
-                java.security.cert.Certificate candidate = store.getCertificate(aliases.nextElement());
-                if (candidate instanceof X509Certificate) {
-                    anchors.add(new TrustAnchor((X509Certificate) candidate, null));
+            if (includeSystemAnchors) {
+                KeyStore store = KeyStore.getInstance("AndroidCAStore");
+                store.load(null);
+                Enumeration<String> aliases = store.aliases();
+                while (aliases.hasMoreElements()) {
+                    java.security.cert.Certificate candidate = store.getCertificate(aliases.nextElement());
+                    if (candidate instanceof X509Certificate) {
+                        anchors.add(new TrustAnchor((X509Certificate) candidate, null));
+                    }
                 }
             }
-            if (anchors.isEmpty()) return PdfSignatureReport.Trust.INDETERMINATE;
-            if (buildPath(leaf, certificates, anchors, now)) return PdfSignatureReport.Trust.TRUSTED;
-            Instant midpoint = leaf.getNotBefore().toInstant().plusMillis(
-                    Math.max(1, leaf.getNotAfter().getTime() - leaf.getNotBefore().getTime()) / 2);
-            return buildPath(leaf, certificates, anchors, midpoint)
-                    ? PdfSignatureReport.Trust.TRUSTED : PdfSignatureReport.Trust.UNTRUSTED;
+            for (X509Certificate anchor : bundledAnchors) anchors.add(new TrustAnchor(anchor, null));
+            if (anchors.isEmpty()) return PdfSignatureReport.Trust.UNTRUSTED;
+            PKIXCertPathBuilderResult result = buildPath(leaf, chain, anchors, now);
+            if (result == null) return PdfSignatureReport.Trust.UNTRUSTED;
+            byte[] trusted = result.getTrustAnchor().getTrustedCert().getEncoded();
+            for (X509Certificate anchor : bundledAnchors) {
+                if (Arrays.equals(trusted, anchor.getEncoded()) && isCcaIndia2022(trusted)) {
+                    return PdfSignatureReport.Trust.TRUSTED_CCA_INDIA_2022;
+                }
+            }
+            return PdfSignatureReport.Trust.TRUSTED;
         } catch (Exception failure) {
             return PdfSignatureReport.Trust.INDETERMINATE;
         }
     }
 
-    private static boolean buildPath(X509Certificate leaf, List<X509Certificate> certificates,
-            Set<TrustAnchor> anchors, Instant at) {
+    private static PKIXCertPathBuilderResult buildPath(X509Certificate leaf,
+            List<X509Certificate> certificates, Set<TrustAnchor> anchors, Instant at)
+            throws GeneralSecurityException {
         try {
             X509CertSelector selector = new X509CertSelector();
             selector.setCertificate(leaf);
@@ -303,10 +445,9 @@ final class PdfSignatureVerifier {
             parameters.setDate(Date.from(at));
             parameters.addCertStore(CertStore.getInstance("Collection",
                     new CollectionCertStoreParameters(certificates)));
-            CertPathBuilder.getInstance("PKIX").build(parameters);
-            return true;
-        } catch (Exception failure) {
-            return false;
+            return (PKIXCertPathBuilderResult) CertPathBuilder.getInstance("PKIX").build(parameters);
+        } catch (CertPathBuilderException noPath) {
+            return null;
         }
     }
 

@@ -73,6 +73,8 @@ public final class PdfChefWebViewPolicyInstrumentedTest {
 
                 // Popup creation and cross-origin file/content/mixed access remain disabled.
                 WebSettings settings = webView.getSettings();
+                assertFalse(webView.isSaveEnabled());
+                assertFalse(webView.isSaveFromParentEnabled());
                 assertEquals(WebSettings.MIXED_CONTENT_NEVER_ALLOW, settings.getMixedContentMode());
                 assertFalse(settings.getAllowFileAccess());
                 assertFalse(settings.getAllowContentAccess());

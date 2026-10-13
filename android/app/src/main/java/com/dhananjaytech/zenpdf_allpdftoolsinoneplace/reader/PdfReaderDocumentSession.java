@@ -19,6 +19,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 /** One private, immutable PDF snapshot owned by a single native reader Activity. */
@@ -29,11 +30,12 @@ public final class PdfReaderDocumentSession implements AutoCloseable {
     static final long STORAGE_RESERVE_BYTES = 1024L * 1024L;
     static final int COPY_CHUNK_BYTES = 512 * 1024;
     static final int RECOVERY_BATCH_LIMIT = MAXIMUM_SESSIONS * 2 + 1;
-    private static final long MAXIMUM_DOCUMENT_BYTES = 128L * 1024L * 1024L;
+    static final long MAXIMUM_DOCUMENT_BYTES = 256L * 1024L * 1024L;
     private static final String MIME_PDF = "application/pdf";
     private static final Pattern TOKEN = Pattern.compile("[A-Za-z0-9_-]{22,64}");
     private static final Pattern SNAPSHOT = Pattern.compile("r1_[A-Za-z0-9_-]{22,64}\\.pdf");
     private static final Pattern PART = Pattern.compile("r1_[A-Za-z0-9_-]{22,64}\\.part");
+    private static final Set<Path> ACTIVE_SNAPSHOTS = ConcurrentHashMap.newKeySet();
 
     private final String ref;
     private final String displayName;
@@ -120,6 +122,7 @@ public final class PdfReaderDocumentSession implements AutoCloseable {
             BasicFileAttributes published = attributes(complete);
             if (!published.isRegularFile() || published.size() != source.sizeBytes()
                     || Files.isSymbolicLink(complete) || !isReadOnly(complete)) throw unsafe();
+            ACTIVE_SNAPSHOTS.add(complete);
             return new PdfReaderDocumentSession(ref, displayName, source.sizeBytes(), complete,
                     faults);
         } catch (Failure failure) {
@@ -147,6 +150,7 @@ public final class PdfReaderDocumentSession implements AutoCloseable {
             deleteVerified(snapshot);
             fsyncDirectory(snapshot.getParent());
             faults.checkpoint(Checkpoint.AFTER_CLOSE_DIRECTORY_FSYNC);
+            ACTIVE_SNAPSHOTS.remove(snapshot);
             closed = true;
         } catch (IOException | Failure | RuntimeException failure) {
             throw new IllegalStateException("Reader session could not be closed.");
@@ -162,6 +166,9 @@ public final class PdfReaderDocumentSession implements AutoCloseable {
 
     private static void copyOnce(Source source, Path part) throws IOException, Failure {
         byte[] prefix = new byte[5];
+        // Reuse the full-size window. A 250 MiB PDF otherwise allocates roughly
+        // 500 separate 512 KiB arrays while it is being validated and staged.
+        byte[] reusableWindow = new byte[COPY_CHUNK_BYTES];
         int prefixLength = 0;
         long total = 0;
         try (FileChannel output = FileChannel.open(part,
@@ -169,7 +176,7 @@ public final class PdfReaderDocumentSession implements AutoCloseable {
             while (total < source.sizeBytes()) {
                 throwIfInterrupted();
                 int wanted = (int) Math.min(COPY_CHUNK_BYTES, source.sizeBytes() - total);
-                byte[] window = new byte[wanted];
+                byte[] window = reusableWindow;
                 int read;
                 try { read = source.read(total, window); }
                 catch (Failure failure) {
@@ -230,7 +237,11 @@ public final class PdfReaderDocumentSession implements AutoCloseable {
             if (!SNAPSHOT.matcher(name).matches()) throw unsafe();
             long age = now - attributes.lastModifiedTime().toMillis();
             if (age < 0) throw unsafe();
-            if (age >= SESSION_EXPIRY_MILLIS || !isReadOnly(path)) {
+            // A snapshot not registered in this process cannot belong to a live reader.
+            // Reclaim it immediately after process death instead of making the next large
+            // document wait for the 24-hour stale-session deadline.
+            if (!ACTIVE_SNAPSHOTS.contains(path)
+                    || age >= SESSION_EXPIRY_MILLIS || !isReadOnly(path)) {
                 faults.checkpoint(Checkpoint.BEFORE_RECOVERY_DELETE);
                 deleteVerified(path);
                 changed = true;

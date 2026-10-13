@@ -67,6 +67,15 @@ for (const entryPoint of [
 ]) assert(mapping.includes(`${entryPoint} -> ${entryPoint}:`),
   `required reflected/manifest entry point was removed or renamed: ${entryPoint}`);
 
+for (const providerClass of [
+  'org.bouncycastle.jcajce.provider.digest.SHA256$Digest',
+  'org.bouncycastle.jcajce.provider.digest.SHA256$Mappings',
+  'org.bouncycastle.jcajce.provider.asymmetric.rsa.DigestSignatureSpi$SHA256',
+  'org.bouncycastle.jcajce.provider.asymmetric.RSA$Mappings',
+  'org.bouncycastle.jcajce.provider.asymmetric.x509.CertificateFactory',
+]) assert(mapping.includes(`${providerClass} -> ${providerClass}:`),
+  `required signature provider class was removed or renamed: ${providerClass}`);
+
 const resources = read('android/app/build/outputs/mapping/release/resources.txt');
 for (const resource of [
   'style:PdfReaderTheme:',
@@ -74,6 +83,7 @@ for (const resource of [
   'layout:pdf_reader_tools_sheet:',
   'drawable:pdf_reader_ic_search:',
   'drawable:pdf_reader_ic_share:',
+  'raw:cca_india_2022:',
 ]) assert(resources.includes(resource), `required native-reader resource was removed: ${resource}`);
 
 const releaseApk = resolve(root, 'android/app/build/outputs/apk/release/app-release-unsigned.apk');

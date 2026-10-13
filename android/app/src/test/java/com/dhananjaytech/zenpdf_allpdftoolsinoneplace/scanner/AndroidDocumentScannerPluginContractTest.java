@@ -128,6 +128,21 @@ public final class AndroidDocumentScannerPluginContractTest {
         assertFalse(AndroidDocumentScannerPlugin.shouldDeliver(false, true));
     }
 
+    @Test public void firstRestoredScannerResultSurvivesProcessDeathWithoutDuplicateImport() {
+        AndroidDocumentScannerPlugin.OperationState fresh =
+                new AndroidDocumentScannerPlugin.OperationState();
+        assertEquals(0, fresh.claimResult(false));
+        long restored = fresh.claimResult(true);
+        assertTrue(restored > 0);
+        assertEquals(0, fresh.begin());
+        assertEquals(0, fresh.claimResult(true));
+        assertTrue(fresh.finish(restored));
+        assertEquals(0, fresh.claimResult(true));
+        long next = fresh.begin();
+        assertTrue(next > restored);
+        assertEquals(next, fresh.claimResult(false));
+    }
+
     private static int occurrences(String source, String value) {
         int count = 0;
         for (int at = 0; (at = source.indexOf(value, at)) >= 0; at += value.length()) count++;

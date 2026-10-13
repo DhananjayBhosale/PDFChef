@@ -43,7 +43,7 @@ const provider = read('android/app/src/main/java/com/dhananjaytech/zenpdf_allpdf
 
 for (const [literal, expected] of [
   ['MAXIMUM_CHUNK_BYTES = 524_288', writer],
-  ['MAXIMUM_FILE_BYTES = 128L * 1024L * 1024L', writer],
+  ['MAXIMUM_FILE_BYTES = 256L * 1024L * 1024L', writer],
   ['MAXIMUM_OPEN_SESSIONS = 4', writer],
   ['MAXIMUM_OPEN_BYTES = 256L * 1024L * 1024L', writer],
   ['INACTIVITY_EXPIRY_MILLIS = 30L * 60L * 1000L', writer],

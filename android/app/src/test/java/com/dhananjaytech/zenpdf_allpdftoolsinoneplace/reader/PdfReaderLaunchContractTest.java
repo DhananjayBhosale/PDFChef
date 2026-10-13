@@ -2,6 +2,7 @@ package com.dhananjaytech.zenpdf_allpdftoolsinoneplace.reader;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.util.Set;
@@ -31,5 +32,34 @@ public final class PdfReaderLaunchContractTest {
                 "/pdf-to-jpg", "/pdf-to-word", "/ocr", "/metadata", "/repair",
                 "/compare"), PdfReaderLaunchContract.toolPaths());
         assertFalse(PdfReaderLaunchContract.toolPaths().contains("/view"));
+        assertEquals("verify-signatures",
+                PdfReaderLaunchContract.INITIAL_ACTION_VERIFY_SIGNATURES);
+    }
+
+    @Test public void initialActionRequestIsExactAndCannotChangeOrdinaryLaunches() throws Exception {
+        Set<String> ordinary = Set.of(
+                PdfReaderLaunchContract.EXTRA_REF,
+                PdfReaderLaunchContract.EXTRA_DISPLAY_NAME);
+        Set<String> verification = Set.of(
+                PdfReaderLaunchContract.EXTRA_REF,
+                PdfReaderLaunchContract.EXTRA_DISPLAY_NAME,
+                PdfReaderLaunchContract.EXTRA_INITIAL_ACTION);
+
+        assertFalse(PdfReaderLaunchContract.requestsSignatureVerification(ordinary, null));
+        assertTrue(PdfReaderLaunchContract.requestsSignatureVerification(
+                verification,
+                PdfReaderLaunchContract.INITIAL_ACTION_VERIFY_SIGNATURES));
+        assertThrows(PdfReaderLaunchContract.Failure.class,
+                () -> PdfReaderLaunchContract.requestsSignatureVerification(
+                        ordinary,
+                        PdfReaderLaunchContract.INITIAL_ACTION_VERIFY_SIGNATURES));
+        assertThrows(PdfReaderLaunchContract.Failure.class,
+                () -> PdfReaderLaunchContract.requestsSignatureVerification(
+                        verification,
+                        "unsupported"));
+        assertThrows(PdfReaderLaunchContract.Failure.class,
+                () -> PdfReaderLaunchContract.requestsSignatureVerification(
+                        Set.of(PdfReaderLaunchContract.EXTRA_REF),
+                        null));
     }
 }

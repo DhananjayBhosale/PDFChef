@@ -13,8 +13,10 @@ const count = (source, pattern) => [...source.matchAll(pattern)].length;
 const paths = {
   build: 'android/app/build.gradle',
   manifest: 'android/app/src/main/AndroidManifest.xml',
+  host: 'android/app/src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/MainActivity.java',
   plugin: 'android/app/src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/AndroidDocumentsPlugin.java',
   coordinator: 'android/app/src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/DocumentLifecycleCoordinator.java',
+  pending: 'android/app/src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/OwnedPendingImportStore.java',
   owned: 'android/app/src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/OwnedDocumentWriter.java',
   legacy: 'android/app/src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/LegacyDocumentOpenResolver.java',
   contract: 'android/app/src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/reader/PdfReaderLaunchContract.java',
@@ -44,6 +46,7 @@ assert(readerTags.length === 1, 'manifest must declare exactly one PdfReaderActi
 const readerTag = readerTags[0][0];
 for (const required of [
   'android:exported="false"',
+  'android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|navigation"',
   'android:theme="@style/PdfReaderTheme"',
   'android:windowSoftInputMode="adjustResize"',
 ]) assert(readerTag.includes(required), `reader manifest invariant missing ${required}`);
@@ -57,17 +60,20 @@ assert(count(manifest, /<provider\b/g) === 1
 const contract = read(paths.contract);
 for (const invariant of [
   'ACTIVITY_CLASS_NAME', 'new ComponentName(context.getPackageName(), ACTIVITY_CLASS_NAME)',
-  'EXTRA_REF', 'EXTRA_DISPLAY_NAME', 'ACTION_CLOSED', 'ACTION_TOOL',
+  'EXTRA_REF', 'EXTRA_DISPLAY_NAME', 'EXTRA_INITIAL_ACTION',
+  'INITIAL_ACTION_VERIFY_SIGNATURES', 'createSignatureVerificationIntent',
+  'requestsSignatureVerification', 'ACTION_CLOSED', 'ACTION_TOOL',
   'data.getAction() != null', 'data.getData() != null', 'data.getClipData() != null',
   'LEGACY_REF', 'OWNED_REF', 'TOOL_PATHS.contains(toolPath)',
 ]) assert(contract.includes(invariant), `reader launch allowlist missing ${invariant}`);
-assert(count(contract, /intent\.putExtra\(/g) === 2,
-  'reader launch request must carry only opaque ref and safe display name');
+assert(count(contract, /intent\.putExtra\(/g) === 3,
+  'reader launch request may add only the allowlisted signature-verification action');
 
 const plugin = read(paths.plugin);
 const documentMethods = [
   'readChunk', 'beginWrite', 'appendWrite', 'finishWrite', 'abortWrite',
-  'listOwned', 'renameItem', 'trashOwned', 'restoreOwned', 'deleteOwned', 'clearOwned', 'takePendingImports',
+  'listOwned', 'renameItem', 'trashOwned', 'restoreOwned', 'deleteOwned', 'clearOwned',
+  'clearOwnedPayloads', 'takePendingImports',
   'acknowledgePendingImports', 'pickDocuments', 'exportItem', 'shareItem', 'openReader',
 ];
 assert(count(plugin, /@PluginMethod\b/g) === documentMethods.length
@@ -87,8 +93,9 @@ assert(readerResult.includes('output.put("toolPath", result.toolPath())')
 
 const session = read(paths.session);
 for (const invariant of [
-  'MAXIMUM_DOCUMENT_BYTES = 128L * 1024L * 1024L',
+  'MAXIMUM_DOCUMENT_BYTES = 256L * 1024L * 1024L',
   'COPY_CHUNK_BYTES = 512 * 1024', 'stream.limit(RECOVERY_BATCH_LIMIT + 1L)',
+  'byte[] reusableWindow = new byte[COPY_CHUNK_BYTES]',
   'makeReadOnly(part)', 'fsyncFile(part)', 'StandardCopyOption.ATOMIC_MOVE',
   'isReadOnly(complete)', 'deleteVerified(snapshot)', 'fsyncDirectory(snapshot.getParent())',
   'Thread.currentThread().isInterrupted()',
@@ -107,6 +114,17 @@ for (const invariant of [
   'FileChannel.open(path, StandardOpenOption.READ', 'LinkOption.NOFOLLOW_LINKS',
   'AFTER_OWNED_READER_SOURCE_READ',
 ]) assert(owned.includes(invariant), `owned-reader one-pass validation missing ${invariant}`);
+for (const invariant of [
+  'loadMetadataForImmediateValidation(ref)',
+  'BasicFileAttributes identityBeforeDigest = attributes(source)',
+  'sameIdentity(identityBeforeDigest, verifiedIdentity)',
+  'sameIdentity(verifiedIdentity, movedIdentity)',
+]) assert(owned.includes(invariant), `pending promotion one-pass invariant missing ${invariant}`);
+const pending = read(paths.pending);
+assert(pending.includes('PendingImportRecord loadMetadataForImmediateValidation(String ref)')
+  && pending.includes('return readMetadata(record, layout.dataPath(ref), ref)')
+  && pending.includes('requireRegularFile(dataPath, record.sizeBytes())'),
+  'metadata-only retain read must preserve record and structural validation');
 const ownedReader = owned.slice(owned.indexOf('private final class OwnedReaderSource'),
   owned.indexOf('static final class Failure'));
 assert(count(ownedReader, /FileChannel\.open\(/g) === 1
@@ -150,11 +168,13 @@ for (const invariant of [
   'setResult(RESULT_OK, PdfReaderLaunchContract.closedResultIntent())',
   'coordinator.prepareReader(requestedRef, requestedName)', 'Executors.newSingleThreadExecutor()',
   'extends PdfViewerFragment', 'fragment.setDocumentUri(staged.documentUri())',
-  'viewer.setTextSearchActive(active)', 'viewer.isTextSearchActive()',
+  'new PdfReaderSearchEngine(getApplicationContext()).search(',
+  'activeSession.snapshotForVerification()', 'executor.submit(() ->',
   'document.getPageCount()', 'pdfView.addOnViewportChangedListener',
   'actions.share(ref', 'PdfReaderLaunchContract.toolResultIntent(path)',
   'viewer.setToolboxVisible(false)', 'R.string.pdf_reader_search_unavailable',
-  'onRetainCustomNonConfigurationInstance()',
+  'onRetainCustomNonConfigurationInstance()', 'onConfigurationChanged(@NonNull Configuration newConfig)',
+  'super.onConfigurationChanged(newConfig);', 'dismissTools();',
 ]) assert(activity.includes(invariant), `native reader affordance missing ${invariant}`);
 assert(activity.indexOf('setResult(RESULT_OK, PdfReaderLaunchContract.closedResultIntent())')
   < activity.indexOf('prepareDocument();'),
@@ -164,21 +184,31 @@ for (const forbidden of ['PluginCall', 'put("uri"', 'put("path"', 'put("bytes"',
   assert(!activity.includes(forbidden), `reader Activity bridge/detail leak: ${forbidden}`);
 }
 
+const host = read(paths.host);
+for (const invariant of [
+  'public void onStart()', 'webView.onResume()',
+  'public void onStop()', 'webView.onPause()',
+]) assert(host.includes(invariant), `host reader-background lifecycle missing ${invariant}`);
+assert(!host.includes('pauseTimers()') && !host.includes('resumeTimers()'),
+  'reader backgrounding must not mutate process-global WebView timers');
+
 const documentsClient = read(paths.documentsClient);
 const readerClient = read(paths.readerClient);
 const workspace = read(paths.workspace);
 const recent = read(paths.recent);
 assert(documentsClient.includes("registerPlugin<AndroidDocumentsNativePlugin>('AndroidDocuments')")
-  && documentsClient.includes('async openReader(ref: string, displayName: string)')
+  && documentsClient.includes('initialAction?: \'verify-signatures\'')
   && documentsClient.includes("{ action: 'closed' }")
   && documentsClient.includes("action: 'tool'"),
   'strict TypeScript AndroidDocuments reader adapter missing');
 for (const invariant of [
   'const LEGACY_REF = /^a1_', 'const OWNED_REF = /^d1_',
-  "document.mimeType === 'application/pdf'", 'MAXIMUM_NATIVE_PDF_BYTES = 128 * 1024 * 1024',
-  'isAndroidDocumentsAvailable()', 'documents.openReader(document.ref, safeName(document))',
+  "document.mimeType === 'application/pdf'", 'MAXIMUM_NATIVE_PDF_BYTES = 256 * 1024 * 1024',
+  'isAndroidDocumentsAvailable()', 'supportsSignatureVerification: true',
+  'documents.openReader(document.ref, safeName(document), options?.initialAction)',
 ]) assert(readerClient.includes(invariant), `native reader eligibility invariant missing ${invariant}`);
-assert(workspace.includes('if (!documentsOverride && !isAndroidDocumentsAvailable()) return base;')
+assert(workspace.includes("if (!documentsOverride && Capacitor.getPlatform() !== 'android') return platformWithDeviceFacts;")
+  && workspace.includes('if (isAndroidNativePdfReaderAvailable())')
   && workspace.includes('platform.pdfReader = createAndroidPdfReaderService(documents)'),
   'native reader must compose through the Android workspace only after bridge discovery');
 assert(recent.includes('reader.isEligible(document)')

@@ -2,7 +2,10 @@ package com.dhananjaytech.zenpdf_allpdftoolsinoneplace.reader;
 
 import android.annotation.SuppressLint;
 import android.app.Dialog;
+import android.content.ClipData;
 import android.content.Intent;
+import android.net.Uri;
+import android.print.PrintManager;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.RectF;
@@ -18,6 +21,7 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.ImageButton;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -28,24 +32,32 @@ import androidx.annotation.Nullable;
 import androidx.annotation.OptIn;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.FileProvider;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
+import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
+import androidx.lifecycle.Lifecycle;
 import androidx.pdf.ExperimentalPdfApi;
 import androidx.pdf.PdfDocument;
 import androidx.pdf.view.PdfView;
 import androidx.pdf.viewer.fragment.PdfViewerFragment;
 
+import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.BuildConfig;
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.PdfChefApplication;
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.R;
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.documents.DocumentLifecycleCoordinator;
 
+import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 
 /**
@@ -68,6 +80,7 @@ public final class PdfReaderActivity extends AppCompatActivity {
     private static final String STATE_PAGE = "pdfchef.reader.page";
     private static final String STATE_SEARCH = "pdfchef.reader.search";
     private static final String STATE_FAILED = "pdfchef.reader.failed";
+    private static final String STATE_SIGNATURE_PRESENTED = "pdfchef.reader.signaturePresented";
     private static final long MESSAGE_VISIBLE_MS = 6000L;
 
     /** Path plus the exact tool name used everywhere else in the product. */
@@ -139,12 +152,26 @@ public final class PdfReaderActivity extends AppCompatActivity {
     private ImageButton toolsButton;
 
     private Dialog toolsDialog;
+    private AlertDialog searchDialog;
     private AlertDialog signatureDialog;
     private AlertDialog passwordDialog;
+    private boolean passwordPromptPending;
+    private boolean viewerNeedsAttach;
+    private EditText searchInput;
+    private TextView searchStatus;
+    private Button searchPreviousButton;
+    private Button searchNextButton;
+    private Future<?> searchTask;
+    private int searchGeneration;
+    private int[] searchPages = new int[0];
+    private int searchResultIndex;
     private boolean sharePending;
     private boolean savePending;
     private boolean signaturePending;
+    private boolean verifySignaturesOnLoad;
+    private boolean signatureVerificationPresented;
     private char[] documentPassword;
+    private char[] verifiedCopyPassword;
     private char[] pendingDocumentPassword;
     private boolean retainedPasswordAttempted;
     private boolean resultSent;
@@ -179,12 +206,20 @@ public final class PdfReaderActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         setTheme(R.style.PdfReaderTheme);
-        super.onCreate(savedInstanceState);
+        // We restore only the small state below and always build a fresh viewer. Restoring the
+        // old fragment/view hierarchy first wastes Binder space and can restore a stale URI.
+        super.onCreate(null);
 
         Intent intent = getIntent();
         String requestedRef = intent == null ? null : intent.getStringExtra(PdfReaderLaunchContract.EXTRA_REF);
         String requestedName = intent == null
                 ? null : intent.getStringExtra(PdfReaderLaunchContract.EXTRA_DISPLAY_NAME);
+        try {
+            verifySignaturesOnLoad = PdfReaderLaunchContract.requestsSignatureVerification(intent);
+        } catch (PdfReaderLaunchContract.Failure invalidRequest) {
+            finishClosed();
+            return;
+        }
         if (!PdfReaderLaunchContract.isCanonicalRef(requestedRef)
                 || !PdfReaderLaunchContract.isSafeDisplayName(requestedName)) {
             // Fail closed. Nothing is said about why, because nothing about the
@@ -204,6 +239,8 @@ public final class PdfReaderActivity extends AppCompatActivity {
             currentPage = Math.max(savedInstanceState.getInt(STATE_PAGE, 1), 1);
             searchActive = savedInstanceState.getBoolean(STATE_SEARCH, false);
             failed = savedInstanceState.getBoolean(STATE_FAILED, false);
+            signatureVerificationPresented = savedInstanceState.getBoolean(
+                    STATE_SIGNATURE_PRESENTED, false);
         }
 
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
@@ -371,6 +408,11 @@ public final class PdfReaderActivity extends AppCompatActivity {
     private void attachViewer(@NonNull PdfReaderDocumentSession staged) {
         if (session != null && session != staged) session.close();
         session = staged;
+        if (!canShowReaderUi()) {
+            viewerNeedsAttach = true;
+            return;
+        }
+        viewerNeedsAttach = false;
         pageCount = 0;
         pdfView = null;
         // A fresh viewer starts at page one and says so before the saved page can
@@ -388,11 +430,13 @@ public final class PdfReaderActivity extends AppCompatActivity {
     }
 
     private void removeViewer() {
+        // Detach the callback target first: SDK layout/viewport callbacks during teardown must
+        // not change the page we are about to save or mark a replacement document as loaded.
+        pdfView = null;
         Fragment current = getSupportFragmentManager().findFragmentByTag(FRAGMENT_TAG);
         if (current != null) {
             getSupportFragmentManager().beginTransaction().remove(current).commitNowAllowingStateLoss();
         }
-        pdfView = null;
     }
 
     private void closeSession() {
@@ -409,7 +453,8 @@ public final class PdfReaderActivity extends AppCompatActivity {
         prepareDocument();
     }
 
-    void onDocumentLoaded(int pages) {
+    void onDocumentLoaded(@NonNull PdfView view, int pages) {
+        if (view != pdfView) return;
         if (pendingDocumentPassword != null) {
             clearPassword(documentPassword);
             documentPassword = pendingDocumentPassword;
@@ -422,9 +467,12 @@ public final class PdfReaderActivity extends AppCompatActivity {
         updatePageLabel();
         // The page the person was on, and the search they had open, survive the
         // rotation that rebuilt this fragment.
-        restorePendingPage();
+        schedulePendingPageRestore();
         if (searchActive) setSearchActive(true);
         hideToolbox();
+        if (verifySignaturesOnLoad && !signatureVerificationPresented) {
+            main.post(this::verifyDigitalSignatures);
+        }
     }
 
     void onDocumentFailed() {
@@ -439,10 +487,14 @@ public final class PdfReaderActivity extends AppCompatActivity {
     void onPdfViewReady(@NonNull PdfView view) {
         pdfView = view;
         hideToolbox();
-        restorePendingPage();
     }
 
     void requestDocumentPassword(@NonNull ReaderFragment fragment) {
+        if (!canShowReaderUi()) {
+            passwordPromptPending = true;
+            return;
+        }
+        passwordPromptPending = false;
         if (documentPassword != null && !retainedPasswordAttempted) {
             retainedPasswordAttempted = true;
             fragment.submitPassword(new String(documentPassword));
@@ -501,23 +553,45 @@ public final class PdfReaderActivity extends AppCompatActivity {
     }
 
     /**
-     * Both halves have to be there: the view to scroll, and a page count to
-     * scroll within. Whichever readiness callback lands second is the one that
-     * issues the scroll, and a target the document cannot honour is dropped
-     * rather than clamped onto some other page.
+     * The viewer reports load success before it assigns the document to its
+     * own view. Posting one main-thread turn lets that assignment create the
+     * page layout before the restore is attempted.
      */
-    private void restorePendingPage() {
+    private void schedulePendingPageRestore() {
         if (pendingPageTarget <= 0 || pendingRestoreIssued) return;
         if (pdfView == null || pageCount <= 0) return;
         if (pendingPageTarget > pageCount) {
             pendingPageTarget = 0;
             return;
         }
-        pendingRestoreIssued = true;
-        pdfView.scrollToPage(pendingPageTarget - 1);
+        PdfView view = pdfView;
+        int target = pendingPageTarget;
+        view.post(() -> restorePendingPage(view, target));
     }
 
-    void onPageChanged(int firstVisiblePage) {
+    private void restorePendingPage(@NonNull PdfView view, int target) {
+        if (view != pdfView || isFinishing() || isDestroyed()) return;
+        if (pendingPageTarget != target || pendingRestoreIssued) return;
+        if (target < 1 || target > pageCount) {
+            pendingPageTarget = 0;
+            return;
+        }
+
+        // scrollToPage can synchronously report the destination, so the issued
+        // flag must be visible during the call. A failed call gives tracking
+        // straight back to the live viewport instead of freezing or crashing.
+        pendingRestoreIssued = true;
+        try {
+            view.scrollToPage(target - 1);
+        } catch (IllegalStateException notReady) {
+            pendingRestoreIssued = false;
+            if (BuildConfig.DEBUG) throw notReady;
+            pendingPageTarget = 0;
+        }
+    }
+
+    void onPageChanged(@NonNull PdfView view, int firstVisiblePage) {
+        if (view != pdfView) return;
         int page = firstVisiblePage + 1;
         if (page < 1) return;
         if (pendingPageTarget > 0) {
@@ -624,44 +698,219 @@ public final class PdfReaderActivity extends AppCompatActivity {
     /** The reader draws its own chrome, so the built-in floating toolbox stays hidden. */
     private void hideToolbox() {
         PdfViewerFragment viewer = viewer();
-        if (viewer != null) viewer.setToolboxVisible(false);
+        if (viewer != null && viewer.getView() != null) viewer.setToolboxVisible(false);
     }
 
-    /**
-     * The viewer is the authority while it exists. Its own close control can end
-     * search without telling this class, so a cached flag would swallow the next
-     * Back or toolbar press and could reopen a search the person had closed. The
-     * cache is only the answer before the viewer is there, and across rotation.
-     */
     private boolean isSearchActive() {
-        PdfViewerFragment viewer = viewer();
-        return viewer != null ? viewer.isTextSearchActive() : searchActive;
+        return searchActive && (searchDialog == null || searchDialog.isShowing());
     }
 
     /**
-     * The query field and the previous/next controls are the viewer's own, so
-     * search stays exactly as native as the password prompt. If the viewer will
-     * not enter search, that is said once and the document stays open.
+     * Search deliberately does not use PdfViewerFragment's highlight pipeline. That pipeline
+     * materializes all highlight rectangles on the main thread and has produced user-perceived
+     * ANRs for match-heavy documents. Our page-only search runs on the existing background
+     * executor, remains cancellable, and moves the same native PdfView to each result.
      */
     private void setSearchActive(boolean active) {
-        PdfViewerFragment viewer = viewer();
-        if (viewer == null) {
-            // No viewer yet: preparing, or failed. Closing search is still a real
-            // answer, so the cache that stands in for the viewer is cleared here.
-            // Otherwise a restored "search was open" would swallow every Back.
-            // Opening search has nothing to open, so the cache is left for the
-            // viewer to honour when it arrives.
-            if (!active) searchActive = false;
+        if (!active) {
+            dismissSearch();
             return;
         }
-        viewer.setTextSearchActive(active);
-        boolean applied = viewer.isTextSearchActive();
-        if (active && !applied) {
-            searchActive = false;
+        searchActive = true;
+        if (session == null || pdfView == null || executor == null) return;
+        showSearch();
+    }
+
+    private void showSearch() {
+        if (searchDialog != null && searchDialog.isShowing()) return;
+
+        float density = getResources().getDisplayMetrics().density;
+        int side = Math.round(24f * density);
+        int gap = Math.round(12f * density);
+
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(side, 0, side, 0);
+
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setHint(R.string.pdf_reader_search_hint);
+        input.setContentDescription(getString(R.string.pdf_reader_search_hint));
+        body.addView(input, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        TextView status = new TextView(this);
+        LinearLayout.LayoutParams statusLayout = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        statusLayout.topMargin = gap;
+        body.addView(status, statusLayout);
+
+        LinearLayout navigation = new LinearLayout(this);
+        navigation.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams navigationLayout = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        navigationLayout.topMargin = gap;
+        body.addView(navigation, navigationLayout);
+
+        Button previous = new Button(this);
+        previous.setText(R.string.pdf_reader_search_previous);
+        previous.setEnabled(false);
+        navigation.addView(previous, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        Button next = new Button(this);
+        next.setText(R.string.pdf_reader_search_next);
+        next.setEnabled(false);
+        LinearLayout.LayoutParams nextLayout = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        nextLayout.setMarginStart(gap);
+        navigation.addView(next, nextLayout);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.pdf_reader_search_title)
+                .setView(body)
+                .setPositiveButton(R.string.pdf_reader_search_action, null)
+                .setNegativeButton(android.R.string.cancel, null)
+                .create();
+        dialog.setOnDismissListener(ignored -> {
+            if (searchDialog == dialog) clearSearchState();
+        });
+        dialog.setOnShowListener(ignored -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> runSearch());
+            input.requestFocus();
+        });
+
+        searchInput = input;
+        searchStatus = status;
+        searchPreviousButton = previous;
+        searchNextButton = next;
+        previous.setOnClickListener(view -> moveToSearchResult(-1));
+        next.setOnClickListener(view -> moveToSearchResult(1));
+        searchDialog = dialog;
+        dialog.show();
+    }
+
+    private void runSearch() {
+        if (searchInput == null || searchStatus == null || session == null || executor == null) {
             showMessage(R.string.pdf_reader_search_unavailable);
             return;
         }
-        searchActive = applied;
+        String query = searchInput.getText().toString();
+        if (query.strip().isEmpty() || query.length() > PdfReaderSearchEngine.MAX_QUERY_CHARACTERS) {
+            searchStatus.setText(R.string.pdf_reader_search_invalid);
+            return;
+        }
+
+        cancelSearchTask();
+        int generation = ++searchGeneration;
+        searchPages = new int[0];
+        searchResultIndex = 0;
+        setSearchNavigationEnabled(false);
+        searchStatus.setText(R.string.pdf_reader_searching);
+
+        final PdfReaderDocumentSession activeSession = session;
+        final char[] password = documentPassword == null ? null : documentPassword.clone();
+        try {
+            searchTask = executor.submit(() -> {
+                PdfReaderSearchEngine.Result result;
+                try {
+                    result = new PdfReaderSearchEngine(getApplicationContext()).search(
+                            activeSession.snapshotForVerification(), password, query);
+                } catch (RuntimeException failure) {
+                    clearPassword(password);
+                    result = new PdfReaderSearchEngine.Result(
+                            PdfReaderSearchEngine.Status.UNAVAILABLE, new int[0], false);
+                }
+                final PdfReaderSearchEngine.Result completed = result;
+                main.post(() -> showSearchResults(generation, completed));
+            });
+        } catch (RejectedExecutionException rejected) {
+            clearPassword(password);
+            searchStatus.setText(R.string.pdf_reader_search_unavailable);
+        }
+    }
+
+    private void showSearchResults(int generation, @NonNull PdfReaderSearchEngine.Result result) {
+        if (generation != searchGeneration || searchDialog == null || !searchDialog.isShowing()) return;
+        searchTask = null;
+        if (result.status == PdfReaderSearchEngine.Status.CANCELLED) return;
+        if (result.status == PdfReaderSearchEngine.Status.INVALID_QUERY) {
+            searchStatus.setText(R.string.pdf_reader_search_invalid);
+            return;
+        }
+        if (result.status != PdfReaderSearchEngine.Status.COMPLETE) {
+            searchStatus.setText(R.string.pdf_reader_search_unavailable);
+            return;
+        }
+        searchPages = result.matchingPages;
+        if (searchPages.length == 0) {
+            searchStatus.setText(R.string.pdf_reader_search_none);
+            return;
+        }
+
+        searchResultIndex = 0;
+        for (int index = 0; index < searchPages.length; index++) {
+            if (searchPages[index] + 1 >= currentPage) {
+                searchResultIndex = index;
+                break;
+            }
+        }
+        setSearchNavigationEnabled(true);
+        showCurrentSearchResult(result.truncated);
+    }
+
+    private void moveToSearchResult(int delta) {
+        if (searchPages.length == 0) return;
+        searchResultIndex = (searchResultIndex + delta + searchPages.length) % searchPages.length;
+        showCurrentSearchResult(false);
+    }
+
+    private void showCurrentSearchResult(boolean truncated) {
+        if (pdfView == null || searchStatus == null || searchPages.length == 0) return;
+        int page = searchPages[searchResultIndex];
+        try { pdfView.scrollToPage(page); }
+        catch (IllegalStateException unavailable) {
+            searchStatus.setText(R.string.pdf_reader_search_unavailable);
+            setSearchNavigationEnabled(false);
+            return;
+        }
+        searchStatus.setText(getString(truncated
+                        ? R.string.pdf_reader_search_result_limited
+                        : R.string.pdf_reader_search_result,
+                searchResultIndex + 1, searchPages.length, page + 1));
+    }
+
+    private void setSearchNavigationEnabled(boolean enabled) {
+        if (searchPreviousButton != null) searchPreviousButton.setEnabled(enabled);
+        if (searchNextButton != null) searchNextButton.setEnabled(enabled);
+    }
+
+    private void dismissSearch() {
+        AlertDialog dialog = searchDialog;
+        if (dialog == null) {
+            clearSearchState();
+            return;
+        }
+        dialog.dismiss();
+    }
+
+    private void clearSearchState() {
+        cancelSearchTask();
+        searchGeneration++;
+        searchActive = false;
+        searchPages = new int[0];
+        searchResultIndex = 0;
+        searchDialog = null;
+        searchInput = null;
+        searchStatus = null;
+        searchPreviousButton = null;
+        searchNextButton = null;
+    }
+
+    private void cancelSearchTask() {
+        Future<?> task = searchTask;
+        searchTask = null;
+        if (task != null) task.cancel(true);
     }
 
     private void share() {
@@ -755,6 +1004,7 @@ public final class PdfReaderActivity extends AppCompatActivity {
     }
 
     private void verifyDigitalSignatures() {
+        if (isFinishing() || isDestroyed()) return;
         if (signaturePending || session == null || executor == null) return;
         dismissTools();
         signaturePending = true;
@@ -793,6 +1043,7 @@ public final class PdfReaderActivity extends AppCompatActivity {
 
     private void showSignatureReport(@NonNull PdfSignatureReport report) {
         if (isFinishing() || isDestroyed()) return;
+        signatureVerificationPresented = true;
         signaturePending = false;
         setActionsEnabled(errorView.getVisibility() != View.VISIBLE);
         dismissSignatureDialog();
@@ -827,12 +1078,113 @@ public final class PdfReaderActivity extends AppCompatActivity {
             text.append("\n\n").append(getString(R.string.pdf_reader_signature_offline_note));
             message = text.toString();
         }
-        signatureDialog = new AlertDialog.Builder(this)
+        AlertDialog.Builder builder = new AlertDialog.Builder(this)
                 .setTitle(R.string.pdf_reader_signature_results_title)
                 .setMessage(message)
-                .setPositiveButton(android.R.string.ok, null)
-                .create();
+                .setPositiveButton(android.R.string.ok, null);
+        if (PdfSignatureReport.fullyVerified(report)) {
+            builder.setNeutralButton(R.string.pdf_reader_verified_copy_action,
+                    (dialog, which) -> createVerifiedCopy(report));
+        }
+        signatureDialog = builder.create();
         signatureDialog.show();
+    }
+
+    private void createVerifiedCopy(PdfSignatureReport report) {
+        dismissSignatureDialog();
+        signatureDialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.pdf_reader_verified_copy_action)
+                .setItems(new CharSequence[] { getString(R.string.pdf_reader_verified_copy_print),
+                        getString(R.string.pdf_reader_verified_copy_share) },
+                        (dialog, which) -> createVerifiedCopy(report, which == 0))
+                .setNegativeButton(android.R.string.cancel, null).create();
+        signatureDialog.show();
+    }
+
+    private void createVerifiedCopy(PdfSignatureReport report, boolean printing) {
+        if (!PdfSignatureReport.fullyVerified(report) || signaturePending || session == null
+                || executor == null || isFinishing() || isDestroyed()) return;
+        signaturePending = true;
+        setActionsEnabled(errorView.getVisibility() != View.VISIBLE);
+        dismissSignatureDialog();
+        signatureDialog = new AlertDialog.Builder(this)
+                .setMessage(R.string.pdf_reader_verified_copy_progress)
+                .setCancelable(false).create();
+        signatureDialog.show();
+        final PdfReaderDocumentSession activeSession = session;
+        final String name = displayName;
+        final Path outputDir = getCacheDir().toPath().resolve(PdfVerifiedCopy.CACHE_DIRECTORY);
+        final char[] password = documentPassword == null ? null : documentPassword.clone();
+        final Date checkedAt = Date.from(report.signatures.get(0).evaluatedAt);
+        verifiedCopyPassword = password;
+        try {
+            executor.execute(() -> {
+                PdfVerifiedCopy.Result result = null;
+                try {
+                    Path snapshot = activeSession.snapshotForVerification();
+                    result = printing
+                            ? PdfVerifiedCopy.prepareForPrint(getApplicationContext(), snapshot, password)
+                            : PdfVerifiedCopy.create(getApplicationContext(), snapshot, password, name,
+                                    checkedAt, outputDir);
+                } catch (Exception failure) {
+                    // Keep file contents, paths and credentials out of logs and UI messages.
+                } finally {
+                    clearPassword(password);
+                }
+                final PdfVerifiedCopy.Result completed = result;
+                main.post(() -> showVerifiedCopy(completed, printing, checkedAt));
+            });
+        } catch (RejectedExecutionException unavailable) {
+            clearPassword(password);
+            showVerifiedCopy(null, printing, checkedAt);
+        }
+    }
+
+    private void showVerifiedCopy(@Nullable PdfVerifiedCopy.Result copy, boolean printing, Date checkedAt) {
+        verifiedCopyPassword = null;
+        if (isFinishing() || isDestroyed()) return;
+        signaturePending = false;
+        setActionsEnabled(errorView.getVisibility() != View.VISIBLE);
+        dismissSignatureDialog();
+        if (copy == null) {
+            showMessage(R.string.pdf_reader_verified_copy_failed);
+        } else if (copy.outcome == PdfVerifiedCopy.Outcome.NO_SIGNATURE_BOX) {
+            showMessage(R.string.pdf_reader_verified_copy_no_box);
+        } else if (copy.outcome == PdfVerifiedCopy.Outcome.UNSUPPORTED_SIGNATURE_BOX) {
+            showMessage(R.string.pdf_reader_verified_copy_unsupported_box);
+        } else if (copy.outcome == PdfVerifiedCopy.Outcome.PASSWORD_UNSUPPORTED) {
+            showMessage(R.string.pdf_reader_verified_copy_password_unsupported);
+        } else if (printing) {
+            printVerifiedCopy(copy, checkedAt);
+        } else {
+            shareVerifiedCopy(copy);
+        }
+    }
+
+    private void shareVerifiedCopy(PdfVerifiedCopy.Result copy) {
+        try {
+            Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", copy.path.toFile());
+            Intent send = new Intent(Intent.ACTION_SEND).setType("application/pdf")
+                    .putExtra(Intent.EXTRA_STREAM, uri)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            send.setClipData(ClipData.newRawUri("PDF", uri));
+            startActivity(Intent.createChooser(send, getString(R.string.pdf_reader_verified_copy_share)));
+        } catch (RuntimeException unavailable) {
+            showMessage(R.string.pdf_reader_verified_copy_failed);
+        }
+    }
+
+    private void printVerifiedCopy(PdfVerifiedCopy.Result copy, Date checkedAt) {
+        PdfVerifiedCopyPrintAdapter adapter = new PdfVerifiedCopyPrintAdapter(this, copy, documentPassword, checkedAt,
+                PdfVerifiedCopy.copyName(displayName));
+        try {
+            PrintManager manager = (PrintManager) getSystemService(PRINT_SERVICE);
+            if (manager == null) throw new IllegalStateException("Printing unavailable");
+            manager.print(PdfVerifiedCopy.copyName(displayName), adapter, null);
+        } catch (RuntimeException unavailable) {
+            adapter.onFinish();
+            showMessage(R.string.pdf_reader_verified_copy_failed);
+        }
     }
 
     private String integrityText(PdfSignatureReport.Signature signature) {
@@ -850,6 +1202,7 @@ public final class PdfReaderActivity extends AppCompatActivity {
     private String trustText(PdfSignatureReport.Trust value) {
         switch (value) {
             case TRUSTED: return getString(R.string.pdf_reader_signature_trusted);
+            case TRUSTED_CCA_INDIA_2022: return getString(R.string.pdf_reader_signature_trusted_cca);
             case UNTRUSTED: return getString(R.string.pdf_reader_signature_untrusted);
             default: return getString(R.string.pdf_reader_signature_indeterminate);
         }
@@ -920,17 +1273,92 @@ public final class PdfReaderActivity extends AppCompatActivity {
     /* ----------------------------------------------------------- lifecycle -- */
 
     @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        // The tools sheet sizes itself from the current viewport. A handled
+        // rotation keeps this Activity alive, so discard the old geometry and
+        // let the next tap build a correctly sized sheet for the new viewport.
+        dismissTools();
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
         hideToolbox();
     }
 
+    private boolean canShowReaderUi() {
+        return !isFinishing() && !isDestroyed()
+                && getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)
+                && !getSupportFragmentManager().isStateSaved();
+    }
+
+    /**
+     * beta01 keeps its loading collector alive after STOPPED and shows its private password
+     * DialogFragment before our hook. Remove an unfinished viewer before state saving to cancel
+     * that collector and load job. Keep the immutable session, so return never copies it again.
+     */
+    private void suspendLoadingViewer() {
+        if (pageCount > 0 && !isChangingConfigurations()) return;
+        FragmentManager fragments = getSupportFragmentManager();
+        Fragment fragment = fragments.findFragmentByTag(FRAGMENT_TAG);
+        if (fragment == null || fragments.isDestroyed()) return;
+        dismissPasswordDialog();
+        passwordPromptPending = false;
+        if (pendingDocumentPassword != null) {
+            clearPassword(documentPassword);
+            documentPassword = pendingDocumentPassword;
+            pendingDocumentPassword = null;
+        }
+        retainedPasswordAttempted = false;
+        viewerNeedsAttach = !isFinishing() && session != null && !failed;
+        removeViewer();
+    }
+
+    @Override
+    protected void onPause() {
+        if (passwordDialog != null && passwordDialog.isShowing()) {
+            passwordPromptPending = true;
+            // Lifecycle dismissal is not user cancellation. Discard any unsubmitted password.
+            dismissPasswordDialog();
+        }
+        super.onPause();
+    }
+
+    @Override
+    protected void onStop() {
+        suspendLoadingViewer();
+        super.onStop();
+    }
+
+    @Override
+    protected void onPostResume() {
+        super.onPostResume();
+        // ON_RESUME can be dispatched after onPostResume returns. Attach only after that event.
+        main.post(this::resumeLoadingViewer);
+    }
+
+    private void resumeLoadingViewer() {
+        if (!canShowReaderUi()) return;
+        FragmentManager fragments = getSupportFragmentManager();
+        if (viewerNeedsAttach && session != null && !failed) attachViewer(session);
+        Fragment fragment = fragments.findFragmentByTag(FRAGMENT_TAG);
+        if (passwordPromptPending && pageCount == 0 && fragment instanceof ReaderFragment) {
+            requestDocumentPassword((ReaderFragment) fragment);
+        }
+    }
+
     @Override
     protected void onSaveInstanceState(@NonNull Bundle outState) {
+        suspendLoadingViewer();
         super.onSaveInstanceState(outState);
+        // The reader has no result launchers to restore. Pagination/form/view state can be huge
+        // and is unused because this Activity explicitly reopens from its opaque ref.
+        outState.clear();
         outState.putInt(STATE_PAGE, currentPage);
         outState.putBoolean(STATE_SEARCH, isSearchActive());
         outState.putBoolean(STATE_FAILED, failed);
+        outState.putBoolean(STATE_SIGNATURE_PRESENTED, signatureVerificationPresented);
     }
 
     @Override
@@ -946,15 +1374,21 @@ public final class PdfReaderActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         main.removeCallbacks(hideMessage);
+        dismissSearch();
         dismissTools();
         dismissSignatureDialog();
         dismissPasswordDialog();
+        // Framework fragment state is deliberately omitted, so explicitly clear its non-config
+        // ViewModels on recreation instead of leaving an unused old document behind.
+        if (isChangingConfigurations()) removeViewer();
         if (actions != null) actions.close();
         if (executor != null) executor.shutdownNow();
         // A retained session belongs to the next instance. Only a real teardown
         // closes it, and close is idempotent by contract.
         if (!isChangingConfigurations()) closeSession();
         clearPasswords();
+        clearPassword(verifiedCopyPassword);
+        verifiedCopyPassword = null;
         session = null;
         pdfView = null;
         super.onDestroy();
@@ -964,6 +1398,9 @@ public final class PdfReaderActivity extends AppCompatActivity {
 
     /** The stock viewer with its toolbox hidden and its page position reported back. */
     public static final class ReaderFragment extends PdfViewerFragment {
+        /** pdf-viewer-fragment 1.0.0-beta01 shows its own password dialog under this tag. */
+        private static final String STOCK_PASSWORD_DIALOG_TAG = "password-dialog";
+        private PdfView readerView;
 
         @Nullable
         private PdfReaderActivity host() {
@@ -973,7 +1410,30 @@ public final class PdfReaderActivity extends AppCompatActivity {
         @Override
         public void onPasswordRequestedState$pdf_viewer_fragment() {
             PdfReaderActivity host = host();
-            if (host != null) host.requestDocumentPassword(this);
+            if (host == null) return;
+            // Keep the SDK dialog attached but hidden. Removing it makes beta01 construct a
+            // new dialog on a wrong-password retry, then dereference it before show() commits.
+            // Only PDF Chef's prompt is visible and captures the password in memory.
+            hideStockPasswordDialog();
+            host.requestDocumentPassword(this);
+        }
+
+        private void hideStockPasswordDialog() {
+            FragmentManager fragments = getChildFragmentManager();
+            try {
+                fragments.executePendingTransactions();
+            } catch (IllegalStateException busy) {
+                // Mid-transaction: try again once the manager is idle rather than
+                // leaving a second password prompt on screen.
+                View view = getView();
+                if (view != null) view.post(this::hideStockPasswordDialog);
+                return;
+            }
+            Fragment stock = fragments.findFragmentByTag(STOCK_PASSWORD_DIALOG_TAG);
+            if (stock instanceof DialogFragment) {
+                Dialog dialog = ((DialogFragment) stock).getDialog();
+                if (dialog != null) dialog.hide();
+            }
         }
 
         @SuppressLint("RestrictedApi")
@@ -990,7 +1450,9 @@ public final class PdfReaderActivity extends AppCompatActivity {
         public void onLoadDocumentSuccess(@NonNull PdfDocument document) {
             super.onLoadDocumentSuccess(document);
             PdfReaderActivity host = host();
-            if (host != null) host.onDocumentLoaded(document.getPageCount());
+            if (host != null && readerView != null) {
+                host.onDocumentLoaded(readerView, document.getPageCount());
+            }
         }
 
         @Override
@@ -1004,6 +1466,8 @@ public final class PdfReaderActivity extends AppCompatActivity {
         @Override
         public void onPdfViewCreated(@NonNull PdfView pdfView) {
             super.onPdfViewCreated(pdfView);
+            PdfReaderAccessibilityGuard.install(pdfView);
+            readerView = pdfView;
             setToolboxVisible(false);
             pdfView.addOnViewportChangedListener(new PdfView.OnViewportChangedListener() {
                 @Override
@@ -1013,7 +1477,7 @@ public final class PdfReaderActivity extends AppCompatActivity {
                         @NonNull SparseArray<RectF> visiblePageAreas,
                         float zoomLevel) {
                     PdfReaderActivity host = host();
-                    if (host != null) host.onPageChanged(firstVisiblePage);
+                    if (host != null) host.onPageChanged(pdfView, firstVisiblePage);
                 }
             });
             PdfReaderActivity host = host();

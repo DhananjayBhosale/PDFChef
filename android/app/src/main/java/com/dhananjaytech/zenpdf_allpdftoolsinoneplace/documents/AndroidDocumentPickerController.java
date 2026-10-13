@@ -131,22 +131,33 @@ public final class AndroidDocumentPickerController {
             throw new Failure(failure.code(), failure.getMessage());
         }
         if (batch.isAcknowledged()) return Result.accepted(batch.batchRef(), itemRefs);
-        for (int index = 0; index < uris.size(); index++) {
-            checkCancelled(cancellation);
-            try (InputStream input = resolver.open(uris.get(index))) {
-                store.stage(itemRefs.get(index), validated.items().get(index), input, cancellation);
-            } catch (OwnedPendingImportStore.Failure failure) {
-                throw new Failure(failure.code(), failure.getMessage());
-            } catch (IOException | SecurityException failure) {
-                throw unavailable();
-            }
-        }
         try {
+            for (int index = 0; index < uris.size(); index++) {
+                checkCancelled(cancellation);
+                try (InputStream input = resolver.open(uris.get(index))) {
+                    store.stage(itemRefs.get(index), validated.items().get(index), input, cancellation);
+                } catch (IOException | SecurityException failure) {
+                    throw unavailable();
+                }
+            }
+            checkCancelled(cancellation);
             store.completeBatch(batch.batchRef(), itemRefs);
         } catch (OwnedPendingImportStore.Failure failure) {
+            abortIncompleteBatch(batch.batchRef(), failure);
             throw new Failure(failure.code(), failure.getMessage());
+        } catch (Failure | RuntimeException failure) {
+            abortIncompleteBatch(batch.batchRef(), failure);
+            throw failure;
         }
         return Result.accepted(batch.batchRef(), itemRefs);
+    }
+
+    private void abortIncompleteBatch(String batchRef, Exception originalFailure) {
+        try { store.abortIncompleteBatch(batchRef); }
+        catch (OwnedPendingImportStore.Failure cleanupFailure) {
+            // An incomplete manifest remains recoverable if storage is temporarily unavailable.
+            originalFailure.addSuppressed(cleanupFailure);
+        }
     }
 
     private byte[] readPrefix(Uri uri) throws IOException {

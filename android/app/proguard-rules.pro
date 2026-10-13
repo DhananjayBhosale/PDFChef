@@ -25,6 +25,13 @@
     public <init>();
 }
 
-# PdfBox can optionally decode JPEG 2000 page images through this commercial
-# decoder. Signature verification never renders page images or calls that path.
+# PdfBox can optionally decode and encode JPEG 2000 images through this commercial
+# library. Signature verification never renders page images, and verified copies
+# keep existing image streams as they are, so neither path is ever called.
 -dontwarn com.gemalto.jp2.JP2Decoder
+-dontwarn com.gemalto.jp2.JP2Encoder
+
+# Bouncy Castle resolves digest, signature, and certificate implementations by name.
+# Signature verification only needs these; the LDAP-backed org.bouncycastle.jce.provider
+# stores are never used and reference javax.naming, which Android does not ship.
+-keep,allowoptimization class org.bouncycastle.jcajce.provider.** { *; }

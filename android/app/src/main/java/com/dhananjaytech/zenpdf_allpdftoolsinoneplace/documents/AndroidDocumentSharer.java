@@ -98,7 +98,7 @@ final class AndroidDocumentSharer {
             faults.checkpoint(Checkpoint.AFTER_PREPARING_RECORD);
             Snapshot snapshot = copy(source, layout.part(token), cancellation);
             if (snapshot.size != source.sizeBytes()) throw corrupt();
-            Path data = layout.data(token);
+            Path data = layout.data(token, source.mimeType());
             atomicMoveNew(layout.part(token), data);
             fsyncDirectory(layout.root);
             faults.checkpoint(Checkpoint.AFTER_STAGE_MOVE);
@@ -160,7 +160,7 @@ final class AndroidDocumentSharer {
                 }
                 if (snapshot.size != item.sizeBytes()) throw corrupt();
                 atomicMoveNew(layout.collectionPart(token, index),
-                        layout.collectionData(token, index));
+                        layout.collectionData(token, index, item.mimeType()));
                 updateAggregate(aggregate, snapshot, item.mimeType());
                 staged.add(new StageItem(index, item.displayName(), item.mimeType(),
                         snapshot.size, snapshot.hash));
@@ -188,19 +188,23 @@ final class AndroidDocumentSharer {
 
     Intent createReadOnlyIntent(Stage stage, Uri contentUri) throws Failure {
         if (stage == null || contentUri == null) throw invalid();
-        Uri expected = new Uri.Builder().scheme("content").authority(providerAuthority)
-                .appendPath("pdfchef_share_staging").appendPath(stage.token + ".bin").build();
-        if (!matchesCanonicalShareUri(expected, contentUri)) throw invalid();
         Layout layout = prepareAndRecover();
         StageRecord record = load(layout, stage.token);
         if (!record.complete || record.dispatched || !stage.matches(record)) throw invalid();
         try {
+            Path staged = existingSingleData(layout, record);
+            Uri expected = new Uri.Builder().scheme("content").authority(providerAuthority)
+                    .appendPath("pdfchef_share_staging")
+                    .appendPath(staged.getFileName().toString()).build();
+            if (!matchesCanonicalShareUri(expected, contentUri)) throw invalid();
             Intent intent = new Intent(Intent.ACTION_SEND);
             intent.setType(record.mimeType);
             intent.putExtra(Intent.EXTRA_STREAM, contentUri);
             intent.setClipData(ClipData.newRawUri("document", contentUri));
             intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             return intent;
+        } catch (IOException failure) {
+            throw unsafe();
         } catch (RuntimeException failure) {
             throw failed();
         }
@@ -223,7 +227,8 @@ final class AndroidDocumentSharer {
                 StageItem item = stage.items.get(index);
                 Uri expected = new Uri.Builder().scheme("content").authority(providerAuthority)
                         .appendPath("pdfchef_share_staging")
-                        .appendPath(collectionFileName(stage.token, item.index)).build();
+                        .appendPath(layout.collectionData(stage.token, item.index)
+                                .getFileName().toString()).build();
                 Uri candidate = contentUris.get(index);
                 if (!matchesCanonicalShareUri(expected, candidate)) throw invalid();
                 streams.add(candidate);
@@ -240,7 +245,8 @@ final class AndroidDocumentSharer {
             intent.setClipData(clip);
             intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             return intent;
-        } catch (Failure failure) { throw failure; }
+        } catch (IOException failure) { throw unsafe(); }
+        catch (Failure failure) { throw failure; }
         catch (RuntimeException failure) { throw failed(); }
     }
 
@@ -293,9 +299,7 @@ final class AndroidDocumentSharer {
         StageRecord record = load(layout, stage.token);
         if (!record.complete || !stage.matches(record)) throw invalid();
         try {
-            Path path = layout.data(stage.token);
-            requireRegular(path, stage.sizeBytes);
-            return path;
+            return existingSingleData(layout, record);
         } catch (IOException failure) { throw unsafe(); }
     }
 
@@ -307,7 +311,7 @@ final class AndroidDocumentSharer {
         try {
             ArrayList<Path> paths = new ArrayList<>(stage.items.size());
             for (StageItem item : stage.items) {
-                Path path = !record.collection ? layout.data(stage.token)
+                Path path = !record.collection ? existingSingleData(layout, record)
                         : layout.collectionData(stage.token, item.index);
                 requireRegular(path, item.size);
                 paths.add(path);
@@ -540,16 +544,16 @@ final class AndroidDocumentSharer {
         }
         for (int index = 0; index < record.itemCount; index++) {
             Path part = layout.collectionPart(record.token, index);
-            Path data = layout.collectionData(record.token, index);
+            Path data = layout.findCollectionData(record.token, index);
             if (Files.exists(part, LinkOption.NOFOLLOW_LINKS)) requireRegular(part, -1);
-            if (Files.exists(data, LinkOption.NOFOLLOW_LINKS)) requireRegular(data, -1);
+            if (data != null) requireRegular(data, -1);
         }
     }
 
     private static void validateCompletedFiles(Layout layout, StageRecord record)
             throws IOException {
         if (!record.collection) {
-            requireRegular(layout.data(record.token), record.size);
+            existingSingleData(layout, record);
             return;
         }
         long total = 0;
@@ -571,12 +575,13 @@ final class AndroidDocumentSharer {
     private static void deleteStageFiles(Layout layout, StageRecord record) throws IOException {
         if (!record.collection) {
             deleteExact(layout.part(record.token));
-            deleteExact(layout.data(record.token));
+            deleteExact(layout.data(record.token, record.mimeType));
+            deleteExact(layout.legacyData(record.token));
             return;
         }
         for (int index = 0; index < record.itemCount; index++) {
             deleteExact(layout.collectionPart(record.token, index));
-            deleteExact(layout.collectionData(record.token, index));
+            deleteExact(layout.findCollectionData(record.token, index));
         }
     }
 
@@ -606,6 +611,30 @@ final class AndroidDocumentSharer {
 
     private static String collectionFileName(String token, int index) {
         return token + "-" + String.format(Locale.ROOT, "%03d", index) + ".bin";
+    }
+
+    private static Path existingSingleData(Layout layout, StageRecord record) throws IOException {
+        Path typed = layout.data(record.token, record.mimeType);
+        Path legacy = layout.legacyData(record.token);
+        boolean typedExists = Files.exists(typed, LinkOption.NOFOLLOW_LINKS);
+        boolean legacyExists = Files.exists(legacy, LinkOption.NOFOLLOW_LINKS);
+        if (typedExists == legacyExists) throw new IOException("unsafe");
+        Path result = typedExists ? typed : legacy;
+        requireRegular(result, record.size);
+        return result;
+    }
+
+    private static String extensionForMime(String mimeType) throws IOException {
+        if (OwnedDocumentWritePolicy.MIME_PDF.equals(mimeType)) return ".pdf";
+        if (OwnedDocumentWritePolicy.MIME_ZIP.equals(mimeType)) return ".zip";
+        if (OwnedDocumentWritePolicy.MIME_TEXT.equals(mimeType)) return ".txt";
+        if (OwnedDocumentWritePolicy.MIME_JPEG.equals(mimeType)) return ".jpg";
+        if (OwnedDocumentWritePolicy.MIME_PNG.equals(mimeType)) return ".png";
+        if (OwnedDocumentWritePolicy.MIME_WEBP.equals(mimeType)) return ".webp";
+        if (OwnedDocumentWritePolicy.MIME_HEIC.equals(mimeType)) return ".heic";
+        if (OwnedDocumentWritePolicy.MIME_DOCX.equals(mimeType)) return ".docx";
+        if (OwnedDocumentWritePolicy.MIME_PPTX.equals(mimeType)) return ".pptx";
+        throw new IOException("mime");
     }
 
     private static MessageDigest sha256() throws IOException {
@@ -686,12 +715,36 @@ final class AndroidDocumentSharer {
         }
         Path metadata(String token) throws IOException { return direct(root, token + ".share"); }
         Path part(String token) throws IOException { return direct(root, token + ".part"); }
-        Path data(String token) throws IOException { return direct(root, token + ".bin"); }
+        Path data(String token, String mimeType) throws IOException {
+            return direct(root, token + extensionForMime(mimeType));
+        }
+        Path legacyData(String token) throws IOException { return direct(root, token + ".bin"); }
         Path collectionPart(String token, int index) throws IOException {
             return direct(root, collectionFileName(token, index) + ".part");
         }
         Path collectionData(String token, int index) throws IOException {
-            return direct(root, collectionFileName(token, index));
+            Path path = findCollectionData(token, index);
+            if (path == null) throw new IOException("missing collection item");
+            return path;
+        }
+        Path collectionData(String token, int index, String mimeType) throws IOException {
+            return direct(root, token + "-" + String.format(Locale.ROOT, "%03d", index)
+                    + extensionForMime(mimeType));
+        }
+        Path findCollectionData(String token, int index) throws IOException {
+            // Older in-flight shares used .bin. Preserve their granted URIs until expiry,
+            // while new shares expose the actual MIME through FileProvider's extension lookup.
+            String stem = token + "-" + String.format(Locale.ROOT, "%03d", index);
+            Path found = null;
+            for (String extension : List.of(".bin", ".pdf", ".zip", ".txt", ".jpg",
+                    ".png", ".webp", ".heic", ".docx", ".pptx")) {
+                Path candidate = direct(root, stem + extension);
+                if (!Files.exists(candidate, LinkOption.NOFOLLOW_LINKS)) continue;
+                requireRegular(candidate, -1);
+                if (found != null) throw new IOException("ambiguous collection item");
+                found = candidate;
+            }
+            return found;
         }
         private static Path existing(Path path) throws IOException {
             if (Files.isSymbolicLink(path) || !Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {

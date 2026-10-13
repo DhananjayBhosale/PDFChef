@@ -29,7 +29,7 @@ import java.util.regex.Pattern;
 /** Inactive owned-document writer. All calls are serialized by DocumentLifecycleCoordinator. */
 final class OwnedDocumentWriter {
     static final int MAXIMUM_CHUNK_BYTES = 524_288;
-    static final long MAXIMUM_FILE_BYTES = 128L * 1024L * 1024L;
+    static final long MAXIMUM_FILE_BYTES = 256L * 1024L * 1024L;
     static final int MAXIMUM_OPEN_SESSIONS = 4;
     static final int MAXIMUM_OWNED_DOCUMENTS = 10_000;
     static final long MAXIMUM_OPEN_BYTES = 256L * 1024L * 1024L;
@@ -258,7 +258,7 @@ final class OwnedDocumentWriter {
         } catch (IOException failure) { throw unsafe(); }
         PendingImportRecord pending;
         try {
-            pending = pendingStore.load(ref);
+            pending = pendingStore.loadMetadataForImmediateValidation(ref);
         } catch (OwnedPendingImportStore.Failure failure) {
             throw new Failure(failure.code(), failure.getMessage());
         }
@@ -267,7 +267,10 @@ final class OwnedDocumentWriter {
         catch (IOException failure) { throw unsafe(); }
         try {
             requireRegular(source, pending.sizeBytes());
+            BasicFileAttributes identityBeforeDigest = attributes(source);
             FileDigest digest = digest(source, pending.sizeBytes(), cancellation, pending.mimeType());
+            BasicFileAttributes verifiedIdentity = attributes(source);
+            if (!sameIdentity(identityBeforeDigest, verifiedIdentity)) throw corrupt();
             if (!digest.hash.equals(pending.contentHash())) throw corrupt();
             validateMagic(pending.mimeType(), digest.prefix);
             FinishRecord intent = new FinishRecord("retain_" + ref, ref, null, pending.mimeType(),
@@ -277,15 +280,26 @@ final class OwnedDocumentWriter {
             publishReplace(operation, encodeFinish(intent));
             fsyncDirectory(layout.operations);
             Path target = layout.ownedData(ref);
+            boolean movedNow = false;
             if (!Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
                 atomicMoveNew(source, target);
+                movedNow = true;
                 fsyncDirectory(layout.owned);
                 fsyncDirectory(source.getParent());
             }
             faults.checkpoint(Checkpoint.AFTER_RETAIN_DATA_MOVE);
             OwnedDocument document = new OwnedDocument(ref, null, pending.mimeType(),
                     pending.sizeBytes(), pending.contentHash(), pending.createdAtMillis(), true);
-            validateOwnedTarget(target, document, cancellation);
+            if (movedNow) {
+                BasicFileAttributes movedIdentity = attributes(target);
+                if (!sameIdentity(verifiedIdentity, movedIdentity)
+                        || !movedIdentity.isRegularFile() || Files.isSymbolicLink(target)
+                        || movedIdentity.size() != document.sizeBytes) throw corrupt();
+            } else {
+                // A retry that did not perform this process's verified move must
+                // still validate the previously published target byte-for-byte.
+                validateOwnedTarget(target, document, cancellation);
+            }
             publishOwnedIfAbsent(layout, document);
             fsyncDirectory(layout.records);
             publishReplace(operation, encodeFinish(intent.asCommitted()));

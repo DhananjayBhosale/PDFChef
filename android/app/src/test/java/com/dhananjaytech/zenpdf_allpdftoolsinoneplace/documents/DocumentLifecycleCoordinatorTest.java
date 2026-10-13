@@ -307,6 +307,34 @@ public final class DocumentLifecycleCoordinatorTest {
                         List.of(firstRef, firstRef), () -> false));
     }
 
+    @Test public void corruptLaterPendingItemDoesNotPartiallyPromoteEarlierItems()
+            throws Exception {
+        Path files = Files.createTempDirectory("coordinator-pending-preflight");
+        Components components = components(files);
+        String firstRef = "d1_abcdefghijklmnopqrstuv";
+        String secondRef = "d1_zyxwvutsrqponmlkjihgfe";
+        AndroidDocumentIngressPolicy.ValidatedItem item = pendingItem(PDF.length);
+        components.pending.stage(firstRef, item, new ByteArrayInputStream(PDF), () -> false);
+        components.pending.stage(secondRef, item, new ByteArrayInputStream(PDF), () -> false);
+        PendingImportBatch batch = components.pending.beginBatch(List.of(firstRef, secondRef));
+        components.pending.completeBatch(batch.batchRef(), List.of(firstRef, secondRef));
+        Path corruptData = files.resolve(
+                "pdfchef_pending_imports/data/zyxwvutsrqponmlkjihgfe.bin");
+        byte[] corrupt = PDF.clone();
+        corrupt[corrupt.length - 1] ^= 1;
+        Files.write(corruptData, corrupt);
+        DocumentLifecycleCoordinator coordinator = new DocumentLifecycleCoordinator(files,
+                components.pending, components.picker, components.writer, components.exporter,
+                components.sharer, components.legacy);
+
+        assertFailure("DOCUMENT_CORRUPT", () -> coordinator.acknowledgePendingImports(
+                batch.batchRef(), List.of(firstRef, secondRef), () -> false));
+
+        assertTrue(components.pending.hasPendingMarker(firstRef));
+        assertTrue(components.pending.hasPendingMarker(secondRef));
+        assertEquals(0, coordinator.listOwnedDocuments().size());
+    }
+
     @Test public void directReaderFailuresKeepTheirOperationalMessages() throws Exception {
         Method fixed = DocumentLifecycleCoordinator.class.getDeclaredMethod(
                 "fixedMessage", String.class);

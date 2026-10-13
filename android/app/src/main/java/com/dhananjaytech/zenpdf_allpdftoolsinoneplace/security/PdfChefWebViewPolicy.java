@@ -13,6 +13,7 @@ import java.util.Locale;
  */
 public final class PdfChefWebViewPolicy {
     public static final String PACKAGED_ORIGIN = "https://localhost";
+    public static final long RENDERER_RECOVERY_COOLDOWN_MILLIS = 30_000L;
 
     public enum Navigation {
         ALLOW_PACKAGED_ORIGIN,
@@ -53,9 +54,28 @@ public final class PdfChefWebViewPolicy {
         return allowNavigation == null || allowNavigation.length == 0;
     }
 
+    /**
+     * One production crash is inside the mt6855 GLES driver while Chromium draws the app. Keep
+     * hardware acceleration everywhere else; only that exact driver family uses WebView's software
+     * layer until its vendor implementation is fixed.
+     */
+    public static boolean requiresSoftwareRendering(String hardware, String socModel) {
+        return "mt6855".equals(lower(hardware)) || "mt6855".equals(lower(socModel));
+    }
+
+    /** Prevents a repeatedly crashing WebView renderer from causing a restart loop. */
+    public static boolean mayRestartRenderer(long previousElapsedMillis, long nowElapsedMillis) {
+        return nowElapsedMillis >= 0 && (previousElapsedMillis <= 0
+                || nowElapsedMillis - previousElapsedMillis >= RENDERER_RECOVERY_COOLDOWN_MILLIS);
+    }
+
     /** Applies the WebView defense-in-depth settings before and after Bridge construction. */
     @SuppressWarnings("deprecation")
     public static void apply(WebView webView) {
+        // Persistent documents/history live in the workspace, not an Activity's Binder Bundle.
+        // Keep Capacitor's plugin/result state; omit only the transient WebView hierarchy.
+        webView.setSaveEnabled(false);
+        webView.setSaveFromParentEnabled(false);
         WebSettings settings = webView.getSettings();
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setAllowFileAccess(false);

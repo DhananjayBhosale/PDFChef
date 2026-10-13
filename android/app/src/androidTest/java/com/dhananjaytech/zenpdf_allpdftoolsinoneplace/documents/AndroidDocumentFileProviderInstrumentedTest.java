@@ -69,6 +69,7 @@ public final class AndroidDocumentFileProviderInstrumentedTest {
             assertEquals("content", content.getScheme());
             assertEquals(authority, content.getAuthority());
             assertEquals("/pdfchef_share_staging/" + staged.getFileName(), content.getPath());
+            assertEquals("application/pdf", target.getContentResolver().getType(content));
             assertArrayEquals(bytes, Files.readAllBytes(staged));
 
             Intent share = coordinator.createShareIntent(handle, content);
@@ -131,11 +132,17 @@ public final class AndroidDocumentFileProviderInstrumentedTest {
             if (outside.exists()) assertTrue("delete exact outside fixture", outside.delete());
             if (staged != null) {
                 Files.deleteIfExists(staged);
-                Files.deleteIfExists(staged.resolveSibling(
-                        staged.getFileName().toString().replace(".bin", ".share")));
+                Files.deleteIfExists(shareMetadata(staged));
             }
             cleanupOwned(target, session, document);
         }
+    }
+
+    private static Path shareMetadata(Path staged) {
+        String name = staged.getFileName().toString();
+        int extension = name.lastIndexOf('.');
+        if (extension <= 0) throw new IllegalArgumentException("share stage");
+        return staged.resolveSibling(name.substring(0, extension) + ".share");
     }
 
     private static void assertTargetOpenRejected(Context context, Uri uri) throws Exception {

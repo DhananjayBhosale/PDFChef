@@ -15,6 +15,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.Test;
 
 public final class OwnedPendingImportStoreTest {
@@ -148,6 +150,19 @@ public final class OwnedPendingImportStoreTest {
         assertStoreFailure("DOCUMENT_NOT_FOUND", () -> store(files).load(REF));
     }
 
+    @Test public void metadataOnlyRetainReadLeavesContentValidationToTheImmediateCaller()
+            throws Exception {
+        Path files = Files.createTempDirectory("pending-import-metadata");
+        OwnedPendingImportStore store = store(files);
+        store.stage(REF, item(PDF.length), new ByteArrayInputStream(PDF), () -> false);
+        byte[] corrupt = PDF.clone();
+        corrupt[corrupt.length - 1] ^= 1;
+        Files.write(dataFile(files), corrupt);
+
+        assertEquals(REF, store.loadMetadataForImmediateValidation(REF).ref());
+        assertStoreFailure("DOCUMENT_CORRUPT", () -> store.load(REF));
+    }
+
     @Test public void incompleteBatchIsNeverDeliverableAndRestartPreservesExactOrder() throws Exception {
         Path files = Files.createTempDirectory("pending-import-batch-restart");
         String second = "d1_zyxwvutsrqponmlkjihgfe";
@@ -250,6 +265,87 @@ public final class OwnedPendingImportStoreTest {
         assertTrue(Files.isRegularFile(dataFile(files)));
         assertTrue(Files.isRegularFile(batchFile(files, complete.batchRef(), ".batch")));
         assertFalse(Files.exists(acknowledgementFile(files, complete.batchRef(), ".ack")));
+    }
+
+    @Test public void cancelledPublishedPayloadRollsBackEvenWithInterruptedWorker() throws Exception {
+        Path files = Files.createTempDirectory("pending-import-cancel-published");
+        AtomicBoolean cancelled = new AtomicBoolean();
+        OwnedPendingImportStore store = new OwnedPendingImportStore(files,
+                required -> required + 1_000_000, () -> 1234L, checkpoint -> {
+                    if (checkpoint == OwnedPendingImportStore.Checkpoint.AFTER_DATA_PUBLISH) {
+                        cancelled.set(true);
+                    }
+                });
+        PendingImportBatch batch = store.beginBatch(List.of(REF));
+        assertStoreFailure("DOCUMENT_CANCELLED", () -> store.stage(
+                REF, item(PDF.length), new ByteArrayInputStream(PDF), cancelled::get));
+        assertTrue(Files.exists(dataFile(files)));
+        Thread.currentThread().interrupt();
+        try {
+            store.abortIncompleteBatch(batch.batchRef());
+            assertTrue(Thread.currentThread().isInterrupted());
+        } finally {
+            Thread.interrupted();
+        }
+        assertFalse(Files.exists(dataFile(files)));
+        assertFalse(Files.exists(recordFile(files)));
+        assertFalse(Files.exists(batchFile(files, batch.batchRef(), ".batch")));
+        store.abortIncompleteBatch(batch.batchRef()); // response-loss retry
+    }
+
+    @Test public void failedBatchRollbackRemovesEarlierItemsButPreservesCompletedDelivery() throws Exception {
+        Path files = Files.createTempDirectory("pending-import-failed-batch-rollback");
+        String second = "d1_zyxwvutsrqponmlkjihgfe";
+        String completedRef = "d1_mnopqrstuvabcdefghijkl";
+        OwnedPendingImportStore store = store(files);
+        PendingImportBatch complete = store.beginBatch(List.of(completedRef));
+        store.stage(completedRef, item(PDF.length), new ByteArrayInputStream(PDF), () -> false);
+        store.completeBatch(complete.batchRef(), complete.refs());
+        PendingImportBatch failed = store.beginBatch(List.of(REF, second));
+        store.stage(REF, item(PDF.length), new ByteArrayInputStream(PDF), () -> false);
+        assertStoreFailure("DOCUMENT_FAILED", () -> store.stage(
+                second, item(PDF.length), new FailingInputStream(0), () -> false));
+        store.abortIncompleteBatch(failed.batchRef());
+        store.abortIncompleteBatch(complete.batchRef());
+        assertFalse(Files.exists(dataFile(files)));
+        assertFalse(Files.exists(recordFile(files)));
+        assertFalse(Files.exists(batchFile(files, failed.batchRef(), ".batch")));
+        assertEquals(List.of(completedRef), store.takeCompleteBatch(100).refs());
+        assertEquals(completedRef, store.load(completedRef).ref());
+    }
+
+    @Test public void restartExpiresAbandonedIncompleteBytesButKeepsCompletedBatch() throws Exception {
+        Path files = Files.createTempDirectory("pending-import-abandoned-recovery");
+        AtomicLong clock = new AtomicLong(1234);
+        String completedRef = "d1_zyxwvutsrqponmlkjihgfe";
+        OwnedPendingImportStore store = new OwnedPendingImportStore(files,
+                required -> required + 1_000_000, clock::get, checkpoint -> {});
+        PendingImportBatch abandoned = store.beginBatch(List.of(REF));
+        store.stage(REF, item(PDF.length), new ByteArrayInputStream(PDF), () -> false);
+        Files.delete(recordFile(files)); // process death before the metadata publish
+        PendingImportBatch complete = store.beginBatch(List.of(completedRef));
+        store.stage(completedRef, item(PDF.length), new ByteArrayInputStream(PDF), () -> false);
+        store.completeBatch(complete.batchRef(), complete.refs());
+        clock.addAndGet(OwnedPendingImportStore.INCOMPLETE_BATCH_MAX_AGE_MILLIS);
+        OwnedPendingImportStore restarted = new OwnedPendingImportStore(files,
+                required -> required + 1_000_000, clock::get, checkpoint -> {});
+        assertEquals(complete.batchRef(), restarted.takeCompleteBatch(100).batchRef());
+        assertFalse(Files.exists(dataFile(files)));
+        assertFalse(Files.exists(batchFile(files, abandoned.batchRef(), ".batch")));
+        assertEquals(completedRef, restarted.load(completedRef).ref());
+    }
+
+    @Test public void rollbackRefusesLinksBeforeDeletingAnyBatchChild() throws Exception {
+        Path files = Files.createTempDirectory("pending-import-rollback-link");
+        OwnedPendingImportStore store = store(files);
+        PendingImportBatch batch = store.beginBatch(List.of(REF));
+        Path outside = files.resolve("unrelated.pdf");
+        Files.write(outside, PDF);
+        Files.createSymbolicLink(dataFile(files), outside);
+        assertStoreFailure("DOCUMENT_UNSAFE_STATE", () -> store.abortIncompleteBatch(batch.batchRef()));
+        assertArrayEquals(PDF, Files.readAllBytes(outside));
+        assertTrue(Files.isSymbolicLink(dataFile(files)));
+        assertTrue(Files.exists(batchFile(files, batch.batchRef(), ".batch")));
     }
 
 

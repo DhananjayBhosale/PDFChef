@@ -421,15 +421,24 @@ public final class AndroidDocumentsPlugin extends Plugin {
     @PluginMethod public void openReader(PluginCall call) {
         try {
             JSObject data = call.getData();
-            if (data == null || data.length() != 2 || !data.has("ref")
-                    || !data.has("displayName") || !(data.get("ref") instanceof String)
-                    || !(data.get("displayName") instanceof String)) {
+            if (data == null || (data.length() != 2 && data.length() != 3)
+                    || !data.has("ref") || !data.has("displayName")
+                    || (data.length() == 3 && !data.has("initialAction"))
+                    || !(data.get("ref") instanceof String)
+                    || !(data.get("displayName") instanceof String)
+                    || (data.has("initialAction")
+                        && !(data.get("initialAction") instanceof String))) {
                 rejectInvalid(call); return;
             }
             String ref = (String) data.get("ref");
             String displayName = (String) data.get("displayName");
+            String initialAction = data.has("initialAction")
+                    ? (String) data.get("initialAction") : null;
             if (!PdfReaderLaunchContract.isCanonicalRef(ref)
-                    || !PdfReaderLaunchContract.isSafeDisplayName(displayName)) {
+                    || !PdfReaderLaunchContract.isSafeDisplayName(displayName)
+                    || (initialAction != null
+                        && !PdfReaderLaunchContract.INITIAL_ACTION_VERIFY_SIGNATURES
+                            .equals(initialAction))) {
                 rejectInvalid(call); return;
             }
             synchronized (this) {
@@ -439,9 +448,11 @@ public final class AndroidDocumentsPlugin extends Plugin {
                 }
                 readerLaunching = true;
             }
-            startActivityForResult(call,
-                    PdfReaderLaunchContract.createIntent(getContext(), ref, displayName),
-                    "readerResult");
+            Intent readerIntent = initialAction == null
+                    ? PdfReaderLaunchContract.createIntent(getContext(), ref, displayName)
+                    : PdfReaderLaunchContract.createSignatureVerificationIntent(
+                            getContext(), ref, displayName);
+            startActivityForResult(call, readerIntent, "readerResult");
             if (!launchAccepted(call.isReleased(),
                     getBridge().getSavedCall(call.getCallbackId()) == call)) {
                 releaseReaderLaunch();

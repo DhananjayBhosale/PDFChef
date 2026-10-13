@@ -88,6 +88,9 @@ public final class AndroidDocumentsPluginContractTest {
         assertTrue(occurrences(source, "getDocumentLifecycleCoordinator()") >= 8);
         assertTrue(source.contains("startActivityForResult(call,"));
         assertTrue(source.contains("PdfReaderLaunchContract.createIntent("));
+        assertTrue(source.contains("PdfReaderLaunchContract.createSignatureVerificationIntent("));
+        assertTrue(source.contains("data.has(\"initialAction\")"));
+        assertTrue(source.contains("INITIAL_ACTION_VERIFY_SIGNATURES"));
         assertTrue(source.contains("PdfReaderLaunchContract.parseResult("));
         assertTrue(source.contains("private static final AtomicBoolean READER_LAUNCH_ACTIVE"));
         assertTrue(source.contains("READER_LAUNCH_ACTIVE.compareAndSet(false, true)"));

@@ -7,7 +7,7 @@ import java.util.List;
 final class PdfSignatureReport {
     public enum Integrity { VALID, INVALID, UNSUPPORTED, INDETERMINATE }
     public enum Coverage { WHOLE_DOCUMENT, SIGNED_REVISION_WITH_LATER_CHANGES, INDETERMINATE }
-    public enum Trust { TRUSTED, UNTRUSTED, INDETERMINATE }
+    public enum Trust { TRUSTED, TRUSTED_CCA_INDIA_2022, UNTRUSTED, INDETERMINATE }
     public enum CertificateValidity { VALID, EXPIRED, NOT_YET_VALID, INDETERMINATE }
     public enum Revocation { GOOD, REVOKED, OFFLINE_NOT_CHECKED, INDETERMINATE }
     public enum TimestampLtv { VALID, INVALID, ABSENT, PRESENT_NOT_VERIFIED, INDETERMINATE }
@@ -59,5 +59,22 @@ final class PdfSignatureReport {
 
     static PdfSignatureReport encrypted() {
         return new PdfSignatureReport(List.of(), false, true);
+    }
+
+    /** Eligibility for a visual printing/sharing copy of the checked snapshot. */
+    static boolean fullyVerified(PdfSignatureReport report) {
+        if (report == null || report.encrypted || report.malformed || report.signatures.isEmpty()) {
+            return false;
+        }
+        for (Signature signature : report.signatures) {
+            if (signature.integrity != Integrity.VALID
+                    || signature.coverage != Coverage.WHOLE_DOCUMENT
+                    || (signature.trust != Trust.TRUSTED
+                        && signature.trust != Trust.TRUSTED_CCA_INDIA_2022)
+                    || signature.certificateValidity != CertificateValidity.VALID) {
+                return false;
+            }
+        }
+        return true;
     }
 }

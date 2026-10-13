@@ -201,9 +201,15 @@ public final class AndroidDocumentDeliveryInstrumentedTest {
         coordinator.cancelShareBeforeDispatch(dispatched);
         assertTrue(Files.exists(retained));
         Files.deleteIfExists(retained);
-        Files.deleteIfExists(retained.resolveSibling(
-                retained.getFileName().toString().replace(".bin", ".share")));
+        Files.deleteIfExists(shareMetadata(retained));
         assertTrue(coordinator.deleteOwnedDocument(document.ref()));
+    }
+
+    private static Path shareMetadata(Path staged) {
+        String name = staged.getFileName().toString();
+        int extension = name.lastIndexOf('.');
+        if (extension <= 0) throw new IllegalArgumentException("share stage");
+        return staged.resolveSibling(name.substring(0, extension) + ".share");
     }
 
     private static int countInternalPending(ContentResolver resolver) {

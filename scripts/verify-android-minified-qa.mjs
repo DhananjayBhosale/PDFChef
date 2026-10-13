@@ -62,11 +62,21 @@ for (const entryPoint of [
 ]) assert(mapping.includes(`${entryPoint} -> ${entryPoint}:`),
   `required QA entry point was removed or renamed: ${entryPoint}`);
 
+for (const providerClass of [
+  'org.bouncycastle.jcajce.provider.digest.SHA256$Digest',
+  'org.bouncycastle.jcajce.provider.digest.SHA256$Mappings',
+  'org.bouncycastle.jcajce.provider.asymmetric.rsa.DigestSignatureSpi$SHA256',
+  'org.bouncycastle.jcajce.provider.asymmetric.RSA$Mappings',
+  'org.bouncycastle.jcajce.provider.asymmetric.x509.CertificateFactory',
+]) assert(mapping.includes(`${providerClass} -> ${providerClass}:`),
+  `required QA signature provider class was removed or renamed: ${providerClass}`);
+
 const resources = read(outputs.resources);
 for (const resource of [
   'style:PdfReaderTheme:',
   'layout:pdf_reader_activity:',
   'layout:pdf_reader_tools_sheet:',
+  'raw:cca_india_2022:',
 ]) assert(resources.includes(resource), `reader resource removed from QA: ${resource}`);
 
 const entries = execFileSync('unzip', ['-Z1', resolve(root, outputs.apk)],

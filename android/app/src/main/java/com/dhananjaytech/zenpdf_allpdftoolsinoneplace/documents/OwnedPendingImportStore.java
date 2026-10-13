@@ -35,6 +35,7 @@ public final class OwnedPendingImportStore {
     private static final int MAX_BATCH_MANIFESTS = 300;
     private static final int MAX_ACKNOWLEDGED_BATCHES = 300;
     private static final long ACKNOWLEDGED_BATCH_MAX_AGE_MILLIS = 7L * 24L * 60L * 60L * 1000L;
+    static final long INCOMPLETE_BATCH_MAX_AGE_MILLIS = 24L * 60L * 60L * 1000L;
 
     private final Path filesDir;
     private final StorageProbe storageProbe;
@@ -156,6 +157,28 @@ public final class OwnedPendingImportStore {
         }
     }
 
+    /**
+     * Reads only the durable record and structural file metadata.
+     *
+     * The sole caller immediately hashes and validates the same data file before
+     * any mutation. Keeping that full validation at the mutation boundary avoids
+     * hashing a large pending PDF twice back-to-back.
+     */
+    synchronized PendingImportRecord loadMetadataForImmediateValidation(String ref)
+            throws Failure {
+        if (!PendingImportRecord.isValidRef(ref)) throw invalid();
+        try {
+            Layout layout = prepareLayout();
+            Path record = layout.recordPath(ref);
+            if (!Files.exists(record, LinkOption.NOFOLLOW_LINKS)) throw notFound();
+            return readMetadata(record, layout.dataPath(ref), ref);
+        } catch (Failure failure) {
+            throw failure;
+        } catch (IOException | RuntimeException failure) {
+            throw corrupt();
+        }
+    }
+
     public synchronized List<PendingImportRecord> listPending() throws Failure {
         try {
             Layout layout = prepareLayout();
@@ -228,6 +251,29 @@ public final class OwnedPendingImportStore {
             throw failure;
         } catch (IOException | RuntimeException failure) {
             throw unsafeState();
+        }
+    }
+
+    /** Roll back only this unsuccessful intake; completed or acknowledged deliveries are preserved. */
+    synchronized void abortIncompleteBatch(String batchRef) throws Failure {
+        if (!PendingImportBatch.isValidBatchRef(batchRef)) throw invalid();
+        // Intake cancellation can interrupt its worker. FileChannel cleanup still needs to run;
+        // restore the cancellation signal after the exact owned paths have been removed.
+        boolean interrupted = Thread.interrupted();
+        try {
+            Layout layout = prepareLayout();
+            Path path = layout.batchPath(batchRef);
+            if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return;
+            PendingImportBatch batch = readBatch(path, batchRef);
+            if (!batch.isComplete() && !batch.isAcknowledged()) {
+                removeIncompleteBatch(layout, batch, readBatches(layout));
+            }
+        } catch (Failure failure) {
+            throw failure;
+        } catch (IOException | RuntimeException failure) {
+            throw unsafeState();
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt();
         }
     }
 
@@ -471,11 +517,7 @@ public final class OwnedPendingImportStore {
 
     private PendingImportRecord readAndValidate(
             Path recordPath, Path dataPath, String expectedRef) throws IOException, Failure {
-        requireRegularFile(recordPath, -1);
-        long recordSize = Files.size(recordPath);
-        if (recordSize <= 0 || recordSize > PendingImportRecord.MAX_ENCODED_BYTES) throw corrupt();
-        PendingImportRecord record = PendingImportRecord.decode(Files.readAllBytes(recordPath));
-        if (!record.ref().equals(expectedRef)) throw corrupt();
+        PendingImportRecord record = readMetadata(recordPath, dataPath, expectedRef);
         FileDigest data = digestOwnedFile(dataPath, record.sizeBytes(), () -> false);
         if (!data.sha256.equals(record.contentHash())) throw corrupt();
         try {
@@ -483,6 +525,17 @@ public final class OwnedPendingImportStore {
         } catch (AndroidDocumentIngressPolicy.Failure failure) {
             throw corrupt();
         }
+        return record;
+    }
+
+    private PendingImportRecord readMetadata(
+            Path recordPath, Path dataPath, String expectedRef) throws IOException, Failure {
+        requireRegularFile(recordPath, -1);
+        long recordSize = Files.size(recordPath);
+        if (recordSize <= 0 || recordSize > PendingImportRecord.MAX_ENCODED_BYTES) throw corrupt();
+        PendingImportRecord record = PendingImportRecord.decode(Files.readAllBytes(recordPath));
+        if (!record.ref().equals(expectedRef)) throw corrupt();
+        requireRegularFile(dataPath, record.sizeBytes());
         return record;
     }
 
@@ -572,7 +625,60 @@ public final class OwnedPendingImportStore {
         Path acknowledged = ensureDirectDirectory(store, store.resolve(ACKNOWLEDGED_NAME));
         cleanupBatchTemps(batches, ".batch");
         cleanupBatchTemps(acknowledged, ".ack");
-        return new Layout(store, data, records, batches, acknowledged);
+        Layout layout = new Layout(store, data, records, batches, acknowledged);
+        cleanupAbandonedBatches(layout);
+        return layout;
+    }
+
+    private void cleanupAbandonedBatches(Layout layout) throws IOException, Failure {
+        List<PendingImportBatch> batches = readBatches(layout);
+        long now = nonNegativeNow();
+        for (PendingImportBatch batch : batches) {
+            if (!batch.isComplete() && !batch.isAcknowledged()
+                    && now >= batch.stateAtMillis()
+                    && now - batch.stateAtMillis() >= INCOMPLETE_BATCH_MAX_AGE_MILLIS) {
+                removeIncompleteBatch(layout, batch, batches);
+            }
+        }
+    }
+
+    private static List<PendingImportBatch> readBatches(Layout layout) throws IOException, Failure {
+        ArrayList<PendingImportBatch> batches = new ArrayList<>();
+        try (var paths = Files.list(layout.batchesDirectory)) {
+            Iterator<Path> iterator = paths.iterator();
+            while (iterator.hasNext()) {
+                Path path = iterator.next();
+                if (batches.size() >= MAX_BATCH_MANIFESTS) throw limit();
+                String ref = batchRefForName(path.getFileName().toString(), ".batch");
+                batches.add(readBatch(path, ref));
+            }
+        }
+        return batches;
+    }
+
+    private static void removeIncompleteBatch(Layout layout, PendingImportBatch batch,
+            List<PendingImportBatch> batches) throws IOException, Failure {
+        ArrayList<Path> targets = new ArrayList<>();
+        for (String ref : batch.refs()) {
+            for (PendingImportBatch other : batches) {
+                if (!other.batchRef().equals(batch.batchRef()) && other.refs().contains(ref)) {
+                    throw corrupt(); // Never remove bytes claimed by another durable delivery.
+                }
+            }
+            for (Path path : List.of(layout.recordPath(ref), layout.dataPath(ref),
+                    layout.recordTempPath(ref), layout.dataTempPath(ref))) {
+                if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+                    requireRegularFile(path, -1);
+                    targets.add(path);
+                }
+            }
+        }
+        // Keep the manifest until every child is gone, so interrupted rollback is restartable.
+        for (Path path : targets) Files.deleteIfExists(path);
+        fsyncDirectory(layout.recordsDirectory);
+        fsyncDirectory(layout.dataDirectory);
+        deleteExactPublished(layout.batchPath(batch.batchRef()));
+        fsyncDirectory(layout.batchesDirectory);
     }
 
     /** Removes only a crash-left exact temp name; published manifests are validated and retained. */

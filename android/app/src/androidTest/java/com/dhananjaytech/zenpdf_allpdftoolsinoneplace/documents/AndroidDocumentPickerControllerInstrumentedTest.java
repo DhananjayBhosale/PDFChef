@@ -159,7 +159,7 @@ public final class AndroidDocumentPickerControllerInstrumentedTest {
         }
     }
 
-    @Test public void simulatedPartialBatchFailureRetriesIdempotentlyInOriginalOrder()
+    @Test public void simulatedPartialBatchFailureRollsBackThenRetriesInOriginalOrder()
             throws Exception {
         Fixture fixture = fixture();
         Uri first = Uri.parse("content://private.provider/source-first.pdf");
@@ -181,7 +181,11 @@ public final class AndroidDocumentPickerControllerInstrumentedTest {
                 original, Activity.RESULT_OK, resultIntent, () -> false));
         String firstRef = fixture.policy.documentRef(original, 0);
         String secondRef = fixture.policy.documentRef(original, 1);
-        assertEquals(List.of(firstRef), refs(fixture.store.listPending()));
+        assertTrue(fixture.store.listPending().isEmpty());
+        assertNull(fixture.store.takeCompleteBatch(100));
+        try (var paths = Files.walk(fixture.base)) {
+            assertFalse(paths.anyMatch(Files::isRegularFile));
+        }
 
         fixture.resolver.clearOpenFailure();
         PickerRequestPolicy.Request restored = fixture.policy.restore(

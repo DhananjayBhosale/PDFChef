@@ -14,6 +14,12 @@ import com.getcapacitor.CapConfig;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.os.Build;
+import android.os.SystemClock;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewParent;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.ServiceWorkerClient;
 import android.webkit.ServiceWorkerController;
 import android.webkit.WebResourceRequest;
@@ -24,16 +30,35 @@ import java.io.ByteArrayInputStream;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicLong;
 
 /** Capacitor host that registers the fixed legacy bridge surface before bridge startup. */
 public class MainActivity extends BridgeActivity {
+    private static final String EXTRA_RENDERER_RECOVERY_URL =
+            "com.dhananjaytech.pdfchef.RENDERER_RECOVERY_URL";
+    private static final AtomicLong LAST_RENDERER_RECOVERY_MILLIS = new AtomicLong();
     private android.view.ViewTreeObserver.OnPreDrawListener systemBarBackgroundListener;
     private Boolean lightSystemBars;
+    private boolean rendererGone;
     private final ExecutorService intakeExecutor = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "pdfchef-incoming-pdf");
         thread.setDaemon(true);
         return thread;
     });
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        WebView webView = bridgeWebView();
+        if (webView != null) webView.onResume();
+    }
+
+    @Override
+    public void onStop() {
+        WebView webView = bridgeWebView();
+        if (webView != null) webView.onPause();
+        super.onStop();
+    }
 
     @Override
     public void onDestroy() {
@@ -121,6 +146,7 @@ public class MainActivity extends BridgeActivity {
 
         // This runs before Bridge construction, where Capacitor registers plugins and calls loadUrl().
         PdfChefWebViewPolicy.apply(webView);
+        configureGraphicsLayer(webView);
         super.load();
         configureWebViewBoundary(getBridge());
     }
@@ -133,7 +159,11 @@ public class MainActivity extends BridgeActivity {
             return;
         }
         PdfChefWebViewPolicy.apply(webView);
+        configureGraphicsLayer(webView);
         bridge.setWebViewClient(new PdfChefWebViewClient(bridge));
+        String recoveryUrl = getIntent().getStringExtra(EXTRA_RENDERER_RECOVERY_URL);
+        getIntent().removeExtra(EXTRA_RENDERER_RECOVERY_URL);
+        if (PdfChefWebViewPolicy.isPackagedOrigin(recoveryUrl)) webView.loadUrl(recoveryUrl);
         synchronizeSystemBarBackground();
         ServiceWorkerController.getInstance().setServiceWorkerClient(new ServiceWorkerClient() {
             @Override public WebResourceResponse shouldInterceptRequest(WebResourceRequest request) {
@@ -144,6 +174,27 @@ public class MainActivity extends BridgeActivity {
                 return blockedResponse();
             }
         });
+    }
+
+    private WebView bridgeWebView() {
+        if (rendererGone) return null;
+        Bridge current = getBridge();
+        return current == null ? null : current.getWebView();
+    }
+
+    private static void configureGraphicsLayer(WebView webView) {
+        String socModel = Build.VERSION.SDK_INT >= 31 ? Build.SOC_MODEL : "";
+        if (PdfChefWebViewPolicy.requiresSoftwareRendering(Build.HARDWARE, socModel)) {
+            webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+        }
+    }
+
+    private static boolean claimRendererRecovery(long now) {
+        while (true) {
+            long previous = LAST_RENDERER_RECOVERY_MILLIS.get();
+            if (!PdfChefWebViewPolicy.mayRestartRenderer(previous, now)) return false;
+            if (LAST_RENDERER_RECOVERY_MILLIS.compareAndSet(previous, now)) return true;
+        }
     }
 
     private void synchronizeSystemBarBackground() {
@@ -204,6 +255,32 @@ public class MainActivity extends BridgeActivity {
                 return super.shouldInterceptRequest(view, request);
             }
             return blockedResponse();
+        }
+
+        @Override public boolean onRenderProcessGone(
+                WebView view, RenderProcessGoneDetail detail) {
+            // Android terminates the host when any associated WebView leaves this callback
+            // unhandled. The dead instance cannot be reused: detach and destroy it, then rebuild
+            // the Capacitor bridge once. A second failure inside the cooldown closes cleanly
+            // instead of entering a restart loop.
+            rendererGone = true;
+            String recoveryUrl = view.getUrl();
+            if (PdfChefWebViewPolicy.isPackagedOrigin(recoveryUrl)) {
+                getIntent().putExtra(EXTRA_RENDERER_RECOVERY_URL, recoveryUrl);
+            }
+            ViewParent parent = view.getParent();
+            if (parent instanceof ViewGroup) ((ViewGroup) parent).removeView(view);
+            view.destroy();
+
+            long now = SystemClock.elapsedRealtime();
+            if (claimRendererRecovery(now)) {
+                getWindow().getDecorView().post(() -> {
+                    if (!isFinishing() && !isDestroyed()) recreate();
+                });
+            } else {
+                finish();
+            }
+            return true;
         }
     }
 

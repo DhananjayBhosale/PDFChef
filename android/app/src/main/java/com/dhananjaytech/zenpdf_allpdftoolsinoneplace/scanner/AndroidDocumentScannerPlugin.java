@@ -98,7 +98,10 @@ public final class AndroidDocumentScannerPlugin extends Plugin {
 
     @ActivityCallback
     private void scannerResult(PluginCall call, ActivityResult activityResult) {
-        long operation = OPERATIONS.claimResult();
+        // ActivityResultRegistry can restore a result after process death, when the static
+        // operation guard is empty. Still import it privately even if JS's call is gone.
+        long operation = OPERATIONS.claimResult(call == null
+                || PluginCall.CALLBACK_ID_DANGLING.equals(call.getCallbackId()));
         if (operation == 0) return;
         boolean sendIntentFailure = activityResult != null && activityResult.getData() != null
                 && activityResult.getData().hasExtra(
@@ -308,6 +311,13 @@ public final class AndroidDocumentScannerPlugin extends Plugin {
         }
 
         synchronized long claimResult() {
+            return claimResult(false);
+        }
+
+        synchronized long claimResult(boolean restoredCallback) {
+            // Only the first restored callback in a fresh process can recover an operation.
+            // Finishing must not make a duplicate result eligible for a second import.
+            if (!active && generation == 0 && restoredCallback) begin();
             if (!active || resultClaimed) return 0;
             resultClaimed = true;
             return generation;
