@@ -27,6 +27,7 @@ import type {
   WorkspacePlatform,
 } from '../contracts.ts';
 import { installOutputDeliveryHandler } from '../../pdfShared.ts';
+import { announceRecordsChanged } from '../../workspace.ts';
 import {
   PdfChefDocumentsBridge,
   isPdfChefDocumentsAvailable,
@@ -70,6 +71,7 @@ export interface IOSDocumentBridge {
   clear(): Promise<void>;
   storageInformation(): Promise<StorageInformation>;
   takePendingImports(): Promise<readonly ImportedDocument[]>;
+  acknowledgePendingImports(refs: readonly DurableDocumentRef[]): Promise<void>;
   startPendingImportDelivery(
     consume: (imports: readonly ImportedDocument[]) => Promise<void> | void,
   ): Promise<() => Promise<void>>;
@@ -336,6 +338,12 @@ export const createIOSWorkspacePlatform = (
         document.retainedAt ?? now(),
       );
       await recent.save(entry);
+      // The file is now in Recent. Acknowledge it before the reader opens: the reader
+      // stays up until the user closes it, and if iOS ends the app meanwhile an
+      // unacknowledged import would reopen on every launch.
+      await bridge.acknowledgePendingImports([document.ref]).catch(() => undefined);
+      // A warm Open-In arrives while Recent may already be on screen.
+      if (typeof window !== 'undefined') announceRecordsChanged();
       const record = { entry, document, available: true };
       if (pdfReader.isEligible(document)) {
         try {

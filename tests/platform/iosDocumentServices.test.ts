@@ -112,6 +112,7 @@ class FakeBridge implements IOSDocumentBridge {
   async clear() { this.documents.clear(); }
   async storageInformation(): Promise<StorageInformation> { return { retainedBytes: 8, availableBytes: 100, capacityBytes: 108 }; }
   async takePendingImports() { return this.pending; }
+  async acknowledgePendingImports(_refs: readonly DurableDocumentRef[]) {}
   async startPendingImportDelivery(consume: (imports: readonly ImportedDocument[]) => Promise<void> | void) {
     if (this.pendingDeliveryError) throw this.pendingDeliveryError;
     await consume(this.pending);
@@ -571,4 +572,64 @@ test('Open-In documents recovered on start arrive before one opened meanwhile', 
   await Promise.all([started, later]);
 
   assert.deepEqual(seen, ['FIRST', 'SECOND', 'LATER']);
+});
+
+class ReaderSessionBridge extends FakeBridge {
+  acknowledged: string[] = [];
+  readerOpen = false;
+  closeReader: () => void = () => undefined;
+  override async acknowledgePendingImports(refs: readonly DurableDocumentRef[]) {
+    this.acknowledged.push(...refs);
+  }
+  // Mirrors PdfChefDocumentsBridge: the queue is acknowledged only after consume settles.
+  override async startPendingImportDelivery(consume: (imports: readonly ImportedDocument[]) => Promise<void> | void) {
+    await consume(this.pending);
+    await this.acknowledgePendingImports(this.pending.map(value => value.document.ref));
+    return async () => undefined;
+  }
+  override async openReader(): ReturnType<IOSDocumentBridge['openReader']> {
+    this.readerOpen = true;
+    await new Promise<void>(resolve => { this.closeReader = resolve; });
+    this.readerOpen = false;
+    return { action: 'closed' };
+  }
+}
+
+test('an Open-In PDF is acknowledged before its reader closes, so a relaunch does not reopen it', async () => {
+  const storage = new MemoryStorage();
+  const bridge = new ReaderSessionBridge();
+  bridge.pending = [{ document: document('OPEN-IN') }];
+  const platform = createIOSWorkspacePlatform({
+    bridge,
+    recent: new LocalRecentRepository(storage),
+    settings: new LocalSettingsRepository(storage),
+    now: () => 123,
+  });
+  for (let turn = 0; turn < 50 && !bridge.readerOpen; turn += 1) {
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  assert.equal(bridge.readerOpen, true, 'the native reader opens for the imported PDF');
+  assert.deepEqual(
+    bridge.acknowledged,
+    [ref('OPEN-IN')],
+    'the import is durable in Recent and acknowledged while the reader is still showing',
+  );
+  bridge.closeReader();
+  await platform.ready;
+  await platform.dispose();
+});
+
+test('an Open-In PDF tells an open Recent list to refresh', async () => {
+  const events = new EventTarget();
+  const changes: string[] = [];
+  events.addEventListener('pdfchef:records-changed', () => changes.push('records-changed'));
+  const previousWindow = (globalThis as { window?: unknown }).window;
+  (globalThis as { window?: unknown }).window = events;
+  try {
+    const { bridge } = await inboxPlatform();
+    await bridge.deliver!([{ document: document('WARM-INBOX') }]);
+    assert.deepEqual(changes, ['records-changed']);
+  } finally {
+    (globalThis as { window?: unknown }).window = previousWindow;
+  }
 });

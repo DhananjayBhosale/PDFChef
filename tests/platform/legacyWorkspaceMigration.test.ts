@@ -122,6 +122,7 @@ class MigrationBridge implements IOSDocumentBridge {
     return { retainedBytes: 0, availableBytes: null, capacityBytes: null };
   }
   async takePendingImports(): Promise<readonly ImportedDocument[]> { return []; }
+  async acknowledgePendingImports(_refs: readonly DurableDocumentRef[]): Promise<void> {}
   async startPendingImportDelivery(consume: (imports: readonly ImportedDocument[]) => Promise<void> | void) {
     this.pendingRegistrationStarted = true;
     await consume([]);
