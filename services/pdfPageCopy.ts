@@ -1,8 +1,7 @@
 import { LocalizedError } from './i18n/errors.ts';
-import { t } from './i18n/core.ts';
 import {
   PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFObjectCopier,
-  PDFPage, PDFPageLeaf, PDFRef, PDFString,
+  PDFObject, PDFPage, PDFPageLeaf, PDFRef, PDFStream, PDFString,
 } from 'pdf-lib';
 
 const name = PDFName.of;
@@ -25,8 +24,7 @@ export const copyPagesWithForms = async (
   destination: PDFDocument, source: PDFDocument, indices: number[],
 ): Promise<PDFPage[]> => {
   const sourceForm = source.catalog.lookupMaybe(name('AcroForm'), PDFDict);
-  if (!sourceForm) return destination.copyPages(source, indices);
-  if (sourceForm.has(name('XFA'))) {
+  if (sourceForm?.has(name('XFA'))) {
     throw new LocalizedError("pdf-page-copy.this.pdf.uses.xfa.forms.export.a.f940e0");
   }
 
@@ -38,6 +36,80 @@ export const copyPagesWithForms = async (
     if (!(node instanceof PDFPageLeaf)) throw new LocalizedError("pdf-page-copy.a.selected.pdf.page.could.not.be.02cd4a");
     return PDFPage.of(node, reference, destination);
   });
+  const retainedPageRefs = new Set(pages.map(page => page.ref));
+  const namedDestinations = new Map<string, PDFObject>();
+  const legacyDestinations = source.catalog.lookupMaybe(name('Dests'), PDFDict);
+  for (const [key, value] of legacyDestinations?.entries() ?? []) {
+    namedDestinations.set(key.decodeText(), value);
+  }
+  const nameTreeVisited = new Set<PDFDict>();
+  const readDestinationTree = (tree: PDFDict) => {
+    if (nameTreeVisited.has(tree)) return;
+    nameTreeVisited.add(tree);
+    const entries = tree.lookupMaybe(name('Names'), PDFArray);
+    for (let index = 0; entries && index + 1 < entries.size(); index += 2) {
+      namedDestinations.set(textOf(entries.lookup(index)), entries.get(index + 1));
+    }
+    for (const child of tree.lookupMaybe(name('Kids'), PDFArray)?.asArray() ?? []) {
+      const node = source.context.lookup(child);
+      if (node instanceof PDFDict) readDestinationTree(node);
+    }
+  };
+  const tree = source.catalog.lookupMaybe(name('Names'), PDFDict)?.lookupMaybe(name('Dests'), PDFDict);
+  if (tree) readDestinationTree(tree);
+
+  // PDFObjectCopier follows links and annotation page pointers. Use the same page
+  // reference map for every donor, then cut references to pages outside this copy.
+  // Callers prune the now-detached objects before serializing the result.
+  const finish = (fieldRoots: PDFObject[] = []) => {
+    const resolveDestination = (value: PDFObject): PDFArray | undefined => {
+      let target = destination.context.lookup(value);
+      if (target instanceof PDFName || target instanceof PDFString || target instanceof PDFHexString) {
+        const sourceTarget = namedDestinations.get(target.decodeText());
+        if (!sourceTarget) return;
+        target = destination.context.lookup(copier.copy(sourceTarget));
+      }
+      if (target instanceof PDFDict) target = target.lookup(name('D'));
+      if (target instanceof PDFArray && retainedPageRefs.has(target.get(0) as PDFRef)) return target;
+    };
+    const visited = new Set<PDFObject>();
+    const retain = (value: PDFObject): boolean => {
+      const object = destination.context.lookup(value);
+      if (!object) return true;
+      if (object instanceof PDFDict && object.lookup(name('Type')) === name('Page') &&
+          (!(value instanceof PDFRef) || !retainedPageRefs.has(value))) return false;
+      if (object instanceof PDFDict && object.lookup(name('S')) === name('GoTo')) {
+        const target = object.get(name('D'));
+        const resolved = target && resolveDestination(target);
+        if (!resolved) return false;
+        object.set(name('D'), resolved);
+      }
+      if (visited.has(object)) return true;
+      visited.add(object);
+      if (object instanceof PDFDict) {
+        if (object.lookup(name('Subtype')) === name('Link') && object.has(name('Dest'))) {
+          const resolved = resolveDestination(object.get(name('Dest'))!);
+          if (resolved) object.set(name('Dest'), resolved);
+          else object.delete(name('Dest'));
+        }
+        for (const [key, child] of object.entries()) {
+          if (!retain(child)) object.delete(key);
+        }
+      } else if (object instanceof PDFArray) {
+        for (let index = object.size() - 1; index >= 0; index -= 1) {
+          if (!retain(object.get(index))) object.remove(index);
+        }
+      } else if (object instanceof PDFStream) {
+        retain(object.dict);
+      }
+      return true;
+    };
+    pages.forEach(page => retain(page.ref));
+    fieldRoots.forEach(retain);
+    return pages;
+  };
+  if (!sourceForm) return finish();
+
   const widgets = new Set<PDFDict>();
   for (const page of pages) {
     for (const reference of page.node.Annots()?.asArray() ?? []) {
@@ -70,7 +142,7 @@ export const copyPagesWithForms = async (
     return keep;
   };
   const roots = (copiedForm.lookupMaybe(name('Fields'), PDFArray)?.asArray() ?? []).filter(keepField);
-  if (!roots.length) return pages;
+  if (!roots.length) return finish();
 
   let targetForm = destination.catalog.lookupMaybe(name('AcroForm'), PDFDict);
   if (!targetForm) {
@@ -154,5 +226,5 @@ export const copyPagesWithForms = async (
     calculations.forEach(reference => order.push(reference));
     targetForm.set(name('CO'), order);
   }
-  return pages;
+  return finish(roots);
 };

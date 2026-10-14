@@ -3,11 +3,12 @@ import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useState, useEffect, useMemo } from 'react';
 import { FileUpload } from '../UI/FileUpload';
+import { PDFLoadingProgress } from '../UI/PDFLoadingProgress';
 import { PDFFile, ProcessingStatus } from '../../types';
-import { getPdfPagePreviews } from '../../services/pdfBrowser';
+import { getPdfPagePreviews, type PdfPreviewProgress } from '../../services/pdfBrowser';
 import { deletePagesFromPDF } from '../../services/pdfDocument';
 import { downloadBlob, isPdfFile, revokeObjectUrls } from '../../services/pdfShared';
-import { Trash2, Loader2, Undo2 } from 'lucide-react';
+import { Trash2, Undo2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
 import { StatusToast } from '../UI/StatusToast';
@@ -22,6 +23,7 @@ export const DeletePages: React.FC = () => {
   const [previews, setPreviews] = useState<string[]>([]);
   const [pagesToDelete, setPagesToDelete] = useState<number[]>([]);
   const [loadingPreviews, setLoadingPreviews] = useState(false);
+  const [previewProgress, setPreviewProgress] = useState<PdfPreviewProgress | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [rangeInput, setRangeInput] = useState('');
   const [selectionMessage, setSelectionMessage] = useState<string | null>(null);
@@ -31,11 +33,16 @@ export const DeletePages: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    setPreviewProgress(null);
 
     if (file) {
       setLoadingPreviews(true);
       setPreviewError(null);
-      getPdfPagePreviews(file.file)
+      getPdfPagePreviews(file.file, {
+        signal: controller.signal,
+        onProgress: (progress) => { if (!cancelled) setPreviewProgress(progress); },
+      })
         .then(urls => {
           if (cancelled) {
             revokeObjectUrls(urls);
@@ -60,6 +67,7 @@ export const DeletePages: React.FC = () => {
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [file]);
 
@@ -190,6 +198,7 @@ export const DeletePages: React.FC = () => {
                 ]}
               />
             </ToolPanel>
+            {loadingPreviews && <PDFLoadingProgress progress={previewProgress} />}
 
             <Button
               tone="primary"
@@ -200,12 +209,7 @@ export const DeletePages: React.FC = () => {
               onClick={() => void handleDelete()}
             >{t("delete-pages.save.without.those.pages.3b9676")}</Button>
 
-            {loadingPreviews ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-6 text-[var(--text-tertiary)]">
-                <Loader2 aria-hidden className="animate-spin" size={24} />
-                <p className="text-sm">{t("delete-pages.loading.pages.1b27e2")}</p>
-              </div>
-            ) : previewError ? (
+            {loadingPreviews ? null : previewError ? (
               <div className="flex flex-col items-center gap-2 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] px-4 py-4 text-center">
                 <p className="font-semibold text-[var(--status-danger-text)]">{t("delete-pages.the.pages.could.not.be.shown.choose.9884e4")}</p>
                 <p className="max-w-measure text-sm text-[var(--text-secondary)]">{previewError}</p>

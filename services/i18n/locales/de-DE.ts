@@ -1,6 +1,13 @@
 import type { Catalog } from '../core';
 
 export default {
+  "preview-progress.opening": "Deine PDF wird geöffnet",
+  "preview-progress.preparing": "Deine Seiten werden sichtbar",
+  "preview-progress.count": "{completed} von {total} Vorschauen bereit",
+  "preview-progress.page": "Seite {page} wird vorbereitet",
+  "preview-progress.hint": "Große PDFs können etwas dauern. Alles bleibt auf deinem Gerät.",
+  "preview-progress.lazy": "Weitere Vorschauen erscheinen beim Scrollen.",
+
   "page-range-selector.label": "Seitenzahlen oder Seitenbereiche",
   "page-range-selector.example": "z. B. 187-230",
   "page-range-selector.select": "Auswählen",
@@ -558,7 +565,6 @@ export default {
   "delete-pages.mark.d7cda0": "Markieren",
   "delete-pages.restore.all.a9c39c": "Alle wiederherstellen",
   "delete-pages.save.without.those.pages.3b9676": "Ohne diese Seiten speichern",
-  "delete-pages.loading.pages.1b27e2": "Seiten werden geladen...",
   "delete-pages.the.pages.could.not.be.shown.choose.9884e4": "Die Seiten konnten nicht angezeigt werden. Wählen Sie eine andere Datei oder wenden Sie zuerst „PDF reparieren“ darauf an.",
   "delete-pages.page.893387": "{v0} Seite {v1}",
   "delete-pages.page.preview.7f7e5e": "Vorschau von Seite {v0}",
@@ -644,7 +650,6 @@ export default {
   "extract-pages.choose.another.pdf.9434e3": "Anderes PDF auswählen",
   "extract-pages.select.all.1fc9a3": "Alle auswählen",
   "extract-pages.clear.83b12c": "Auswahl aufheben",
-  "extract-pages.loading.pages.1b27e2": "Seiten werden geladen...",
   "extract-pages.this.pdf.has.no.pages.in.it.8c754b": "Dieses PDF enthält keine Seiten. Wählen Sie eine andere Datei.",
   "flatten-pdf.locking.the.filled.answers.c0bd41": "Ausgefüllte Antworten werden gesperrt…",
   "flatten-pdf.getting.your.pdf.ready.3a0d56": "Ihr PDF wird vorbereitet…",
@@ -1051,7 +1056,6 @@ export default {
   "reorder-pdf.redo.742739": "Wiederholen",
   "reorder-pdf.reset.daee76": "Zurücksetzen",
   "reorder-pdf.save.reordered.pdf.b8306f": "Neu angeordnetes PDF speichern",
-  "reorder-pdf.generating.page.previews.83467f": "Seitenvorschauen werden erstellt...",
   "reorder-pdf.the.pages.could.not.be.shown.choose.9884e4": "Die Seiten konnten nicht angezeigt werden. Wählen Sie eine andere Datei oder führen Sie zuerst „PDF reparieren“ darauf aus.",
   "reorder-pdf.drag.page.8b847a": "Seite {v0} ziehen",
   "reorder-pdf.page.c140ba": "Seite {v0}",
@@ -1085,7 +1089,6 @@ export default {
   "rotate-pdf.clear.83b12c": "Auswahl aufheben",
   "rotate-pdf.reset.daee76": "Zurücksetzen",
   "rotate-pdf.save.turned.pdf.fa1cfd": "Gedrehtes PDF speichern",
-  "rotate-pdf.loading.pages.1b27e2": "Seiten werden geladen...",
   "rotate-pdf.the.pages.could.not.be.shown.choose.9884e4": "Die Seiten konnten nicht angezeigt werden. Wählen Sie eine andere Datei oder führen Sie zuerst „PDF reparieren“ darauf aus.",
   "security-pdf.encrypting.pdf.on.this.device.af1739": "PDF wird auf diesem Gerät verschlüsselt...",
   "security-pdf.protected.copy.ready.3fad41": "Geschützte Kopie bereit: {v0}.",
@@ -1185,7 +1188,6 @@ export default {
   "split-pdf.cancel.19766e": "Abbrechen",
   "split-pdf.save.the.split.files.33c422": "Aufgeteilte Dateien speichern",
   "split-pdf.pages.to.include.225127": "Einzuschließende Seiten",
-  "split-pdf.generating.page.previews.83467f": "Seitenvorschauen werden erstellt...",
   "split-pdf.page.previews.are.unavailable.318997": "Seitenvorschauen sind nicht verfügbar",
   "split-pdf.retry.previews.7e9483": " Vorschauen erneut versuchen",
   "split-pdf.the.pages.could.not.be.shown.here.a4b115": "Die Seiten konnten hier nicht angezeigt werden. Sie können oben dennoch nach Seitenzahlen aufteilen.",
@@ -1442,7 +1444,6 @@ export default {
   "pdfpreview-modal.close.preview.7d8ab3": "Vorschau schließen",
   "pdfpreview-modal.previous.page.1208ec": "Vorherige Seite",
   "pdfpreview-modal.next.page.c08ac7": "Nächste Seite",
-  "pdfpreview-modal.rendering.high.quality.preview.916fc2": "Hochwertige Vorschau wird gerendert …",
   "pdfpreview-modal.dragging.26d17c": "Wird gezogen",
   "page-thumbnail.page.8b21ee": "Seite {v0}{v1}",
   "page-thumbnail.page.c140ba": "Seite {v0}",
@@ -2186,5 +2187,8 @@ export default {
   "compareReport.none": "<keine>",
   "compareReport.page": "Seite {v0}",
   "compareReport.extractedText": "{v0} extrahierter Text: {v1}",
-  "compareReport.truncatedTextDetails": "Details zum extrahierten Text (gekürzt):"
+  "compareReport.truncatedTextDetails": "Details zum extrahierten Text (gekürzt):",
+  "make-fillable.dropdown.options.required": "Füge jeder Dropdown-Liste Optionen hinzu. Entferne leere oder doppelte Optionen.",
+  "error.pdfTextBoxOverflow": "Dieses Textfeld ist zu klein. Vergrößere es oder kürze den Text vor dem Speichern.",
+  "error.pdfTextBoxUnsupported": "Dieses Textfeld enthält Zeichen, die mit dieser Schrift nicht gespeichert werden können. Entferne diese Zeichen vor dem Speichern."
 } satisfies Catalog;

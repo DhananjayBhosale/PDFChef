@@ -1,6 +1,13 @@
 import type { Catalog } from '../core';
 
 export default {
+  "preview-progress.opening": "Öppnar din PDF",
+  "preview-progress.preparing": "Dina sidor tar form",
+  "preview-progress.count": "{completed} av {total} förhandsvisningar klara",
+  "preview-progress.page": "Förbereder sida {page}",
+  "preview-progress.hint": "Stora PDF-filer kan ta en stund. Allt stannar på din enhet.",
+  "preview-progress.lazy": "Fler förhandsvisningar visas när du rullar.",
+
   "page-range-selector.label": "Sidnummer eller sidintervall",
   "page-range-selector.example": "t.ex. 187-230",
   "page-range-selector.select": "Välj",
@@ -558,7 +565,6 @@ export default {
   "delete-pages.mark.d7cda0": "Markera",
   "delete-pages.restore.all.a9c39c": "Återställ alla",
   "delete-pages.save.without.those.pages.3b9676": "Spara utan dessa sidor",
-  "delete-pages.loading.pages.1b27e2": "Laddar sidor...",
   "delete-pages.the.pages.could.not.be.shown.choose.9884e4": "Sidorna kunde inte visas. Välj en annan fil eller kör Reparera PDF på den först.",
   "delete-pages.page.893387": "{v0} sida {v1}",
   "delete-pages.page.preview.7f7e5e": "Förhandsgranskning av sida {v0}",
@@ -644,7 +650,6 @@ export default {
   "extract-pages.choose.another.pdf.9434e3": "Välj en annan PDF-fil",
   "extract-pages.select.all.1fc9a3": "Markera alla",
   "extract-pages.clear.83b12c": "Rensa",
-  "extract-pages.loading.pages.1b27e2": "Laddar sidor...",
   "extract-pages.this.pdf.has.no.pages.in.it.8c754b": "Denna PDF-fil innehåller inga sidor. Välj en annan fil.",
   "flatten-pdf.locking.the.filled.answers.c0bd41": "Låser ifyllda svar…",
   "flatten-pdf.getting.your.pdf.ready.3a0d56": "Gör i ordning din PDF-fil…",
@@ -1074,7 +1079,6 @@ export default {
   "reorder-pdf.undo.a8283a": "Ångra",
   "reorder-pdf.redo.742739": "Gör om",
   "reorder-pdf.save.reordered.pdf.b8306f": "Spara omordnad PDF",
-  "reorder-pdf.generating.page.previews.83467f": "Genererar förhandsgranskningar av sidor...",
   "reorder-pdf.the.pages.could.not.be.shown.choose.9884e4": "Sidorna kunde inte visas. Välj en annan fil eller kör Reparera PDF på den först.",
   "reorder-pdf.drag.page.8b847a": "Dra sida {v0}",
   "reorder-pdf.page.c140ba": "Sida {v0}",
@@ -1106,7 +1110,6 @@ export default {
   "rotate-pdf.right.90.471b9b": "Höger 90°",
   "rotate-pdf.clear.83b12c": "Rensa",
   "rotate-pdf.save.turned.pdf.fa1cfd": "Spara roterad PDF",
-  "rotate-pdf.loading.pages.1b27e2": "Läser in sidor...",
   "rotate-pdf.the.pages.could.not.be.shown.choose.9884e4": "Sidorna kunde inte visas. Välj en annan fil eller kör Reparera PDF på den först.",
   "security-pdf.encrypting.pdf.on.this.device.af1739": "Krypterar PDF på den här enheten...",
   "security-pdf.protected.copy.ready.3fad41": "Skyddad kopia klar: {v0}.",
@@ -1204,7 +1207,6 @@ export default {
   "split-pdf.cancelling.7b2613": "Avbryter...",
   "split-pdf.save.the.split.files.33c422": "Spara de delade filerna",
   "split-pdf.pages.to.include.225127": "Sidor att inkludera",
-  "split-pdf.generating.page.previews.83467f": "Genererar förhandsgranskningar av sidor...",
   "split-pdf.page.previews.are.unavailable.318997": "Förhandsgranskningar av sidor är inte tillgängliga",
   "split-pdf.retry.previews.7e9483": " Försök igen med förhandsgranskningar",
   "split-pdf.the.pages.could.not.be.shown.here.a4b115": "Sidorna kunde inte visas här. Du kan fortfarande dela efter sidnummer ovan.",
@@ -1417,7 +1419,6 @@ export default {
   "pdfpreview-modal.close.preview.7d8ab3": "Stäng förhandsgranskning",
   "pdfpreview-modal.previous.page.1208ec": "Föregående sida",
   "pdfpreview-modal.next.page.c08ac7": "Nästa sida",
-  "pdfpreview-modal.rendering.high.quality.preview.916fc2": "Återger högkvalitativ förhandsgranskning...",
   "pdfpreview-modal.dragging.26d17c": "Drar",
   "page-thumbnail.page.8b21ee": "Sida {v0}{v1}",
   "page-thumbnail.page.c140ba": "Sida {v0}",
@@ -2186,5 +2187,8 @@ export default {
   "compareReport.none": "<inga>",
   "compareReport.page": "Sida {v0}",
   "compareReport.extractedText": "{v0} extraherad text: {v1}",
-  "compareReport.truncatedTextDetails": "Detaljer för extraherad text (trunkerad):"
+  "compareReport.truncatedTextDetails": "Detaljer för extraherad text (trunkerad):",
+  "make-fillable.dropdown.options.required": "Lägg till alternativ i varje rullgardinsmeny. Ta bort tomma eller upprepade alternativ.",
+  "error.pdfTextBoxOverflow": "Den här textrutan är för liten. Förstora den eller korta texten innan du sparar.",
+  "error.pdfTextBoxUnsupported": "Textrutan innehåller tecken som dess typsnitt inte kan spara. Ta bort tecknen innan du sparar."
 } satisfies Catalog;

@@ -1,6 +1,13 @@
 import type { Catalog } from '../core';
 
 export default {
+  "preview-progress.opening": "正在打开 PDF",
+  "preview-progress.preparing": "正在准备页面",
+  "preview-progress.count": "已完成 {completed}/{total} 个预览",
+  "preview-progress.page": "正在准备第 {page} 页",
+  "preview-progress.hint": "大型 PDF 可能需要一些时间。所有处理都在您的设备上完成。",
+  "preview-progress.lazy": "滚动时会显示更多预览。",
+
   "page-range-selector.label": "页码或页面范围",
   "page-range-selector.example": "例如 187-230",
   "page-range-selector.select": "选择",
@@ -550,7 +557,6 @@ export default {
   "delete-pages.mark.d7cda0": "标记",
   "delete-pages.restore.all.a9c39c": "全部恢复",
   "delete-pages.save.without.those.pages.3b9676": "排除这些页面并保存",
-  "delete-pages.loading.pages.1b27e2": "正在加载页面...",
   "delete-pages.the.pages.could.not.be.shown.choose.9884e4": "无法显示页面。请选择其他文件，或先对其运行“修复 PDF”工具。",
   "delete-pages.page.893387": "{v0} 第 {v1} 页",
   "delete-pages.page.preview.7f7e5e": "第 {v0} 页预览",
@@ -633,7 +639,6 @@ export default {
   "extract-pages.choose.another.pdf.9434e3": "选择其他 PDF",
   "extract-pages.select.all.1fc9a3": "全选",
   "extract-pages.clear.83b12c": "清除",
-  "extract-pages.loading.pages.1b27e2": "正在加载页面...",
   "extract-pages.this.pdf.has.no.pages.in.it.8c754b": "此 PDF 中没有页面。请选择其他文件。",
   "flatten-pdf.locking.the.filled.answers.c0bd41": "正在锁定填写的回答…",
   "flatten-pdf.getting.your.pdf.ready.3a0d56": "正在准备您的 PDF…",
@@ -1032,7 +1037,6 @@ export default {
   "reorder-pdf.redo.742739": "重做",
   "reorder-pdf.reset.daee76": "重置",
   "reorder-pdf.save.reordered.pdf.b8306f": "保存重新排列后的 PDF",
-  "reorder-pdf.generating.page.previews.83467f": "正在生成页面预览...",
   "reorder-pdf.the.pages.could.not.be.shown.choose.9884e4": "无法显示页面。请选择其他文件，或先对其运行“修复 PDF”。",
   "reorder-pdf.drag.page.8b847a": "拖动第 {v0} 页",
   "reorder-pdf.page.c140ba": "第 {v0} 页",
@@ -1066,7 +1070,6 @@ export default {
   "rotate-pdf.clear.83b12c": "清除",
   "rotate-pdf.reset.daee76": "重置",
   "rotate-pdf.save.turned.pdf.fa1cfd": "保存旋转后的 PDF",
-  "rotate-pdf.loading.pages.1b27e2": "正在加载页面...",
   "rotate-pdf.the.pages.could.not.be.shown.choose.9884e4": "无法显示页面。请选择其他文件，或先对其运行“修复 PDF”。",
   "security-pdf.encrypting.pdf.on.this.device.af1739": "正在此设备上加密 PDF...",
   "security-pdf.protected.copy.ready.3fad41": "受保护的副本已就绪：{v0}。",
@@ -1164,7 +1167,6 @@ export default {
   "split-pdf.cancel.19766e": "取消",
   "split-pdf.save.the.split.files.33c422": "保存拆分后的文件",
   "split-pdf.pages.to.include.225127": "要包含的页面",
-  "split-pdf.generating.page.previews.83467f": "正在生成页面预览...",
   "split-pdf.page.previews.are.unavailable.318997": "页面预览不可用",
   "split-pdf.retry.previews.7e9483": " 重试预览",
   "split-pdf.the.pages.could.not.be.shown.here.a4b115": "此处无法显示页面。您仍可在上方按页码进行拆分。",
@@ -1425,7 +1427,6 @@ export default {
   "pdfpreview-modal.close.preview.7d8ab3": "关闭预览",
   "pdfpreview-modal.previous.page.1208ec": "上一页",
   "pdfpreview-modal.next.page.c08ac7": "下一页",
-  "pdfpreview-modal.rendering.high.quality.preview.916fc2": "正在渲染高质量预览...",
   "pdfpreview-modal.dragging.26d17c": "正在拖动",
   "page-thumbnail.page.8b21ee": "第 {v0}{v1} 页",
   "page-thumbnail.page.c140ba": "第 {v0} 页",
@@ -2129,5 +2130,8 @@ export default {
   "compareReport.none": "<无>",
   "compareReport.page": "第 {v0} 页",
   "compareReport.extractedText": "{v0} 提取的文本: {v1}",
-  "compareReport.truncatedTextDetails": "提取文本详情（已截断）:"
+  "compareReport.truncatedTextDetails": "提取文本详情（已截断）:",
+  "make-fillable.dropdown.options.required": "为每个下拉列表添加选项。删除空白或重复的选项。",
+  "error.pdfTextBoxOverflow": "此文本框太小。请在保存前扩大文本框或缩短文本。",
+  "error.pdfTextBoxUnsupported": "此文本框包含当前字体无法保存的字符。请在保存前删除这些字符。"
 } satisfies Catalog;

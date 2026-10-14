@@ -2,7 +2,7 @@ import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { planBlockEdit, type StyledSegment } from '../../services/pdfBlockEditPlanning';
+import { blockStyledSegments, planBlockEdit, preserveStyledTextEdit, styledTextEqual, type StyledSegment } from '../../services/pdfBlockEditPlanning';
 export type { StyledSegment } from '../../services/pdfBlockEditPlanning';
 import type { PdfTextAlign, PdfTextBlock, PdfTextLine } from '../../services/pdfTextBlocks';
 import { capturePdfFocusAnchor, pdfCaretScroll, pdfFocusAnchorScroll, type PdfFocusAnchor } from '../../services/pdfEditingFocus';
@@ -308,6 +308,18 @@ export const readStyledSegments = (
   return lines;
 };
 
+const hasDamagedStyleSpans = (element: HTMLElement) => {
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    const run = node.parentElement?.closest('[data-font]');
+    if (node.textContent?.trim() && (!run || run === element || !element.contains(run))) return true;
+  }
+  const runs = [...element.querySelectorAll<HTMLElement>('[data-pdf-line][data-pdf-run]')];
+  const keys = runs.map(run => `${run.dataset.pdfLine}:${run.dataset.pdfRun}`);
+  return new Set(keys).size !== keys.length;
+};
+
 const BlockEditor: React.FC<{
   resolved: ResolvedBlock & { stackOrder: number };
   edit: BlockEditState | undefined;
@@ -327,6 +339,9 @@ const BlockEditor: React.FC<{
   const [focused, setFocused] = useState(false);
   const [composing, setComposing] = useState(false);
   const committedText = useRef(edit?.text ?? block.text);
+  const committedStyles = useRef(edit?.segments ?? blockStyledSegments(block));
+  const inputRange = useRef<{ start: number; end: number } | null>(null);
+  const styleRepairNeeded = useRef(false);
   const typingSession = useRef(false);
   const isDirty = Boolean(edit) && ((edit?.text ?? block.text) !== block.text
     || Boolean(edit?.fontOverride) || edit?.fontSize !== undefined
@@ -362,6 +377,29 @@ const BlockEditor: React.FC<{
   const renderRef = useRef({ fontsByKey, runFits, font });
   renderRef.current = { fontsByKey, runFits, font };
 
+  // A text diff cannot identify the selected occurrence when a paragraph repeats the same
+  // letters. Capture the browser's actual replacement range before it mutates the run spans.
+  useEffect(() => {
+    const element = editableRef.current;
+    if (!element) return;
+    const beforeInput = (event: InputEvent) => {
+      inputRange.current = null;
+      if (event.inputType.startsWith('history')) return;
+      const selection = window.getSelection();
+      const range = event.getTargetRanges?.()[0]
+        ?? (selection?.rangeCount ? selection.getRangeAt(0) : null);
+      if (!range || !element.contains(range.startContainer) || !element.contains(range.endContainer)) return;
+      const prefix = document.createRange();
+      prefix.selectNodeContents(element);
+      prefix.setEnd(range.startContainer, range.startOffset);
+      const start = prefix.toString().length;
+      prefix.setEnd(range.endContainer, range.endOffset);
+      inputRange.current = { start, end: prefix.toString().length };
+    };
+    element.addEventListener('beforeinput', beforeInput);
+    return () => element.removeEventListener('beforeinput', beforeInput);
+  }, []);
+
   // Keep ordinary typing in browser-owned nodes. Rebuild only external changes or a run whose
   // wrapper Chromium discarded during a full selection replacement, retaining the caret below.
   useLayoutEffect(() => {
@@ -370,22 +408,10 @@ const BlockEditor: React.FC<{
     const externalChange = !written.current || committedText.current !== text;
     if (!externalChange) {
       if (composing || text.split('\n').length !== block.lines.length) return;
-      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-      let lostRun = false;
-      let node: Node | null;
-      while ((node = walker.nextNode())) {
-        if (node.textContent?.trim() && !node.parentElement?.closest('[data-pdf-line][data-pdf-run]')) {
-          lostRun = true;
-          break;
-        }
-      }
-      const runs = [...element.querySelectorAll<HTMLElement>('[data-pdf-line][data-pdf-run]')];
-      const keys = runs.map(run => `${run.dataset.pdfLine}:${run.dataset.pdfRun}`);
-      if (!lostRun && new Set(keys).size === keys.length) return;
-      if (planBlockEdit(block, text).mode !== 'direct') return;
+      if (!styleRepairNeeded.current && !hasDamagedStyleSpans(element)) return;
     }
     committedText.current = text;
-    if (externalChange) typingSession.current = false;
+    if (externalChange) { typingSession.current = false; inputRange.current = null; }
     written.current = true;
     const current = renderRef.current;
     const selection = window.getSelection();
@@ -399,11 +425,11 @@ const BlockEditor: React.FC<{
     const anchor = selection ? offsetOf(selection.anchorNode, selection.anchorOffset) : null;
     const focus = selection ? offsetOf(selection.focusNode, selection.focusOffset) : null;
     // Restore original run styles and spacing only where the edit still maps to those runs.
-    const plan = planBlockEdit(block, text);
+    const plan = planBlockEdit(block, text, { segments: edit?.segments });
     const replacements = plan.mode === 'direct'
       ? new Map(plan.runEdits.map((run) => [run.itemIndex, run.replacementText]))
       : new Map<number, string>();
-    const direct = text === block.text || plan.mode === 'direct';
+    const direct = plan.mode === 'unchanged' || plan.mode === 'direct';
     const lines: PdfTextLine[] = direct
       ? block.lines.map((line) => ({ ...line, runs: line.runs.map((run) => ({
         ...run, text: replacements.get(run.itemIndex) ?? run.text,
@@ -419,6 +445,8 @@ const BlockEditor: React.FC<{
         }));
     writeBlockContent(element, lines, current.fontsByKey, current.font,
       direct ? current.runFits : null, block.fontSize);
+    committedStyles.current = readStyledSegments(element, block.fontKey, block.text.includes('\u00a0'), block.fontSize);
+    styleRepairNeeded.current = false;
     if (anchor !== null && focus !== null && selection) {
       const a = blockRange(element, Math.min(anchor, text.length), Math.min(anchor, text.length));
       const f = blockRange(element, Math.min(focus, text.length), Math.min(focus, text.length));
@@ -426,7 +454,7 @@ const BlockEditor: React.FC<{
     }
     if (!externalChange) {
       // The discarded wrapper may have been the only record of an edited bold/italic run.
-      onChange(block.id, text, readStyledSegments(element, block.fontKey, block.text.includes('\u00a0'), block.fontSize));
+      onChange(block.id, text, committedStyles.current);
     }
   }, [block, text, edit?.segments, composing, onChange]);
 
@@ -553,8 +581,16 @@ const BlockEditor: React.FC<{
     }
     const keepsNonBreakingSpace = block.text.includes('\u00a0');
     const next = readBlockText(element, keepsNonBreakingSpace);
+    const domSegments = readStyledSegments(element, block.fontKey, keepsNonBreakingSpace, block.fontSize);
+    const segments = inputRange.current || hasDamagedStyleSpans(element)
+      ? preserveStyledTextEdit(committedStyles.current, next,
+        { text: '', fontKey: block.fontKey, fontSize: block.fontSize }, inputRange.current)
+      : domSegments;
+    inputRange.current = null;
+    styleRepairNeeded.current = !styledTextEqual(domSegments, segments, block.fontSize);
     committedText.current = next;
-    onChange(block.id, next, readStyledSegments(element, block.fontKey, keepsNonBreakingSpace, block.fontSize));
+    committedStyles.current = segments;
+    onChange(block.id, next, segments);
   }, [block, onBeginChange, onChange]);
 
   return (

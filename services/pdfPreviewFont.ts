@@ -11,3 +11,10 @@ export const getPdfPreviewFont = (bold = false): Promise<PDFFont> => {
   }
   return font;
 };
+
+/** Validate before measuring: pdf-lib throws for unsupported characters during render. */
+export const unsupportedPdfPreviewCharacter = (font: PDFFont | null, text: string): string | null => {
+  if (!font) return null;
+  const supported = new Set(font.getCharacterSet());
+  return [...text].find(character => !supported.has(character.codePointAt(0)!)) ?? null;
+};

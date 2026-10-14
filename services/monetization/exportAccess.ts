@@ -44,9 +44,9 @@ export class PendingExport {
     return request;
   }
 
-  /** Ends a request that no longer needs the paywall. */
-  finish(request: object): void {
-    this.live.delete(request);
+  /** Claims a live request once; false means it was cancelled or already ended. */
+  finish(request: object): boolean {
+    return this.live.delete(request);
   }
 
   /** Holds the request's export, unless its result was discarded after it began. */

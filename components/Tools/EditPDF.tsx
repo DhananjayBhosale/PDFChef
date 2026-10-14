@@ -89,6 +89,7 @@ import { useZoom } from '../../hooks/useZoom';
 import { usePdfPinchZoom } from '../../hooks/usePdfPinchZoom';
 import { useImmersiveWorkspace } from '../Layout/AppShell';
 import { PDF_TEXT_OVERFLOW_MESSAGE } from '../../services/pdfTextEditSafety';
+import { layoutTextBox, PdfTextBoxError, TEXT_BOX_PADDING_X, TEXT_BOX_PADDING_Y } from '../../services/pdfTextBoxLayout';
 import { pdfPageFromScrollBoundary } from '../../services/pdfZoomGesture';
 import { releaseNativePdfTextDocument } from '../../services/pdfNativeTextEditor';
 
@@ -295,6 +296,7 @@ const PDFPage: React.FC<{
   const [blockFonts, setBlockFonts] = useState<PageTextBlocks['fonts']>(() => new Map());
   // Base dimensions at scale 1.0 (PDF Points)
   const [dims, setDims] = useState({ w: 600, h: 850 });
+  const [pageUserUnit, setPageUserUnit] = useState(1);
 
   useEffect(() => {
     const obs = new IntersectionObserver(([entry]) => {
@@ -336,6 +338,7 @@ const PDFPage: React.FC<{
         
         // Store logical dimensions (1.0 scale) for layout
         setDims({ w: viewport.width / renderScale, h: viewport.height / renderScale });
+        setPageUserUnit(page.userUnit || 1);
         
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
@@ -462,6 +465,8 @@ const PDFPage: React.FC<{
           <ResizableElement 
             key={el.id} element={el} containerRef={containerRef}
             displayScale={displayScale}
+            pageSize={{ width: dims.w / pageUserUnit, height: dims.h / pageUserUnit }}
+            pageUserUnit={pageUserUnit}
             isSelected={selectedId === el.id}
             onSelect={() => onSelect(el.id)}
             onUpdate={onUpdate} onDelete={onDelete} onBeginChange={onBeginElementChange}
@@ -752,7 +757,7 @@ const PDFFormFieldControl: React.FC<{
 };
 
 // Re-implementing simplified ResizableElement
-const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpdate, onDelete, onBeginChange, containerRef, displayScale }) => {
+const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpdate, onDelete, onBeginChange, containerRef, displayScale, pageSize, pageUserUnit }) => {
   useI18n();
   const [editMode, setEditMode] = useState<'drag' | 'resize' | null>(null);
   const origin = useRef({ clientX: 0, clientY: 0, x: 0, y: 0, width: 0.2, height: 0.1 });
@@ -763,6 +768,11 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
   const width = element.width || (element.type === 'text' ? 0.24 : 0.22);
   const height = element.height || (element.type === 'text' ? 0.07 : 0.14);
   const cssFontFamily = editorCssFontFamily(element.fontFamily);
+  const textLayout = useMemo(() => {
+    if (element.type !== 'text') return null;
+    try { return layoutTextBox(element, width * pageSize.width, height * pageSize.height); }
+    catch { return null; } // Unsupported text remains editable; Save reports the corrective action.
+  }, [element.content, element.type, element.fontFamily, element.fontSize, element.fontWeight, element.fontStyle, width, height, pageSize.width, pageSize.height]);
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
   useEffect(() => {
@@ -924,6 +934,7 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
            value={element.content}
            placeholder={t("edit-pdf.text.71988c")}
            rows={1}
+           aria-invalid={textLayout?.overflow || (!textLayout && !!element.content)}
            spellCheck={false}
            autoCorrect="off"
            onPointerDown={(event) => event.stopPropagation()}
@@ -947,33 +958,39 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
                event.currentTarget.blur();
              }
            }}
-           className="h-full w-full touch-auto resize-none overflow-hidden border-0 bg-transparent px-1.5 py-1 outline-none"
+           className="h-full w-full touch-auto resize-none overflow-auto border-0 bg-transparent outline-none"
            style={{
-             fontSize: `${element.fontSize}px`,
+             fontSize: `${(element.fontSize || 12) * pageUserUnit}px`,
+             padding: `${TEXT_BOX_PADDING_Y * pageUserUnit}px ${TEXT_BOX_PADDING_X * pageUserUnit}px`,
              color: element.color,
              fontFamily: cssFontFamily,
              fontWeight: element.fontWeight,
              fontStyle: element.fontStyle,
              lineHeight: 1.2,
              whiteSpace: 'pre-wrap',
+             overflowWrap: 'anywhere',
            }}
          />
         </>
       ) : element.type === 'text' ? (
-         <div
-           className="h-full w-full overflow-hidden px-1.5 py-1"
-           style={{
-             fontSize: `${element.fontSize}px`,
-             color: element.color,
-             fontFamily: cssFontFamily,
-             fontWeight: element.fontWeight,
-             fontStyle: element.fontStyle,
-             lineHeight: 1.2,
-             whiteSpace: 'pre-wrap',
-           }}
-         >
-           {element.content || t("edit-pdf.text.71988c")}
-         </div>
+         !textLayout ? <div data-testid="text-box-preview" aria-label={element.content}
+           className="h-full w-full overflow-hidden"
+           style={{ fontSize: `${(element.fontSize || 12) * pageUserUnit}px`,
+             padding: `${TEXT_BOX_PADDING_Y * pageUserUnit}px ${TEXT_BOX_PADDING_X * pageUserUnit}px`,
+             color: element.color, fontFamily: cssFontFamily, fontWeight: element.fontWeight,
+             fontStyle: element.fontStyle, lineHeight: 1.2, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+           {element.content}
+         </div> :
+         <svg data-testid="text-box-preview" className="h-full w-full overflow-hidden"
+           viewBox={`0 0 ${width * pageSize.width} ${height * pageSize.height}`}
+           aria-label={element.content}>
+           {textLayout.lines.map((line, index) => line.text && (
+             <text key={index} x={line.x} y={line.baseline} textLength={line.width}
+               lengthAdjust="spacingAndGlyphs" xmlSpace="preserve" fontSize={textLayout.fontSize}
+               fontFamily={cssFontFamily} fontWeight={element.fontWeight} fontStyle={element.fontStyle}
+               fill={element.color || '#000000'}>{line.text}</text>
+           ))}
+         </svg>
       ) : (
          element.type === 'image'
            ? <img src={element.content} alt={t("edit-pdf.added.pdf.graphic.f492bb")} className="h-full w-full object-contain pointer-events-none" />
@@ -1957,6 +1974,7 @@ export const EditPDF: React.FC = () => {
           ? { mode: 'blocked', reason: t("edit-pdf.rotated.or.skewed.text.cannot.be.restyled.258b98") }
           : { mode: 'reflow', reason: t("edit-pdf.the.paragraph.s.typeface.size.or.colour.35605c") }
         : planBlockEdit(block, edit.text, {
+          segments: edit.segments,
           measure: (text: string, fontSize: number, fontKey: string) =>
             measureTextWidth(text, runFont(fontKey).resolved, fontSize),
           maxU: Math.min(pageText?.pageWidth ?? Infinity, block.left + block.measure),
@@ -2541,6 +2559,16 @@ export const EditPDF: React.FC = () => {
       });
     } catch (error) {
       if (generation !== documentGeneration.current) return;
+      if (error instanceof PdfTextBoxError) {
+        const element = savingElements.find((item) => item.id === error.elementId);
+        if (element) {
+          setTargetPageIndex(element.pageIndex);
+          setSelectedId(element.id);
+          setActiveBlockId(null);
+        }
+        setStatus({ isProcessing: false, progress: 0, message: '', error: localizeError(error) });
+        return;
+      }
       if (error instanceof Error && error.name === 'AbortError') {
         setStatus({ isProcessing: false, progress: 0, message: t("edit-pdf.save.cancelled.your.edits.are.still.here.433678") });
         return;

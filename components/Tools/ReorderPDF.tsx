@@ -4,11 +4,12 @@ import { useI18n } from '../../services/i18n/react';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FileUpload } from '../UI/FileUpload';
+import { PDFLoadingProgress } from '../UI/PDFLoadingProgress';
 import { PDFFile, ProcessingStatus } from '../../types';
-import { getPdfPagePreviews } from '../../services/pdfBrowser';
+import { getPdfPagePreviews, type PdfPreviewProgress } from '../../services/pdfBrowser';
 import { reorderPDFPages } from '../../services/pdfDocument';
 import { downloadBlob, isPdfFile, revokeObjectUrls } from '../../services/pdfShared';
-import { ChevronDown, ChevronUp, Loader2, Save, Undo2, Redo2, History, GripVertical, Eye, RotateCcw } from 'lucide-react';
+import { ChevronDown, ChevronUp, Save, Undo2, Redo2, History, GripVertical, Eye, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
 import { createPortal } from 'react-dom';
@@ -42,6 +43,7 @@ export const ReorderPDF: React.FC = () => {
   const [history, setHistory] = useState<PageItem[][]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [loadingPreviews, setLoadingPreviews] = useState(false);
+  const [previewProgress, setPreviewProgress] = useState<PdfPreviewProgress | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
 
@@ -67,11 +69,16 @@ export const ReorderPDF: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    setPreviewProgress(null);
 
     if (file) {
       setLoadingPreviews(true);
       setPreviewError(null);
-      getPdfPagePreviews(file.file)
+      getPdfPagePreviews(file.file, {
+        signal: controller.signal,
+        onProgress: (progress) => { if (!cancelled) setPreviewProgress(progress); },
+      })
         .then(urls => {
           if (cancelled) {
             revokeObjectUrls(urls);
@@ -106,6 +113,7 @@ export const ReorderPDF: React.FC = () => {
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [file]);
 
@@ -382,6 +390,7 @@ export const ReorderPDF: React.FC = () => {
                 actions={[]}
               />
             </ToolPanel>
+            {loadingPreviews && <PDFLoadingProgress progress={previewProgress} />}
 
             <Button
               tone="primary"
@@ -398,12 +407,7 @@ export const ReorderPDF: React.FC = () => {
               className="relative flex flex-col gap-2"
               role="list"
             >
-               {loadingPreviews ? (
-                 <div className="flex flex-col items-center justify-center gap-2 py-6 text-[var(--text-tertiary)]">
-                   <Loader2 aria-hidden className="animate-spin" size={24} />
-                   <p className="text-sm">{t("reorder-pdf.generating.page.previews.83467f")}</p>
-                 </div>
-               ) : previewError ? (
+               {loadingPreviews ? null : previewError ? (
                  <div className="flex flex-col items-center gap-2 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] px-4 py-4 text-center">
                    <p className="font-semibold text-[var(--status-danger-text)]">{t("reorder-pdf.the.pages.could.not.be.shown.choose.9884e4")}</p>
                    <p className="max-w-measure text-sm text-[var(--text-secondary)]">{previewError}</p>

@@ -1,6 +1,13 @@
 import type { Catalog } from '../core';
 
 export default {
+  "preview-progress.opening": "Membuka PDF Anda",
+  "preview-progress.preparing": "Menyiapkan halaman Anda",
+  "preview-progress.count": "{completed} dari {total} pratinjau siap",
+  "preview-progress.page": "Menyiapkan halaman {page}",
+  "preview-progress.hint": "PDF besar mungkin memerlukan waktu. Semuanya tetap di perangkat Anda.",
+  "preview-progress.lazy": "Pratinjau lainnya muncul saat Anda menggulir.",
+
   "page-range-selector.label": "Nomor atau rentang halaman",
   "page-range-selector.example": "mis. 187-230",
   "page-range-selector.select": "Pilih",
@@ -550,7 +557,6 @@ export default {
   "delete-pages.mark.d7cda0": "Tandai",
   "delete-pages.restore.all.a9c39c": "Pulihkan semua",
   "delete-pages.save.without.those.pages.3b9676": "Simpan tanpa halaman-halaman tersebut",
-  "delete-pages.loading.pages.1b27e2": "Memuat halaman...",
   "delete-pages.the.pages.could.not.be.shown.choose.9884e4": "Halaman tidak dapat ditampilkan. Pilih berkas lain, atau gunakan alat “Perbaiki PDF” terlebih dahulu.",
   "delete-pages.page.893387": "{v0} halaman {v1}",
   "delete-pages.page.preview.7f7e5e": "Pratinjau halaman {v0}",
@@ -633,7 +639,6 @@ export default {
   "extract-pages.choose.another.pdf.9434e3": "Pilih PDF lain",
   "extract-pages.select.all.1fc9a3": "Pilih semua",
   "extract-pages.clear.83b12c": "Bersihkan",
-  "extract-pages.loading.pages.1b27e2": "Memuat halaman...",
   "extract-pages.this.pdf.has.no.pages.in.it.8c754b": "PDF ini tidak memiliki halaman di dalamnya. Pilih berkas lain.",
   "flatten-pdf.locking.the.filled.answers.c0bd41": "Mengunci jawaban yang terisi…",
   "flatten-pdf.getting.your.pdf.ready.3a0d56": "Menyiapkan PDF Anda…",
@@ -1032,7 +1037,6 @@ export default {
   "reorder-pdf.redo.742739": "Ulangi",
   "reorder-pdf.reset.daee76": "Atur ulang",
   "reorder-pdf.save.reordered.pdf.b8306f": "Simpan PDF yang diurutkan ulang",
-  "reorder-pdf.generating.page.previews.83467f": "Membuat pratinjau halaman...",
   "reorder-pdf.the.pages.could.not.be.shown.choose.9884e4": "Halaman tidak dapat ditampilkan. Pilih file lain, atau jalankan Perbaiki PDF terlebih dahulu.",
   "reorder-pdf.drag.page.8b847a": "Seret halaman {v0}",
   "reorder-pdf.page.c140ba": "Halaman {v0}",
@@ -1066,7 +1070,6 @@ export default {
   "rotate-pdf.clear.83b12c": "Bersihkan",
   "rotate-pdf.reset.daee76": "Atur ulang",
   "rotate-pdf.save.turned.pdf.fa1cfd": "Simpan PDF yang diputar",
-  "rotate-pdf.loading.pages.1b27e2": "Memuat halaman...",
   "rotate-pdf.the.pages.could.not.be.shown.choose.9884e4": "Halaman tidak dapat ditampilkan. Pilih file lain, atau jalankan Perbaiki PDF terlebih dahulu.",
   "security-pdf.encrypting.pdf.on.this.device.af1739": "Mengenkripsi PDF di perangkat ini...",
   "security-pdf.protected.copy.ready.3fad41": "Salinan terlindungi siap: {v0}.",
@@ -1164,7 +1167,6 @@ export default {
   "split-pdf.cancel.19766e": "Batal",
   "split-pdf.save.the.split.files.33c422": "Simpan file yang dipisahkan",
   "split-pdf.pages.to.include.225127": "Halaman yang akan disertakan",
-  "split-pdf.generating.page.previews.83467f": "Membuat pratinjau halaman...",
   "split-pdf.page.previews.are.unavailable.318997": "Pratinjau halaman tidak tersedia",
   "split-pdf.retry.previews.7e9483": " Coba lagi pratinjau",
   "split-pdf.the.pages.could.not.be.shown.here.a4b115": "Halaman tidak dapat ditampilkan di sini. Anda masih dapat memisahkan berdasarkan nomor halaman di atas.",
@@ -1392,7 +1394,6 @@ export default {
   "pdfpreview-modal.close.preview.7d8ab3": "Tutup pratinjau",
   "pdfpreview-modal.previous.page.1208ec": "Halaman sebelumnya",
   "pdfpreview-modal.next.page.c08ac7": "Halaman berikutnya",
-  "pdfpreview-modal.rendering.high.quality.preview.916fc2": "Merender pratinjau berkualitas tinggi...",
   "pdfpreview-modal.dragging.26d17c": "Menyeret",
   "page-thumbnail.page.8b21ee": "Halaman {v0}{v1}",
   "page-thumbnail.page.c140ba": "Halaman {v0}",
@@ -2129,5 +2130,8 @@ export default {
   "compareReport.none": "<tidak ada>",
   "compareReport.page": "Halaman {v0}",
   "compareReport.extractedText": "Teks yang diekstrak {v0}: {v1}",
-  "compareReport.truncatedTextDetails": "Detail teks yang diekstrak (dipotong):"
+  "compareReport.truncatedTextDetails": "Detail teks yang diekstrak (dipotong):",
+  "make-fillable.dropdown.options.required": "Tambahkan pilihan ke setiap dropdown. Hapus pilihan kosong atau berulang.",
+  "error.pdfTextBoxOverflow": "Kotak teks ini terlalu kecil. Perbesar kotak atau persingkat teks sebelum menyimpan.",
+  "error.pdfTextBoxUnsupported": "Kotak teks ini berisi karakter yang tidak dapat disimpan dengan font ini. Hapus karakter tersebut sebelum menyimpan."
 } satisfies Catalog;

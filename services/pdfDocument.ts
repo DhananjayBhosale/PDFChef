@@ -24,6 +24,7 @@ import type { PdfFormFieldValue } from './pdfBrowser';
 import { loadPDFDocument } from './pdfBrowser';
 import { readFileAsArrayBuffer } from './pdfShared';
 import { getPdfPageVisualGeometry } from './pdfPageGeometry';
+import { layoutTextBox, PdfTextBoxError } from './pdfTextBoxLayout';
 import { decryptPdf, encryptPdfWithAes128 } from './qpdfBrowser';
 import {
   getVisualPageSize,
@@ -813,7 +814,8 @@ export const cropPDFMargins = async (file: File, options: CropBoxOptions): Promi
     // came back BIGGER than the 20% — and any page whose MediaBox does not
     // start at 0,0 (common from imposition and scanner software) was trimmed
     // against the wrong corner.
-    const box = page.getCropBox();
+    const geometry = getPdfPageVisualGeometry(page);
+    const box = { x: geometry.cropX, y: geometry.cropY, width: geometry.cropWidth, height: geometry.cropHeight };
     // The controls name visible edges; a clockwise quarter turn maps visible top to PDF left.
     const edges = [margins.top, margins.right, margins.bottom, margins.left];
     const turns = normalizePageRotation(page.getRotation().angle) / 90;
@@ -1361,14 +1363,7 @@ export const savePDFWithAnnotations = async (
   for (const element of elements) {
     if (element.pageIndex < 0 || element.pageIndex >= pages.length) continue;
     const page = pages[element.pageIndex];
-    const cropBox = page.getCropBox();
-    const geometry = {
-      cropX: cropBox.x,
-      cropY: cropBox.y,
-      cropWidth: cropBox.width,
-      cropHeight: cropBox.height,
-      rotation: normalizePageRotation(page.getRotation().angle),
-    };
+    const geometry = getPdfPageVisualGeometry(page);
     const visualSize = getVisualPageSize(geometry);
     const visualX = element.x * visualSize.width;
     const visualY = element.y * visualSize.height;
@@ -1383,7 +1378,7 @@ export const savePDFWithAnnotations = async (
       const borderWidth = Math.max(0.5, Math.min(16, element.strokeWidth || 2));
 
       if (element.type === 'rectangle') {
-        const rotation = element.rotation || 0;
+        const rotation = -(element.rotation || 0);
         const center = visualPointToPdf(
           geometry,
           visualX + width / 2,
@@ -1425,7 +1420,7 @@ export const savePDFWithAnnotations = async (
           borderWidth,
           color: fillColor,
           opacity: fillColor ? 0.22 : undefined,
-          rotate: degrees(geometry.rotation + (element.rotation || 0)),
+          rotate: degrees(geometry.rotation - (element.rotation || 0)),
         });
         continue;
       }
@@ -1456,13 +1451,19 @@ export const savePDFWithAnnotations = async (
         const image = element.content.startsWith('data:image/png')
           ? await pdfDoc.embedPng(element.content)
           : await pdfDoc.embedJpg(element.content);
-        const width = (element.width || 0.2) * visualSize.width;
-        const height = (element.height || 0.2) * visualSize.height;
-        const rotation = element.rotation || 0;
+        const boxWidth = (element.width || 0.2) * visualSize.width;
+        const boxHeight = (element.height || 0.2) * visualSize.height;
+        // The editor uses object-contain: fit the image inside its box, then rotate
+        // around the box's center so portrait/landscape images retain their shape.
+        const fit = Math.min(boxWidth / image.width, boxHeight / image.height);
+        const width = image.width * fit;
+        const height = image.height * fit;
+        // CSS turns clockwise; PDF text and images turn counterclockwise.
+        const rotation = -(element.rotation || 0);
         const center = visualPointToPdf(
           geometry,
-          visualX + width / 2,
-          visualY + height / 2,
+          visualX + boxWidth / 2,
+          visualY + boxHeight / 2,
         );
         const origin = rotatedBoxOrigin(
           center.x,
@@ -1485,35 +1486,25 @@ export const savePDFWithAnnotations = async (
       continue;
     }
 
-    const fontFamily = element.fontFamily === 'TimesRoman'
-      ? 'TimesRoman'
-      : element.fontFamily === 'Courier'
-        ? 'Courier'
-        : 'Helvetica';
-    const isBold = (element.fontWeight ?? 400) >= 600;
-    const isItalic = element.fontStyle === 'italic';
-    const fontKey = fontFamily === 'TimesRoman'
-      ? isBold && isItalic ? 'TimesRomanBoldItalic' : isBold ? 'TimesRomanBold' : isItalic ? 'TimesRomanItalic' : 'TimesRoman'
-      : fontFamily === 'Courier'
-        ? isBold && isItalic ? 'CourierBoldOblique' : isBold ? 'CourierBold' : isItalic ? 'CourierOblique' : 'Courier'
-        : isBold && isItalic ? 'HelveticaBoldOblique' : isBold ? 'HelveticaBold' : isItalic ? 'HelveticaOblique' : 'Helvetica';
-    const font = fonts[fontKey];
-    const size = element.fontSize || 12;
-    const lines = element.content.split('\n');
-    const lineHeight = size * 1.2;
     const width = (element.width || 0.24) * visualSize.width;
     const height = (element.height || 0.07) * visualSize.height;
+    let layout: ReturnType<typeof layoutTextBox>;
+    try { layout = layoutTextBox(element, width, height); }
+    catch { throw new PdfTextBoxError(element.id, 'error.pdfTextBoxUnsupported'); }
+    if (layout.overflow) throw new PdfTextBoxError(element.id, 'error.pdfTextBoxOverflow');
+    const font = fonts[layout.fontKey];
     const center = visualPointToPdf(
       geometry,
       visualX + width / 2,
       visualY + height / 2,
     );
-    const rotation = element.rotation || 0;
-    lines.forEach((line, index) => {
+    const rotation = -(element.rotation || 0);
+    layout.lines.forEach((line) => {
+      if (!line.text) return;
       const baseline = visualPointToPdf(
         geometry,
-        visualX,
-        visualY + size + index * lineHeight,
+        visualX + line.x,
+        visualY + line.baseline,
       );
       const origin = rotatePointAroundCenter(
         baseline.x,
@@ -1522,10 +1513,10 @@ export const savePDFWithAnnotations = async (
         center.y,
         rotation,
       );
-      page.drawText(line, {
+      page.drawText(line.text, {
         x: origin.x,
         y: origin.y,
-        size,
+        size: layout.fontSize,
         font,
         color: element.color ? hexToRgb(element.color) : rgb(0, 0, 0),
         rotate: degrees(geometry.rotation + rotation),

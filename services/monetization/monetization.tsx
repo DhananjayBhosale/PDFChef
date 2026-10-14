@@ -201,7 +201,7 @@ export const MonetizationProvider: React.FC<MonetizationProviderProps> = ({ chil
       throw error;
     }
     if (allowed) {
-      pending.finish(request);
+      if (!pending.finish(request)) return { status: 'blocked' };
       return { status: 'completed', value: await operation() };
     }
     // A result discarded while its access was checked neither opens the paywall nor waits there.

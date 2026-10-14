@@ -1,6 +1,13 @@
 import type { Catalog } from '../core';
 
 export default {
+  "preview-progress.opening": "Je PDF wordt geopend",
+  "preview-progress.preparing": "Je pagina’s komen tot leven",
+  "preview-progress.count": "{completed} van {total} voorbeelden klaar",
+  "preview-progress.page": "Pagina {page} wordt voorbereid",
+  "preview-progress.hint": "Grote PDF’s kunnen even duren. Alles blijft op je apparaat.",
+  "preview-progress.lazy": "Meer voorbeelden verschijnen wanneer je scrolt.",
+
   "page-range-selector.label": "Paginanummers of paginabereiken",
   "page-range-selector.example": "bijv. 187-230",
   "page-range-selector.select": "Selecteren",
@@ -558,7 +565,6 @@ export default {
   "delete-pages.mark.d7cda0": "Markeren",
   "delete-pages.restore.all.a9c39c": "Alles herstellen",
   "delete-pages.save.without.those.pages.3b9676": "Opslaan zonder die pagina's",
-  "delete-pages.loading.pages.1b27e2": "Pagina's laden...",
   "delete-pages.the.pages.could.not.be.shown.choose.9884e4": "De pagina's konden niet worden weergegeven. Kies een ander bestand of voer eerst PDF repareren uit.",
   "delete-pages.page.893387": "{v0} pagina {v1}",
   "delete-pages.page.preview.7f7e5e": "Voorvertoning van pagina {v0}",
@@ -644,7 +650,6 @@ export default {
   "extract-pages.choose.another.pdf.9434e3": "Kies een andere PDF",
   "extract-pages.select.all.1fc9a3": "Alles selecteren",
   "extract-pages.clear.83b12c": "Wissen",
-  "extract-pages.loading.pages.1b27e2": "Pagina's laden...",
   "extract-pages.this.pdf.has.no.pages.in.it.8c754b": "Deze PDF bevat geen pagina's. Kies een ander bestand.",
   "flatten-pdf.locking.the.filled.answers.c0bd41": "Ingevulde antwoorden vergrendelen…",
   "flatten-pdf.getting.your.pdf.ready.3a0d56": "Je PDF klaarmaken…",
@@ -1051,7 +1056,6 @@ export default {
   "reorder-pdf.redo.742739": "Opnieuw uitvoeren",
   "reorder-pdf.reset.daee76": "Herstellen",
   "reorder-pdf.save.reordered.pdf.b8306f": "Opnieuw geordende PDF opslaan",
-  "reorder-pdf.generating.page.previews.83467f": "Paginavoorvertoningen genereren...",
   "reorder-pdf.the.pages.could.not.be.shown.choose.9884e4": "De pagina's konden niet worden weergegeven. Kies een ander bestand of voer eerst PDF repareren uit.",
   "reorder-pdf.drag.page.8b847a": "Sleep pagina {v0}",
   "reorder-pdf.page.c140ba": "Pagina {v0}",
@@ -1085,7 +1089,6 @@ export default {
   "rotate-pdf.clear.83b12c": "Wissen",
   "rotate-pdf.reset.daee76": "Herstellen",
   "rotate-pdf.save.turned.pdf.fa1cfd": "Gedraaide PDF opslaan",
-  "rotate-pdf.loading.pages.1b27e2": "Pagina's laden...",
   "rotate-pdf.the.pages.could.not.be.shown.choose.9884e4": "De pagina's konden niet worden weergegeven. Kies een ander bestand of voer eerst PDF repareren uit.",
   "security-pdf.encrypting.pdf.on.this.device.af1739": "PDF versleutelen op dit apparaat...",
   "security-pdf.protected.copy.ready.3fad41": "Beveiligde kopie gereed: {v0}.",
@@ -1185,7 +1188,6 @@ export default {
   "split-pdf.cancel.19766e": "Annuleren",
   "split-pdf.save.the.split.files.33c422": "De gesplitste bestanden opslaan",
   "split-pdf.pages.to.include.225127": "Op te nemen pagina's",
-  "split-pdf.generating.page.previews.83467f": "Paginavoorvertoningen genereren...",
   "split-pdf.page.previews.are.unavailable.318997": "Paginavoorvertoningen zijn niet beschikbaar",
   "split-pdf.retry.previews.7e9483": " Voorvertoningen opnieuw proberen",
   "split-pdf.the.pages.could.not.be.shown.here.a4b115": "De pagina's konden hier niet worden weergegeven. Je kunt hierboven nog steeds splitsen op paginanummer.",
@@ -1417,7 +1419,6 @@ export default {
   "pdfpreview-modal.close.preview.7d8ab3": "Voorvertoning sluiten",
   "pdfpreview-modal.previous.page.1208ec": "Vorige pagina",
   "pdfpreview-modal.next.page.c08ac7": "Volgende pagina",
-  "pdfpreview-modal.rendering.high.quality.preview.916fc2": "Voorvertoning in hoge kwaliteit renderen...",
   "pdfpreview-modal.dragging.26d17c": "Slepen",
   "page-thumbnail.page.8b21ee": "Pagina {v0}{v1}",
   "page-thumbnail.page.c140ba": "Pagina {v0}",
@@ -2186,5 +2187,8 @@ export default {
   "compareReport.none": "<geen>",
   "compareReport.page": "Pagina {v0}",
   "compareReport.extractedText": "{v0} geëxtraheerde tekst: {v1}",
-  "compareReport.truncatedTextDetails": "Details van geëxtraheerde tekst (ingekort):"
+  "compareReport.truncatedTextDetails": "Details van geëxtraheerde tekst (ingekort):",
+  "make-fillable.dropdown.options.required": "Voeg keuzes toe aan elke keuzelijst. Verwijder lege of dubbele keuzes.",
+  "error.pdfTextBoxOverflow": "Dit tekstvak is te klein. Vergroot het of kort de tekst in voordat je opslaat.",
+  "error.pdfTextBoxUnsupported": "Dit tekstvak bevat tekens die het lettertype niet kan opslaan. Verwijder deze tekens voordat je opslaat."
 } satisfies Catalog;

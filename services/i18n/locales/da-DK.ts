@@ -1,6 +1,13 @@
 import type { Catalog } from '../core';
 
 export default {
+  "preview-progress.opening": "Åbner din PDF",
+  "preview-progress.preparing": "Dine sider bliver klar",
+  "preview-progress.count": "{completed} af {total} forhåndsvisninger er klar",
+  "preview-progress.page": "Klargør side {page}",
+  "preview-progress.hint": "Store PDF-filer kan tage lidt tid. Alt bliver på din enhed.",
+  "preview-progress.lazy": "Flere forhåndsvisninger vises, når du ruller.",
+
   "page-range-selector.label": "Sidetal eller sideintervaller",
   "page-range-selector.example": "f.eks. 187-230",
   "page-range-selector.select": "Vælg",
@@ -558,7 +565,6 @@ export default {
   "delete-pages.mark.d7cda0": "Markér",
   "delete-pages.restore.all.a9c39c": "Gendan alle",
   "delete-pages.save.without.those.pages.3b9676": "Gem uden disse sider",
-  "delete-pages.loading.pages.1b27e2": "Indlæser sider...",
   "delete-pages.the.pages.could.not.be.shown.choose.9884e4": "Siderne kunne ikke vises. Vælg en anden fil, eller kør Reparer PDF på den først.",
   "delete-pages.page.893387": "{v0} side {v1}",
   "delete-pages.page.preview.7f7e5e": "Forhåndsvisning af side {v0}",
@@ -644,7 +650,6 @@ export default {
   "extract-pages.choose.another.pdf.9434e3": "Vælg en anden PDF",
   "extract-pages.select.all.1fc9a3": "Vælg alle",
   "extract-pages.clear.83b12c": "Ryd",
-  "extract-pages.loading.pages.1b27e2": "Indlæser sider...",
   "extract-pages.this.pdf.has.no.pages.in.it.8c754b": "Denne PDF indeholder ingen sider. Vælg en anden fil.",
   "flatten-pdf.locking.the.filled.answers.c0bd41": "Låser de udfyldte svar…",
   "flatten-pdf.getting.your.pdf.ready.3a0d56": "Gør din PDF klar…",
@@ -1074,7 +1079,6 @@ export default {
   "reorder-pdf.undo.a8283a": "Fortryd",
   "reorder-pdf.redo.742739": "Gentag",
   "reorder-pdf.save.reordered.pdf.b8306f": "Gem omorganiseret PDF",
-  "reorder-pdf.generating.page.previews.83467f": "Genererer forhåndsvisninger af sider...",
   "reorder-pdf.the.pages.could.not.be.shown.choose.9884e4": "Siderne kunne ikke vises. Vælg en anden fil, eller kør Reparer PDF på den først.",
   "reorder-pdf.drag.page.8b847a": "Træk side {v0}",
   "reorder-pdf.page.c140ba": "Side {v0}",
@@ -1106,7 +1110,6 @@ export default {
   "rotate-pdf.right.90.471b9b": "Højre 90°",
   "rotate-pdf.clear.83b12c": "Ryd",
   "rotate-pdf.save.turned.pdf.fa1cfd": "Gem roteret PDF",
-  "rotate-pdf.loading.pages.1b27e2": "Indlæser sider...",
   "rotate-pdf.the.pages.could.not.be.shown.choose.9884e4": "Siderne kunne ikke vises. Vælg en anden fil, eller kør Reparer PDF på den først.",
   "security-pdf.encrypting.pdf.on.this.device.af1739": "Krypterer PDF på denne enhed...",
   "security-pdf.protected.copy.ready.3fad41": "Beskyttet kopi er klar: {v0}.",
@@ -1204,7 +1207,6 @@ export default {
   "split-pdf.cancelling.7b2613": "Annullerer...",
   "split-pdf.save.the.split.files.33c422": "Gem de opdelte filer",
   "split-pdf.pages.to.include.225127": "Sider, der skal inkluderes",
-  "split-pdf.generating.page.previews.83467f": "Genererer forhåndsvisninger af sider...",
   "split-pdf.page.previews.are.unavailable.318997": "Forhåndsvisninger af sider er ikke tilgængelige",
   "split-pdf.retry.previews.7e9483": " Prøv forhåndsvisninger igen",
   "split-pdf.the.pages.could.not.be.shown.here.a4b115": "Siderne kunne ikke vises her. Du kan stadig opdele efter sidetal ovenfor.",
@@ -1417,7 +1419,6 @@ export default {
   "pdfpreview-modal.close.preview.7d8ab3": "Luk forhåndsvisning",
   "pdfpreview-modal.previous.page.1208ec": "Forrige side",
   "pdfpreview-modal.next.page.c08ac7": "Næste side",
-  "pdfpreview-modal.rendering.high.quality.preview.916fc2": "Gengiver forhåndsvisning i høj kvalitet...",
   "pdfpreview-modal.dragging.26d17c": "Trækker",
   "page-thumbnail.page.8b21ee": "Side {v0}{v1}",
   "page-thumbnail.page.c140ba": "Side {v0}",
@@ -2186,5 +2187,8 @@ export default {
   "compareReport.none": "<ingen>",
   "compareReport.page": "Side {v0}",
   "compareReport.extractedText": "{v0} udtrukket tekst: {v1}",
-  "compareReport.truncatedTextDetails": "Detaljer om udtrukket tekst (afkortet):"
+  "compareReport.truncatedTextDetails": "Detaljer om udtrukket tekst (afkortet):",
+  "make-fillable.dropdown.options.required": "Tilføj valgmuligheder til hver rullemenu. Fjern tomme eller gentagne valgmuligheder.",
+  "error.pdfTextBoxOverflow": "Dette tekstfelt er for lille. Gør det større, eller forkort teksten før du gemmer.",
+  "error.pdfTextBoxUnsupported": "Tekstfeltet indeholder tegn, som skrifttypen ikke kan gemme. Fjern dem før du gemmer."
 } satisfies Catalog;

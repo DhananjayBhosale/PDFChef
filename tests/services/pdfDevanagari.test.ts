@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { PDFDict, PDFDocument, PDFName, rgb } from 'pdf-lib';
+import { PDFContentStream, PDFDict, PDFDocument, PDFName, rgb } from 'pdf-lib';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {
   canShapeDevanagari,
@@ -61,4 +61,42 @@ test('shaped Devanagari stays visible PDF text and reopens in logical Unicode or
   assert.ok(psName);
   assert.match(matchingDevanagariFont(originalFile, psName, 'नमस्ते भारत') ?? '', /^Embedded/);
   assert.equal(matchingDevanagariFont(originalFile, 'another-font', 'नमस्ते भारत'), null);
+});
+
+
+test('Devanagari glyph advances and mark offsets rotate with the page', async () => {
+  await loadDevanagariFonts(async (id) => new Uint8Array(readFileSync(
+    new URL(`../../assets/fonts/pdf-edit/${fontNames[id]}`, import.meta.url),
+  )));
+  const document = await PDFDocument.create();
+  const writer = new DevanagariPdfWriter(document);
+  const text = 'कि कृ नमस्ते क्षेत्र';
+  const origin = { x: 150, y: 150 };
+  const rotations = [0, 90, 180, 270];
+  for (const angle of rotations) {
+    await writer.drawLine(document.addPage([400, 400]), [{
+      text, fontId: 'MuktaRegular', ...origin,
+      width: measureDevanagariText(text, 'MuktaRegular', 18),
+    }], 18, rgb(0, 0, 0), angle);
+  }
+  writer.finish();
+  const positions = document.context.enumerateIndirectObjects()
+    .map(([, value]) => value)
+    .filter((value): value is PDFContentStream => value instanceof PDFContentStream)
+    .map(stream => [...stream.getContentsString().matchAll(/^([^\n]+) Tm$/gm)]
+      .map(match => match[1].split(' ').map(Number).slice(4)));
+  assert.equal(positions.length, rotations.length);
+  assert.ok(positions[0].length > 8, 'the fixture needs several visible glyphs and marks');
+  for (let index = 1; index < rotations.length; index += 1) {
+    const radians = rotations[index] * Math.PI / 180;
+    assert.equal(positions[index].length, positions[0].length);
+    positions[0].forEach(([x, y], glyph) => {
+      const dx = x - origin.x, dy = y - origin.y;
+      const [actualX, actualY] = positions[index][glyph];
+      assert.ok(Math.abs(actualX - (origin.x + dx * Math.cos(radians) - dy * Math.sin(radians))) < 1e-8,
+        `${rotations[index]} degree glyph ${glyph} has an unrotated x position`);
+      assert.ok(Math.abs(actualY - (origin.y + dx * Math.sin(radians) + dy * Math.cos(radians))) < 1e-8,
+        `${rotations[index]} degree glyph ${glyph} has an unrotated y position`);
+    });
+  }
 });

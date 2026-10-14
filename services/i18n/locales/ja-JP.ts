@@ -1,6 +1,13 @@
 import type { Catalog } from '../core';
 
 export default {
+  "preview-progress.opening": "PDFを開いています",
+  "preview-progress.preparing": "ページを準備しています",
+  "preview-progress.count": "{total}件中{completed}件のプレビューが完成",
+  "preview-progress.page": "{page}ページを準備中",
+  "preview-progress.hint": "大きなPDFは少し時間がかかることがあります。すべて端末内で処理されます。",
+  "preview-progress.lazy": "スクロールすると、さらにプレビューが表示されます。",
+
   "page-range-selector.label": "ページ番号または範囲",
   "page-range-selector.example": "例: 187-230",
   "page-range-selector.select": "選択",
@@ -550,7 +557,6 @@ export default {
   "delete-pages.mark.d7cda0": "指定",
   "delete-pages.restore.all.a9c39c": "すべて元に戻す",
   "delete-pages.save.without.those.pages.3b9676": "指定したページを除いて保存",
-  "delete-pages.loading.pages.1b27e2": "ページを読み込み中...",
   "delete-pages.the.pages.could.not.be.shown.choose.9884e4": "ページを表示できませんでした。別のファイルを選択するか、先に「PDFを修復」を実行してください。",
   "delete-pages.page.893387": "{v0} ページ {v1}",
   "delete-pages.page.preview.7f7e5e": "ページ{v0}のプレビュー",
@@ -633,7 +639,6 @@ export default {
   "extract-pages.choose.another.pdf.9434e3": "別のPDFを選択",
   "extract-pages.select.all.1fc9a3": "すべて選択",
   "extract-pages.clear.83b12c": "クリア",
-  "extract-pages.loading.pages.1b27e2": "ページを読み込み中...",
   "extract-pages.this.pdf.has.no.pages.in.it.8c754b": "このPDFにはページが含まれていません。別のファイルを選択してください。",
   "flatten-pdf.locking.the.filled.answers.c0bd41": "記入された回答を固定中…",
   "flatten-pdf.getting.your.pdf.ready.3a0d56": "PDFの準備中…",
@@ -1032,7 +1037,6 @@ export default {
   "reorder-pdf.redo.742739": "やり直す",
   "reorder-pdf.reset.daee76": "リセット",
   "reorder-pdf.save.reordered.pdf.b8306f": "並べ替えたPDFを保存",
-  "reorder-pdf.generating.page.previews.83467f": "ページのプレビューを生成中...",
   "reorder-pdf.the.pages.could.not.be.shown.choose.9884e4": "ページを表示できませんでした。別のファイルを選択するか、先に「PDFを修復」を実行してください。",
   "reorder-pdf.drag.page.8b847a": "ページ {v0} をドラッグ",
   "reorder-pdf.page.c140ba": "ページ {v0}",
@@ -1066,7 +1070,6 @@ export default {
   "rotate-pdf.clear.83b12c": "クリア",
   "rotate-pdf.reset.daee76": "リセット",
   "rotate-pdf.save.turned.pdf.fa1cfd": "回転したPDFを保存",
-  "rotate-pdf.loading.pages.1b27e2": "ページを読み込み中...",
   "rotate-pdf.the.pages.could.not.be.shown.choose.9884e4": "ページを表示できませんでした。別のファイルを選択するか、先に「PDFを修復」を実行してください。",
   "security-pdf.encrypting.pdf.on.this.device.af1739": "このデバイスでPDFを暗号化中...",
   "security-pdf.protected.copy.ready.3fad41": "保護されたコピーの準備ができました: {v0}。",
@@ -1164,7 +1167,6 @@ export default {
   "split-pdf.cancel.19766e": "キャンセル",
   "split-pdf.save.the.split.files.33c422": "分割されたファイルを保存",
   "split-pdf.pages.to.include.225127": "含めるページ",
-  "split-pdf.generating.page.previews.83467f": "ページのプレビューを生成中...",
   "split-pdf.page.previews.are.unavailable.318997": "ページのプレビューを利用できません",
   "split-pdf.retry.previews.7e9483": " プレビューを再試行",
   "split-pdf.the.pages.could.not.be.shown.here.a4b115": "ここにページを表示できませんでした。上記でページ番号を指定して分割することは可能です。",
@@ -1425,7 +1427,6 @@ export default {
   "pdfpreview-modal.close.preview.7d8ab3": "プレビューを閉じる",
   "pdfpreview-modal.previous.page.1208ec": "前のページ",
   "pdfpreview-modal.next.page.c08ac7": "次のページ",
-  "pdfpreview-modal.rendering.high.quality.preview.916fc2": "高品質プレビューをレンダリング中…",
   "pdfpreview-modal.dragging.26d17c": "ドラッグ中",
   "page-thumbnail.page.8b21ee": "ページ {v0}{v1}",
   "page-thumbnail.page.c140ba": "ページ {v0}",
@@ -2129,5 +2130,8 @@ export default {
   "compareReport.none": "<なし>",
   "compareReport.page": "ページ {v0}",
   "compareReport.extractedText": "{v0} の抽出テキスト: {v1}",
-  "compareReport.truncatedTextDetails": "抽出テキストの詳細（省略）:"
+  "compareReport.truncatedTextDetails": "抽出テキストの詳細（省略）:",
+  "make-fillable.dropdown.options.required": "各ドロップダウンに選択肢を追加してください。空白や重複した選択肢は削除してください。",
+  "error.pdfTextBoxOverflow": "テキストボックスが小さすぎます。保存する前にボックスを広げるか、テキストを短くしてください。",
+  "error.pdfTextBoxUnsupported": "このテキストボックスには、現在のフォントで保存できない文字が含まれています。保存する前に該当する文字を削除してください。"
 } satisfies Catalog;

@@ -1,6 +1,13 @@
 import type { Catalog } from '../core';
 
 export default {
+  "preview-progress.opening": "Ouverture de votre PDF",
+  "preview-progress.preparing": "Vos pages prennent vie",
+  "preview-progress.count": "{completed} aperçus sur {total} sont prêts",
+  "preview-progress.page": "Préparation de la page {page}",
+  "preview-progress.hint": "Les PDF volumineux peuvent prendre un moment. Tout reste sur votre appareil.",
+  "preview-progress.lazy": "D’autres aperçus apparaissent en faisant défiler.",
+
   "page-range-selector.label": "Numéros ou plages de pages",
   "page-range-selector.example": "p. ex. 187-230",
   "page-range-selector.select": "Choisir",
@@ -566,7 +573,6 @@ export default {
   "delete-pages.mark.d7cda0": "Marquer",
   "delete-pages.restore.all.a9c39c": "Tout restaurer",
   "delete-pages.save.without.those.pages.3b9676": "Enregistrer sans ces pages",
-  "delete-pages.loading.pages.1b27e2": "Chargement des pages...",
   "delete-pages.the.pages.could.not.be.shown.choose.9884e4": "Impossible d'afficher les pages. Choisissez un autre fichier ou exécutez d'abord Réparer le PDF dessus.",
   "delete-pages.page.893387": "{v0} page {v1}",
   "delete-pages.page.preview.7f7e5e": "Aperçu de la page {v0}",
@@ -655,7 +661,6 @@ export default {
   "extract-pages.choose.another.pdf.9434e3": "Choisir un autre PDF",
   "extract-pages.select.all.1fc9a3": "Tout sélectionner",
   "extract-pages.clear.83b12c": "Effacer",
-  "extract-pages.loading.pages.1b27e2": "Chargement des pages...",
   "extract-pages.this.pdf.has.no.pages.in.it.8c754b": "Ce PDF ne contient aucune page. Choisissez un autre fichier.",
   "flatten-pdf.locking.the.filled.answers.c0bd41": "Verrouillage des réponses renseignées…",
   "flatten-pdf.getting.your.pdf.ready.3a0d56": "Préparation de votre PDF…",
@@ -1070,7 +1075,6 @@ export default {
   "reorder-pdf.redo.742739": "Rétablir",
   "reorder-pdf.reset.daee76": "Réinitialiser",
   "reorder-pdf.save.reordered.pdf.b8306f": "Enregistrer le PDF réorganisé",
-  "reorder-pdf.generating.page.previews.83467f": "Génération des aperçus des pages...",
   "reorder-pdf.the.pages.could.not.be.shown.choose.9884e4": "Impossible d'afficher les pages. Choisissez un autre fichier ou exécutez d'abord Réparer le PDF.",
   "reorder-pdf.drag.page.8b847a": "Faire glisser la page {v0}",
   "reorder-pdf.page.c140ba": "Page {v0}",
@@ -1104,7 +1108,6 @@ export default {
   "rotate-pdf.clear.83b12c": "Effacer",
   "rotate-pdf.reset.daee76": "Réinitialiser",
   "rotate-pdf.save.turned.pdf.fa1cfd": "Enregistrer le PDF pivoté",
-  "rotate-pdf.loading.pages.1b27e2": "Chargement des pages...",
   "rotate-pdf.the.pages.could.not.be.shown.choose.9884e4": "Impossible d'afficher les pages. Choisissez un autre fichier ou exécutez d'abord Réparer le PDF.",
   "security-pdf.encrypting.pdf.on.this.device.af1739": "Chiffrement du PDF sur cet appareil...",
   "security-pdf.protected.copy.ready.3fad41": "Copie protégée prête : {v0}.",
@@ -1206,7 +1209,6 @@ export default {
   "split-pdf.cancel.19766e": "Annuler",
   "split-pdf.save.the.split.files.33c422": "Enregistrer les fichiers divisés",
   "split-pdf.pages.to.include.225127": "Pages à inclure",
-  "split-pdf.generating.page.previews.83467f": "Génération des aperçus des pages...",
   "split-pdf.page.previews.are.unavailable.318997": "Les aperçus des pages ne sont pas disponibles",
   "split-pdf.retry.previews.7e9483": " Réessayer les aperçus",
   "split-pdf.the.pages.could.not.be.shown.here.a4b115": "Impossible d'afficher les pages ici. Vous pouvez toujours diviser par numéros de page ci-dessus.",
@@ -1497,7 +1499,6 @@ export default {
   "pdfpreview-modal.close.preview.7d8ab3": "Fermer l'aperçu",
   "pdfpreview-modal.previous.page.1208ec": "Page précédente",
   "pdfpreview-modal.next.page.c08ac7": "Page suivante",
-  "pdfpreview-modal.rendering.high.quality.preview.916fc2": "Rendu de l'aperçu haute qualité en cours...",
   "pdfpreview-modal.dragging.26d17c": "Glissement",
   "page-thumbnail.page.8b21ee": "Page {v0}{v1}",
   "page-thumbnail.page.c140ba": "Page {v0}",
@@ -2243,5 +2244,8 @@ export default {
   "compareReport.none": "<aucun>",
   "compareReport.page": "Page {v0}",
   "compareReport.extractedText": "Texte extrait de {v0} : {v1}",
-  "compareReport.truncatedTextDetails": "Détails du texte extrait (tronqué) :"
+  "compareReport.truncatedTextDetails": "Détails du texte extrait (tronqué) :",
+  "make-fillable.dropdown.options.required": "Ajoutez des choix à chaque liste déroulante. Supprimez les choix vides ou répétés.",
+  "error.pdfTextBoxOverflow": "Cette zone de texte est trop petite. Agrandissez-la ou raccourcissez le texte avant de l’enregistrer.",
+  "error.pdfTextBoxUnsupported": "Cette zone de texte contient des caractères que sa police ne peut pas enregistrer. Supprimez-les avant l’enregistrement."
 } satisfies Catalog;

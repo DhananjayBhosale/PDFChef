@@ -3,7 +3,8 @@ import { useI18n } from '../../services/i18n/react';
 
 import React, { useEffect, useId, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Loader2, ArrowLeft, ArrowRight, Move } from 'lucide-react';
+import { X, ArrowLeft, ArrowRight, Move } from 'lucide-react';
+import { PDFLoadingProgress } from './PDFLoadingProgress';
 import { loadDisposablePDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ZoomControls } from './ZoomControls';
@@ -27,6 +28,7 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
   const [error, setError] = useState<string | null>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
+  const stopPanRef = useRef<(() => void) | null>(null);
   const imageUrlRef = useRef<string | null>(null);
   const pdfDocRef = useRef<any | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -97,6 +99,7 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
 
   useEffect(() => {
     if (zoom <= 1) {
+      stopPanRef.current?.();
       setPan({ x: 0, y: 0 });
     }
   }, [zoom]);
@@ -104,6 +107,9 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
   // Load document once
   useEffect(() => {
     let active = true;
+    setLoading(true);
+    setPdfDoc(null);
+    setTotalPages(0);
     (async () => {
       try {
         setError(null);
@@ -119,6 +125,7 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
         console.error(err);
         if (active) {
           setError(t("pdfpreview-modal.failed.to.load.pdf.bc21e7"));
+          setLoading(false);
         }
       }
     })();
@@ -168,11 +175,13 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
   }, [pdfDoc, currentPageIndex, renderScale]);
 
   useEffect(() => {
+    stopPanRef.current?.();
     setPan({ x: 0, y: 0 });
-  }, [currentPageIndex]);
+  }, [currentPageIndex, file]);
 
   useEffect(() => {
     return () => {
+      stopPanRef.current?.();
       if (imageUrlRef.current && imageUrlRef.current.startsWith('blob:')) {
         URL.revokeObjectURL(imageUrlRef.current);
       }
@@ -181,25 +190,40 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
   }, []);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (zoom <= 1) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
+    if (zoom <= 1 || e.button !== 0 || !e.isPrimary) return;
+    stopPanRef.current?.();
+    const target = e.currentTarget;
+    const pointerId = e.pointerId;
+    target.setPointerCapture(pointerId);
     setIsPanning(true);
     const startX = e.clientX - pan.x;
     const startY = e.clientY - pan.y;
 
     const onMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return;
       setPan({ x: moveEvent.clientX - startX, y: moveEvent.clientY - startY });
     };
 
-    const onUp = (upEvent: PointerEvent) => {
-      setIsPanning(false);
-      e.currentTarget.releasePointerCapture(upEvent.pointerId);
+    const stop = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      window.removeEventListener('blur', stop);
+      target.removeEventListener('lostpointercapture', onUp);
+      stopPanRef.current = null;
+      if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
+      setIsPanning(false);
+    };
+    const onUp = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId === pointerId) stop();
     };
 
+    stopPanRef.current = stop;
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    window.addEventListener('blur', stop);
+    target.addEventListener('lostpointercapture', onUp);
   };
 
   return createPortal(
@@ -263,13 +287,11 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
         {/* Content Area */}
         <div
           className={`relative flex flex-1 items-center justify-center overflow-hidden bg-black/50 p-4 ${zoom > 1 ? 'cursor-grab active:cursor-grabbing' : ''}`}
+          style={{ touchAction: zoom > 1 ? 'none' : undefined }}
           onPointerDown={handlePointerDown}
         >
           {loading ? (
-            <div className="flex flex-col items-center gap-3 text-paper-400">
-              <Loader2 className="animate-spin" size={40} />
-              <p>{t("pdfpreview-modal.rendering.high.quality.preview.916fc2")}</p>
-            </div>
+            <PDFLoadingProgress pageNumber={pdfDoc ? currentPageIndex + 1 : undefined} />
           ) : error ? (
             <div className="text-danger-300 font-medium bg-rose-900/20 px-6 py-4 rounded-xl border border-danger-500">
               {error}

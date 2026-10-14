@@ -3,11 +3,12 @@ import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useState, useEffect } from 'react';
 import { FileUpload } from '../UI/FileUpload';
+import { PDFLoadingProgress } from '../UI/PDFLoadingProgress';
 import { PDFFile, ProcessingStatus } from '../../types';
-import { getPdfPagePreviews } from '../../services/pdfBrowser';
+import { getPdfPagePreviews, type PdfPreviewProgress } from '../../services/pdfBrowser';
 import { rotateSpecificPages } from '../../services/pdfDocument';
 import { downloadBlob, isPdfFile, revokeObjectUrls } from '../../services/pdfShared';
-import { RotateCw, Loader2, Undo2, Save } from 'lucide-react';
+import { RotateCw, Undo2, Save } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
 import { PageThumbnail } from '../UI/PageThumbnail';
@@ -21,6 +22,7 @@ export const RotatePDF: React.FC = () => {
   const [file, setFile] = useState<PDFFile | null>(null);
   const [previews, setPreviews] = useState<string[]>([]);
   const [loadingPreviews, setLoadingPreviews] = useState(false);
+  const [previewProgress, setPreviewProgress] = useState<PdfPreviewProgress | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [selectedPages, setSelectedPages] = useState<number[]>([]);
   const [pageRotations, setPageRotations] = useState<Record<number, number>>({}); // Map pageIndex -> rotation
@@ -35,11 +37,16 @@ export const RotatePDF: React.FC = () => {
   // Load previews
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    setPreviewProgress(null);
 
     if (file) {
       setLoadingPreviews(true);
       setPreviewError(null);
-      getPdfPagePreviews(file.file)
+      getPdfPagePreviews(file.file, {
+        signal: controller.signal,
+        onProgress: (progress) => { if (!cancelled) setPreviewProgress(progress); },
+      })
         .then(urls => {
           if (cancelled) {
             revokeObjectUrls(urls);
@@ -70,6 +77,7 @@ export const RotatePDF: React.FC = () => {
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [file]);
 
@@ -238,6 +246,7 @@ export const RotatePDF: React.FC = () => {
                 ]}
               />
             </ToolPanel>
+            {loadingPreviews && <PDFLoadingProgress progress={previewProgress} />}
 
             {/* In flow, directly under the choice it acts on. The floating bar
                 this replaces sat over the tab bar and needed a 96px spacer
@@ -253,12 +262,7 @@ export const RotatePDF: React.FC = () => {
               {status.isProcessing ? status.message || t("rotate-pdf.rotating.pages.a6d7f2") : t("rotate-pdf.save.turned.pdf.fa1cfd")}
             </Button>
 
-            {loadingPreviews ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-6 text-[var(--text-tertiary)]">
-                <Loader2 aria-hidden className="animate-spin" size={24} />
-                <p className="text-sm">{t("rotate-pdf.loading.pages.1b27e2")}</p>
-              </div>
-            ) : previewError ? (
+            {loadingPreviews ? null : previewError ? (
               <div className="flex flex-col items-center gap-2 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] px-4 py-4 text-center">
                 <p className="font-semibold text-[var(--status-danger-text)]">{t("rotate-pdf.the.pages.could.not.be.shown.choose.9884e4")}</p>
                 <p className="max-w-measure text-sm text-[var(--text-secondary)]">{previewError}</p>

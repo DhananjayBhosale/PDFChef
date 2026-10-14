@@ -1,6 +1,13 @@
 import type { Catalog } from '../core';
 
 export default {
+  "preview-progress.opening": "جارٍ فتح ملف PDF",
+  "preview-progress.preparing": "نجهّز صفحاتك للعرض",
+  "preview-progress.count": "تم تجهيز {completed} من {total} معاينة",
+  "preview-progress.page": "جارٍ تجهيز الصفحة {page}",
+  "preview-progress.hint": "قد تستغرق ملفات PDF الكبيرة بعض الوقت. يبقى كل شيء على جهازك.",
+  "preview-progress.lazy": "تظهر معاينات إضافية أثناء التمرير.",
+
   "page-range-selector.label": "أرقام الصفحات أو نطاقاتها",
   "page-range-selector.example": "مثال: 187-230",
   "page-range-selector.select": "تحديد",
@@ -590,7 +597,6 @@ export default {
   "delete-pages.mark.d7cda0": "تحديد",
   "delete-pages.restore.all.a9c39c": "استعادة الكل",
   "delete-pages.save.without.those.pages.3b9676": "حفظ بدون تلك الصفحات",
-  "delete-pages.loading.pages.1b27e2": "جارٍ تحميل الصفحات...",
   "delete-pages.the.pages.could.not.be.shown.choose.9884e4": "تعذر عرض الصفحات. اختر ملفاً آخر، أو شغّل أداة إصلاح PDF عليه أولاً.",
   "delete-pages.page.893387": "{v0} صفحة {v1}",
   "delete-pages.page.preview.7f7e5e": "معاينة الصفحة {v0}",
@@ -688,7 +694,6 @@ export default {
   "extract-pages.choose.another.pdf.9434e3": "اختر ملف PDF آخر",
   "extract-pages.select.all.1fc9a3": "تحديد الكل",
   "extract-pages.clear.83b12c": "مسح",
-  "extract-pages.loading.pages.1b27e2": "جارٍ تحميل الصفحات...",
   "extract-pages.this.pdf.has.no.pages.in.it.8c754b": "لا يحتوي ملف PDF هذا على أي صفحات. اختر ملفاً آخر.",
   "flatten-pdf.locking.the.filled.answers.c0bd41": "جارٍ قفل الإجابات المعبأة…",
   "flatten-pdf.getting.your.pdf.ready.3a0d56": "جارٍ تجهيز ملف PDF الخاص بك…",
@@ -1127,7 +1132,6 @@ export default {
   "reorder-pdf.redo.742739": "إعادة",
   "reorder-pdf.reset.daee76": "إعادة تعيين",
   "reorder-pdf.save.reordered.pdf.b8306f": "حفظ ملف PDF المعاد ترتيبه",
-  "reorder-pdf.generating.page.previews.83467f": "جارٍ إنشاء معاينات الصفحات...",
   "reorder-pdf.the.pages.could.not.be.shown.choose.9884e4": "تعذر عرض الصفحات. اختر ملفاً آخر، أو قم بتشغيل إصلاح PDF عليه أولاً.",
   "reorder-pdf.drag.page.8b847a": "سحب الصفحة {v0}",
   "reorder-pdf.page.c140ba": "الصفحة {v0}",
@@ -1161,7 +1165,6 @@ export default {
   "rotate-pdf.clear.83b12c": "مسح",
   "rotate-pdf.reset.daee76": "إعادة تعيين",
   "rotate-pdf.save.turned.pdf.fa1cfd": "حفظ ملف PDF المدوَّر",
-  "rotate-pdf.loading.pages.1b27e2": "جارٍ تحميل الصفحات...",
   "rotate-pdf.the.pages.could.not.be.shown.choose.9884e4": "تعذر عرض الصفحات. اختر ملفاً آخر، أو قم بتشغيل إصلاح PDF عليه أولاً.",
   "security-pdf.encrypting.pdf.on.this.device.af1739": "جارٍ تشفير PDF على هذا الجهاز...",
   "security-pdf.protected.copy.ready.3fad41": "النسخة المحمية جاهزة: {v0}.",
@@ -1269,7 +1272,6 @@ export default {
   "split-pdf.cancel.19766e": "إلغاء",
   "split-pdf.save.the.split.files.33c422": "حفظ الملفات المقسَّمة",
   "split-pdf.pages.to.include.225127": "الصفحات المراد تضمينها",
-  "split-pdf.generating.page.previews.83467f": "جارٍ إنشاء معاينات الصفحات...",
   "split-pdf.page.previews.are.unavailable.318997": "معاينات الصفحات غير متوفرة",
   "split-pdf.retry.previews.7e9483": " إعادة محاولة المعاينة",
   "split-pdf.the.pages.could.not.be.shown.here.a4b115": "تعذر عرض الصفحات هنا. لا يزال بإمكانك التقسيم حسب أرقام الصفحات أعلاه.",
@@ -1517,7 +1519,6 @@ export default {
   "pdfpreview-modal.close.preview.7d8ab3": "إغلاق المعاينة",
   "pdfpreview-modal.previous.page.1208ec": "الصفحة السابقة",
   "pdfpreview-modal.next.page.c08ac7": "الصفحة التالية",
-  "pdfpreview-modal.rendering.high.quality.preview.916fc2": "جارٍ عرض معاينة عالية الجودة...",
   "pdfpreview-modal.dragging.26d17c": "جارٍ السحب",
   "page-thumbnail.page.8b21ee": "الصفحة {v0}{v1}",
   "page-thumbnail.page.c140ba": "الصفحة {v0}",
@@ -2414,5 +2415,8 @@ export default {
   "compareReport.none": "<لا يوجد>",
   "compareReport.page": "الصفحة {v0}",
   "compareReport.extractedText": "النص المستخرج من {v0}: {v1}",
-  "compareReport.truncatedTextDetails": "تفاصيل النص المستخرج (مقتطعة):"
+  "compareReport.truncatedTextDetails": "تفاصيل النص المستخرج (مقتطعة):",
+  "make-fillable.dropdown.options.required": "أضف خيارات إلى كل قائمة منسدلة. احذف الخيارات الفارغة أو المكررة.",
+  "error.pdfTextBoxOverflow": "مربع النص هذا صغير جدًا. كبّره أو اختصر النص قبل الحفظ.",
+  "error.pdfTextBoxUnsupported": "يحتوي مربع النص على أحرف لا يمكن حفظها بهذا الخط. احذف هذه الأحرف قبل الحفظ."
 } satisfies Catalog;

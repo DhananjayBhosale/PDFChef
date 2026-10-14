@@ -4,7 +4,8 @@ import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Download, Loader2 } from 'lucide-react';
+import { ArrowLeft, Download } from 'lucide-react';
+import { PDFLoadingProgress } from '../UI/PDFLoadingProgress';
 import { FileUpload } from '../UI/FileUpload';
 import { PageThumbnail } from '../UI/PageThumbnail';
 import { PageRangeSelector } from '../UI/PageRangeSelector';
@@ -29,6 +30,8 @@ export const ExtractPages: React.FC = () => {
   const [rangePending, setRangePending] = useState(false);
   const [selectionRevision, setSelectionRevision] = useState(0);
   const [loadingPreviews, setLoadingPreviews] = useState(false);
+  const [inspectingFile, setInspectingFile] = useState(false);
+  const [thumbnailProgress, setThumbnailProgress] = useState<{ document: any; completed: number; total: number; active: number } | null>(null);
   const [previewError, setPreviewError] = useState('');
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const fileInspectionRef = useRef(false);
@@ -55,6 +58,7 @@ export const ExtractPages: React.FC = () => {
             return;
           }
           setPdfDoc(document);
+          setThumbnailProgress({ document, completed: 0, total: 0, active: 0 });
           setLoadingPreviews(false);
         })
         .catch((error) => {
@@ -80,6 +84,7 @@ export const ExtractPages: React.FC = () => {
     const selected = files[0];
     setStatus({ isProcessing: false, progress: 0, message: '' });
     fileInspectionRef.current = true;
+    setInspectingFile(true);
     try {
       const pageCount = await getPDFPageCount(selected);
       if (pageCount < 1) throw new Error(t("split-pdf.selected.pdf.has.no.pages.3882f9"));
@@ -92,6 +97,7 @@ export const ExtractPages: React.FC = () => {
       setStatus({ isProcessing: false, progress: 0, message: '', error: localizeError(error) });
     } finally {
       fileInspectionRef.current = false;
+      setInspectingFile(false);
     }
   };
 
@@ -105,8 +111,14 @@ export const ExtractPages: React.FC = () => {
 
   const pagePreviewLoaders = useMemo(() => Array.from({ length: totalPages }, (_, pageIndex) => async () => {
     if (!pdfDoc) throw new Error(t("extract-pages.pdf.is.not.ready.fb76b6"));
-    const rendered = await renderPageAsImage(pdfDoc, pageIndex, { format: 'image/jpeg', quality: 0.72, scale: 0.35 });
-    return rendered.objectUrl;
+    setThumbnailProgress(current => current?.document === pdfDoc ? { ...current, total: current.total + 1, active: current.active + 1 } : current);
+    try {
+      const rendered = await renderPageAsImage(pdfDoc, pageIndex, { format: 'image/jpeg', quality: 0.72, scale: 0.35 });
+      setThumbnailProgress(current => current?.document === pdfDoc ? { ...current, completed: current.completed + 1 } : current);
+      return rendered.objectUrl;
+    } finally {
+      setThumbnailProgress(current => current?.document === pdfDoc ? { ...current, active: current.active - 1 } : current);
+    }
   }), [pdfDoc, totalPages]);
 
   const resetRangeDraft = () => {
@@ -176,6 +188,7 @@ export const ExtractPages: React.FC = () => {
         {!file ? (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mx-auto w-full max-w-3xl">
             <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("extract-pages.choose.a.pdf.to.extract.pages.e82bf1")} />
+            {inspectingFile && <PDFLoadingProgress />}
           </motion.div>
         ) : (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-3">
@@ -228,11 +241,9 @@ export const ExtractPages: React.FC = () => {
               onClick={() => void handleExtract()}
             >{t("extract-pages.message.2f2b9d8bc2", { count: selectedPages.length })}</Button>
 
+            {thumbnailProgress?.document === pdfDoc && thumbnailProgress.active > 0 && <PDFLoadingProgress progress={thumbnailProgress} lazy />}
             {loadingPreviews ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-6 text-[var(--text-tertiary)]">
-                <Loader2 aria-hidden className="animate-spin" size={24} />
-                <p className="text-sm">{t("extract-pages.loading.pages.1b27e2")}</p>
-              </div>
+              <PDFLoadingProgress />
             ) : previewError ? (
               <div role="alert" className="px-4 py-4 text-center text-sm font-medium text-[var(--status-danger-text)]">
                 {previewError}

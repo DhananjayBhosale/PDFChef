@@ -4,8 +4,9 @@ import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FileUpload } from '../UI/FileUpload';
+import { PDFLoadingProgress } from '../UI/PDFLoadingProgress';
 import { PDFFile, ProcessingStatus } from '../../types';
-import { getPdfPagePreviews } from '../../services/pdfBrowser';
+import { getPdfPagePreviews, type PdfPreviewProgress } from '../../services/pdfBrowser';
 import {
   extractPages,
   getPDFPageCount,
@@ -43,10 +44,12 @@ export const SplitPDF: React.FC = () => {
   const [status, setStatus] = useState<ProcessingStatus>(idleStatus);
   const [activeJob, setActiveJob] = useState<ActiveJob>(null);
   const [loadingPreviews, setLoadingPreviews] = useState(false);
+  const [previewProgress, setPreviewProgress] = useState<PdfPreviewProgress | null>(null);
   const [previewError, setPreviewError] = useState('');
   const [previewReloadKey, setPreviewReloadKey] = useState(0);
   const activeJobControllerRef = useRef<AbortController | null>(null);
   const fileInspectionRef = useRef(false);
+  const [inspectingFile, setInspectingFile] = useState(false);
 
   useEffect(() => () => {
     activeJobControllerRef.current?.abort();
@@ -67,6 +70,8 @@ export const SplitPDF: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    setPreviewProgress(null);
 
     setPreviewError('');
     if (!file) {
@@ -74,12 +79,16 @@ export const SplitPDF: React.FC = () => {
       setPreviews([]);
       return () => {
         cancelled = true;
+        controller.abort();
       };
     }
 
     setLoadingPreviews(true);
     setPreviews([]);
-    getPdfPagePreviews(file.file)
+    getPdfPagePreviews(file.file, {
+      signal: controller.signal,
+      onProgress: (progress) => { if (!cancelled) setPreviewProgress(progress); },
+    })
       .then((urls) => {
         if (cancelled) {
           revokeObjectUrls(urls);
@@ -97,6 +106,7 @@ export const SplitPDF: React.FC = () => {
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [file, previewReloadKey]);
 
@@ -121,6 +131,7 @@ export const SplitPDF: React.FC = () => {
 
     setStatus(idleStatus());
     fileInspectionRef.current = true;
+    setInspectingFile(true);
     try {
       const pageCount = await getPDFPageCount(selected);
       if (pageCount < 1) {
@@ -145,6 +156,7 @@ export const SplitPDF: React.FC = () => {
       });
     } finally {
       fileInspectionRef.current = false;
+      setInspectingFile(false);
     }
   };
 
@@ -381,6 +393,7 @@ export const SplitPDF: React.FC = () => {
             className="mx-auto max-w-3xl"
           >
             <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("split-pdf.choose.a.pdf.to.split.90f382")} />
+            {inspectingFile && <PDFLoadingProgress />}
           </motion.div>
         ) : (
           <motion.div
@@ -437,6 +450,7 @@ export const SplitPDF: React.FC = () => {
                 >{t("split-pdf.message.eff1a10749", { count: effectiveSelectedPages.length })}</Button>
               )}
             </ToolPanel>
+            {loadingPreviews && <PDFLoadingProgress progress={previewProgress} />}
 
             {/* A two-choice method is a strip, not two padded cards with a
                 sub-line each: the input below already names what the number
@@ -526,12 +540,7 @@ export const SplitPDF: React.FC = () => {
               {/* The selection bar above already states the count. */}
               <h2 id="split-pages-heading" className="text-sm font-semibold text-[var(--text-primary)]">{t("split-pdf.pages.to.include.225127")}</h2>
 
-              {loadingPreviews ? (
-                <div role="status" className="flex flex-col items-center justify-center gap-2 py-6 text-[var(--text-tertiary)]">
-                  <Loader2 aria-hidden className="animate-spin" size={24} />
-                  <p className="text-sm">{t("split-pdf.generating.page.previews.83467f")}</p>
-                </div>
-              ) : previewError ? (
+              {loadingPreviews ? null : previewError ? (
                 <div role="status" className="flex flex-col items-center justify-center px-4 py-6 text-center">
                   <p className="font-semibold text-[var(--text-primary)]">{t("split-pdf.page.previews.are.unavailable.318997")}</p>
                   <p className="mt-1 max-w-measure text-sm text-[var(--text-secondary)]">{t("split-pdf.message.a68d961425", { v0: previewError })}</p>

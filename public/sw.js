@@ -10,7 +10,9 @@ const isHtmlResponse = (response) => (response.headers.get('content-type') || ''
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll([...new Set([...APP_SHELL, ...PRECACHE_ASSETS])])));
-  self.skipWaiting();
+  // Let updates wait until the previous worker's tabs close. Those tabs still
+  // import the previous build's lazy chunks, whose cache activation removes.
+  // A first installation activates normally and claims its initial tab below.
 });
 
 self.addEventListener('activate', (event) => {

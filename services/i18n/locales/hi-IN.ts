@@ -1,6 +1,13 @@
 import type { Catalog } from '../core';
 
 export default {
+  "preview-progress.opening": "आपकी PDF खुल रही है",
+  "preview-progress.preparing": "आपके पेज तैयार हो रहे हैं",
+  "preview-progress.count": "{total} में से {completed} प्रीव्यू तैयार हैं",
+  "preview-progress.page": "पेज {page} तैयार हो रहा है",
+  "preview-progress.hint": "बड़ी PDF में थोड़ा समय लग सकता है। सब कुछ आपके डिवाइस पर रहता है।",
+  "preview-progress.lazy": "स्क्रॉल करने पर और प्रीव्यू दिखाई देंगे।",
+
   "page-range-selector.label": "पेज नंबर या पेज की सीमा",
   "page-range-selector.example": "जैसे 187-230",
   "page-range-selector.select": "चुनें",
@@ -558,7 +565,6 @@ export default {
   "delete-pages.mark.d7cda0": "मार्क करें",
   "delete-pages.restore.all.a9c39c": "सभी रीस्टोर करें",
   "delete-pages.save.without.those.pages.3b9676": "उन पेजों के बिना सेव करें",
-  "delete-pages.loading.pages.1b27e2": "पेज लोड हो रहे हैं...",
   "delete-pages.the.pages.could.not.be.shown.choose.9884e4": "पेज नहीं दिखाए जा सके। कोई दूसरी फ़ाइल चुनें, या पहले इस पर 'PDF सुधारें' टूल चलाएं।",
   "delete-pages.page.893387": "{v0} पेज {v1}",
   "delete-pages.page.preview.7f7e5e": "पेज {v0} प्रीव्यू",
@@ -644,7 +650,6 @@ export default {
   "extract-pages.choose.another.pdf.9434e3": "दूसरा PDF चुनें",
   "extract-pages.select.all.1fc9a3": "सभी चुनें",
   "extract-pages.clear.83b12c": "साफ़ करें",
-  "extract-pages.loading.pages.1b27e2": "पेज लोड हो रहे हैं...",
   "extract-pages.this.pdf.has.no.pages.in.it.8c754b": "इस PDF में कोई पेज नहीं है। कोई दूसरी फ़ाइल चुनें।",
   "flatten-pdf.locking.the.filled.answers.c0bd41": "भरे गए जवाबों को लॉक किया जा रहा है…",
   "flatten-pdf.getting.your.pdf.ready.3a0d56": "आपका PDF तैयार किया जा रहा है…",
@@ -1051,7 +1056,6 @@ export default {
   "reorder-pdf.redo.742739": "फिर से करें",
   "reorder-pdf.reset.daee76": "रीसेट करें",
   "reorder-pdf.save.reordered.pdf.b8306f": "पुनः व्यवस्थित PDF सहेजें",
-  "reorder-pdf.generating.page.previews.83467f": "पेज पूर्वावलोकन जनरेट किए जा रहे हैं...",
   "reorder-pdf.the.pages.could.not.be.shown.choose.9884e4": "पेज नहीं दिखाए जा सके. कोई अन्य फ़ाइल चुनें, या पहले उस पर 'PDF सुधारें' चलाएं.",
   "reorder-pdf.drag.page.8b847a": "पेज {v0} खींचें",
   "reorder-pdf.page.c140ba": "पेज {v0}",
@@ -1085,7 +1089,6 @@ export default {
   "rotate-pdf.clear.83b12c": "साफ़ करें",
   "rotate-pdf.reset.daee76": "रीसेट करें",
   "rotate-pdf.save.turned.pdf.fa1cfd": "घुमाई गई PDF सहेजें",
-  "rotate-pdf.loading.pages.1b27e2": "पेज लोड हो रहे हैं...",
   "rotate-pdf.the.pages.could.not.be.shown.choose.9884e4": "पेज नहीं दिखाए जा सके. कोई अन्य फ़ाइल चुनें, या पहले उस पर 'PDF सुधारें' चलाएं.",
   "security-pdf.encrypting.pdf.on.this.device.af1739": "इस डिवाइस पर PDF को एन्क्रिप्ट किया जा रहा है...",
   "security-pdf.protected.copy.ready.3fad41": "सुरक्षित प्रति तैयार है: {v0}.",
@@ -1185,7 +1188,6 @@ export default {
   "split-pdf.cancel.19766e": "रद्द करें",
   "split-pdf.save.the.split.files.33c422": "विभाजित फ़ाइलें सहेजें",
   "split-pdf.pages.to.include.225127": "शामिल करने के लिए पेज",
-  "split-pdf.generating.page.previews.83467f": "पेज पूर्वावलोकन जनरेट किए जा रहे हैं...",
   "split-pdf.page.previews.are.unavailable.318997": "पेज पूर्वावलोकन उपलब्ध नहीं हैं",
   "split-pdf.retry.previews.7e9483": " पूर्वावलोकन का पुनः प्रयास करें",
   "split-pdf.the.pages.could.not.be.shown.here.a4b115": "पेज यहां नहीं दिखाए जा सके. आप अब भी ऊपर दिए गए पेज नंबरों द्वारा विभाजित कर सकते हैं.",
@@ -1461,7 +1463,6 @@ export default {
   "pdfpreview-modal.close.preview.7d8ab3": "पूर्वावलोकन बंद करें",
   "pdfpreview-modal.previous.page.1208ec": "पिछला पेज",
   "pdfpreview-modal.next.page.c08ac7": "अगला पेज",
-  "pdfpreview-modal.rendering.high.quality.preview.916fc2": "उच्च-गुणवत्ता वाला पूर्वावलोकन रेंडर किया जा रहा है...",
   "pdfpreview-modal.dragging.26d17c": "ड्रैग किया जा रहा है",
   "page-thumbnail.page.8b21ee": "पेज {v0}{v1}",
   "page-thumbnail.page.c140ba": "पेज {v0}",
@@ -2186,5 +2187,8 @@ export default {
   "compareReport.none": "<कोई नहीं>",
   "compareReport.page": "पृष्ठ {v0}",
   "compareReport.extractedText": "{v0} निकाला गया टेक्स्ट: {v1}",
-  "compareReport.truncatedTextDetails": "निकाले गए टेक्स्ट का विवरण (छोटा किया गया):"
+  "compareReport.truncatedTextDetails": "निकाले गए टेक्स्ट का विवरण (छोटा किया गया):",
+  "make-fillable.dropdown.options.required": "हर ड्रॉपडाउन में विकल्प जोड़ें। खाली या दोहराए गए विकल्प हटाएँ।",
+  "error.pdfTextBoxOverflow": "यह टेक्स्ट बॉक्स बहुत छोटा है। सेव करने से पहले इसे बड़ा करें या टेक्स्ट छोटा करें।",
+  "error.pdfTextBoxUnsupported": "इस टेक्स्ट बॉक्स में ऐसे अक्षर हैं जिन्हें इसका फ़ॉन्ट सेव नहीं कर सकता। सेव करने से पहले वे अक्षर हटाएँ।"
 } satisfies Catalog;

@@ -5,10 +5,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FormInput, Loader2, ScanSearch, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { FileUpload } from '../UI/FileUpload';
+import { PDFLoadingProgress } from '../UI/PDFLoadingProgress';
 import { StatusToast } from '../UI/StatusToast';
 import { ToolHeader, ToolShell } from '../UI/ToolLayout';
 import { Badge } from '../UI/Primitives';
-import { getPageSelectableTextLines, getPdfFormFields, getPdfPagePreviews, loadPDFDocument } from '../../services/pdfBrowser';
+import { getPageSelectableTextLines, getPdfFormFields, getPdfPagePreviews, loadPDFDocument, type PdfPreviewProgress } from '../../services/pdfBrowser';
 import { createFillablePdf, detectVisualFormFields, type FillableFieldKind, type FillableFieldPlacement } from '../../services/fillableForms';
 import { downloadBytes, revokeObjectUrls } from '../../services/pdfShared';
 import { shouldWarnForFiles } from '../../services/workspace';
@@ -40,6 +41,10 @@ export const MakeFillable: React.FC = () => {
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [touchDrawMode, setTouchDrawMode] = useState(false);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
+  const [preparingPreviews, setPreparingPreviews] = useState(false);
+  const [previewProgress, setPreviewProgress] = useState<PdfPreviewProgress | null>(null);
+  const previewControllerRef = useRef<AbortController | null>(null);
+  useEffect(() => () => { previewControllerRef.current?.abort(); }, []);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
 
@@ -53,6 +58,11 @@ export const MakeFillable: React.FC = () => {
     if (pendingReviewCount > 0) messages.push(t("make-fillable.keep.or.remove.the.suggested.field.still.2cb558", { count: pendingReviewCount }));
     if (fields.some((field) => !validFieldName.test(field.name))) messages.push(t("make-fillable.field.names.must.start.with.a.letter.ba8fe6"));
     if (new Set(fields.map((field) => field.name.toLowerCase())).size !== fields.length) messages.push(t("make-fillable.field.names.must.be.unique.564b3d"));
+    if (fields.some((field) => {
+      if (field.kind !== 'dropdown') return false;
+      const choices = (field.options ?? []).map((option) => option.trim());
+      return choices.length === 0 || choices.some((option) => !option) || new Set(choices).size !== choices.length;
+    })) messages.push(t("make-fillable.dropdown.options.required"));
     return messages;
   }, [fields, pendingReviewCount, locale]);
 
@@ -83,9 +93,13 @@ export const MakeFillable: React.FC = () => {
 
   const select = async (files: File[]) => {
     const selected = files[0];
-    if (!selected) return;
+    if (!selected || previewControllerRef.current || status.isProcessing) return;
     if (shouldWarnForFiles([selected]) && !window.confirm(t("make-fillable.this.is.a.large.pdf.and.may.848eab"))) return;
     setStatus({ isProcessing: true, progress: 10, message: t("make-fillable.preparing.pages.ebeefc") });
+    const controller = new AbortController();
+    previewControllerRef.current = controller;
+    setPreparingPreviews(true);
+    setPreviewProgress(null);
     let pdf: any = null;
     try {
       revokeObjectUrls(previews);
@@ -94,7 +108,10 @@ export const MakeFillable: React.FC = () => {
         throw new Error(t("make-fillable.this.form.was.built.with.a.special.5b8d56"));
       }
       const existingFields = await getPdfFormFields(pdf);
-      const nextPreviews = await getPdfPagePreviews(selected, { scale: 0.8 });
+      const nextPreviews = await getPdfPagePreviews(selected, {
+        scale: 0.8, signal: controller.signal,
+        onProgress: progress => { if (!controller.signal.aborted) setPreviewProgress(progress); },
+      });
       setFile(selected);
       setPreviews(nextPreviews);
       setFields([]);
@@ -105,10 +122,13 @@ export const MakeFillable: React.FC = () => {
       setPageIndex(0);
       setStatus({ isProcessing: false, progress: 100, message: t("make-fillable.ready.draw.the.boxes.yourself.or.let.c60493") });
     } catch (error) {
+      if (controller.signal.aborted) return;
       setFile(null);
       setExistingFieldCount(0);
       setStatus({ isProcessing: false, progress: 0, message: '', error: error instanceof Error ? localizeError(error) : t("make-fillable.unable.to.open.this.pdf.9c2826") });
     } finally {
+      previewControllerRef.current = null;
+      setPreparingPreviews(false);
       if (pdf?.destroy) void pdf.destroy();
     }
   };
@@ -128,7 +148,7 @@ export const MakeFillable: React.FC = () => {
       width: isSquare ? side : Math.max(0.08, width),
       height: isSquare ? side : Math.max(0.025, height),
       required,
-      options: kind === 'dropdown' ? options.split(',').map((item) => item.trim()).filter(Boolean) : undefined,
+      options: kind === 'dropdown' ? options.split(',') : undefined,
       radioGroup: kind === 'radio' ? 'choice' : undefined,
     }]);
     setSelectedFieldId(id);
@@ -238,7 +258,7 @@ export const MakeFillable: React.FC = () => {
           note={<span className="font-medium text-[var(--status-caution-text)]">{t("make-fillable.suggestions.can.be.wrong.so.review.every.21f3d3")}</span>}
         />
         <FileUpload onFilesSelected={(files) => void select(files)} accept=".pdf,application/pdf" label={t("make-fillable.choose.a.pdf.to.make.fillable.2b865c")} />
-        <StatusToast status={status} />
+        {preparingPreviews ? <PDFLoadingProgress progress={previewProgress} /> : <StatusToast status={status} />}
       </ToolShell>
     );
   }
@@ -340,6 +360,7 @@ export const MakeFillable: React.FC = () => {
                     </div>
                     <label className="mt-2 block text-xs font-semibold text-[var(--text-secondary)]">{t("make-fillable.name.dcd1d5")}<input value={field.name} onFocus={() => setSelectedFieldId(field.id)} onChange={(event) => setFields((current) => current.map((item) => item.id === field.id ? { ...item, name: event.target.value } : item))} className="mt-1 h-11 w-full rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-transparent px-3 font-semibold text-[var(--text-primary)] outline-none focus:border-[var(--accent-rest)]" /></label>
                     <label className="mt-2 block text-xs font-semibold text-[var(--text-secondary)]">{t("make-fillable.type.baaddf")}<select value={field.kind} onFocus={() => setSelectedFieldId(field.id)} onChange={(event) => setFields((current) => current.map((item) => item.id === field.id ? { ...item, kind: event.target.value as FillableFieldKind } : item))} className="mt-1 h-11 w-full rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-3 text-sm text-[var(--text-primary)]">{fieldKinds.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+                    {field.kind === 'dropdown' && <label className="mt-2 block text-xs font-semibold text-[var(--text-secondary)]">{t("make-fillable.options.d0db8b")}<input value={(field.options ?? []).join(',')} onFocus={() => setSelectedFieldId(field.id)} onChange={(event) => setFields((current) => current.map((item) => item.id === field.id ? { ...item, options: event.target.value.split(',') } : item))} className="chef-field mt-1" /></label>}
                     <div className="mt-2 flex gap-2">
                       {needsReview && <button type="button" onClick={() => keepSuggestion(field.id)} className="chef-hit-y chef-pressable min-h-11 flex-1 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-3 text-sm font-bold text-[var(--text-on-accent)]">{t("make-fillable.keep.183f00")}</button>}
                       <button type="button" aria-label={t("make-fillable.delete.3468c7", { v0: field.name })} onClick={() => removeField(field.id)} className="chef-hit-y chef-pressable flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius-control)] border border-[var(--status-danger-text)] px-3 text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)]"><Trash2 size={18} /><span className="ml-2 text-sm font-bold">{t("make-fillable.delete.e2d0a5")}</span></button>

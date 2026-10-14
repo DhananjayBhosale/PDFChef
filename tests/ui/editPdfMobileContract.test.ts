@@ -83,7 +83,11 @@ test('selected text annotations edit directly on the page with one history snaps
   assert.match(editor, /onUpdate\(element\.id, \{ content: event\.currentTarget\.value \}\)/);
   assert.match(editor, /onBlur=\{\(event\) => \{\s*inlineTextChanged\.current = false;\s*event\.currentTarget\.scrollLeft = 0;\s*event\.currentTarget\.scrollTop = 0;/);
   assert.match(editor, /onKeyDown=\{\(event\) => \{\s*event\.stopPropagation\(\);/);
-  assert.equal((editor.match(/lineHeight: 1\.2/g) ?? []).length, 2);
+  assert.match(editor, /lineHeight: 1\.2/);
+  assert.match(editor, /resize-none overflow-auto/);
+  assert.match(editor, /layoutTextBox\(element, width \* pageSize\.width, height \* pageSize\.height\)/);
+  assert.match(editor, /<svg data-testid="text-box-preview"/);
+  assert.match(editor, /y=\{line\.baseline\} textLength=\{line\.width\}/);
 });
 
 test('mobile and desktop inspector text fields group typing into one undo snapshot', () => {
@@ -116,7 +120,7 @@ test('the browser keeps ownership of an editable paragraph while it is being typ
   assert.match(blockLayer, /const writeBlockContent = \(/);
   assert.match(blockLayer, /element\.replaceChildren\(fragment\)/);
   assert.match(blockLayer, /const externalChange = !written\.current \|\| committedText\.current !== text/);
-  assert.match(blockLayer, /if \(!lostRun && new Set\(keys\)\.size === keys\.length\) return/);
+  assert.match(blockLayer, /if \(!styleRepairNeeded\.current && !hasDamagedStyleSpans\(element\)\) return/);
   assert.match(blockLayer, /if \(composing \|\| text\.split/);
   assert.match(blockLayer, /selection\.setBaseAndExtent/);
   const editable = blockLayer.slice(blockLayer.indexOf('data-testid="pdf-text-block"'));

@@ -1000,3 +1000,25 @@ html[data-text-scale='larger'] .chef-clamp-2 {
     transition: background-color 90ms ease-out;
   }
 }
+
+/* A little paper bob and moving ink show activity without inventing completion. */
+.chef-preview-indeterminate { width: 35%; }
+@media (prefers-reduced-motion: no-preference) {
+  .chef-preview-paper { animation: chef-preview-paper 2.4s ease-in-out infinite; }
+  .chef-preview-fill {
+    background-image: linear-gradient(110deg, transparent 35%, rgb(255 255 255 / 22%) 50%, transparent 65%);
+    background-size: 200% 100%;
+    animation: chef-preview-ink 2s linear infinite;
+    transition: width 180ms ease-out;
+  }
+  .chef-preview-indeterminate { animation: chef-preview-travel 1.6s ease-in-out infinite; }
+}
+@keyframes chef-preview-paper {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-3px) rotate(4deg); }
+}
+@keyframes chef-preview-ink { to { background-position: -200% 0; } }
+@keyframes chef-preview-travel {
+  0%, 100% { transform: translateX(-100%); }
+  50% { transform: translateX(280%); }
+}

@@ -238,7 +238,7 @@ try {
     });
     try {
       await open(page, tool);
-      if (mode === 'delay') await page.getByText('Loading pages...', { exact: true }).waitFor();
+      if (mode === 'delay') await page.getByRole('progressbar').waitFor();
       else await page.getByText(tool === 'split' ? 'Page previews are unavailable' : /Page previews are unavailable\./).waitFor();
       assert(requests > 0, 'Real PDF.js worker request was delayed/failed');
       await apply(page);

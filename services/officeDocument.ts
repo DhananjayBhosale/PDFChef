@@ -16,6 +16,7 @@ import type {
 export interface DocxBlock {
   text: string;
   breakAfter: boolean;
+  breakBefore?: boolean;
 }
 
 export type PptxPageRotation = 'keep' | 'rotate_clockwise';
@@ -125,6 +126,12 @@ const isPageBreak = (element: Element) => (
   element.getAttributeNS(WORD_NAMESPACE, 'type') === 'page' || element.getAttribute('w:type') === 'page'
 );
 
+const wordChild = (element: Element | undefined, name: string) =>
+  Array.from(element?.children ?? []).find((child) => child.namespaceURI === WORD_NAMESPACE && child.localName === name);
+
+const wordValue = (element: Element | undefined) => element?.getAttributeNS(WORD_NAMESPACE, 'val')
+  ?? element?.getAttribute('w:val');
+
 const readParagraph = (paragraph: Element): DocxBlock[] => {
   const blocks: DocxBlock[] = [];
   let text = '';
@@ -159,6 +166,18 @@ const readParagraph = (paragraph: Element): DocxBlock[] => {
 
   paragraph.childNodes.forEach(visit);
   if (text || blocks.length === 0) flush(false);
+  const properties = wordChild(paragraph, 'pPr');
+  const pageBreakBefore = wordChild(properties, 'pageBreakBefore');
+  if (pageBreakBefore && !['0', 'false', 'off'].includes(wordValue(pageBreakBefore) ?? '')) {
+    blocks[0].breakBefore = true;
+  }
+  const section = wordChild(properties, 'sectPr');
+  // A paragraph-level section boundary starts the next page unless it is
+  // explicitly continuous or column-only. Body-level sectPr ends the document.
+  const sectionType = wordValue(wordChild(section, 'type'));
+  if (section && sectionType !== 'continuous' && sectionType !== 'nextColumn') {
+    blocks[blocks.length - 1].breakAfter = true;
+  }
   return blocks;
 };
 
@@ -306,7 +325,7 @@ export const convertDocxToPdf = async (
   };
 
   blocks.forEach((block, index) => {
-    if (pageBreakPending) {
+    if (pageBreakPending || (block.breakBefore && y !== pageHeight - margin)) {
       newPage();
       pageBreakPending = false;
     }

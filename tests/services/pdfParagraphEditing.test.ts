@@ -12,6 +12,7 @@ import {
   blockStyledSegments,
   findInStyledLines,
   planBlockEdit,
+  preserveStyledTextEdit,
   replaceInStyledLines,
   styledLineText,
   wrapStyledText,
@@ -759,4 +760,94 @@ test('an overlong unbroken replacement wraps deterministically without adding ha
   const wrapped = wrapStyledText(input, text => text.length * 6, 24);
   assert.deepEqual(wrapped.map(styledLineText), ['abcd', 'efgh', 'ij']);
   assert.equal(input[0][0].text, 'abcdefghij');
+});
+
+test('case-insensitive find and replace keeps offsets in the original Unicode text', () => {
+  const lines = styled([['İstanbul ', 'body'], ['test and test', 'bold']]);
+  assert.deepEqual(findInStyledLines(lines, 'test'), [
+    { line: 0, start: 9, end: 13 },
+    { line: 0, start: 18, end: 22 },
+  ]);
+  const all = replaceInStyledLines(lines, 'test', 'X');
+  assert.equal(all.replaced, 2);
+  assert.deepEqual(all.lines[0], [
+    { text: 'İstanbul ', fontKey: 'body' },
+    { text: 'X and X', fontKey: 'bold' },
+  ]);
+  assert.equal(styledLineText(replaceInStyledLines(lines, 'test', 'X', false,
+    { line: 0, start: 18, end: 22 }).lines[0]), 'İstanbul test and X');
+  // The query itself may expand; a folded match must still cover the original characters.
+  assert.deepEqual(findInStyledLines(styled([['i\u0307 İ 😀TEST', 'body']]), 'İ'), [
+    { line: 0, start: 0, end: 2 }, { line: 0, start: 3, end: 4 },
+  ]);
+  assert.equal(styledLineText(replaceInStyledLines(styled([['İ 😀TEST', 'body']]), 'test', 'X').lines[0]), 'İ 😀X');
+  assert.equal(styledLineText(replaceInStyledLines(styled([['İA', 'body']]), 'A', 'X').lines[0]), 'İX');
+  assert.deepEqual(findInStyledLines(lines, 'test', true), [
+    { line: 0, start: 9, end: 13 }, { line: 0, start: 18, end: 22 },
+  ]);
+});
+
+test('cross-run replacement redraws instead of moving an untouched suffix into a different style', () => {
+  for (const [lastFont, lastSize] of [['bold', 12], ['regular', 14]] as const) {
+    const block = buildTextBlocks([
+      run(0, 'First ', 72, 100, 30, 12, 'regular'),
+      run(1, 'BOLDTAIL', 102, 100, 60, lastSize, lastFont),
+    ], 0)[0];
+    const edited = replaceInStyledLines(blockStyledSegments(block), 'First BOLD', 'New', true);
+    assert.deepEqual(edited.lines[0], [
+      { text: 'New', fontKey: 'regular', fontSize: 12 },
+      { text: 'TAIL', fontKey: lastFont, fontSize: lastSize },
+    ]);
+    assert.equal(planBlockEdit(block, 'NewTAIL', {
+      measure: text => text.length * 5, maxU: 600, canDraw: () => true,
+    }).mode, 'reflow', 'merging these runs would change the surviving suffix style');
+  }
+  const sameStyle = buildTextBlocks([
+    run(0, 'First ', 72, 100, 30, 12, 'regular'),
+    run(1, 'BOLDTAIL', 102, 100, 60, 12, 'regular'),
+  ], 0)[0];
+  assert.equal(planBlockEdit(sameStyle, 'NewTAIL').mode, 'direct');
+});
+
+test('a plaintext-only browser replacement restores the selected face and untouched suffix', () => {
+  const previous = [[
+    { text: 'First ', fontKey: 'regular', fontSize: 12 },
+    { text: 'BOLDTAIL', fontKey: 'bold', fontSize: 14 },
+  ]];
+  const fallback = { text: '', fontKey: 'bold', fontSize: 14 };
+  const repaired = preserveStyledTextEdit(previous, 'NewTAIL', fallback);
+  assert.deepEqual(repaired, [[
+    { text: 'New', fontKey: 'regular', fontSize: 12 },
+    { text: 'TAIL', fontKey: 'bold', fontSize: 14 },
+  ]]);
+  assert.deepEqual(preserveStyledTextEdit(repaired, 'NewerTAIL', fallback), [[
+    { text: 'Newer', fontKey: 'regular', fontSize: 12 },
+    { text: 'TAIL', fontKey: 'bold', fontSize: 14 },
+  ]]);
+  assert.deepEqual(preserveStyledTextEdit(repaired, 'New\nTAIL', fallback), [
+    [{ text: 'New', fontKey: 'regular', fontSize: 12 }],
+    [{ text: 'TAIL', fontKey: 'bold', fontSize: 14 }],
+  ]);
+});
+
+test('a repeated-text selection uses its actual range and rejects a differently styled direct splice', () => {
+  const block = buildTextBlocks([
+    run(0, 'abc', 72, 100, 18, 12, 'regular'),
+    run(1, 'abc', 90, 100, 18, 12, 'bold'),
+  ], 0)[0];
+  const segments = preserveStyledTextEdit(blockStyledSegments(block), 'abc',
+    { text: '', fontKey: 'regular', fontSize: 12 }, { start: 0, end: 4 });
+  assert.deepEqual(segments, [[
+    { text: 'a', fontKey: 'regular', fontSize: 12 },
+    { text: 'bc', fontKey: 'bold', fontSize: 12 },
+  ]]);
+  assert.equal(planBlockEdit(block, 'abc', { segments }).mode, 'reflow');
+  // Deleting the final bold occurrence really does leave the first regular occurrence intact.
+  const deleteLast = preserveStyledTextEdit(blockStyledSegments(block), 'abc',
+    { text: '', fontKey: 'regular', fontSize: 12 }, { start: 3, end: 6 });
+  assert.deepEqual(deleteLast, [[{ text: 'abc', fontKey: 'regular', fontSize: 12 }]]);
+  assert.equal(planBlockEdit(block, 'abc', { segments: deleteLast }).mode, 'direct');
+  // If a browser omits a usable range, mismatched offsets must not change the result's text.
+  assert.equal(preserveStyledTextEdit(blockStyledSegments(block), 'Newabc',
+    { text: '', fontKey: 'regular', fontSize: 12 }, { start: 5, end: 6 })[0].map(run => run.text).join(''), 'Newabc');
 });

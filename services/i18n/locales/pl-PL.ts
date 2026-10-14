@@ -1,6 +1,13 @@
 import type { Catalog } from '../core';
 
 export default {
+  "preview-progress.opening": "Otwieranie pliku PDF",
+  "preview-progress.preparing": "Przygotowujemy Twoje strony",
+  "preview-progress.count": "Gotowe podglądy: {completed} z {total}",
+  "preview-progress.page": "Przygotowywanie strony {page}",
+  "preview-progress.hint": "Duże pliki PDF mogą wymagać chwili. Wszystko pozostaje na Twoim urządzeniu.",
+  "preview-progress.lazy": "Kolejne podglądy pojawią się podczas przewijania.",
+
   "page-range-selector.label": "Numery lub zakresy stron",
   "page-range-selector.example": "np. 187-230",
   "page-range-selector.select": "Wybierz",
@@ -574,7 +581,6 @@ export default {
   "delete-pages.mark.d7cda0": "Zaznacz",
   "delete-pages.restore.all.a9c39c": "Przywróć wszystko",
   "delete-pages.save.without.those.pages.3b9676": "Zapisz bez tych stron",
-  "delete-pages.loading.pages.1b27e2": "Ładowanie stron...",
   "delete-pages.the.pages.could.not.be.shown.choose.9884e4": "Nie można wyświetlić stron. Wybierz inny plik lub najpierw użyj narzędzia Napraw PDF.",
   "delete-pages.page.893387": "{v0} strona {v1}",
   "delete-pages.page.preview.7f7e5e": "Podgląd strony {v0}",
@@ -666,7 +672,6 @@ export default {
   "extract-pages.choose.another.pdf.9434e3": "Wybierz inny plik PDF",
   "extract-pages.select.all.1fc9a3": "Zaznacz wszystko",
   "extract-pages.clear.83b12c": "Wyczyść",
-  "extract-pages.loading.pages.1b27e2": "Ładowanie stron...",
   "extract-pages.this.pdf.has.no.pages.in.it.8c754b": "Ten plik PDF nie zawiera żadnych stron. Wybierz inny plik.",
   "flatten-pdf.locking.the.filled.answers.c0bd41": "Blokowanie wpisanych odpowiedzi…",
   "flatten-pdf.getting.your.pdf.ready.3a0d56": "Przygotowywanie pliku PDF…",
@@ -1089,7 +1094,6 @@ export default {
   "reorder-pdf.redo.742739": "Ponów",
   "reorder-pdf.reset.daee76": "Zresetuj",
   "reorder-pdf.save.reordered.pdf.b8306f": "Zapisz plik PDF z nową kolejnością",
-  "reorder-pdf.generating.page.previews.83467f": "Generowanie podglądów stron...",
   "reorder-pdf.the.pages.could.not.be.shown.choose.9884e4": "Nie udało się wyświetlić stron. Wybierz inny plik lub najpierw użyj narzędzia Napraw PDF.",
   "reorder-pdf.drag.page.8b847a": "Przeciągnij stronę {v0}",
   "reorder-pdf.page.c140ba": "Strona {v0}",
@@ -1123,7 +1127,6 @@ export default {
   "rotate-pdf.clear.83b12c": "Wyczyść",
   "rotate-pdf.reset.daee76": "Zresetuj",
   "rotate-pdf.save.turned.pdf.fa1cfd": "Zapisz obrócony PDF",
-  "rotate-pdf.loading.pages.1b27e2": "Wczytywanie stron...",
   "rotate-pdf.the.pages.could.not.be.shown.choose.9884e4": "Nie udało się wyświetlić stron. Wybierz inny plik lub najpierw użyj narzędzia Napraw PDF.",
   "security-pdf.encrypting.pdf.on.this.device.af1739": "Szyfrowanie pliku PDF na tym urządzeniu...",
   "security-pdf.protected.copy.ready.3fad41": "Chroniona kopia gotowa: {v0}.",
@@ -1227,7 +1230,6 @@ export default {
   "split-pdf.cancel.19766e": "Anuluj",
   "split-pdf.save.the.split.files.33c422": "Zapisz podzielone pliki",
   "split-pdf.pages.to.include.225127": "Strony do uwzględnienia",
-  "split-pdf.generating.page.previews.83467f": "Generowanie podglądów stron...",
   "split-pdf.page.previews.are.unavailable.318997": "Podglądy stron są niedostępne",
   "split-pdf.retry.previews.7e9483": " Ponów podglądy",
   "split-pdf.the.pages.could.not.be.shown.here.a4b115": "Nie udało się wyświetlić stron w tym miejscu. Nadal możesz podzielić dokument według numerów stron powyżej.",
@@ -1467,7 +1469,6 @@ export default {
   "pdfpreview-modal.close.preview.7d8ab3": "Zamknij podgląd",
   "pdfpreview-modal.previous.page.1208ec": "Poprzednia strona",
   "pdfpreview-modal.next.page.c08ac7": "Następna strona",
-  "pdfpreview-modal.rendering.high.quality.preview.916fc2": "Renderowanie podglądu wysokiej jakości...",
   "pdfpreview-modal.dragging.26d17c": "Przeciąganie",
   "page-thumbnail.page.8b21ee": "Strona {v0}{v1}",
   "page-thumbnail.page.c140ba": "Strona {v0}",
@@ -2300,5 +2301,8 @@ export default {
   "compareReport.none": "<brak>",
   "compareReport.page": "Strona {v0}",
   "compareReport.extractedText": "{v0} – wyodrębniony tekst: {v1}",
-  "compareReport.truncatedTextDetails": "Szczegóły wyodrębnionego tekstu (skrócone):"
+  "compareReport.truncatedTextDetails": "Szczegóły wyodrębnionego tekstu (skrócone):",
+  "make-fillable.dropdown.options.required": "Dodaj opcje do każdej listy rozwijanej. Usuń puste lub powtarzające się opcje.",
+  "error.pdfTextBoxOverflow": "To pole tekstowe jest za małe. Powiększ je lub skróć tekst przed zapisaniem.",
+  "error.pdfTextBoxUnsupported": "To pole tekstowe zawiera znaki, których nie można zapisać w tej czcionce. Usuń je przed zapisaniem."
 } satisfies Catalog;

@@ -62,7 +62,7 @@ test('the annotation exporter uses centre-corrected origins without changing ell
   assert.equal((exporter.match(/const origin = rotatedBoxOrigin\(/g) ?? []).length, 3);
   assert.match(exporter, /page\.drawRectangle\(\{\s*x: origin\.x,\s*y: origin\.y,/);
   assert.match(exporter, /page\.drawImage\(image, \{\s*x: origin\.x,\s*y: origin\.y,/);
-  assert.match(exporter, /const origin = rotatePointAroundCenter\([\s\S]*page\.drawText\(line, \{\s*x: origin\.x,\s*y: origin\.y,/);
+  assert.match(exporter, /const origin = rotatePointAroundCenter\([\s\S]*page\.drawText\(line\.text, \{\s*x: origin\.x,\s*y: origin\.y,/);
   assert.match(exporter, /page\.drawEllipse\(\{\s*x: center\.x,\s*y: center\.y,/);
   assert.match(exporter, /const start = visualPointToPdf\(geometry, visualX, visualY\)/);
   assert.match(exporter, /rotate: degrees\(geometry\.rotation \+ rotation\)/);

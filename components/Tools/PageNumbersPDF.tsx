@@ -11,7 +11,7 @@ import { PDFFile, ProcessingStatus } from '../../types';
 import { addPageNumbersToPDF, getPDFPageCount } from '../../services/pdfDocument';
 import { loadPDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
 import { getPdfPreviewLayoutSize } from '../../services/pdfPageGeometry';
-import { getPdfPreviewFont } from '../../services/pdfPreviewFont';
+import { getPdfPreviewFont, unsupportedPdfPreviewCharacter } from '../../services/pdfPreviewFont';
 import type { PDFFont } from 'pdf-lib';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
 import {
@@ -181,9 +181,14 @@ export const PageNumbersPDF: React.FC = () => {
    * The layout the export will use, in page points, so the dashed box shows the label's real
    * clamped position and size instead of a separately invented one.
    */
+  const unsupportedCharacter = unsupportedPdfPreviewCharacter(previewFont, previewText);
+  const textValidationMessage = unsupportedCharacter ? t("business-document.error.b7890f176a", {
+    v0: unsupportedCharacter,
+    v1: unsupportedCharacter.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0'),
+  }) : null;
   const layout = useMemo(
     () =>
-      pageNumberLayout({
+      unsupportedCharacter || !previewFont ? null : pageNumberLayout({
         pageWidth: previewDimensions.width,
         pageHeight: previewDimensions.height,
         text: previewText,
@@ -191,7 +196,7 @@ export const PageNumbersPDF: React.FC = () => {
         fontSize,
         measureTextWidth: (value, fontSize) => previewFont?.widthOfTextAtSize(value, fontSize) ?? 0,
       }),
-    [previewFont, fontSize, previewDimensions.height, previewDimensions.width, previewText, xPercent, yPercent],
+    [previewFont, fontSize, previewDimensions.height, previewDimensions.width, previewText, xPercent, yPercent, unsupportedCharacter],
   );
 
   const previewScaleX = previewSize.width / Math.max(1, previewDimensions.width);
@@ -258,7 +263,7 @@ export const PageNumbersPDF: React.FC = () => {
   }, [editing, previewSize.height, previewSize.width]);
 
   const handleApply = async () => {
-    if (!file || validationMessage) return;
+    if (!file || !previewFont || validationMessage || textValidationMessage) return;
     setStatus({ isProcessing: true, progress: 10, message: t("page-numbers-pdf.applying.page.numbers.e12e84") });
 
     try {
@@ -398,6 +403,8 @@ export const PageNumbersPDF: React.FC = () => {
               <div>
                 <label htmlFor="page-numbers-format" className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">{t("page-numbers-pdf.format.2f3436")}</label>
                 <input id="page-numbers-format"
+                  aria-invalid={!!textValidationMessage}
+                  aria-describedby={textValidationMessage ? "page-number-text-error" : undefined}
                   value={format}
                   onChange={(event) => setFormat(event.target.value)}
                   maxLength={MAX_PDF_TEXT_LENGTH}
@@ -454,6 +461,7 @@ export const PageNumbersPDF: React.FC = () => {
 
               {/* The healthy state only restated the two fields above it, so the
                   box now appears solely when the range is invalid. */}
+              {textValidationMessage && <p id="page-number-text-error" role="alert" className="text-xs text-[var(--status-danger-text)]">{textValidationMessage}</p>}
               {validationMessage && (
                 <div role="alert" className="rounded-[var(--radius-field)] bg-[var(--status-danger-quiet)] px-3 py-2 text-xs text-[var(--status-danger-text)]">
                   {validationMessage}
@@ -464,7 +472,7 @@ export const PageNumbersPDF: React.FC = () => {
                 tone="primary"
                 block
                 busy={status.isProcessing}
-                disabled={!!validationMessage}
+                disabled={!previewFont || !!validationMessage || !!textValidationMessage}
                 icon={<Hash aria-hidden size={18} />}
                 onClick={() => void handleApply()}
               >

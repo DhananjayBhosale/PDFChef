@@ -232,8 +232,10 @@ export class DevanagariPdfWriter {
       if (shaped.glyphs.some((glyph) => glyph.id === 0 || glyph.id >= state.face.numGlyphs)) throw new Error('The selected font cannot draw this paragraph');
       shaped.glyphs.forEach((glyph, index) => {
         const position = shaped.positions[index];
-        const x = piece.x + (advance + position.xOffset) * size / state.face.unitsPerEm;
-        const y = piece.y + (position.yOffset) * size / state.face.unitsPerEm;
+        const dx = (advance + position.xOffset) * size / state.face.unitsPerEm;
+        const dy = position.yOffset * size / state.face.unitsPerEm;
+        const x = piece.x + a * dx + c * dy;
+        const y = piece.y + b * dx + d * dy;
         const code = this.cid(state, glyph.id, '00AD', glyph.advanceWidth * 1000 / state.face.unitsPerEm);
         page.pushOperators(setTextMatrix(a, b, c + a * slant, d + b * slant, x, y), showText(PDFHexString.of(code)));
         advance += position.xAdvance;

@@ -16,7 +16,7 @@ import { addWatermarkToPDF } from '../../services/pdfDocument';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
 import { loadPDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
 import { getPdfPreviewLayoutSize } from '../../services/pdfPageGeometry';
-import { getPdfPreviewFont } from '../../services/pdfPreviewFont';
+import { getPdfPreviewFont, unsupportedPdfPreviewCharacter } from '../../services/pdfPreviewFont';
 import type { PDFFont } from 'pdf-lib';
 import {
   DEFAULT_WATERMARK_COLOR_HEX,
@@ -140,9 +140,14 @@ export const WatermarkPDF: React.FC = () => {
    * the preview honest about the rotated-bounding-box clamp and about rotation happening around
    * the mark's centre.
    */
+  const unsupportedCharacter = unsupportedPdfPreviewCharacter(previewFont, sanitizeWatermarkText(text));
+  const textValidationMessage = unsupportedCharacter ? t("business-document.error.b7890f176a", {
+    v0: unsupportedCharacter,
+    v1: unsupportedCharacter.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0'),
+  }) : null;
   const layout = useMemo(
     () =>
-      watermarkLayout({
+      unsupportedCharacter || !previewFont ? null : watermarkLayout({
         pageWidth: previewDimensions.width,
         pageHeight: previewDimensions.height,
         text,
@@ -151,7 +156,7 @@ export const WatermarkPDF: React.FC = () => {
         placement: { xPercent, yPercent },
         measureTextWidth: (value, fontSize) => previewFont?.widthOfTextAtSize(value, fontSize) ?? 0,
       }),
-    [previewFont, previewDimensions.height, previewDimensions.width, rotation, size, text, xPercent, yPercent],
+    [previewFont, previewDimensions.height, previewDimensions.width, rotation, size, text, xPercent, yPercent, unsupportedCharacter],
   );
 
   // Opening the preview after scrolling used to leave Close wherever the page
@@ -211,7 +216,7 @@ export const WatermarkPDF: React.FC = () => {
   };
 
   const handleApplyWatermark = async () => {
-    if (!file || !sanitizeWatermarkText(text)) return;
+    if (!file || !previewFont || textValidationMessage || !sanitizeWatermarkText(text)) return;
     setStatus({ isProcessing: true, progress: 10, message: t("watermark-pdf.applying.watermark.339c47") });
     try {
       const bytes = await addWatermarkToPDF(file.file, {
@@ -397,11 +402,14 @@ export const WatermarkPDF: React.FC = () => {
                 <label className="block type-footnote font-semibold text-[var(--text-secondary)] mb-1">{t("watermark-pdf.watermark.text.9429e8")}</label>
                 <input
                   value={text}
+                  aria-invalid={!!textValidationMessage}
+                  aria-describedby={textValidationMessage ? "watermark-text-error" : undefined}
                   onChange={(event) => setText(event.target.value)}
                   maxLength={MAX_PDF_TEXT_LENGTH}
                   className="chef-field h-10 w-full px-3 text-sm"
                   placeholder={DEFAULT_WATERMARK_TEXT}
                 />
+                {textValidationMessage && <p id="watermark-text-error" role="alert" className="mt-2 text-xs text-[var(--status-danger-text)]">{textValidationMessage}</p>}
               </div>
 
               <div>
@@ -487,7 +495,7 @@ export const WatermarkPDF: React.FC = () => {
 
               <button
                 onClick={handleApplyWatermark}
-                disabled={status.isProcessing || !sanitizeWatermarkText(text)}
+                disabled={status.isProcessing || !previewFont || !!textValidationMessage || !sanitizeWatermarkText(text)}
                 className="chef-target chef-pressable flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-5 font-semibold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-55"
               >
                 {status.isProcessing ? <Loader2 aria-hidden className="animate-spin" size={18} /> : <Droplets aria-hidden size={18} />}

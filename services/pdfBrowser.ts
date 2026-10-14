@@ -70,7 +70,9 @@ const renderPageToBlob = async (
   scale: number,
   format: ImageExportConfig['format'] | 'image/jpeg',
   quality: number,
+  signal?: AbortSignal,
 ) => {
+  signal?.throwIfAborted();
   const viewport = page.getViewport({ scale });
   const canvas = document.createElement('canvas');
   canvas.width = viewport.width;
@@ -84,18 +86,22 @@ const renderPageToBlob = async (
   context.fillStyle = '#ffffff';
   context.fillRect(0, 0, canvas.width, canvas.height);
 
-  await page.render({ canvasContext: context, viewport }).promise;
-  const width = canvas.width;
-  const height = canvas.height;
-  const blob = await canvasToBlob(canvas, format, quality);
-  canvas.width = 0;
-  canvas.height = 0;
-
-  return {
-    blob,
-    width,
-    height,
-  };
+  const renderTask = page.render({ canvasContext: context, viewport });
+  const cancel = () => renderTask.cancel();
+  signal?.addEventListener('abort', cancel, { once: true });
+  try {
+    await renderTask.promise;
+    signal?.throwIfAborted();
+    const width = canvas.width;
+    const height = canvas.height;
+    const blob = await canvasToBlob(canvas, format, quality);
+    signal?.throwIfAborted();
+    return { blob, width, height };
+  } finally {
+    signal?.removeEventListener('abort', cancel);
+    canvas.width = 0;
+    canvas.height = 0;
+  }
 };
 
 const loadOwnedPDFDocument = async (file: File, onDestroy?: () => void): Promise<any> => {
@@ -253,26 +259,40 @@ export const analyzePDF = async (file: File): Promise<{ isTextHeavy: boolean; pa
   }
 };
 
+export interface PdfPreviewProgress { completed: number; total: number; }
+
 export const getPdfPagePreviews = async (
   file: File,
-  options?: { limit?: number; scale?: number },
+  options?: { limit?: number; scale?: number; signal?: AbortSignal; onProgress?: (progress: PdfPreviewProgress) => void },
 ): Promise<string[]> => {
-  const pdf = await loadPDFDocument(file);
-  const pageLimit = options?.limit ? Math.min(pdf.numPages, options.limit) : pdf.numPages;
-  const scale = options?.scale ?? 0.3;
+  options?.signal?.throwIfAborted();
+  // A preview batch owns its worker. The shared cache has other consumers whose documents
+  // must remain usable when this batch finishes or the user chooses a different file.
+  const pdf = await loadDisposablePDFDocument(file);
   const previews: string[] = [];
 
-  for (let index = 0; index < pageLimit; index += 1) {
-    const page = await pdf.getPage(index + 1);
-    const { blob } = await renderPageToBlob(page, scale, 'image/jpeg', 0.7);
-    previews.push(URL.createObjectURL(blob));
-
-    if ((index + 1) % 4 === 0) {
-      await nextFrame();
+  try {
+    options?.signal?.throwIfAborted();
+    const pageLimit = options?.limit ? Math.min(pdf.numPages, options.limit) : pdf.numPages;
+    const scale = options?.scale ?? 0.3;
+    options?.onProgress?.({ completed: 0, total: pageLimit });
+    for (let index = 0; index < pageLimit; index += 1) {
+      options?.signal?.throwIfAborted();
+      const page = await pdf.getPage(index + 1);
+      const { blob } = await renderPageToBlob(page, scale, 'image/jpeg', 0.7, options?.signal);
+      previews.push(URL.createObjectURL(blob));
+      options?.onProgress?.({ completed: index + 1, total: pageLimit });
+      // Paint the first completed preview, then keep the existing four-page yield cadence.
+      if (index === 0 || (index + 1) % 4 === 0) await nextFrame();
     }
+    options?.signal?.throwIfAborted();
+    return previews;
+  } catch (error) {
+    previews.forEach(url => URL.revokeObjectURL(url));
+    throw error;
+  } finally {
+    await pdf.destroy();
   }
-
-  return previews;
 };
 
 export interface ImageExportConfig {
@@ -929,6 +949,17 @@ export const getPageTextSignatures = async (
   }
 };
 
+// Keep the preview and size sample on the same raster scale and JPEG encoder as export.
+const renderCompressedPage = (page: any, config: AdaptiveConfig) =>
+  renderPageToBlob(page, config.scale * 1.5, 'image/jpeg', config.quality);
+
+const blobToDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result as string);
+  reader.onerror = () => reject(new LocalizedError("pdf-browser.preview.render.failed.abb8ce"));
+  reader.readAsDataURL(blob);
+});
+
 export const generatePreviewPair = async (
   file: File,
   config: AdaptiveConfig,
@@ -942,33 +973,14 @@ export const generatePreviewPair = async (
   const pageIndex = Math.max(0, Math.min(pageCount - 1, requestedPageIndex));
   const page = await pdf.getPage(pageIndex + 1);
 
-  const originalImage = await (async () => {
-    const viewport = page.getViewport({ scale: 1.5 });
-    const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new LocalizedError("pdf-browser.preview.render.failed.abb8ce");
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    return canvas.toDataURL('image/jpeg', 0.9);
-  })();
-
-  const compressedImage = await (async () => {
-    const viewport = page.getViewport({ scale: config.scale });
-    const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new LocalizedError("pdf-browser.preview.render.failed.abb8ce");
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    return canvas.toDataURL('image/jpeg', config.quality);
-  })();
-
-  const estimatedTotalSize = Math.round(file.size * (compressedImage.length / originalImage.length));
+  const original = await renderPageToBlob(page, 1.5, 'image/jpeg', 0.9);
+  const compressed = await renderCompressedPage(page, config);
+  const [originalImage, compressedImage] = await Promise.all([
+    blobToDataUrl(original.blob), blobToDataUrl(compressed.blob),
+  ]);
+  const estimatedTotalSize = projectCompressedSize({
+    bytesPerPage: compressed.blob.size, pageCount, sampledPages: 1,
+  });
 
   return {
     original: originalImage,
@@ -1123,7 +1135,7 @@ export const compressPDFAdaptive = async (
       Array.from({ length: batchEnd - batchStart }, async (_, offset) => {
         const page = await pdf.getPage(batchStart + offset + 1);
         const originalViewport = page.getViewport({ scale: 1.0 });
-        const { blob } = await renderPageToBlob(page, config.scale * 1.5, 'image/jpeg', config.quality);
+        const { blob } = await renderCompressedPage(page, config);
         completedPages += 1;
         onProgress((completedPages / numPages) * 90);
 
@@ -1194,7 +1206,7 @@ export const measureCompressedSize = async (
     const page = await pdf.getPage(pageIndex + 1);
     // The exporter's own arguments, verbatim. Anything else would measure a
     // different encoder than the one that writes the file.
-    const { blob } = await renderPageToBlob(page, config.scale * 1.5, 'image/jpeg', config.quality);
+    const { blob } = await renderCompressedPage(page, config);
     totalBytes += blob.size;
     sampledPages += 1;
   }

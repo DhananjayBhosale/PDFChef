@@ -44,7 +44,6 @@ interface SignatureItem {
 type EditMode = 'drag' | 'resize' | null;
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-const clampWidth = (value: number) => clamp(value, 0.1, 0.8);
 
 const getPoint = (event: PointerEvent | React.PointerEvent) => ({ x: event.clientX, y: event.clientY });
 
@@ -101,11 +100,11 @@ const rotateSignatureImage = async (dataUrl: string) => {
   canvas.width = image.height;
   canvas.height = image.width;
   const context = canvas.getContext('2d');
-  if (!context) return dataUrl;
+  if (!context) throw new Error(t("sign-pdf.the.signature.could.not.be.turned.try.1d434d"));
   context.translate(canvas.width, 0);
   context.rotate(Math.PI / 2);
   context.drawImage(image, 0, 0);
-  return canvas.toDataURL('image/png');
+  return { dataUrl: canvas.toDataURL('image/png'), aspectRatio: canvas.width / canvas.height };
 };
 
 const typedSignatureImage = (text: string, color: string) => {
@@ -209,8 +208,9 @@ const SignatureOverlay: React.FC<{
         const rawWidth = originRef.current.width + dx / rect.width;
         const maxWidthByX = 1 - originRef.current.x;
         const maxWidthByY = (1 - originRef.current.y) * originRef.current.aspectRatio * rect.height / rect.width;
-        const maxWidth = Math.max(0.1, Math.min(0.9, maxWidthByX, maxWidthByY));
-        const nextWidth = clampWidth(clamp(rawWidth, 0.1, maxWidth));
+        const maxWidth = Math.min(1, maxWidthByX, maxWidthByY);
+        const minWidth = Math.min(0.1, originRef.current.width, maxWidth);
+        const nextWidth = clamp(rawWidth, minWidth, maxWidth);
         onUpdate(item.localId, { width: nextWidth });
       }
     };
@@ -478,7 +478,6 @@ export const SignPDF: React.FC = () => {
           ? {
               ...signature,
               ...updates,
-              width: updates.width !== undefined ? clampWidth(updates.width) : signature.width,
             }
           : signature,
       ),
@@ -762,15 +761,28 @@ export const SignPDF: React.FC = () => {
   };
 
   const rotateSelectedSignature = async () => {
-    if (!selectedSignature) return;
+    if (!selectedSignature || !pdfDoc) return;
     try {
-      const dataUrl = await rotateSignatureImage(selectedSignature.dataUrl);
-      const image = new Image();
-      image.onload = () => updateSignature(selectedSignature.localId, {
-        dataUrl,
-        aspectRatio: image.width / Math.max(1, image.height),
+      const [rotated, page] = await Promise.all([
+        rotateSignatureImage(selectedSignature.dataUrl),
+        pdfDoc.getPage(selectedSignature.pageIndex + 1),
+      ]);
+      const viewport = page.getViewport({ scale: 1 });
+      const oldWidth = selectedSignature.width * viewport.width;
+      const oldHeight = oldWidth / selectedSignature.aspectRatio;
+      // A quarter turn swaps physical dimensions; keeping the old width would
+      // enlarge a normal horizontal signature into a tall, clipped image.
+      const fit = Math.min(1, viewport.width / oldHeight, viewport.height / oldWidth);
+      const width = oldHeight * fit / viewport.width;
+      const height = oldWidth * fit / viewport.height;
+      const centerX = selectedSignature.x + selectedSignature.width / 2;
+      const centerY = selectedSignature.y + oldHeight / viewport.height / 2;
+      updateSignature(selectedSignature.localId, {
+        ...rotated,
+        width,
+        x: clamp(centerX - width / 2, 0, 1 - width),
+        y: clamp(centerY - height / 2, 0, 1 - height),
       });
-      image.src = dataUrl;
     } catch {
       setStatus({ isProcessing: false, progress: 0, message: '', error: t("sign-pdf.the.signature.could.not.be.turned.try.1d434d") });
     }
@@ -969,8 +981,8 @@ export const SignPDF: React.FC = () => {
                         label={t("sign-pdf.stamp.width.b43467")}
                         suffix="%"
                         decimals={2}
-                        min={10}
-                        max={80}
+                        min={Math.min(10, Number((selectedSignature.width * 100).toFixed(2)))}
+                        max={Math.max(80, Number((selectedSignature.width * 100).toFixed(2)))}
                         step={0.25}
                         value={Number((selectedSignature.width * 100).toFixed(2))}
                         onChange={(next) => updateSignature(selectedSignature.localId, { width: next / 100 })}

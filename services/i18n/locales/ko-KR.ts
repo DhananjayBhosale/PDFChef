@@ -1,6 +1,13 @@
 import type { Catalog } from '../core';
 
 export default {
+  "preview-progress.opening": "PDF를 여는 중",
+  "preview-progress.preparing": "페이지를 준비하고 있어요",
+  "preview-progress.count": "미리보기 {total}개 중 {completed}개 준비 완료",
+  "preview-progress.page": "{page}페이지 준비 중",
+  "preview-progress.hint": "큰 PDF는 시간이 조금 걸릴 수 있어요. 모든 작업은 기기 안에서 이루어집니다.",
+  "preview-progress.lazy": "스크롤하면 더 많은 미리보기가 나타납니다.",
+
   "page-range-selector.label": "페이지 번호 또는 범위",
   "page-range-selector.example": "예: 187-230",
   "page-range-selector.select": "선택",
@@ -550,7 +557,6 @@ export default {
   "delete-pages.mark.d7cda0": "표시",
   "delete-pages.restore.all.a9c39c": "모두 복원",
   "delete-pages.save.without.those.pages.3b9676": "해당 페이지를 제외하고 저장",
-  "delete-pages.loading.pages.1b27e2": "페이지 불러오는 중...",
   "delete-pages.the.pages.could.not.be.shown.choose.9884e4": "페이지를 표시할 수 없습니다. 다른 파일을 선택하거나 먼저 PDF 복구를 실행하세요.",
   "delete-pages.page.893387": "{v0} 페이지 {v1}",
   "delete-pages.page.preview.7f7e5e": "{v0}페이지 미리보기",
@@ -633,7 +639,6 @@ export default {
   "extract-pages.choose.another.pdf.9434e3": "다른 PDF 선택",
   "extract-pages.select.all.1fc9a3": "모두 선택",
   "extract-pages.clear.83b12c": "지우기",
-  "extract-pages.loading.pages.1b27e2": "페이지 불러오는 중...",
   "extract-pages.this.pdf.has.no.pages.in.it.8c754b": "이 PDF에는 페이지가 없습니다. 다른 파일을 선택하세요.",
   "flatten-pdf.locking.the.filled.answers.c0bd41": "입력된 답변 고정 중…",
   "flatten-pdf.getting.your.pdf.ready.3a0d56": "PDF 준비 중…",
@@ -1032,7 +1037,6 @@ export default {
   "reorder-pdf.redo.742739": "다시 실행",
   "reorder-pdf.reset.daee76": "초기화",
   "reorder-pdf.save.reordered.pdf.b8306f": "재정렬된 PDF 저장",
-  "reorder-pdf.generating.page.previews.83467f": "페이지 미리보기 생성 중...",
   "reorder-pdf.the.pages.could.not.be.shown.choose.9884e4": "페이지를 표시할 수 없습니다. 다른 파일을 선택하거나 먼저 'PDF 복구'를 실행하세요.",
   "reorder-pdf.drag.page.8b847a": "{v0}페이지 드래그",
   "reorder-pdf.page.c140ba": "{v0}페이지",
@@ -1066,7 +1070,6 @@ export default {
   "rotate-pdf.clear.83b12c": "지우기",
   "rotate-pdf.reset.daee76": "초기화",
   "rotate-pdf.save.turned.pdf.fa1cfd": "회전된 PDF 저장",
-  "rotate-pdf.loading.pages.1b27e2": "페이지 로드 중...",
   "rotate-pdf.the.pages.could.not.be.shown.choose.9884e4": "페이지를 표시할 수 없습니다. 다른 파일을 선택하거나 먼저 'PDF 복구'를 실행하세요.",
   "security-pdf.encrypting.pdf.on.this.device.af1739": "이 기기에서 PDF 암호화 중...",
   "security-pdf.protected.copy.ready.3fad41": "보호된 사본 준비 완료: {v0}.",
@@ -1164,7 +1167,6 @@ export default {
   "split-pdf.cancel.19766e": "취소",
   "split-pdf.save.the.split.files.33c422": "분할된 파일 저장",
   "split-pdf.pages.to.include.225127": "포함할 페이지",
-  "split-pdf.generating.page.previews.83467f": "페이지 미리보기 생성 중...",
   "split-pdf.page.previews.are.unavailable.318997": "페이지 미리보기를 사용할 수 없습니다",
   "split-pdf.retry.previews.7e9483": " 미리보기 다시 시도",
   "split-pdf.the.pages.could.not.be.shown.here.a4b115": "여기에 페이지를 표시할 수 없습니다. 위에서 페이지 번호로 계속 분할할 수 있습니다.",
@@ -1392,7 +1394,6 @@ export default {
   "pdfpreview-modal.close.preview.7d8ab3": "미리보기 닫기",
   "pdfpreview-modal.previous.page.1208ec": "이전 페이지",
   "pdfpreview-modal.next.page.c08ac7": "다음 페이지",
-  "pdfpreview-modal.rendering.high.quality.preview.916fc2": "고화질 미리보기 렌더링 중...",
   "pdfpreview-modal.dragging.26d17c": "드래그 중",
   "page-thumbnail.page.8b21ee": "페이지 {v0}{v1}",
   "page-thumbnail.page.c140ba": "{v0}페이지",
@@ -2129,5 +2130,8 @@ export default {
   "compareReport.none": "<없음>",
   "compareReport.page": "페이지 {v0}",
   "compareReport.extractedText": "{v0} 추출된 텍스트: {v1}",
-  "compareReport.truncatedTextDetails": "추출된 텍스트 세부 정보(일부 생략됨):"
+  "compareReport.truncatedTextDetails": "추출된 텍스트 세부 정보(일부 생략됨):",
+  "make-fillable.dropdown.options.required": "각 드롭다운에 선택 항목을 추가하세요. 비어 있거나 중복된 항목은 삭제하세요.",
+  "error.pdfTextBoxOverflow": "텍스트 상자가 너무 작습니다. 저장하기 전에 상자를 키우거나 텍스트를 줄이세요.",
+  "error.pdfTextBoxUnsupported": "이 텍스트 상자에는 현재 글꼴로 저장할 수 없는 문자가 있습니다. 저장하기 전에 해당 문자를 삭제하세요."
 } satisfies Catalog;

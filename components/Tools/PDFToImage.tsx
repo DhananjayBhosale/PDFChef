@@ -125,6 +125,8 @@ export const PDFToImage: React.FC = () => {
 
   const { zoom, zoomIn, zoomOut, resetZoom } = useZoom(1.0);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const stopPanRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => { stopPanRef.current?.(); }, [file?.id, exportMode]);
 
   const replaceEmbeddedImages = useCallback((nextImages: EmbeddedPdfImageAsset[]) => {
     revokeObjectUrls(embeddedImagesRef.current.map((image) => image.objectUrl));
@@ -239,26 +241,44 @@ export const PDFToImage: React.FC = () => {
   }, [updatePreview]);
 
   const handlePointerDown = (event: React.PointerEvent) => {
-    if (zoom <= 1) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
+    if (zoom <= 1 || event.button !== 0 || !event.isPrimary) return;
+    stopPanRef.current?.();
+    const target = event.currentTarget;
+    const pointerId = event.pointerId;
+    target.setPointerCapture(pointerId);
     const startX = event.clientX - pan.x;
     const startY = event.clientY - pan.y;
 
     const onMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return;
       setPan({ x: moveEvent.clientX - startX, y: moveEvent.clientY - startY });
     };
-    const onUp = (upEvent: PointerEvent) => {
-      event.currentTarget.releasePointerCapture(upEvent.pointerId);
+    const stop = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      window.removeEventListener('blur', stop);
+      target.removeEventListener('lostpointercapture', onUp);
+      stopPanRef.current = null;
+      if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
+    };
+    const onUp = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId === pointerId) stop();
     };
 
+    stopPanRef.current = stop;
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    window.addEventListener('blur', stop);
+    target.addEventListener('lostpointercapture', onUp);
   };
 
   useEffect(() => {
-    if (zoom === 1) setPan({ x: 0, y: 0 });
+    if (zoom <= 1) {
+      stopPanRef.current?.();
+      setPan({ x: 0, y: 0 });
+    }
   }, [zoom]);
 
   const resolvedPageSelection = useMemo<number[] | null>(() => {
@@ -672,6 +692,7 @@ export const PDFToImage: React.FC = () => {
 
                 <div
                   className={`relative flex flex-1 items-center justify-center overflow-hidden ${zoom > 1 ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                  style={{ touchAction: zoom > 1 ? 'none' : undefined }}
                   onPointerDown={handlePointerDown}
                 >
                   {isGeneratingPreview && (

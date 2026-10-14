@@ -1,6 +1,13 @@
 import type { Catalog } from '../core';
 
 export default {
+  "preview-progress.opening": "PDF dosyanız açılıyor",
+  "preview-progress.preparing": "Sayfalarınız hazırlanıyor",
+  "preview-progress.count": "{total} önizlemeden {completed} tanesi hazır",
+  "preview-progress.page": "{page}. sayfa hazırlanıyor",
+  "preview-progress.hint": "Büyük PDF dosyaları biraz zaman alabilir. Her şey cihazınızda kalır.",
+  "preview-progress.lazy": "Kaydırdıkça daha fazla önizleme görünür.",
+
   "page-range-selector.label": "Sayfa numaraları veya aralıkları",
   "page-range-selector.example": "ör. 187-230",
   "page-range-selector.select": "Seç",
@@ -559,7 +566,6 @@ export default {
   "delete-pages.mark.d7cda0": "İşaretle",
   "delete-pages.restore.all.a9c39c": "Tümünü geri yükle",
   "delete-pages.save.without.those.pages.3b9676": "Bu sayfalar olmadan kaydet",
-  "delete-pages.loading.pages.1b27e2": "Sayfalar yükleniyor...",
   "delete-pages.the.pages.could.not.be.shown.choose.9884e4": "Sayfalar gösterilemedi. Başka bir dosya seçin veya önce dosyada PDF'i Onar aracını çalıştırın.",
   "delete-pages.page.893387": "{v1}. sayfa: {v0}",
   "delete-pages.page.preview.7f7e5e": "{v0}. sayfa önizlemesi",
@@ -645,7 +651,6 @@ export default {
   "extract-pages.choose.another.pdf.9434e3": "Başka bir PDF seçin",
   "extract-pages.select.all.1fc9a3": "Tümünü seç",
   "extract-pages.clear.83b12c": "Temizle",
-  "extract-pages.loading.pages.1b27e2": "Sayfalar yükleniyor...",
   "extract-pages.this.pdf.has.no.pages.in.it.8c754b": "Bu PDF'te sayfa yok. Başka bir dosya seçin.",
   "flatten-pdf.locking.the.filled.answers.c0bd41": "Doldurulan yanıtlar kilitleniyor…",
   "flatten-pdf.getting.your.pdf.ready.3a0d56": "PDF'iniz hazırlanıyor…",
@@ -1064,7 +1069,6 @@ export default {
   "reorder-pdf.redo.742739": "Yinele",
   "reorder-pdf.reset.daee76": "Sıfırla",
   "reorder-pdf.save.reordered.pdf.b8306f": "Yeniden sıralanan PDF'i kaydet",
-  "reorder-pdf.generating.page.previews.83467f": "Sayfa önizlemeleri oluşturuluyor...",
   "reorder-pdf.the.pages.could.not.be.shown.choose.9884e4": "Sayfalar gösterilemedi. Başka bir dosya seçin veya önce dosyada PDF'i Onar aracını çalıştırın.",
   "reorder-pdf.drag.page.8b847a": "{v0}. sayfayı sürükleyin",
   "reorder-pdf.page.c140ba": "Sayfa {v0}",
@@ -1098,7 +1102,6 @@ export default {
   "rotate-pdf.clear.83b12c": "Temizle",
   "rotate-pdf.reset.daee76": "Sıfırla",
   "rotate-pdf.save.turned.pdf.fa1cfd": "Döndürülen PDF'i kaydet",
-  "rotate-pdf.loading.pages.1b27e2": "Sayfalar yükleniyor...",
   "rotate-pdf.the.pages.could.not.be.shown.choose.9884e4": "Sayfalar gösterilemedi. Başka bir dosya seçin veya önce dosyada PDF'i Onar aracını çalıştırın.",
   "security-pdf.encrypting.pdf.on.this.device.af1739": "PDF bu cihazda şifreleniyor...",
   "security-pdf.protected.copy.ready.3fad41": "Korumalı kopya hazır: {v0}.",
@@ -1198,7 +1201,6 @@ export default {
   "split-pdf.cancel.19766e": "İptal",
   "split-pdf.save.the.split.files.33c422": "Bölünen dosyaları kaydet",
   "split-pdf.pages.to.include.225127": "Dahil edilecek sayfalar",
-  "split-pdf.generating.page.previews.83467f": "Sayfa önizlemeleri oluşturuluyor...",
   "split-pdf.page.previews.are.unavailable.318997": "Sayfa önizlemeleri kullanılamıyor",
   "split-pdf.retry.previews.7e9483": " Önizlemeleri tekrar dene",
   "split-pdf.the.pages.could.not.be.shown.here.a4b115": "Sayfalar burada gösterilemedi. Yine de yukarıdaki sayfa numaralarına göre bölebilirsiniz.",
@@ -1416,7 +1418,6 @@ export default {
   "pdfpreview-modal.close.preview.7d8ab3": "Önizlemeyi kapat",
   "pdfpreview-modal.previous.page.1208ec": "Önceki sayfa",
   "pdfpreview-modal.next.page.c08ac7": "Sonraki sayfa",
-  "pdfpreview-modal.rendering.high.quality.preview.916fc2": "Yüksek kaliteli önizleme oluşturuluyor...",
   "pdfpreview-modal.dragging.26d17c": "Sürükleniyor",
   "page-thumbnail.page.8b21ee": "Sayfa {v0}{v1}",
   "page-thumbnail.page.c140ba": "Sayfa {v0}",
@@ -2186,5 +2187,8 @@ export default {
   "compareReport.none": "<yok>",
   "compareReport.page": "Sayfa {v0}",
   "compareReport.extractedText": "{v0} belgesinden ayıklanan metin: {v1}",
-  "compareReport.truncatedTextDetails": "Ayıklanan metin ayrıntıları (kesildi):"
+  "compareReport.truncatedTextDetails": "Ayıklanan metin ayrıntıları (kesildi):",
+  "make-fillable.dropdown.options.required": "Her açılır listeye seçenekler ekleyin. Boş veya yinelenen seçenekleri kaldırın.",
+  "error.pdfTextBoxOverflow": "Bu metin kutusu çok küçük. Kaydetmeden önce kutuyu büyütün veya metni kısaltın.",
+  "error.pdfTextBoxUnsupported": "Bu metin kutusu, yazı tipinin kaydedemediği karakterler içeriyor. Kaydetmeden önce bu karakterleri kaldırın."
 } satisfies Catalog;

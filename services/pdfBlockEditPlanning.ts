@@ -35,6 +35,8 @@ export type BlockEditPlan =
   | { mode: 'blocked'; reason: string };
 
 export interface BlockEditPlanOptions {
+  /** Actual editor styles; repeated text alone cannot identify which source run was edited. */
+  segments?: StyledSegment[][];
   /**
    * Width of `text` when drawn at `fontSize`, in the same pixel space as the block's geometry.
    * Injected so this module stays pure; the editor passes a measurement bound to the resolved font.
@@ -127,6 +129,14 @@ const planLineChange = (
 
   const first = fallbackTouched[0];
   const last = fallbackTouched[fallbackTouched.length - 1];
+  // A direct splice moves all surviving text into the first source object. If the selection
+  // crosses a face or size boundary, that would also restyle its untouched suffix (and any
+  // unchanged runs between separate replacements). Keep the editor's styled segments instead.
+  if (fallbackTouched.some(({ run }) => (
+    run.fontKey !== first.run.fontKey || run.fontSize !== first.run.fontSize
+  ))) {
+    return { runEdits: [], reason: 'the edit spans different text styles that must be preserved' };
+  }
   const rebuiltText = originalText.slice(first.start, changeStart)
     + replacementMiddle
     + originalText.slice(changeEnd, last.end);
@@ -191,7 +201,8 @@ export const planBlockEdit = (
   nextText: string,
   options: BlockEditPlanOptions = {},
 ): BlockEditPlan => {
-  if (nextText === block.text) return { mode: 'unchanged' };
+  if (nextText === block.text && (!options.segments
+    || styledTextEqual(blockStyledSegments(block), options.segments, block.fontSize))) return { mode: 'unchanged' };
 
   const rotated = Math.abs(block.angle) > AXIS_ALIGNED_TOLERANCE;
   const cannotRedraw = (reason: string): BlockEditPlan => (rotated
@@ -220,6 +231,15 @@ export const planBlockEdit = (
     runEdits.push(...change.runEdits);
   }
 
+  if (options.segments) {
+    const replacements = new Map(runEdits.map(edit => [edit.itemIndex, edit.replacementText]));
+    const directStyles = block.lines.map(line => line.runs.map(run => ({
+      text: replacements.get(run.itemIndex) ?? run.text, fontKey: run.fontKey, fontSize: run.fontSize,
+    })));
+    if (!styledTextEqual(directStyles, options.segments, block.fontSize)) {
+      return cannotRedraw('the original text objects would change the edited text’s font or size');
+    }
+  }
   if (runEdits.length === 0) return { mode: 'unchanged' };
   return { mode: 'direct', runEdits };
 };
@@ -230,6 +250,22 @@ export interface StyledSegment {
   /** Original point size, retained when the paragraph needs a redraw. */
   fontSize?: number;
 }
+
+/** Compare appearance independently of how the browser split adjacent equal-style spans. */
+export const styledTextEqual = (first: StyledSegment[][], second: StyledSegment[][], defaultSize: number) => {
+  const normalize = (lines: StyledSegment[][]) => lines.map(line => {
+    const merged: StyledSegment[] = [];
+    line.forEach(segment => {
+      if (!segment.text) return;
+      const size = segment.fontSize ?? defaultSize;
+      const last = merged.at(-1);
+      if (last?.fontKey === segment.fontKey && last.fontSize === size) last.text += segment.text;
+      else merged.push({ text: segment.text, fontKey: segment.fontKey, fontSize: size });
+    });
+    return merged;
+  });
+  return JSON.stringify(normalize(first)) === JSON.stringify(normalize(second));
+};
 
 /**
  * Wrap edited text to the paragraph's original measure, keeping each stretch with the face it is
@@ -304,6 +340,55 @@ export const wrapStyledText = (
 /** The plain-text form of a wrapped line, for measuring and for drawing as one run. */
 export const styledLineText = (line: StyledSegment[]) => line.map((segment) => segment.text).join('');
 
+/** Restore style metadata when plaintext-only editing removes or duplicates run spans. */
+export const preserveStyledTextEdit = (
+  previous: StyledSegment[][],
+  text: string,
+  fallback: StyledSegment,
+  selection?: { start: number; end: number } | null,
+): StyledSegment[][] => {
+  const source = previous.map(styledLineText).join('\n');
+  // Use the browser's pre-input target range when available. Equal text on both sides of a
+  // selection makes a prefix/suffix diff ambiguous, even though the actual selection is known.
+  const anchored = selection && selection.start >= 0 && selection.end >= selection.start
+    && selection.end <= source.length && text.length >= selection.start + source.length - selection.end
+    && text.startsWith(source.slice(0, selection.start)) && text.endsWith(source.slice(selection.end));
+  const prefix = anchored ? selection.start : commonPrefixLength(source, text);
+  const suffix = anchored ? source.length - selection.end : commonSuffixLength(source, text, prefix);
+  const end = source.length - suffix;
+  let cursor = 0;
+  const spans = previous.flatMap((line, index) => (
+    index < previous.length - 1 ? [...line, { ...(line.at(-1) ?? fallback), text: '\n' }] : line
+  )).map(segment => {
+    const span = { segment, start: cursor, end: cursor + segment.text.length };
+    cursor = span.end;
+    return span;
+  });
+  // Replacement inherits its first selected character; insertion at a boundary extends the
+  // preceding run. Prefix and suffix retain their original faces and point sizes exactly.
+  const inherited = (prefix === end
+    ? spans.find(span => span.start < prefix && span.end >= prefix)
+    : spans.find(span => span.start <= prefix && span.end > prefix))?.segment ?? spans[0]?.segment ?? fallback;
+  const pieces: StyledSegment[] = [];
+  const copy = (start: number, finish: number) => spans.forEach(span => {
+    const from = Math.max(start, span.start), to = Math.min(finish, span.end);
+    if (to > from) pieces.push({ ...span.segment, text: span.segment.text.slice(from - span.start, to - span.start) });
+  });
+  copy(0, prefix);
+  pieces.push({ ...inherited, text: text.slice(prefix, text.length - suffix) });
+  copy(end, source.length);
+  const lines: StyledSegment[][] = [[]];
+  pieces.forEach(piece => piece.text.split('\n').forEach((part, index) => {
+    if (index > 0) lines.push([]);
+    if (!part) return;
+    const line = lines[lines.length - 1];
+    const last = line.at(-1);
+    if (last?.fontKey === piece.fontKey && last.fontSize === piece.fontSize) last.text += part;
+    else line.push({ ...piece, text: part });
+  }));
+  return lines;
+};
+
 /** One occurrence of a search term inside a paragraph. */
 export interface StyledMatch {
   /** Index of the wrapped line the match starts on. */
@@ -332,13 +417,32 @@ export const findInStyledLines = (
   const matches: StyledMatch[] = [];
 
   lines.forEach((line, lineIndex) => {
-    const haystack = foldCase(styledLineText(line), caseSensitive);
+    const original = styledLineText(line);
+    const haystack = foldCase(original, caseSensitive);
+    // Unicode lowercasing can expand a character (İ -> i + combining dot). Search the complete
+    // folded string so contextual casing still works, then map its positions back to the PDF's
+    // original UTF-16 offsets before highlighting or replacing any text.
+    const offsets: Array<{ start: number; end: number }> = [];
+    if (haystack.length !== original.length) {
+      let start = 0;
+      for (const character of original) {
+        const end = start + character.length;
+        for (let index = 0; index < foldCase(character, caseSensitive).length; index += 1) {
+          offsets.push({ start, end });
+        }
+        start = end;
+      }
+    }
     let from = 0;
     for (;;) {
       const at = haystack.indexOf(needle, from);
       if (at < 0) break;
-      matches.push({ line: lineIndex, start: at, end: at + query.length });
-      from = at + query.length;
+      matches.push({
+        line: lineIndex,
+        start: offsets[at]?.start ?? at,
+        end: offsets[at + needle.length - 1]?.end ?? at + needle.length,
+      });
+      from = at + needle.length;
     }
   });
 

@@ -89,3 +89,14 @@ test('a result discarded while its access is checked is never held for a later p
   pending.finish(finished);
   assert.equal(pending.hold(finished, save), false, 'a finished request cannot be held');
 });
+
+test('a late authorization can claim only a still-live export request', () => {
+  const pending = new PendingExport();
+  const discarded = pending.begin('result-a');
+  const surviving = pending.begin('result-b');
+  pending.cancel('result-a');
+
+  assert.equal(pending.finish(discarded), false, 'a discarded result must not export after authorization');
+  assert.equal(pending.finish(surviving), true, 'another result remains exportable');
+  assert.equal(pending.finish(surviving), false, 'the same authorization cannot execute twice');
+});

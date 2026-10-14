@@ -1,6 +1,13 @@
 import type { Catalog } from '../core';
 
 export default {
+  "preview-progress.opening": "Apertura del tuo PDF",
+  "preview-progress.preparing": "Le tue pagine prendono vita",
+  "preview-progress.count": "{completed} anteprime su {total} pronte",
+  "preview-progress.page": "Preparazione della pagina {page}",
+  "preview-progress.hint": "I PDF grandi possono richiedere un momento. Tutto resta sul tuo dispositivo.",
+  "preview-progress.lazy": "Altre anteprime appaiono mentre scorri.",
+
   "page-range-selector.label": "Numeri o intervalli di pagine",
   "page-range-selector.example": "es. 187-230",
   "page-range-selector.select": "Seleziona",
@@ -566,7 +573,6 @@ export default {
   "delete-pages.mark.d7cda0": "Contrassegna",
   "delete-pages.restore.all.a9c39c": "Ripristina tutto",
   "delete-pages.save.without.those.pages.3b9676": "Salva senza quelle pagine",
-  "delete-pages.loading.pages.1b27e2": "Caricamento pagine in corso...",
   "delete-pages.the.pages.could.not.be.shown.choose.9884e4": "Impossibile mostrare le pagine. Scegli un altro file oppure esegui prima Ripara PDF.",
   "delete-pages.page.893387": "{v0} pagina {v1}",
   "delete-pages.page.preview.7f7e5e": "Anteprima pagina {v0}",
@@ -655,7 +661,6 @@ export default {
   "extract-pages.choose.another.pdf.9434e3": "Scegli un altro PDF",
   "extract-pages.select.all.1fc9a3": "Seleziona tutto",
   "extract-pages.clear.83b12c": "Cancella",
-  "extract-pages.loading.pages.1b27e2": "Caricamento pagine in corso...",
   "extract-pages.this.pdf.has.no.pages.in.it.8c754b": "Questo PDF non contiene pagine. Scegli un altro file.",
   "flatten-pdf.locking.the.filled.answers.c0bd41": "Blocco delle risposte inserite in corso…",
   "flatten-pdf.getting.your.pdf.ready.3a0d56": "Preparazione del PDF in corso…",
@@ -1070,7 +1075,6 @@ export default {
   "reorder-pdf.redo.742739": "Ripeti",
   "reorder-pdf.reset.daee76": "Reimposta",
   "reorder-pdf.save.reordered.pdf.b8306f": "Salva PDF riordinato",
-  "reorder-pdf.generating.page.previews.83467f": "Generazione anteprime delle pagine...",
   "reorder-pdf.the.pages.could.not.be.shown.choose.9884e4": "Impossibile mostrare le pagine. Scegli un altro file o esegui prima Ripara PDF su di esso.",
   "reorder-pdf.drag.page.8b847a": "Trascina la pagina {v0}",
   "reorder-pdf.page.c140ba": "Pagina {v0}",
@@ -1104,7 +1108,6 @@ export default {
   "rotate-pdf.clear.83b12c": "Cancella",
   "rotate-pdf.reset.daee76": "Reimposta",
   "rotate-pdf.save.turned.pdf.fa1cfd": "Salva PDF ruotato",
-  "rotate-pdf.loading.pages.1b27e2": "Caricamento pagine...",
   "rotate-pdf.the.pages.could.not.be.shown.choose.9884e4": "Impossibile mostrare le pagine. Scegli un altro file o esegui prima Ripara PDF su di esso.",
   "security-pdf.encrypting.pdf.on.this.device.af1739": "Crittografia del PDF su questo dispositivo...",
   "security-pdf.protected.copy.ready.3fad41": "Copia protetta pronta: {v0}.",
@@ -1206,7 +1209,6 @@ export default {
   "split-pdf.cancel.19766e": "Annulla",
   "split-pdf.save.the.split.files.33c422": "Salva i file divisi",
   "split-pdf.pages.to.include.225127": "Pagine da includere",
-  "split-pdf.generating.page.previews.83467f": "Generazione anteprime delle pagine...",
   "split-pdf.page.previews.are.unavailable.318997": "Le anteprime delle pagine non sono disponibili",
   "split-pdf.retry.previews.7e9483": " Riprova anteprime",
   "split-pdf.the.pages.could.not.be.shown.here.a4b115": "Impossibile mostrare le pagine qui. Puoi comunque dividere in base ai numeri di pagina sopra.",
@@ -1442,7 +1444,6 @@ export default {
   "pdfpreview-modal.close.preview.7d8ab3": "Chiudi anteprima",
   "pdfpreview-modal.previous.page.1208ec": "Pagina precedente",
   "pdfpreview-modal.next.page.c08ac7": "Pagina successiva",
-  "pdfpreview-modal.rendering.high.quality.preview.916fc2": "Generazione anteprima in alta qualità in corso...",
   "pdfpreview-modal.dragging.26d17c": "Trascinamento",
   "page-thumbnail.page.8b21ee": "Pagina {v0}{v1}",
   "page-thumbnail.page.c140ba": "Pagina {v0}",
@@ -2243,5 +2244,8 @@ export default {
   "compareReport.none": "<nessuno>",
   "compareReport.page": "Pagina {v0}",
   "compareReport.extractedText": "Testo estratto {v0}: {v1}",
-  "compareReport.truncatedTextDetails": "Dettagli del testo estratto (troncati):"
+  "compareReport.truncatedTextDetails": "Dettagli del testo estratto (troncati):",
+  "make-fillable.dropdown.options.required": "Aggiungi opzioni a ogni menu a discesa. Rimuovi le opzioni vuote o ripetute.",
+  "error.pdfTextBoxOverflow": "Questa casella di testo è troppo piccola. Ingrandiscila o accorcia il testo prima di salvare.",
+  "error.pdfTextBoxUnsupported": "Questa casella di testo contiene caratteri che il suo font non può salvare. Rimuovili prima di salvare."
 } satisfies Catalog;
