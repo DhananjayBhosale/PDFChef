@@ -54,3 +54,10 @@ test('Storage used is read again whenever files change', () => {
   const clear = between(read('components/Pages/SettingsPage.tsx'), 'await platform.records.clearRecords();', 'setNotice(');
   assert.match(clear, /announceRecordsChanged\(\)/);
 });
+
+test('Home does not say 0 free jobs while the App Store is still answering', () => {
+  const source = read('components/Tools/Dashboard.tsx');
+  assert.match(source, /loading: monetizationLoading/);
+  const line = between(source, '{access?.unlocked', '</span>');
+  assert.match(line, /access \|\| !monetizationLoading\s*\?\s*t\("dashboard\.full\.job\.left/);
+});

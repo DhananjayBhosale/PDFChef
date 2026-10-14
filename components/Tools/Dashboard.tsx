@@ -192,7 +192,7 @@ const ToolRow: React.FC<{
 export const Dashboard: React.FC = () => {
   const { revision } = useI18n();
   const platform = useWorkspacePlatform();
-  const { available: monetizationAvailable, access, freeRemaining } = useMonetization();
+  const { available: monetizationAvailable, loading: monetizationLoading, access, freeRemaining } = useMonetization();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<CategoryFilter>('All');
   const deferredQuery = useDeferredValue(query);
@@ -289,10 +289,14 @@ export const Dashboard: React.FC = () => {
           </div>
           {monetizationAvailable && (
             <p className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-0 text-xs leading-5 text-[var(--text-secondary)]">
+              {/* The App Store can take seconds to answer at launch. Until it does, the count is
+                  unknown, not zero; the link beside it keeps the row's height meanwhile. */}
               <span>
                 {access?.unlocked
                   ? t("dashboard.pro.access.is.active.194781")
-                  : t("dashboard.full.job.left.in.this.7.day.252761", { v0: freeRemaining ?? 0, count: freeRemaining })}
+                  : access || !monetizationLoading
+                    ? t("dashboard.full.job.left.in.this.7.day.252761", { v0: freeRemaining ?? 0, count: freeRemaining })
+                    : null}
               </span>
               <Link
                 to="/settings"
