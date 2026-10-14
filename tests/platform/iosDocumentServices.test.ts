@@ -633,3 +633,37 @@ test('an Open-In PDF tells an open Recent list to refresh', async () => {
     (globalThis as { window?: unknown }).window = previousWindow;
   }
 });
+
+class BusyReaderBridge extends InboxBridge {
+  busyRejections = 2;
+  readerOpens = 0;
+  override async openReader(): ReturnType<IOSDocumentBridge['openReader']> {
+    this.readerOpens += 1;
+    if (this.busyRejections > 0) {
+      this.busyRejections -= 1;
+      // PdfChefDocumentsPlugin rejects this way while a share sheet, picker or another reader is up.
+      throw Object.assign(new Error('Operation unavailable.'), { code: 'PRESENTATION_BUSY' });
+    }
+    return { action: 'closed' };
+  }
+}
+
+test('an Open-In PDF waits for a busy screen to close, then opens in the native reader', async () => {
+  const storage = new MemoryStorage();
+  const bridge = new BusyReaderBridge();
+  const platform = createIOSWorkspacePlatform({
+    bridge,
+    recent: new LocalRecentRepository(storage),
+    settings: new LocalSettingsRepository(storage),
+    now: () => 123,
+  });
+  await platform.ready;
+  const webReader: string[] = [];
+  await platform.pdfOpenHandoffs!.start(({ toolPath }) => { webReader.push(toolPath); });
+
+  await bridge.deliver!([{ document: document('WHILE-SHARING') }]);
+
+  assert.equal(bridge.readerOpens, 3, 'the native reader is tried again until the screen on top is gone');
+  assert.deepEqual(webReader, [], 'the file is not sent to the web reader hidden behind that screen');
+  await platform.dispose();
+});

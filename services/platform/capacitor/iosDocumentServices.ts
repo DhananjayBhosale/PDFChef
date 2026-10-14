@@ -56,6 +56,8 @@ export const IOS_PICKER_MIME_TYPES = [
 ] as const;
 
 const FALLBACK_MIME_TYPE = 'application/octet-stream';
+const READER_BUSY_RETRY_MS = 500;
+const READER_BUSY_LIMIT_MS = 10 * 60 * 1000;
 
 export interface IOSDocumentBridge {
   retain(
@@ -329,6 +331,21 @@ export const createIOSWorkspacePlatform = (
     return document;
   };
 
+  // A PDF from another app can arrive while a share sheet, picker, report or another
+  // reader is up. The web reader would open hidden behind it, with no Close button,
+  // so wait for that screen to go away. A screen stuck this long keeps the old fallback.
+  const openImportedReader = async (document: StoredDocument) => {
+    const giveUpAt = now() + READER_BUSY_LIMIT_MS;
+    for (;;) {
+      try {
+        return await pdfReader.open(document);
+      } catch (error) {
+        if ((error as { code?: unknown } | null)?.code !== 'PRESENTATION_BUSY' || now() >= giveUpAt) throw error;
+        await new Promise(resolve => setTimeout(resolve, READER_BUSY_RETRY_MS));
+      }
+    }
+  };
+
   const pendingImportRegistration = pendingImports.start(async imports => {
     for (const imported of imports) {
       const document = imported.document;
@@ -347,7 +364,7 @@ export const createIOSWorkspacePlatform = (
       const record = { entry, document, available: true };
       if (pdfReader.isEligible(document)) {
         try {
-          const result = await pdfReader.open(document);
+          const result = await openImportedReader(document);
           if (result.action === 'tool') {
             await publishPdfHandoff({ record, toolPath: result.toolPath }).catch(() => undefined);
           }
