@@ -112,14 +112,21 @@ export const RotatePDF: React.FC = () => {
       setSelectionMessage(t("rotate-pdf.select.at.least.one.page.to.rotate.0729e0"));
       return;
     }
-    setPageRotations(prev => {
-      const next = { ...prev };
-      selectedPages.forEach(index => {
-        next[index] = sanitizePageRotationDegrees((next[index] || 0) + angle);
-      });
-      return next;
+    const next = { ...pageRotations };
+    selectedPages.forEach(index => {
+      next[index] = sanitizePageRotationDegrees((next[index] || 0) + angle);
     });
-    setSelectionMessage(t(angle < 0 ? 'rotate.turned.left' : 'rotate.turned.right', { count: selectedPages.length }));
+    setPageRotations(next);
+    // Say how the selected pages now face, not what this tap did: two right turns
+    // are 180°, and right then left is upright again. Upright, upside down or a
+    // mix has no 90° turn to name, so the line goes back to the selection count.
+    const turns = new Set(selectedPages.map(index => next[index]));
+    const turn = turns.size === 1 ? [...turns][0] : 0;
+    setSelectionMessage(
+      turn === 90 || turn === -90
+        ? t(turn < 0 ? 'rotate.turned.left' : 'rotate.turned.right', { count: selectedPages.length })
+        : null,
+    );
   };
 
   const resetRotation = () => {
