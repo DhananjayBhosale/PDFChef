@@ -2159,15 +2159,21 @@ export const EditPDF: React.FC = () => {
               ? (text, face, size) => measureDevanagariText(text, face.family as DevanagariFontId, size)
               : undefined,
             normalizeText: reflow.devanagari ? (text) => text.replace(/\t/g, '    ') : undefined,
-          }).map((piece) => ({ ...piece, font: {
-            ...FALLBACK_RESOLVED_FONT,
-            cssFamily: piece.face.embeddedFontId ? `"${embeddedPdfFont(piece.face.embeddedFontId)?.cssFamily ?? 'sans-serif'}", sans-serif`
-              : reflow.devanagari ? devanagariCssFamily(piece.face.family as DevanagariFontId)
-              : piece.face.family === 'TimesRoman' ? '"Times New Roman", Times, serif'
-              : piece.face.family === 'Courier' ? '"Courier New", Courier, monospace' : 'Arial, Helvetica, sans-serif',
-            cssWeight: reflow.devanagari || piece.face.embeddedFontId ? '400' : piece.face.bold ? '700' : '400',
-            cssStyle: piece.face.embeddedFontId ? 'normal' : piece.face.italic ? 'italic' : 'normal',
-          } })),
+          }).map((piece) => {
+            // Save always writes with the embedded program. The screen uses it only when the
+            // browser was given it; otherwise the nearest standard family stands in.
+            const embedded = piece.face.embeddedFontId ? embeddedPdfFont(piece.face.embeddedFontId) : undefined;
+            const ownFamily = embedded?.browserFace ? embedded.cssFamily : null;
+            return { ...piece, font: {
+              ...FALLBACK_RESOLVED_FONT,
+              cssFamily: ownFamily ? `"${ownFamily}", sans-serif`
+                : reflow.devanagari ? devanagariCssFamily(piece.face.family as DevanagariFontId)
+                : piece.face.family === 'TimesRoman' ? '"Times New Roman", Times, serif'
+                : piece.face.family === 'Courier' ? '"Courier New", Courier, monospace' : 'Arial, Helvetica, sans-serif',
+              cssWeight: reflow.devanagari || ownFamily ? '400' : piece.face.bold ? '700' : '400',
+              cssStyle: ownFamily ? 'normal' : piece.face.italic ? 'italic' : 'normal',
+            } };
+          }),
         };
       } else if (plan.mode === 'direct') {
         const replacements = new Map(plan.runEdits.map((run) => [run.itemIndex, run.replacementText]));

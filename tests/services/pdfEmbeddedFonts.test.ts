@@ -4,6 +4,7 @@ import test from 'node:test';
 import fontkit from '@pdf-lib/fontkit';
 import { PDFDict, PDFDocument, PDFName } from 'pdf-lib';
 import {
+  browserCanDrawFont,
   documentEmbeddedFontsReady,
   embeddedPdfFont,
   loadDocumentEmbeddedFonts,
@@ -167,4 +168,17 @@ test('a released in-flight font load cannot repopulate the registry', async () =
   await loadDocumentEmbeddedFonts(file);
   assert.ok(matchingEmbeddedPdfFont(file, psName, 'A heading'));
   releaseDocumentEmbeddedFonts(file);
+});
+
+test('only a font with a Unicode character table is handed to the browser for the preview', () => {
+  const unicode = fontkit.create(readFileSync('node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf'));
+  assert.equal(browserCanDrawFont(unicode as never), true);
+  // macOS and iOS subsets: WebKit drew these with blank and stand-in letters.
+  assert.equal(browserCanDrawFont({ cmap: { tables: [{ platformID: 1, encodingID: 0 }] } }), false);
+  assert.equal(browserCanDrawFont({ cmap: { tables: [{ platformID: 3, encodingID: 0 }] } }), false);
+  assert.equal(browserCanDrawFont({ cmap: { tables: [{ platformID: 3, encodingID: 1 }, { platformID: 1, encodingID: 0 }] } }), true);
+  assert.equal(browserCanDrawFont({}), false);
+  const editor = readFileSync('components/Tools/EditPDF.tsx', 'utf8');
+  assert.match(editor, /const ownFamily = embedded\?\.browserFace \? embedded\.cssFamily : null;/);
+  assert.doesNotMatch(editor, /cssFamily: piece\.face\.embeddedFontId \?/);
 });

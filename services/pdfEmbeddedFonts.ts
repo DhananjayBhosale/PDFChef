@@ -7,6 +7,7 @@ export type ShapingFace = {
   numGlyphs: number;
   cff?: unknown;
   'OS/2'?: { fsType?: { noEmbedding?: boolean; viewOnly?: boolean; bitmapOnly?: boolean } };
+  cmap?: { tables?: Array<{ platformID: number; encodingID: number }> };
   hasGlyphForCodePoint: (codePoint: number) => boolean;
   layout: (text: string) => {
     direction: string;
@@ -27,6 +28,15 @@ const fonts = new Map<EmbeddedPdfFontId, EmbeddedPdfFont>();
 const loads = new WeakMap<File, { promise: Promise<void>; active: boolean; ids: Set<EmbeddedPdfFontId> }>();
 const documentFonts = new WeakMap<File, Map<string, EmbeddedPdfFontId>>();
 let nextFont = 1;
+
+/**
+ * Subsets written by macOS and iOS often map characters only through the old Mac table.
+ * The PDF writer reads that table, but WebKit draws such a font with blank and stand-in
+ * letters, so only a font with a Unicode table is handed to the browser.
+ */
+export const browserCanDrawFont = (face: Pick<ShapingFace, 'cmap'>): boolean =>
+  face.cmap?.tables?.some(({ platformID, encodingID }) =>
+    platformID === 0 || (platformID === 3 && (encodingID === 1 || encodingID === 10))) ?? false;
 
 export const embeddedPdfFont = (id: EmbeddedPdfFontId) => fonts.get(id);
 export const documentEmbeddedFontsReady = (file: File) => documentFonts.has(file);
@@ -60,7 +70,7 @@ export const loadDocumentEmbeddedFonts = (file: File): Promise<void> => {
         const id: EmbeddedPdfFontId = `Embedded${nextFont++}`;
         const cssFamily = `PDF Chef ${id}`;
         let browserFace: FontFace | undefined;
-        if (typeof document !== 'undefined' && typeof FontFace !== 'undefined') {
+        if (typeof document !== 'undefined' && typeof FontFace !== 'undefined' && browserCanDrawFont(face)) {
           browserFace = new FontFace(cssFamily, bytes.slice().buffer);
           await browserFace.load();
           if (!load.active) return;
