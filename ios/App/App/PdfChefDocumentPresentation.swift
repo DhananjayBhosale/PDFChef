@@ -18,19 +18,6 @@ final class PdfChefDocumentPresentation: NSObject, UIDocumentPickerDelegate, UIA
     private var sharing = false
     private var reading = false
 
-    static func itemProvider(for copyURL: URL) -> NSItemProvider {
-        let provider = NSItemProvider()
-        let contentType = copyURL.pathExtension.lowercased() == "pdf"
-            ? UTType.pdf
-            : (UTType(filenameExtension: copyURL.pathExtension) ?? .data)
-        provider.suggestedName = copyURL.lastPathComponent
-        provider.registerFileRepresentation(forTypeIdentifier: contentType.identifier, visibility: .all) { completion in
-            completion(copyURL, false, nil)
-            return nil
-        }
-        return provider
-    }
-
     func pick(
         from presenter: UIViewController,
         contentTypes: [UTType],
@@ -78,8 +65,9 @@ final class PdfChefDocumentPresentation: NSObject, UIDocumentPickerDelegate, UIA
             return
         }
         sharing = true
-        let configuration = UIActivityItemsConfiguration(itemProviders: [Self.itemProvider(for: copyURL)])
-        let controller = UIActivityViewController(activityItemsConfiguration: configuration)
+        // Share the file itself. The copy always ends in ".pdf" for PDFs, so receivers
+        // such as WhatsApp get a PDF, and the sheet header shows its name, type and preview.
+        let controller = UIActivityViewController(activityItems: [copyURL], applicationActivities: nil)
         if let popover = controller.popoverPresentationController {
             popover.sourceView = presenter.view
             popover.sourceRect = CGRect(

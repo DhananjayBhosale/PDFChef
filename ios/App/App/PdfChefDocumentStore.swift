@@ -322,10 +322,14 @@ final class PdfChefDocumentStore {
         try queue.sync {
             let document = try statUnlocked(ref: ref)
             var filename = try presentationFilename(name ?? document.name, fallback: ref)
-            if document.mimeType?.lowercased() == "application/pdf"
-                && !filename.lowercased().hasSuffix(".pdf") {
+            // Older records and untyped outputs can lack a PDF MIME type. Without the
+            // extension the share sheet offers generic data, which WhatsApp sends as .bin.
+            let isPDF = document.mimeType?.lowercased() == "application/pdf"
+                || hasPDFHeader(contentURL(for: ref))
+            if isPDF && !filename.lowercased().hasSuffix(".pdf") {
                 filename += ".pdf"
             }
+            filename = fittingFileNameLimit(filename)
             let container = presentationURL.appendingPathComponent(UUID().uuidString, isDirectory: true)
             try fileManager.createDirectory(at: container, withIntermediateDirectories: false)
             try protect(container)
@@ -533,6 +537,27 @@ final class PdfChefDocumentStore {
             throw PdfChefDocumentStoreError.invalidPresentationName
         }
         return candidate
+    }
+
+    /// PDF readers accept the header anywhere in the first 1024 bytes.
+    private func hasPDFHeader(_ url: URL) -> Bool {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? handle.close() }
+        guard let prefix = try? handle.read(upToCount: 1024) else { return false }
+        return prefix.range(of: Data("%PDF-".utf8)) != nil
+    }
+
+    /// iOS file names hold at most 255 characters. Shorten the stem and keep the extension.
+    private func fittingFileNameLimit(_ filename: String) -> String {
+        let limit = 255
+        guard filename.utf16.count > limit else { return filename }
+        let pathExtension = (filename as NSString).pathExtension
+        let suffix = pathExtension.isEmpty || pathExtension.utf16.count > 16 ? "" : "." + pathExtension
+        var stem = suffix.isEmpty ? filename : String(filename.dropLast(suffix.count))
+        while stem.utf16.count + suffix.utf16.count > limit {
+            stem.removeLast()
+        }
+        return stem.trimmingCharacters(in: .whitespaces) + suffix
     }
 
     private func removeAbandonedWrites() throws {

@@ -128,22 +128,8 @@ final class PdfChefDocumentStoreTests: XCTestCase {
         XCTAssertEqual(copy.lastPathComponent, "export.pdf")
         XCTAssertEqual(try Data(contentsOf: copy), Data("present".utf8))
         XCTAssertTrue(copy.path.hasPrefix(rootURL.appendingPathComponent("Presentation").path + "/"))
-        let provider = PdfChefDocumentPresentation.itemProvider(for: copy)
-        XCTAssertEqual(provider.suggestedName, "export.pdf")
-        XCTAssertEqual(provider.registeredTypeIdentifiers, [UTType.pdf.identifier])
-        let loaded = expectation(description: "PDF file representation")
-        provider.loadFileRepresentation(forTypeIdentifier: UTType.pdf.identifier) { url, error in
-            XCTAssertNil(error)
-            XCTAssertEqual(url?.pathExtension.lowercased(), "pdf")
-            XCTAssertEqual(url?.lastPathComponent, "export.pdf")
-            if let url {
-                XCTAssertEqual(try? Data(contentsOf: url), Data("present".utf8))
-            } else {
-                XCTFail("The PDF representation did not provide a file")
-            }
-            loaded.fulfill()
-        }
-        wait(for: [loaded], timeout: 5)
+        // The share sheet types a file by its extension.
+        XCTAssertEqual(UTType(filenameExtension: copy.pathExtension), .pdf)
 
         let renamedCopy = try store.makePresentationCopy(ref: retained.ref, name: "renamed.bin")
         XCTAssertEqual(renamedCopy.lastPathComponent, "renamed.bin.pdf")
@@ -154,6 +140,38 @@ final class PdfChefDocumentStoreTests: XCTestCase {
         try store.removePresentationCopy(at: copy)
         try store.removePresentationCopy(at: renamedCopy)
         XCTAssertFalse(FileManager.default.fileExists(atPath: copy.path))
+    }
+
+    func testPresentationCopyOfUntypedPdfStillSharesAsPdf() throws {
+        let session = try store.beginWrite(name: "Invoice 14.10.2026", mimeType: "application/octet-stream")
+        try store.append(sessionID: session, data: Data("%PDF-1.7\n%untyped".utf8))
+        let retained = try store.finishWrite(sessionID: session)
+
+        let copy = try store.makePresentationCopy(ref: retained.ref, name: nil)
+        XCTAssertEqual(copy.lastPathComponent, "Invoice 14.10.2026.pdf")
+        XCTAssertEqual(UTType(filenameExtension: copy.pathExtension), .pdf)
+        try store.removePresentationCopy(at: copy)
+
+        let other = try store.beginWrite(name: "notes", mimeType: nil)
+        try store.append(sessionID: other, data: Data("plain text".utf8))
+        let text = try store.finishWrite(sessionID: other)
+        let textCopy = try store.makePresentationCopy(ref: text.ref, name: nil)
+        XCTAssertEqual(textCopy.lastPathComponent, "notes")
+        try store.removePresentationCopy(at: textCopy)
+    }
+
+    func testPresentationCopyShortensNamesTooLongForTheFileSystem() throws {
+        // iOS file names hold at most 255 characters; Recent rename has no length limit.
+        let longName = String(repeating: "Quarterly report ", count: 20) + ".pdf"
+        XCTAssertGreaterThan(longName.utf16.count, 255)
+        let retained = try retain(Data("%PDF-1.7 long".utf8), name: longName)
+
+        let copy = try store.makePresentationCopy(ref: retained.ref, name: nil)
+        XCTAssertLessThanOrEqual(copy.lastPathComponent.utf16.count, 255)
+        XCTAssertTrue(copy.lastPathComponent.hasSuffix(".pdf"))
+        XCTAssertTrue(longName.hasPrefix(String(copy.lastPathComponent.dropLast(4))))
+        XCTAssertEqual(try Data(contentsOf: copy), Data("%PDF-1.7 long".utf8))
+        try store.removePresentationCopy(at: copy)
     }
 
     func testRelaunchCleansAbandonedPresentationCopiesOnly() throws {
