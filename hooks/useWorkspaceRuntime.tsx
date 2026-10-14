@@ -381,16 +381,26 @@ export const useStorageInformation = () => {
         alive = false;
       };
     }
-    service
-      .getStorageInformation()
-      .then((value) => {
-        if (alive) setState({ status: 'ready', value });
-      })
-      .catch((caught: unknown) => {
-        if (alive) setState({ status: 'error', message: messageFrom(caught, t("use-workspace-runtime.storage.usage.could.not.be.read.96fb6b")) });
-      });
+    // Saving, adding or clearing files changes the total, so read it again then.
+    let latestRead = 0;
+    const read = () => {
+      const current = ++latestRead;
+      service
+        .getStorageInformation()
+        .then((value) => {
+          if (alive && current === latestRead) setState({ status: 'ready', value });
+        })
+        .catch((caught: unknown) => {
+          if (alive && current === latestRead) setState({ status: 'error', message: messageFrom(caught, t("use-workspace-runtime.storage.usage.could.not.be.read.96fb6b")) });
+        });
+    };
+    window.addEventListener(OUTPUT_EVENT, read);
+    window.addEventListener(RECORDS_CHANGED_EVENT, read);
+    read();
     return () => {
       alive = false;
+      window.removeEventListener(OUTPUT_EVENT, read);
+      window.removeEventListener(RECORDS_CHANGED_EVENT, read);
     };
   }, [platform]);
 

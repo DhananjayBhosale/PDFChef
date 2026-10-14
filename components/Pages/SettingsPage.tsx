@@ -5,7 +5,7 @@ import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, ExternalLink } from 'lucide-react';
-import { getWorkspaceSettings, updateWorkspaceSettings, type WorkspaceSettings } from '../../services/workspace';
+import { announceRecordsChanged, getWorkspaceSettings, updateWorkspaceSettings, type WorkspaceSettings } from '../../services/workspace';
 import { TabHeader } from '../Layout/AppShell';
 import { Button, ConfirmSheet, SegmentedControl, StatusLine, Switch, cx } from '../UI/Primitives';
 import { formatBytes } from '../UI/format';
@@ -414,6 +414,7 @@ export const SettingsPage: React.FC = () => {
           setProblem('');
           try {
             await platform.records.clearRecords();
+            announceRecordsChanged();
             await refresh();
             setNotice(t("settings-page.recent.cleared.598fd2"));
           } catch (caught) {

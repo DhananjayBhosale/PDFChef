@@ -586,14 +586,11 @@ export const RecentPage: React.FC = () => {
   }, [visibleIdKey]);
 
   /**
-   * `hold` keeps a message up for as long as its action can still be taken
-   * back. A line that says what was deleted must not disappear while the Undo
-   * beside it is still live.
+   * A line stays until something newer replaces it. It sits above the list, so
+   * one that timed out would pull the list up from under a finger about to tap.
    */
-  const report = useCallback((tone: 'success' | 'danger', message: string, hold = false) => {
+  const report = useCallback((tone: 'success' | 'danger', message: string) => {
     setFeedback({ tone, message });
-    if (hold) return;
-    window.setTimeout(() => setFeedback((current) => (current?.message === message ? null : current)), 6000);
   }, []);
 
   const run = useCallback(
@@ -605,6 +602,8 @@ export const RecentPage: React.FC = () => {
         report('success', successMessage);
         return true;
       } catch (caught) {
+        // Closing the Files picker or share sheet is a choice, not a failure.
+        if (caught instanceof Error && caught.name === 'AbortError') return false;
         haptic('error');
         report('danger', caught instanceof Error && caught.message ? localizeError(caught) : failureMessage);
         return false;
@@ -808,7 +807,7 @@ export const RecentPage: React.FC = () => {
         setPendingUndo((current) => mergeUndo(current, trashed, outcome.message, Date.now()));
       }
       haptic(failed === 0 ? 'commit' : 'error');
-      if (outcome) report(outcome.tone, outcome.message, trashed.length > 0);
+      if (outcome) report(outcome.tone, outcome.message);
       await refresh();
       return { deleted, failed, total };
     },
@@ -847,7 +846,7 @@ export const RecentPage: React.FC = () => {
     const retry = outcome ? remainingUndo(offer, unrestored, outcome.message, Date.now()) : null;
     setPendingUndo(retry);
     haptic(unrestored.length === 0 ? 'commit' : 'error');
-    if (outcome) report(outcome.tone, outcome.message, retry !== null);
+    if (outcome) report(outcome.tone, outcome.message);
     // Recent is the record, so it is brought back into step here rather than
     // sending the person somewhere else to see what happened.
     await refresh();
