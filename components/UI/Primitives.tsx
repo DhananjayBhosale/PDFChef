@@ -279,6 +279,11 @@ export const Sheet: React.FC<{
   const panel = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const descriptionId = useId();
+  // Callers pass inline closures, so onClose changes on every keystroke in a
+  // field inside the sheet. Reading it through a ref keeps the effect below from
+  // re-running and moving focus off the field after the first character.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -292,7 +297,7 @@ export const Sheet: React.FC<{
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && dismissible) {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -317,7 +322,7 @@ export const Sheet: React.FC<{
       document.body.style.overflow = overflow;
       previous?.focus();
     };
-  }, [dismissible, onClose, open]);
+  }, [dismissible, open]);
 
   if (!open) return null;
   if (typeof document === 'undefined') return null;

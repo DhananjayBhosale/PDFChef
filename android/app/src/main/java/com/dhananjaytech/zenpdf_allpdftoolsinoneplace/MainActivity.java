@@ -111,7 +111,10 @@ public class MainActivity extends BridgeActivity {
                     DocumentLifecycleCoordinator coordinator =
                             ((PdfChefApplication) getApplicationContext())
                                     .getDocumentLifecycleCoordinator();
-                    documentRef = new IncomingPdfIntake().accept(coordinator, handedOver);
+                    String sourceName = IncomingPdfIntake.sourceDisplayName(
+                            getContentResolver(), handedOver);
+                    documentRef = new IncomingPdfIntake().accept(
+                            coordinator, handedOver, sourceName);
                 } catch (Exception failure) {
                     return;
                 }

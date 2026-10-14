@@ -83,8 +83,8 @@ final class AndroidDocumentSharer {
             if (aggregate > MAXIMUM_RETAINED_BYTES - record.size) throw unsafe();
             aggregate += record.size;
         }
-        if (records.size() >= MAXIMUM_RETAINED_STAGES
-                || aggregate > MAXIMUM_RETAINED_BYTES - source.sizeBytes()) throw limit();
+        try { makeRoom(layout, records, source.sizeBytes()); }
+        catch (IOException failure) { throw unsafe(); }
         long required = source.sizeBytes() + OwnedDocumentWriter.STORAGE_RESERVE_BYTES;
         try {
             if (storageProbe.availableBytes(required) < required) throw storageFull();
@@ -137,9 +137,9 @@ final class AndroidDocumentSharer {
             int count = collection.itemCount();
             long total = collection.totalBytes();
             if (count < 1 || count > LegacyDocumentOpenResolver.MAXIMUM_COLLECTION_ITEMS
-                    || total <= 0 || total > LegacyDocumentOpenResolver.MAXIMUM_COLLECTION_BYTES
-                    || records.size() >= MAXIMUM_RETAINED_STAGES
-                    || retained > MAXIMUM_RETAINED_BYTES - total) throw limit();
+                    || total <= 0 || total > LegacyDocumentOpenResolver.MAXIMUM_COLLECTION_BYTES)
+                throw limit();
+            makeRoom(layout, records, total);
             long required = total + OwnedDocumentWriter.STORAGE_RESERVE_BYTES;
             if (storageProbe.availableBytes(required) < required) throw storageFull();
             String token = validToken();
@@ -399,6 +399,34 @@ final class AndroidDocumentSharer {
         }
         fsyncDirectory(target.getParent());
         return new Snapshot(total, hex(digest.digest()));
+    }
+
+    /**
+     * A share copy only has to outlive the hand-off to the receiving app. When the bounded
+     * staging area is full, the oldest finished copies make room; otherwise every share after
+     * the eighth failed until the first copy expired a day later.
+     */
+    private static void makeRoom(Layout layout, List<StageRecord> records, long incoming)
+            throws IOException, Failure {
+        ArrayList<StageRecord> oldestFirst = new ArrayList<>(records);
+        oldestFirst.sort(Comparator.comparingLong(StageRecord::createdAt)
+                .thenComparing(StageRecord::token));
+        int count = oldestFirst.size();
+        long retained = 0;
+        for (StageRecord record : oldestFirst) retained += record.size;
+        boolean removed = false;
+        for (StageRecord record : oldestFirst) {
+            if (count < MAXIMUM_RETAINED_STAGES
+                    && retained <= MAXIMUM_RETAINED_BYTES - incoming) break;
+            deleteStageFiles(layout, record);
+            deleteExact(layout.metadata(record.token));
+            count--;
+            retained -= record.size;
+            removed = true;
+        }
+        if (removed) fsyncDirectory(layout.root);
+        if (count >= MAXIMUM_RETAINED_STAGES
+                || retained > MAXIMUM_RETAINED_BYTES - incoming) throw limit();
     }
 
     private void cleanupPreparing(Layout layout) {

@@ -2919,6 +2919,12 @@ export const EditPDF: React.FC = () => {
           {!file ? (
              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mx-auto w-full max-w-xl">
                 <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("edit-pdf.choose.a.pdf.to.edit.8d2720")} />
+                {/* A file that would not open leaves no document, so its reason is said here. */}
+                {status.error && (
+                  <div className="mt-3" role="alert">
+                    <StatusLine tone="danger">{status.error}</StatusLine>
+                  </div>
+                )}
              </motion.div>
           ) : (
              <div className="relative overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)]">

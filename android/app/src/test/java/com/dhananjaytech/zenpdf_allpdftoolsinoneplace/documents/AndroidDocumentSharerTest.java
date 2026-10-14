@@ -100,19 +100,32 @@ public final class AndroidDocumentSharerTest {
         assertTrue(restarted.prepare(source(PDF), () -> false).sizeBytes > 0);
     }
 
-    @Test public void retainedStageCountIsExactlyBoundedToEight() throws Exception {
+    @Test public void retainedStagesStayBoundedAndTheOldestMakesRoomForTheNextShare()
+            throws Exception {
         Path files = Files.createTempDirectory("share-count");
         List<String> values = new ArrayList<>();
-        for (int index = 0; index < 9; index++) {
+        for (int index = 0; index < 20; index++) {
             values.add(String.format("%022d", index + 1));
         }
-        AndroidDocumentSharer sharer = sharer(files, () -> 10,
+        AtomicLong clock = new AtomicLong(10);
+        AndroidDocumentSharer sharer = sharer(files, clock::get,
                 tokens(values.toArray(String[]::new)), ignored -> {});
-        for (int index = 0; index < AndroidDocumentSharer.MAXIMUM_RETAINED_STAGES; index++) {
-            sharer.prepare(source(PDF), () -> false);
+        List<Path> staged = new ArrayList<>();
+        for (int index = 0; index < 20; index++) {
+            clock.incrementAndGet();
+            AndroidDocumentSharer.Stage stage = sharer.prepare(source(PDF), () -> false);
+            staged.add(sharer.stagedPathForProvider(stage));
+            sharer.markDispatched(stage);
         }
-        assertFailure("DOCUMENT_LIMIT_EXCEEDED",
-                () -> sharer.prepare(source(PDF), () -> false));
+        Path share = files.resolve("pdfchef_documents/share");
+        try (var listing = Files.list(share)) {
+            assertEquals(AndroidDocumentSharer.MAXIMUM_RETAINED_STAGES,
+                    listing.filter(path -> path.toString().endsWith(".share")).count());
+        }
+        for (int index = 0; index < staged.size(); index++) {
+            assertEquals(index >= 20 - AndroidDocumentSharer.MAXIMUM_RETAINED_STAGES,
+                    Files.exists(staged.get(index)));
+        }
     }
 
     @Test public void cancellationAndStorageReserveFailBeforePublishingStage() throws Exception {

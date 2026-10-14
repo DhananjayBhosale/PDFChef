@@ -6,6 +6,7 @@ import { useOpenedPdf } from '../../hooks/useOpenedPdf';
 import { useWorkspacePlatform } from '../../hooks/useWorkspaceRuntime';
 import { AndroidDocumentsClient, isAndroidDocumentsAvailable } from '../../services/platform/android/androidDocuments';
 import { openIncomingAndroidPdf } from '../../services/platform/android/openIncomingPdf';
+import { announceRecordsChanged } from '../../services/workspace';
 
 export const AndroidIncomingPdfHandler = () => {
   useI18n();
@@ -24,6 +25,8 @@ export const AndroidIncomingPdfHandler = () => {
       queue = queue.catch(() => undefined).then(async () => {
         if (disposed) return;
         setFailed(false);
+        // The handed-over copy is already a Recent row; a Recent screen that is open now shows it.
+        announceRecordsChanged();
         try {
           await openIncomingAndroidPdf(platform, ref, (file, toolPath) => {
             if (disposed) return;

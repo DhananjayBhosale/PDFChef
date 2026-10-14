@@ -1,9 +1,13 @@
 package com.dhananjaytech.zenpdf_allpdftoolsinoneplace.documents;
 
 import android.app.Activity;
+import android.content.ContentResolver;
 import android.content.Intent;
+import android.database.Cursor;
 import android.net.Uri;
+import android.provider.OpenableColumns;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 
 /**
@@ -53,6 +57,69 @@ public final class IncomingPdfIntake {
      * intent carried nothing this app will accept.
      */
     public String accept(DocumentLifecycleCoordinator coordinator, Intent intent)
+            throws DocumentLifecycleCoordinator.Failure {
+        return accept(coordinator, intent, null);
+    }
+
+    /**
+     * As {@link #accept(DocumentLifecycleCoordinator, Intent)}, keeping the name the
+     * sending app gave the file. Without it every PDF opened from Files, WhatsApp or
+     * Gmail showed as "Document", and every later save was called "edited-Document".
+     * Opening the same file again reuses its existing copy instead of adding another
+     * identical row to Recent.
+     */
+    public String accept(DocumentLifecycleCoordinator coordinator, Intent intent,
+            String sourceDisplayName) throws DocumentLifecycleCoordinator.Failure {
+        String ref = importCopy(coordinator, intent);
+        String name = safeDisplayName(sourceDisplayName);
+        if (ref == null || name == null) return ref;
+        try {
+            DocumentLifecycleCoordinator.DocumentRecord named =
+                    coordinator.renameOwnedDocument(ref, name);
+            for (DocumentLifecycleCoordinator.DocumentRecord existing
+                    : coordinator.listOwnedDocuments()) {
+                if (!existing.ref().equals(ref) && existing.available()
+                        && name.equals(existing.displayName())
+                        && named.contentHash().equals(existing.contentHash())
+                        && named.sizeBytes() == existing.sizeBytes()) {
+                    coordinator.deleteOwnedDocument(ref);
+                    return existing.ref();
+                }
+            }
+        } catch (DocumentLifecycleCoordinator.Failure | RuntimeException ignored) {
+            // The copy is already safe under its unnamed ref; a name is a courtesy.
+        }
+        return ref;
+    }
+
+    /** The sender's name for the handed-over file, or null when it gives none. */
+    public static String sourceDisplayName(ContentResolver resolver, Intent intent) {
+        if (resolver == null || !isIncomingPdf(intent)) return null;
+        try (Cursor cursor = resolver.query(uriOf(intent),
+                new String[] {OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+            if (cursor == null || !cursor.moveToFirst() || cursor.isNull(0)) return null;
+            return cursor.getString(0);
+        } catch (RuntimeException unreadable) {
+            return null;
+        }
+    }
+
+    /** A sender-supplied name made safe for owned storage, always ending in .pdf. */
+    static String safeDisplayName(String value) {
+        if (value == null) return null;
+        String name = value.replace('\0', ' ').replace('/', '-').replace('\\', '-')
+                .replaceAll("[\\p{Cntrl}]", " ").trim();
+        if (name.toLowerCase(Locale.ROOT).endsWith(".pdf")) {
+            name = name.substring(0, name.length() - 4);
+        }
+        name = name.replaceAll("[\\s.]+$", "");
+        if (name.length() > 120) name = name.substring(0, 120).trim();
+        if (name.isEmpty()) return null;
+        name = name + ".pdf";
+        return OwnedDocumentWritePolicy.isValidDisplayName(name) ? name : null;
+    }
+
+    private String importCopy(DocumentLifecycleCoordinator coordinator, Intent intent)
             throws DocumentLifecycleCoordinator.Failure {
         if (coordinator == null || !isIncomingPdf(intent)) return null;
         Intent normalized = asPickerShapedIntent(intent);

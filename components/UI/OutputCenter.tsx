@@ -41,6 +41,7 @@ export const OutputCenter: React.FC = () => {
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const recordRef = useRef<OutputReadyRecord | null>(null);
   recordRef.current = record;
@@ -58,6 +59,7 @@ export const OutputCenter: React.FC = () => {
     setRecord(null);
     setMoreOpen(false);
     setExported(false);
+    setNotice('');
     setRenameOpen(false);
     setError('');
   }, [abandonPendingSave]);
@@ -76,6 +78,7 @@ export const OutputCenter: React.FC = () => {
       ));
       setMoreOpen(true);
       setRenameOpen(false);
+      setNotice('');
       setError(next.deliveryIssue === 'cancelled'
         ? t("output-center.save.cancelled.your.result.is.still.available.79e0fc")
         : next.deliveryIssue === 'failed'
@@ -258,8 +261,15 @@ export const OutputCenter: React.FC = () => {
           <Button
             block
             icon={<Download aria-hidden size={16} />}
-            onClick={() => void act(downloadResult, t("output-center.that.file.could.not.be.saved.4d740f"))}
+            onClick={() => {
+              setNotice('');
+              void act(downloadResult, t("output-center.that.file.could.not.be.saved.4d740f")).then((saved) => {
+                // Each press saves another copy; without a word here it looked like nothing happened.
+                if (saved && recordRef.current?.id === record.id) setNotice(`Saved ${safeName}.`);
+              });
+            }}
           >{t("output-center.download.9ce5b1")}</Button>
+          {notice && <StatusLine tone="success">{notice}</StatusLine>}
           <Button
             block
             icon={<Wrench aria-hidden size={16} />}

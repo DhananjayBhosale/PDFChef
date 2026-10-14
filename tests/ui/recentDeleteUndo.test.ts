@@ -465,3 +465,20 @@ test('a disabled control carries its reason in text, not in a hover title', () =
   assert.match(actions, /disabled=\{activeAbilities\?\.limitation === 'legacy-read-only'\}/);
   assert.match(actions, /\{activeReason && <p/);
 });
+
+/* ------------------------------------------------------------ rename --- */
+
+test('a rename keeps the original extension and never doubles or swaps it', () => {
+  const rename = page.withOriginalExtension;
+  assert.equal(rename('Invoice March', 'old.pdf'), 'Invoice March.pdf');
+  assert.equal(rename('Invoice March.pdf', 'old.pdf'), 'Invoice March.pdf');
+  assert.equal(rename('Invoice March.PDF', 'old.pdf'), 'Invoice March.pdf');
+  assert.equal(rename('Report.docx', 'old.pdf'), 'Report.docx.pdf');
+  assert.equal(rename('trail.', 'old.pdf'), 'trail.pdf');
+  assert.equal(rename('a/b\\c', 'old.pdf'), 'a-b-c.pdf');
+  // Nothing usable left: keep the current name instead of saving ".pdf".
+  assert.equal(rename('.pdf', 'old.pdf'), 'old.pdf');
+  assert.equal(rename('.', 'old.pdf'), 'old.pdf');
+  assert.equal(rename('   ', 'old.pdf'), 'old.pdf');
+  assert.equal(rename('notes', 'legacy'), 'notes');
+});
