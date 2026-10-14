@@ -396,7 +396,7 @@ export const ReorderPDF: React.FC = () => {
               tone="primary"
               block
               busy={status.isProcessing}
-              disabled={loadingPreviews || items.length === 0}
+              disabled={loadingPreviews || items.length === 0 || !hasOrderChanges}
               icon={<Save aria-hidden size={18} />}
               onClick={() => void handleSave()}
             >{t("reorder-pdf.save.reordered.pdf.b8306f")}</Button>

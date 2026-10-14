@@ -2752,7 +2752,7 @@ export const EditPDF: React.FC = () => {
             <button type="button" onClick={() => setFindOpen((open) => !open)} aria-pressed={findOpen} aria-label={t("edit-pdf.find.and.replace.9898ad")} className={`chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] ${findOpen ? 'bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'text-[var(--text-secondary)]'}`}><Search aria-hidden size={19} /></button>
             <button type="button" onClick={undo} disabled={undoStack.current.length === 0} aria-label={t("edit-pdf.undo.added.element.change.d99d56")} className="chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><Undo2 aria-hidden size={19} /></button>
             <button type="button" onClick={redo} disabled={redoStack.current.length === 0} aria-label={t("edit-pdf.redo.added.element.change.2c6d7a")} className="chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><Redo2 aria-hidden size={19} /></button>
-            <button type="button" onClick={handleSave} disabled={status.isProcessing} aria-label={t("edit-pdf.save.1509f5")} className="chef-pressable chef-target inline-flex shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-3 text-sm font-bold text-[var(--text-on-accent)] disabled:opacity-55"><Save aria-hidden size={17} />{/* Always spelled out. This is the one action in the editor that
+            <button type="button" onClick={handleSave} disabled={status.isProcessing || !hasUnsavedEdits} aria-label={t("edit-pdf.save.1509f5")} className="chef-pressable chef-target inline-flex shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-3 text-sm font-bold text-[var(--text-on-accent)] disabled:opacity-55"><Save aria-hidden size={17} />{/* Always spelled out. This is the one action in the editor that
                 cannot be discovered by trying it, and a lone disk glyph is exactly the icon a reader
                 who did not grow up with it has to guess at. The title beside it truncates instead. */}<span>{t("edit-pdf.save.1509f5")}</span></button>
           </div>
@@ -2904,7 +2904,7 @@ export const EditPDF: React.FC = () => {
                   </select>
                   <button type="button" onClick={() => addShape()} aria-label={elementAction(shapeKind, 'add')} className="chef-hit-y chef-pressable flex min-h-11 items-center gap-1 border-l border-[var(--border-strong)] px-3 font-bold text-[var(--text-primary)]"><Shapes size={18}/>{t("edit-pdf.add.0d40dd")}</button>
                 </div>
-                <button type="button" onClick={handleSave} disabled={status.isProcessing} className="chef-hit-y chef-pressable flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-6 font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] disabled:opacity-55"><Save size={18}/>{t("edit-pdf.save.52453d")}</button>
+                <button type="button" onClick={handleSave} disabled={status.isProcessing || !hasUnsavedEdits} className="chef-hit-y chef-pressable flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-6 font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] disabled:opacity-55"><Save size={18}/>{t("edit-pdf.save.52453d")}</button>
              </div>
           )}
           {insertMode && (
