@@ -217,6 +217,15 @@ export const ViewPDF: React.FC = () => {
       setToolsOpen(true);
     }
   }, [location.key, location.state, openedPdf?.id, openedPdf?.previewOnly]);
+  // The Read PDF card starts a new read. A file left open from an earlier visit would
+  // otherwise come back every time, with no way to choose another. The flag is dropped
+  // from history so Back from a tool returns to the file, not to the picker.
+  const readAnother = (location.state as { readAnother?: boolean } | null)?.readAnother === true;
+  useEffect(() => {
+    if (!readAnother) return;
+    clearOpenedPdf();
+    navigate(location.pathname, { replace: true, state: null });
+  }, [clearOpenedPdf, location.pathname, navigate, readAnother]);
   const handleActivePage = useCallback((page: number) => setCurrentPage(page), []);
   const replacePdfDoc = useCallback((nextDocument: any | null) => {
     const previousDocument = pdfDocRef.current;

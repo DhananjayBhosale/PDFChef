@@ -33,7 +33,7 @@ import {
   StatusLine,
   cx,
 } from '../UI/Primitives';
-import { formatBytes, formatTimestamp, formatTimestampLong, sanitizeFilenameStem, splitFilename } from '../UI/format';
+import { formatBytes, formatTimestamp, formatTimestampLong, renameKeepingExtension, splitFilename } from '../UI/format';
 import {
   knownSpaceSaved,
   recordAbilities,
@@ -126,20 +126,10 @@ const hasTime = (value: unknown): value is number =>
  * Renaming should not cost the file its type. If the new name carries no
  * extension, the original one is carried over rather than silently dropped.
  */
-/**
- * A rename changes the name, never the kind of file. The original extension is
- * always kept, so "Report.docx" on a PDF becomes "Report.docx.pdf" rather than a
- * PDF that other apps take for a Word file, and a typed ".pdf" is not doubled.
- * Path separators become "-" because the native store refuses them.
- */
+/** Path separators become "-" because the native store refuses them. */
 export const withOriginalExtension = (nextName: string, previousName: unknown): string => {
-  const { extension } = splitFilename(displayName(previousName));
-  let stem = sanitizeFilenameStem(nextName).trim();
-  if (extension && stem.toLowerCase().endsWith(extension.toLowerCase())) {
-    stem = stem.slice(0, -extension.length);
-  }
-  stem = stem.replace(/[\s.]+$/u, '');
-  return stem ? `${stem}${extension}` : displayName(previousName);
+  const current = displayName(previousName);
+  return renameKeepingExtension(nextName, splitFilename(current).extension, current);
 };
 
 type Feedback = { tone: 'success' | 'danger'; message: string } | null;

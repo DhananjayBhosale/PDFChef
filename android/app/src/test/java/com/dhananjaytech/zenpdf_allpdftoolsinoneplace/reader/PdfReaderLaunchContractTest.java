@@ -62,4 +62,13 @@ public final class PdfReaderLaunchContractTest {
                         Set.of(PdfReaderLaunchContract.EXTRA_REF),
                         null));
     }
+
+    // Cycle-2 QA: a second PDF from another app closed the open reader without its answer,
+    // and the first document then reappeared in the web viewer behind the new one.
+    @Test public void aReaderClosedByTheSystemIsAClose() throws Exception {
+        PdfReaderLaunchContract.Result result = PdfReaderLaunchContract.parseResult(
+                android.app.Activity.RESULT_CANCELED, null);
+        assertEquals(PdfReaderLaunchContract.ACTION_CLOSED, result.action());
+        assertEquals(null, result.toolPath());
+    }
 }

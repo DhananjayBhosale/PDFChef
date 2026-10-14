@@ -298,6 +298,13 @@ export const recordOutput = async (
   return record;
 };
 
+export const OUTPUT_DISMISS_EVENT = 'pdfchef:output-dismiss';
+
+/** A tool starting on a new file clears the last result's banner, which would cover it. */
+export const dismissOutputBanner = () => {
+  window.dispatchEvent(new Event(OUTPUT_DISMISS_EVENT));
+};
+
 export const announceOutput = (record: OutputRecord) => {
   window.dispatchEvent(new CustomEvent<OutputRecord>(OUTPUT_EVENT, { detail: record }));
 };

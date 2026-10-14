@@ -97,6 +97,10 @@ public final class PdfReaderLaunchContract {
     }
 
     public static Result parseResult(int resultCode, Intent data) throws Failure {
+        // Android closed the reader without its answer, for example because another app handed
+        // over a PDF while it was open. That is a close, not a failed launch, so the caller
+        // must not fall back to showing the old document elsewhere.
+        if (resultCode == Activity.RESULT_CANCELED && data == null) return new Result(ACTION_CLOSED, null);
         if (resultCode != Activity.RESULT_OK || data == null || data.getAction() != null
                 || data.getData() != null || data.getType() != null || data.getClipData() != null
                 || data.getCategories() != null || data.getComponent() != null

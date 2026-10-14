@@ -144,6 +144,7 @@ const ToolRow: React.FC<{
   return (
     <Link
       to={tool.path}
+      state={tool.path === '/view' ? { readAnother: true } : undefined}
       onPointerDown={() => haptic('selection')}
       className="chef-pressable chef-pressable-row flex min-h-[72px] items-center gap-[14px] px-[14px] py-[10px] outline-none focus-visible:bg-[var(--surface-sunken)] md:min-h-[56px] md:gap-3 md:px-3 md:py-2"
     >

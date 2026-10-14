@@ -62,6 +62,18 @@ export const splitFilename = (name: string): { stem: string; extension: string }
   return { stem: name.slice(0, dot), extension: name.slice(dot) };
 };
 
+/**
+ * A rename changes the name, never the kind of file. The extension is always kept, so
+ * "Report.docx" on a PDF becomes "Report.docx.pdf", a typed ".pdf" is not doubled, and a
+ * name with nothing usable left (".pdf", ".", spaces) keeps the current name.
+ */
+export const renameKeepingExtension = (typed: string, extension: string, currentName: string): string => {
+  let stem = sanitizeFilenameStem(typed).trim();
+  if (extension && stem.toLowerCase().endsWith(extension.toLowerCase())) stem = stem.slice(0, -extension.length);
+  stem = stem.replace(/[\s.]+$/u, '');
+  return stem ? `${stem}${extension}` : currentName;
+};
+
 /** Keep editable names safe for the iOS Files/share handoff and its byte limit. */
 export const sanitizeFilenameStem = (value: string): string => {
   let result = '';

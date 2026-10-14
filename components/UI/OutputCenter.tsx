@@ -5,9 +5,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { CheckCircle2, Clock, Download, ExternalLink, MoreHorizontal, Pencil, Share2, Wrench, X } from 'lucide-react';
 import type { OutputReadyRecord } from '../../services/pdfShared';
-import { OUTPUT_EVENT, announceRecordsChanged, getWorkspaceSettings } from '../../services/workspace';
+import { OUTPUT_DISMISS_EVENT, OUTPUT_EVENT, announceRecordsChanged, getWorkspaceSettings } from '../../services/workspace';
 import { Button, Sheet, StatusLine, cx } from './Primitives';
-import { formatBytes, sanitizeFilenameStem, splitFilename } from './format';
+import { formatBytes, renameKeepingExtension, sanitizeFilenameStem, splitFilename } from './format';
 import {
   FALLBACK_DOCUMENT_NAME,
   FALLBACK_MIME_TYPE,
@@ -89,6 +89,13 @@ export const OutputCenter: React.FC = () => {
     window.addEventListener(OUTPUT_EVENT, onOutput);
     return () => window.removeEventListener(OUTPUT_EVENT, onOutput);
   }, [abandonPendingSave, haptic]);
+
+  // A failed save stays retryable; any other result gives way to the next document.
+  useEffect(() => {
+    const onDismiss = () => { if (!recordRef.current?.deliveryIssue) dismiss(); };
+    window.addEventListener(OUTPUT_DISMISS_EVENT, onDismiss);
+    return () => window.removeEventListener(OUTPUT_DISMISS_EVENT, onDismiss);
+  }, [dismiss]);
 
   // A failed save must remain retryable across navigation until dismissed.
   useEffect(() => {
@@ -316,9 +323,7 @@ export const OutputCenter: React.FC = () => {
               busy={busy}
               disabled={busy || !renameValue.trim()}
               onClick={() => void (async () => {
-                const typedName = renameValue.trim();
-                const nextName = originalExtension && !typedName.toLowerCase().endsWith(originalExtension.toLowerCase())
-                  ? `${typedName}${originalExtension}` : typedName;
+                const nextName = renameKeepingExtension(renameValue, originalExtension, safeName);
                 if (recent && platform.rename) {
                   const renamed = await act(() => platform.rename!(recent, nextName), t("output-center.that.file.could.not.be.saved.4d740f"));
                   if (!renamed) return;

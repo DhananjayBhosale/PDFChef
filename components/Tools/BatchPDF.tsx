@@ -188,6 +188,8 @@ export const BatchPDF: React.FC = () => {
       );
       checkCanceled();
       if (result.status !== 'success') throw new Error(t("batch-pdf.compression.was.blocked.by.the.readability.safety.99233a"));
+      // Like Compress PDF: when the new copy is not smaller, the original is what is kept.
+      if (result.data.length === 0 || result.data.length >= file.size) return { blob: file, filename: file.name };
       recordSavings(file.size, result.data.length);
       return { blob: bytesBlob(result.data), filename: `${baseName(file.name)}-compressed.pdf` };
     }
