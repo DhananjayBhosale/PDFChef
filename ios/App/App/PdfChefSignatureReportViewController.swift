@@ -13,6 +13,7 @@ final class PdfChefSignatureReportViewController: UIViewController {
     private var verificationStarted = false
     private var closeRequested = false
     private var dismissalFinished = false
+    private var finishReported = false
     /// Held only while this sheet is open, so a verified copy can keep the original's password.
     private var verifiedPassword: String?
     private var verifiedAt = Date()
@@ -441,9 +442,18 @@ final class PdfChefSignatureReportViewController: UIViewController {
     }
 
     @objc private func close() {
+        // UIKit ignores a dismissal requested while the sheet is still sliding in.
+        // Close once that finishes instead of latching closeRequested on a no-op.
+        if let coordinator = transitionCoordinator {
+            coordinator.animate(alongsideTransition: nil) { [weak self] _ in self?.close() }
+            return
+        }
         guard !closeRequested else { return }
         closeRequested = true
         verifiedPassword = nil
+        // Nothing has started that would finish later, and this sheet may be released
+        // once dismissed, so do not wait on the document load callback.
+        if !verificationStarted { verificationFinished = true }
         dismiss(animated: !UIAccessibility.isReduceMotionEnabled) { [weak self] in
             guard let self else { return }
             self.dismissalFinished = true
@@ -452,7 +462,8 @@ final class PdfChefSignatureReportViewController: UIViewController {
     }
 
     private func finishIfReady() {
-        guard verificationFinished, dismissalFinished else { return }
+        guard verificationFinished, dismissalFinished, !finishReported else { return }
+        finishReported = true
         onFinished()
     }
 }

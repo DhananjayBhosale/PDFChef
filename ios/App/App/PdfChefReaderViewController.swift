@@ -485,10 +485,24 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
     @objc private func previousPage() { pdfView.goToPreviousPage(nil) }
     @objc private func nextPage() { pdfView.goToNextPage(nil) }
     @objc private func retry() { loadDocument() }
-    @objc private func share() { shareDocument(self) }
-    @objc private func close() { finish(.closed) }
+    /// Bar buttons stay tappable while a sheet slides in over them. Presenting or
+    /// closing from that moment leaves the new sheet unable to dismiss, so wait it out.
+    private var isIdleForBarAction: Bool {
+        presentedViewController == nil && transitionCoordinator == nil
+    }
+
+    @objc private func share() {
+        guard isIdleForBarAction else { return }
+        shareDocument(self)
+    }
+
+    @objc private func close() {
+        guard isIdleForBarAction else { return }
+        finish(.closed)
+    }
 
     @objc private func showTools() {
+        guard isIdleForBarAction else { return }
         let sheet = UIAlertController(title: "PDF Tools", message: nil, preferredStyle: .actionSheet)
         if canVerifySignatures {
             sheet.addAction(UIAlertAction(title: "Verify PDF Signatures", style: .default) { [weak self] _ in
