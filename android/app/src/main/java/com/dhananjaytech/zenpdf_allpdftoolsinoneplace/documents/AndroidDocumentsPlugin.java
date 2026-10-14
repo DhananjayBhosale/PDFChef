@@ -14,8 +14,11 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import android.content.ClipData;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -34,6 +37,8 @@ public final class AndroidDocumentsPlugin extends Plugin {
     private static final AtomicBoolean READER_LAUNCH_ACTIVE = new AtomicBoolean();
     private static final AtomicBoolean PICKER_LAUNCH_ACTIVE = new AtomicBoolean();
     private boolean readerLaunching;
+    /** Picked file names by batch, applied once the batch is acknowledged. */
+    private final Map<String, Map<String, String>> pickedNames = new HashMap<>();
     private boolean pickerLaunching;
 
     @PluginMethod
@@ -252,8 +257,18 @@ public final class AndroidDocumentsPlugin extends Plugin {
             if (refs == null || !PendingImportBatch.isValidBatchRef(suppliedBatchRef)) {
                 rejectInvalid(call); return;
             }
-            int acknowledged = application().getDocumentLifecycleCoordinator()
-                    .acknowledgePendingImports(suppliedBatchRef, refs, call::isReleased);
+            DocumentLifecycleCoordinator coordinator = application().getDocumentLifecycleCoordinator();
+            int acknowledged = coordinator.acknowledgePendingImports(suppliedBatchRef, refs, call::isReleased);
+            Map<String, String> names;
+            synchronized (pickedNames) { names = pickedNames.remove(suppliedBatchRef); }
+            if (names != null) {
+                for (Map.Entry<String, String> named : names.entrySet()) {
+                    try { coordinator.renameOwnedDocument(named.getKey(), named.getValue()); }
+                    catch (DocumentLifecycleCoordinator.Failure | RuntimeException ignored) {
+                        // The copy is already safe under its unnamed ref; a name is a courtesy.
+                    }
+                }
+            }
             JSObject output = new JSObject();
             output.put("acknowledgedCount", acknowledged);
             call.resolve(output);
@@ -512,7 +527,16 @@ public final class AndroidDocumentsPlugin extends Plugin {
             }
             List<DocumentLifecycleCoordinator.DocumentRecord> records = application()
                     .getDocumentLifecycleCoordinator().pendingImportsForBatch(result.batchRef());
+            Map<String, String> names = pickedPdfNames(
+                    activityResult.getData(), result.itemRefs(), records);
+            synchronized (pickedNames) { pickedNames.put(result.batchRef(), names); }
             JSObject output = acceptedPickerEnvelope(result.batchRef(), records);
+            JSONArray items = output.getJSONArray("items");
+            for (int index = 0; index < items.length(); index++) {
+                org.json.JSONObject item = items.getJSONObject(index);
+                String name = names.get(item.getString("ref"));
+                if (name != null) item.put("displayName", name);
+            }
             JSObject event = new JSObject();
             event.put("batchRef", output.getString("batchRef"));
             event.put("itemCount", records.size());
@@ -680,6 +704,35 @@ public final class AndroidDocumentsPlugin extends Plugin {
         output.put("batchRef", batchRef);
         output.put("items", pendingItems(records));
         return output;
+    }
+
+    /**
+     * The picker copy keeps no source name, so Recent and the share sheet said "Document".
+     * The provider's name is read here, made safe, and kept for picked PDFs only.
+     */
+    private Map<String, String> pickedPdfNames(Intent data, List<String> refs,
+            List<DocumentLifecycleCoordinator.DocumentRecord> records) {
+        Map<String, String> names = new HashMap<>();
+        if (data == null) return names;
+        List<Uri> uris = new ArrayList<>();
+        ClipData clip = data.getClipData();
+        if (clip != null) {
+            for (int index = 0; index < clip.getItemCount(); index++) uris.add(clip.getItemAt(index).getUri());
+        } else if (data.getData() != null) {
+            uris.add(data.getData());
+        }
+        if (uris.size() != refs.size()) return names;
+        Set<String> pdfRefs = new HashSet<>();
+        for (DocumentLifecycleCoordinator.DocumentRecord record : records) {
+            if ("application/pdf".equals(record.mimeType())) pdfRefs.add(record.ref());
+        }
+        for (int index = 0; index < uris.size(); index++) {
+            if (!pdfRefs.contains(refs.get(index))) continue;
+            String name = IncomingPdfIntake.safeDisplayName(IncomingPdfIntake.displayNameOf(
+                    getContext().getContentResolver(), uris.get(index)));
+            if (name != null) names.put(refs.get(index), name);
+        }
+        return names;
     }
 
     private static JSObject acceptedPickerEnvelope(

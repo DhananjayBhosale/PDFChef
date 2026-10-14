@@ -13,6 +13,7 @@ import { Link } from 'react-router-dom';
 import { ZoomControls } from '../UI/ZoomControls';
 import { useZoom } from '../../hooks/useZoom';
 import { useDragReorder } from '../../hooks/useDragReorder';
+import { useConfirmDiscard } from '../../hooks/useConfirmDiscard';
 import { createPortal } from 'react-dom';
 import { tools } from './toolCatalog';
 import { ToolIdentity } from './ToolIdentity';
@@ -20,6 +21,7 @@ import { StatusToast } from '../UI/StatusToast';
 import { StatusLine } from '../UI/Primitives';
 import { ToolHeader, ToolShell } from '../UI/ToolLayout';
 import { useImmersiveWorkspace } from '../Layout/AppShell';
+import { imagePdfOutputName } from '../UI/format';
 
 const IMAGE_TO_PDF_TOOL = tools.find((tool) => tool.path === '/image-to-pdf');
 const MAX_IMAGE_TO_PDF_FILES = 100;
@@ -43,10 +45,6 @@ const mapWithConcurrency = async <Input, Output>(
   return results;
 };
 
-const imagePdfOutputName = (filename: string) => {
-  const baseName = filename.replace(/\.[^/.]+$/, '').trim() || 'images';
-  return `${baseName}.pdf`;
-};
 
 // Data Model
 interface ImageElement {
@@ -266,6 +264,8 @@ const CanvasPage: React.FC<{
 export const ImageToPDF: React.FC = () => {
   useI18n();
   const [pages, setPages] = useState<PageData[]>([]);
+  const [savedPages, setSavedPages] = useState<PageData[] | null>(null);
+  useConfirmDiscard(pages.length > 0 && pages !== savedPages);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const { zoom, zoomIn, zoomOut, resetZoom } = useZoom(1.0, 0.5, 1.5, 0.25);
   const canvasViewportRef = useRef<HTMLDivElement>(null);
@@ -521,6 +521,7 @@ export const ImageToPDF: React.FC = () => {
         imagePdfOutputName(firstImage?.file.name || 'images'),
         'application/pdf',
       );
+      setSavedPages(pages);
       setStatus({ isProcessing: false, progress: 100, message: t("image-to-pdf.pdf.is.ready.34a5a8") });
     } catch (e) {
       console.error(e);

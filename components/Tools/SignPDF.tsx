@@ -23,6 +23,7 @@ import { PDFFile, ProcessingStatus } from '../../types';
 import { useZoom } from '../../hooks/useZoom';
 import { usePdfPinchZoom } from '../../hooks/usePdfPinchZoom';
 import { useFileDrop } from '../../hooks/useFileDrop';
+import { useConfirmDiscard } from '../../hooks/useConfirmDiscard';
 import { loadPDFDocument } from '../../services/pdfBrowser';
 import { applySignaturesToPDF } from '../../services/pdfDocument';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
@@ -382,6 +383,8 @@ export const SignPDF: React.FC = () => {
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const [signatures, setSignatures] = useState<SignatureItem[]>([]);
+  const [savedSignatures, setSavedSignatures] = useState<SignatureItem[] | null>(null);
+  useConfirmDiscard(signatures.length > 0 && signatures !== savedSignatures);
   const [selectedSignatureId, setSelectedSignatureId] = useState<string | null>(null);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [mobilePanel, setMobilePanel] = useState<'document' | 'stamps'>('document');
@@ -633,6 +636,7 @@ export const SignPDF: React.FC = () => {
       const bytes = await applySignaturesToPDF(file.file, signatures);
       const outputName = androidExportFileName('sign', file.name, 'pdf');
       downloadBlob(new Blob([bytes], { type: 'application/pdf' }), outputName);
+      setSavedSignatures(signatures);
       setStatus({ isProcessing: false, progress: 100, message: t("sign-pdf.signed.copy.ready.f2efbd", { v0: outputName }) });
     } catch {
       setStatus({ isProcessing: false, progress: 0, message: '', error: t("sign-pdf.the.signed.pdf.could.not.be.saved.0a4825") });

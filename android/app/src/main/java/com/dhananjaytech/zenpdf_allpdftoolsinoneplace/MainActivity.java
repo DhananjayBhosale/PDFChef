@@ -40,6 +40,7 @@ public class MainActivity extends BridgeActivity {
     private android.view.ViewTreeObserver.OnPreDrawListener systemBarBackgroundListener;
     private Boolean lightSystemBars;
     private boolean rendererGone;
+    private boolean creating;
     private final ExecutorService intakeExecutor = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "pdfchef-incoming-pdf");
         thread.setDaemon(true);
@@ -77,8 +78,21 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AndroidStorageStatsPlugin.class);
         registerPlugin(AndroidDocumentsPlugin.class);
         registerPlugin(AndroidDocumentScannerPlugin.class);
-        super.onCreate(savedInstanceState);
-        acceptIncomingPdf(getIntent());
+        // Capacitor passes the launch intent to onNewIntent from inside onCreate; it is
+        // handled once below instead.
+        creating = true;
+        try {
+            super.onCreate(savedInstanceState);
+        } finally {
+            creating = false;
+        }
+        // Reopening from Recents after the process ended gives back the task's first intent,
+        // either as a restored screen (saved state) or as a relaunch from history. That PDF
+        // was taken in already; showing it again would be a surprise.
+        if (savedInstanceState == null
+                && !IncomingPdfIntake.isReplayedFromRecents(getIntent().getFlags())) {
+            acceptIncomingPdf(getIntent());
+        }
     }
 
     /**
@@ -91,7 +105,7 @@ public class MainActivity extends BridgeActivity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        acceptIncomingPdf(intent);
+        if (!creating) acceptIncomingPdf(intent);
     }
 
     /**

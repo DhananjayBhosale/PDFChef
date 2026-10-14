@@ -74,6 +74,13 @@ export const renameKeepingExtension = (typed: string, extension: string, current
   return stem ? `${stem}${extension}` : currentName;
 };
 
+// Android's photo picker hides real names, so the WebView names a photo by its media id
+// ("66.png"). A bare number is no name at all.
+export const imagePdfOutputName = (filename: string): string => {
+  const baseName = filename.replace(/\.[^/.]+$/, '').trim();
+  return `${baseName && !/^\d+$/u.test(baseName) ? baseName : 'images'}.pdf`;
+};
+
 /** Keep editable names safe for the iOS Files/share handoff and its byte limit. */
 export const sanitizeFilenameStem = (value: string): string => {
   let result = '';

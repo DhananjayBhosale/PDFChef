@@ -17,6 +17,7 @@ import {
   degrees,
   StandardFonts,
 } from 'pdf-lib';
+import { flattenFormFields } from './pdfFormFlatten';
 import JSZip from 'jszip';
 import { copyPagesWithForms } from './pdfPageCopy';
 import type { PDFMetadata } from '../types';
@@ -675,7 +676,7 @@ export const flattenPDF = async (file: File): Promise<Uint8Array> => {
 
   const hasAcroForm = pdfDoc.catalog.lookup(PDFName.of('AcroForm')) !== undefined;
   if (hasAcroForm) {
-    pdfDoc.getForm().flatten();
+    flattenFormFields(pdfDoc);
   }
 
   return pdfDoc.save();

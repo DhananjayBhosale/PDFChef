@@ -95,7 +95,18 @@ public final class IncomingPdfIntake {
     /** The sender's name for the handed-over file, or null when it gives none. */
     public static String sourceDisplayName(ContentResolver resolver, Intent intent) {
         if (resolver == null || !isIncomingPdf(intent)) return null;
-        try (Cursor cursor = resolver.query(uriOf(intent),
+        return displayNameOf(resolver, uriOf(intent));
+    }
+
+    /** True when Android relaunched the task from Recents with its original intent. */
+    public static boolean isReplayedFromRecents(int intentFlags) {
+        return (intentFlags & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0;
+    }
+
+    /** The provider's name for one content URI, or null when it gives none. */
+    static String displayNameOf(ContentResolver resolver, Uri uri) {
+        if (resolver == null || uri == null) return null;
+        try (Cursor cursor = resolver.query(uri,
                 new String[] {OpenableColumns.DISPLAY_NAME}, null, null, null)) {
             if (cursor == null || !cursor.moveToFirst() || cursor.isNull(0)) return null;
             return cursor.getString(0);
