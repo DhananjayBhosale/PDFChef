@@ -99,11 +99,12 @@ const documentConsumers = [...entryGraph]
   .map(file => relative(root, file))
   .sort();
 assert(JSON.stringify(documentConsumers) === JSON.stringify([
+  'components/Layout/AndroidIncomingPdfHandler.tsx',
   'services/platform/android/androidPdfReader.ts',
   'services/platform/android/androidWorkspacePlatform.ts',
 ]), `AndroidDocuments composition drifted: ${documentConsumers.join(', ')}`);
 const workspace = readFileSync(workspaceComposition, 'utf8');
-assert(workspace.includes('if (!documentsOverride && !isAndroidDocumentsAvailable()) return platformWithDeviceFacts;')
+assert(workspace.includes("if (!documentsOverride && Capacitor.getPlatform() !== 'android') return platformWithDeviceFacts;")
   && workspace.includes('getApplicationMetadata: () => metadata.getMetadata()')
   && workspace.includes('getStorageInformation: () => storage.getStorageStats()')
   && workspace.includes('platform.documentScanner = createAndroidDocumentScannerService()')

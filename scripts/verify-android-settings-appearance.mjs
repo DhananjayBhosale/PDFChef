@@ -61,8 +61,8 @@ assert(localWrite >= 0 && nativeWrite > localWrite,
   'the current app theme must be durable before optional legacy sync');
 
 const feedbackStart = surface.indexOf('const THEME_SYNC_FEEDBACK');
-const themeRowStart = surface.indexOf('<Row label="Theme" stacked>');
-const textSizeStart = surface.indexOf('<Row label="Text size" stacked>');
+const themeRowStart = surface.indexOf('<Row label={t("settings-page.theme.efb52e")} stacked>');
+const textSizeStart = surface.indexOf('<Row label={t("settings-page.text.size.d68761")} stacked>');
 assert(feedbackStart >= 0 && themeRowStart > feedbackStart && textSizeStart > themeRowStart,
   'Theme feedback must remain inside the existing Settings flow');
 const feedback = surface.slice(feedbackStart, surface.indexOf('export const SettingsPage'));

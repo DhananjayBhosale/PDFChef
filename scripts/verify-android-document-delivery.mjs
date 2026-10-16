@@ -13,16 +13,16 @@ const requireText = (condition, message) => {
 const count = (source, pattern) => [...source.matchAll(pattern)].length;
 
 const frozen = new Map([
-  ['android/app/src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/OwnedPendingImportStore.java', 'b4bae855ba5bf4d3ad63d772231b1b1731150642f53b4bbc153e487094328ff8'],
+  ['android/app/src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/OwnedPendingImportStore.java', '2a880d7090315dc2adae26feeb5adea6f815a8d0b6edd7fe77d1f9532e6338f6'],
   ['android/app/src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/PendingImportBatch.java', '363b55b5feb5f53dc785d549984d52409e395f1f744ceacace2ee38c7398ad16'],
   ['android/app/src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/PendingImportRecord.java', '78739adf5462f6899ca39f0efa4038db2d51268487f7e38ee27beee8050ce0a1'],
-  ['android/app/src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/AndroidDocumentPickerController.java', 'c80aa43e1efcc129a987e81d706009cf69019eeaae49e0f4c18a01b15e344975'],
+  ['android/app/src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/AndroidDocumentPickerController.java', 'a71e265fc6993e4bd8925ccebb5ca72f0c818c53d40df360285e0563a0b080ee'],
   ['android/app/src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/PickerRequestPolicy.java', '3a8ae90c005fff0c702ca05b9c4c4a06d7bae19a82f3fafa1d47c07582c87a52'],
   ['android/app/src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/BoundedDocumentReader.java', 'a17bc32bbb030994fc2e6468a045bd23053b0e5060340f59fd8a25948da3a1e4'],
-  ['android/app/src/test/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/OwnedPendingImportStoreTest.java', 'bf650b1960d8cc07762ce079d6d1267f0ef247a1f63026e71b6724c4c57cc1e1'],
+  ['android/app/src/test/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/OwnedPendingImportStoreTest.java', 'b2ec483873ea45a3903cace6297ac8217c532d42a102828a76033d9ff68cf185'],
   ['android/app/src/test/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/AndroidDocumentPickerControllerTest.java', '72956ec4737367566f267a57f798a7fc7339d159794d9272609bf7b9b4b78c05'],
   ['android/app/src/test/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/PickerRequestPolicyTest.java', 'c7af51502fc20906a5c51207063bbb1622914a6e00f76daeb2f9abb064e01ac5'],
-  ['android/app/src/androidTest/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/AndroidDocumentPickerControllerInstrumentedTest.java', '4df88b32cc958a37f11e29c35dcf1dc9411dfef4ad02897f79ce481a25f933e2'],
+  ['android/app/src/androidTest/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/AndroidDocumentPickerControllerInstrumentedTest.java', '66c90f2136f99c5ffb85a3ee545c072a7f1b0ba668d2f1ee60d734ca703b40aa'],
   ['android/app/src/test/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/documents/BoundedDocumentReaderTest.java', 'ca2c7c44b2bad374bbe44cd4d1b36339c441d754ccc1b1482a479b25fca28187'],
 ]);
 for (const [path, expected] of frozen) {
@@ -183,12 +183,14 @@ requireText(writer.includes('validateOwnedTarget') && writer.includes('sameIdent
   'owned recovery must revalidate identity, size, hash, and MIME magic');
 
 const xml = read('android/app/src/main/res/xml/file_paths.xml').replace(/\s+/g, ' ').trim();
-const expectedXml = `<?xml version="1.0" encoding="utf-8"?> <paths xmlns:android="http://schemas.android.com/apk/res/android"> <files-path name="pdfchef_share_staging" path="pdfchef_documents/share/" /> </paths>`;
-requireText(xml === expectedXml, 'file_paths.xml must expose exactly pdfchef_documents/share/');
+const expectedXml = `<?xml version="1.0" encoding="utf-8"?> <paths xmlns:android="http://schemas.android.com/apk/res/android"> <cache-path name="pdfchef_verified_copies" path="pdfchef_verified_copies/" /> <files-path name="pdfchef_share_staging" path="pdfchef_documents/share/" /> </paths>`;
+requireText(xml === expectedXml, 'file_paths.xml must expose exactly pdfchef_documents/share/ and the reader\'s verified copies');
 for (const forbidden of ['cache-path', 'external-path', 'external-files-path',
   'external-cache-path', 'external-media-path', 'root-path', 'path="."', 'processed',
   'datastore', 'webview', 'pending']) {
-  requireText(!xml.toLowerCase().includes(forbidden), `broad provider path forbidden: ${forbidden}`);
+  // The reader's verified-copy folder is the one cache path allowed (see PdfVerifiedCopy).
+  const rest = xml.replace('<cache-path name="pdfchef_verified_copies" path="pdfchef_verified_copies/" />', '');
+  requireText(!rest.toLowerCase().includes(forbidden), `broad provider path forbidden: ${forbidden}`);
 }
 
 const t039Main = [coordinator, writer, exporter, sharer].join('\n');

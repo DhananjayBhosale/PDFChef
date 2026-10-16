@@ -24,9 +24,10 @@ assert(/sourceSets\s*\{[\s\S]*?minifiedQa\s*\{[\s\S]*?java\.srcDir 'src\/release
   'minified QA must compile the accepted release-only Application source set');
 assert(!appBuild.includes('testBuildType'),
   'QA runtime proof must not replace or complicate the ordinary debug instrumentation target');
-assert(!/release\s*\{[\s\S]*?signingConfig\s+/m.test(
-  appBuild.replace(/minifiedQa\s*\{[\s\S]*?\n\s*\}/m, '')),
-  'production release must remain unsigned');
+// Release is signed only when all four ZENPDF_RELEASE_* values are supplied; otherwise unsigned.
+assert(/if \(hasReleaseSigningConfig\) \{\s*signingConfig signingConfigs\.release\s*\}/.test(appBuild)
+  && (appBuild.match(/signingConfig signingConfigs\.release/g) ?? []).length === 1,
+  'production release may be signed only from the complete ZENPDF_RELEASE_* configuration');
 assert(!rules.includes('minifiedQa'), 'QA-only keep rules are forbidden');
 
 const outputs = {
