@@ -61,5 +61,7 @@ requireMatch(activity, /ServiceWorkerController\.getInstance\(\)\.setServiceWork
 requireMatch(activity, /onPageStarted[\s\S]*!PdfChefWebViewPolicy\.isPackagedOrigin\(url\)[\s\S]*view\.stopLoading\(\)/, 'redirect fail-closed guard');
 requireMatch(activity, /return blockedResponse\(\)/, 'remote subresource block');
 requireAbsent(activity, /bridge\.launchIntent\(/, 'Capacitor broad intent launcher');
+requireMatch(activity, /PlayInAppUpdateController\.create\(this, inAppUpdateLauncher\)/,
+  'lifecycle-owned Play update controller');
 
 console.log('WEBVIEW_SECURITY_VERIFIER: PASS');

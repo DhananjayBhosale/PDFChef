@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { AndroidLegacySettingsSnapshot } from '../../services/platform/android/legacyCompatibilityContracts.ts';
+import type {
+  AndroidLegacyHistorySnapshot,
+  AndroidLegacySettingsSnapshot,
+} from '../../services/platform/android/legacyCompatibilityContracts.ts';
 import {
   importAndroidOnboardingContinuity,
   legacyOnboardingIsComplete,
@@ -27,6 +30,18 @@ const snapshot = (
     values,
   };
 };
+
+const history = (
+  health: AndroidLegacyHistorySnapshot['health'],
+  returnedCount: number,
+): AndroidLegacyHistorySnapshot => ({
+  health,
+  sourceCount: returnedCount,
+  invalidRecordCount: health === 'partial_invalid' ? 1 : 0,
+  returnedCount,
+  truncated: false,
+  entries: [],
+});
 
 test('T911: only an independently valid positive legacy completion is importable', () => {
   assert.equal(legacyOnboardingIsComplete(snapshot('ok', true)), true);
@@ -170,6 +185,36 @@ test('T911: false, absent and unhealthy legacy state preserve genuine first run'
     assert.equal(status, 'unchanged');
     assert.equal(writes, 0);
   }
+});
+
+test('an existing legacy history suppresses repeated onboarding when its preference is unavailable', async () => {
+  for (const settings of [snapshot('ok'), snapshot('corrupt')] as const) {
+    let writes = 0;
+    const status = await importAndroidOnboardingContinuity({
+      readSharedOnboardingComplete: () => false,
+      readLegacySettings: async () => settings,
+      readLegacyHistory: async () => history('ok', 1),
+      markSharedOnboardingComplete: () => { writes += 1; },
+      isCommitAllowed: () => true,
+    });
+    assert.equal(status, 'imported');
+    assert.equal(writes, 1);
+  }
+});
+
+test('an explicit legacy first-run value is authoritative even when history exists', async () => {
+  let historyReads = 0;
+  let writes = 0;
+  const status = await importAndroidOnboardingContinuity({
+    readSharedOnboardingComplete: () => false,
+    readLegacySettings: async () => snapshot('ok', false),
+    readLegacyHistory: async () => { historyReads += 1; return history('ok', 1); },
+    markSharedOnboardingComplete: () => { writes += 1; },
+    isCommitAllowed: () => true,
+  });
+  assert.equal(status, 'unchanged');
+  assert.equal(historyReads, 0);
+  assert.equal(writes, 0);
 });
 
 test('T911: storage and bridge failures are contained without suppressing onboarding', async () => {

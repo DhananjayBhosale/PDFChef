@@ -2,6 +2,10 @@
 <resources>
     <string name="app_name">PDF Chef</string>
     <string name="title_activity_main">PDF Chef</string>
+    <string name="update_ready_title">Update ready</string>
+    <string name="update_ready_message">Restart PDF Chef to finish updating.</string>
+    <string name="update_later">Later</string>
+    <string name="update_restart">Restart</string>
     <string name="package_name">com.dhananjaytech.pdfchef</string>
     <string name="custom_url_scheme">com.dhananjaytech.pdfchef</string>
 </resources>
