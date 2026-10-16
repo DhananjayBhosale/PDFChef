@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<path d="M46 26H152L182 56V212Q182 222 172 222H46Q36 222 36 212V36Q36 26 46 26Z" fill="#FCF3E1" stroke="#2A303B" stroke-width="5"/>
+<path d="M152 26V48Q152 56 160 56H182Z" fill="#F4DCBB" stroke="#2A303B" stroke-width="5"/>
+<path d="M56 54H108" fill="none" stroke="#3479CF" stroke-width="10"/>
+<path d="M56 76H94" stroke="#CDB89C" stroke-width="6"/>
+<path d="M56 104H112M138 104H160M56 122H104M138 122H160M56 140H116M138 140H160" stroke="#CDB89C" stroke-width="6"/>
+<path d="M56 160H162" fill="none" stroke="#2A303B" stroke-width="4"/>
+<path d="M56 182H88" stroke="#CDB89C" stroke-width="6"/>
+<path d="M112 182H144" fill="none" stroke="#2A303B" stroke-width="8"/>
+<path d="M112 198H144" fill="none" stroke="#2A303B" stroke-width="3"/>
+<circle cx="190" cy="194" r="30" fill="#3479CF" stroke="#2A303B" stroke-width="5"/>
+<circle cx="190" cy="194" r="21" fill="none" stroke="#2B5F9E" stroke-width="3"/>
+<path d="M196.8 187.2C194.8 183.2 182.8 182.8 183.2 188.7C183.5 194.2 196.5 193.3 196.8 199.1C197.2 205.2 184.9 205 183.2 200.6M190 179.7V208.3" fill="none" stroke="#FFFFFF" stroke-width="5"/>
+</svg>

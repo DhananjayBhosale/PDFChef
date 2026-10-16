@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<path d="M54 26H152L182 56V204Q182 214 172 214H54Q44 214 44 204V36Q44 26 54 26Z" fill="#FCF3E1" stroke="#2A303B" stroke-width="5"/>
+<path d="M152 26V48Q152 56 160 56H182Z" fill="#F4DCBB" stroke="#2A303B" stroke-width="5"/>
+<path d="M64 62H128M64 80H156M64 98H150M64 116H118" stroke="#CDB89C" stroke-width="6"/>
+<path d="M64 160C70 140 82 132 82 146C82 160 72 170 80 166C88 162 92 148 98 150C103 152 98 162 104 160L118 156" fill="none" stroke="#F2604E" stroke-width="5"/>
+<path d="M62 182H122" fill="none" stroke="#2A303B" stroke-width="4"/>
+<path d="M166 178L150 222L163 215L170 228L180 186Z" fill="#F2604E" stroke="#2A303B" stroke-width="5"/>
+<path d="M182 178L198 222L185 215L178 228L168 186Z" fill="#F2604E" stroke="#2A303B" stroke-width="5"/>
+<path d="M174 124Q183.8 117.1 189.6 127.6Q201.4 125.6 202.1 137.6Q213.6 140.9 209.1 152Q218 160 209.1 168Q213.6 179.1 202.1 182.4Q201.4 194.4 189.6 192.4Q183.8 202.9 174 196Q164.2 202.9 158.4 192.4Q146.6 194.4 145.9 182.4Q134.4 179.1 138.9 168Q130 160 138.9 152Q134.4 140.9 145.9 137.6Q146.6 125.6 158.4 127.6Q164.2 117.1 174 124Z" fill="#3479CF" stroke="#2A303B" stroke-width="5"/>
+<circle cx="174" cy="160" r="25" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+<path d="M161 161L171 171L188 151" fill="none" stroke="#FFFFFF" stroke-width="8"/>
+</svg>

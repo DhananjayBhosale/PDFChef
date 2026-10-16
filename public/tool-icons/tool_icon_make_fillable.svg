@@ -1,5 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
-  <path fill="#E2F5F3" d="M8 3h25l7 7v35H8z"/>
-  <path fill="#2E8D8A" d="M32 3v9h8zM13 17h4v4h-4zM20 17h14v3H20zM13 25h4v4h-4zM20 25h14v3H20zM13 33h4v4h-4zM20 33h10v3H20z"/>
-  <path fill="#53AA90" d="m14 26 1.5 1.5 3-4 1.5 1.2-4.3 5.6-3-3z"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<path d="M48 28H160L190 58V216Q190 226 180 226H48Q38 226 38 216V38Q38 28 48 28Z" fill="#FCF3E1" stroke="#2A303B" stroke-width="5"/>
+<path d="M160 28V50Q160 58 168 58H190Z" fill="#F4DCBB" stroke="#2A303B" stroke-width="5"/>
+<rect x="58" y="50" width="22" height="22" rx="5" fill="#FFFFFF" stroke="#2A303B" stroke-width="4"/>
+<path d="M63 61L68 66L76 55" fill="none" stroke="#3479CF" stroke-width="5"/>
+<path d="M94 61H154" stroke="#CDB89C" stroke-width="6"/>
+<rect x="58" y="84" width="22" height="22" rx="5" fill="#FFFFFF" stroke="#2A303B" stroke-width="4"/>
+<path d="M94 95H140" stroke="#CDB89C" stroke-width="6"/>
+<path d="M60 128H104" stroke="#CDB89C" stroke-width="6"/>
+<rect x="58" y="138" width="112" height="26" rx="6" fill="#FFFFFF" stroke="#2A303B" stroke-width="4"/>
+<path d="M60 182H96" stroke="#CDB89C" stroke-width="6"/>
+<rect x="58" y="192" width="92" height="24" rx="6" fill="#FFFFFF" stroke="#2A303B" stroke-width="4"/>
+<path d="M72 198V210" fill="none" stroke="#3479CF" stroke-width="4"/>
+<g transform="translate(146 202) rotate(-45)">
+<path d="M0 0L26 -11L26 11Z" fill="#F4DCBB" stroke="#2A303B" stroke-width="5"/>
+<path d="M0 0L9 -4L9 4Z" fill="#2A303B" stroke="#2A303B" stroke-width="3"/>
+<rect x="26" y="-11" width="62" height="22" rx="2" fill="#3479CF" stroke="#2A303B" stroke-width="5"/>
+<path d="M30 0H84" fill="none" stroke="#2B5F9E" stroke-width="3"/>
+<rect x="88" y="-11" width="11" height="22" rx="1" fill="#C9CFD8" stroke="#2A303B" stroke-width="5"/>
+<path d="M99 -11H106Q113 -11 113 -4V4Q113 11 106 11H99Z" fill="#F2604E" stroke="#2A303B" stroke-width="5"/>
+</g>
 </svg>

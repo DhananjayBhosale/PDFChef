@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<path d="M58 30H138L164 56V180Q164 190 154 190H58Q48 190 48 180V40Q48 30 58 30Z" fill="#FCF3E1" stroke="#2A303B" stroke-width="5"/>
+<path d="M138 30V48Q138 56 146 56H164Z" fill="#F4DCBB" stroke="#2A303B" stroke-width="5"/>
+<path d="M40 48H120L146 74V198Q146 208 136 208H40Q30 208 30 198V58Q30 48 40 48Z" fill="#FCF3E1" stroke="#2A303B" stroke-width="5"/>
+<path d="M120 48V66Q120 74 128 74H146Z" fill="#F4DCBB" stroke="#2A303B" stroke-width="5"/>
+<path d="M48 80H104M48 98H124M48 116H120M48 134H96M48 152H118M48 170H90" stroke="#CDB89C" stroke-width="6"/>
+<g transform="rotate(12 178 130)">
+<path d="M142 62H202L226 86V180Q226 190 216 190H142Q132 190 132 180V72Q132 62 142 62Z" fill="#FFFDF8" stroke="#2A303B" stroke-width="5"/>
+<path d="M202 62V78Q202 86 210 86H226Z" fill="#F4DCBB" stroke="#2A303B" stroke-width="5"/>
+</g>
+<circle cx="206" cy="196" r="23" fill="#F2604E" stroke="#2A303B" stroke-width="5"/>
+<path d="M198.2 188.2L213.8 203.8M213.8 188.2L198.2 203.8" fill="none" stroke="#FFFFFF" stroke-width="6.5"/>
+</svg>
