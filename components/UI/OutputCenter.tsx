@@ -271,7 +271,7 @@ export const OutputCenter: React.FC = () => {
             disabled={!platform.keepFresh || retained || Boolean(recent)}
             icon={<CheckCircle2 aria-hidden size={16} />}
             onClick={() => void act(keepResult, t("output-center.that.file.could.not.be.saved.4d740f"))}
-          >{t("output-center.save.1509f5")}</Button>
+          >{retained || recent ? t("output-center.saved.b5c120") : t("output-center.save.1509f5")}</Button>
           <Button
             block
             disabled={recent ? !platform.share : !platform.shareFresh}

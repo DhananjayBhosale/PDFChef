@@ -305,7 +305,8 @@ test('the one action a reader cannot guess at keeps its word on every phone', ()
   assert.equal(english["edit-pdf.save.1509f5"], "Save");
   assert.doesNotMatch(editor, /max-\[400px\]:sr-only/, 'the Save label must not be hidden on narrow phones');
   // The badge is what gives up its width instead; it says something useful but nothing urgent.
-  assert.match(editor, /Badge tone="caution" className="shrink-0 max-\[400px\]:hidden"/);
+  // At 402 points (iPhone 17 Pro) it left the title as "Edit …", so it goes below 440.
+  assert.match(editor, /Badge tone="caution" className="shrink-0 max-\[440px\]:hidden"/);
 });
 
 test('a page that is only a picture says so and offers the two ways forward', () => {

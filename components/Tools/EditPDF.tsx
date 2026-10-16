@@ -87,6 +87,7 @@ import { Link, useBlocker } from 'react-router-dom';
 import { ZoomControls } from '../UI/ZoomControls';
 import { ClampedNumberInput } from '../UI/ClampedNumberInput';
 import { useZoom } from '../../hooks/useZoom';
+import { useDiscardPrompt } from '../../hooks/useConfirmDiscard';
 import { usePdfPinchZoom } from '../../hooks/usePdfPinchZoom';
 import { useImmersiveWorkspace } from '../Layout/AppShell';
 import { PDF_TEXT_OVERFLOW_MESSAGE } from '../../services/pdfTextEditSafety';
@@ -1770,14 +1771,9 @@ export const EditPDF: React.FC = () => {
   const updateFormValue = (fieldName: string, value: PdfFormFieldValue) =>
     setFormValues((prev) => ({ ...prev, [fieldName]: value }));
 
-  const confirmDiscardEdits = useCallback(
-    () => !hasUnsavedEdits || window.confirm(t("edit-pdf.discard.your.unsaved.edits.1575c6")),
-    [hasUnsavedEdits],
-  );
+  const { ask: askToDiscard, sheet: discardSheet } = useDiscardPrompt();
 
-  const closeEditor = useCallback(() => {
-    if (!confirmDiscardEdits()) return;
-
+  const discardAndClose = useCallback(() => {
     if (file?.file) {
       void releaseNativePdfTextDocument(file.file);
       releaseDocumentEmbeddedFonts(file.file);
@@ -1803,7 +1799,12 @@ export const EditPDF: React.FC = () => {
     redoStack.current = [];
     setHistoryVersion((value) => value + 1);
     setStatus({ isProcessing: false, progress: 0, message: '' });
-  }, [confirmDiscardEdits, file, replaceBlockEdits, replaceElements]);
+  }, [file, replaceBlockEdits, replaceElements]);
+
+  const closeEditor = useCallback(() => {
+    if (hasUnsavedEdits) askToDiscard(discardAndClose);
+    else discardAndClose();
+  }, [askToDiscard, discardAndClose, hasUnsavedEdits]);
 
   // The editor's history is one stack over paragraphs, annotations and shapes, so the keyboard
   // shortcut has to drive that rather than whatever a focused paragraph's own undo would do.
@@ -1862,9 +1863,8 @@ export const EditPDF: React.FC = () => {
 
   useEffect(() => {
     if (navigationBlocker.state !== 'blocked') return;
-    if (confirmDiscardEdits()) navigationBlocker.proceed();
-    else navigationBlocker.reset();
-  }, [confirmDiscardEdits, navigationBlocker]);
+    askToDiscard(() => navigationBlocker.proceed(), () => navigationBlocker.reset());
+  }, [askToDiscard, navigationBlocker]);
 
   useEffect(() => {
     if (!isImmersiveEditor && !insertMode) return undefined;
@@ -2750,7 +2750,7 @@ export const EditPDF: React.FC = () => {
                 {/* The badge is the first thing to go when the bar runs out of room. It tells the
                     reader something useful but nothing urgent, and the width it frees is what keeps
                     the word "Save" on the one control they must be able to find. */}
-                <Badge tone="caution" className="shrink-0 max-[400px]:hidden">{t("edit-pdf.beta.703390")}</Badge>
+                <Badge tone="caution" className="shrink-0 max-[440px]:hidden">{t("edit-pdf.beta.703390")}</Badge>
               </div>
             </div>
             <button type="button" onClick={() => setFindOpen((open) => !open)} aria-pressed={findOpen} aria-label={t("edit-pdf.find.and.replace.9898ad")} className={`chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] ${findOpen ? 'bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'text-[var(--text-secondary)]'}`}><Search aria-hidden size={19} /></button>
@@ -2875,6 +2875,7 @@ export const EditPDF: React.FC = () => {
           </div>
           <input ref={imageInputRef} type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" className="hidden" onChange={(event) => { void addImage(event.target.files?.[0]); event.currentTarget.value = ''; }} />
         </div>
+        {discardSheet}
       </div>
     );
   }
@@ -2996,6 +2997,7 @@ export const EditPDF: React.FC = () => {
              </div>
           )}
        </AnimatePresence>
+       {discardSheet}
     </div>
   );
 };

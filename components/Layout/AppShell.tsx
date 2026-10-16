@@ -245,6 +245,9 @@ const SideRail: React.FC = () => {
 const ToolNavBar: React.FC<{ title: string; tool?: ToolCardData }> = ({ title, tool }) => {
   useI18n();
   const navigate = useNavigate();
+  // A page opened from another tab (Privacy from Settings) names that tab instead.
+  const from = (useLocation().state as { from?: string } | null)?.from;
+  const backTab = TABS.find((tab) => tab.to === from) ?? TABS[0];
   const [scrolled, setScrolled] = useState(false);
   const bar = useRef<HTMLDivElement>(null);
   const back = useRef<HTMLButtonElement>(null);
@@ -291,11 +294,11 @@ const ToolNavBar: React.FC<{ title: string; tool?: ToolCardData }> = ({ title, t
           onClick={() => {
             const historyIndex = Number(window.history.state?.idx ?? 0);
             if (historyIndex > 0) navigate(-1);
-            else navigate('/', { replace: true });
+            else navigate(backTab.to, { replace: true });
           }}
           className="chef-pressable chef-target inline-flex items-center gap-0.5 rounded-[var(--radius-control)] ps-1 pe-2 font-medium text-[var(--accent-text)]"
         >
-          <ChevronLeft aria-hidden size={22} className="rtl:rotate-180" />{t("app-shell.tools.ea93d6")}</button>
+          <ChevronLeft aria-hidden size={22} className="rtl:rotate-180" />{backTab.label}</button>
         {/* Identity and title are one unit: the mark never appears without the
             name it belongs to, so the bar is either empty or fully legible. */}
         <div

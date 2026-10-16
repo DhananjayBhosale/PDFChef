@@ -265,7 +265,7 @@ export const ImageToPDF: React.FC = () => {
   useI18n();
   const [pages, setPages] = useState<PageData[]>([]);
   const [savedPages, setSavedPages] = useState<PageData[] | null>(null);
-  useConfirmDiscard(pages.length > 0 && pages !== savedPages);
+  const discardSheet = useConfirmDiscard(pages.length > 0 && pages !== savedPages);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const { zoom, zoomIn, zoomOut, resetZoom } = useZoom(1.0, 0.5, 1.5, 0.25);
   const canvasViewportRef = useRef<HTMLDivElement>(null);
@@ -733,6 +733,7 @@ export const ImageToPDF: React.FC = () => {
          document.body
       )}
       <StatusToast status={status} />
+      {discardSheet}
     </div>
   );
 };

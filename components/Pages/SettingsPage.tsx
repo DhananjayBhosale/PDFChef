@@ -93,6 +93,16 @@ const THEME_SYNC_FEEDBACK: Record<
   },
 };
 
+// Pages opened from here say "Settings" on their Back control, since that is where it goes.
+const BACK_TO_SETTINGS = { from: '/settings' };
+
+// The count reuses the home screen's sentence, which already reads "1 full job left" in every
+// language. A sentence ending in "。" needs no space before the next one.
+const freeJobsDetail = (remaining: number): string => {
+  const count = t("dashboard.full.job.left.in.this.7.day.252761", { v0: remaining, count: remaining });
+  return `${count}${/[。！？]$/u.test(count) ? '' : ' '}${t("settings-page.processing.stays.unlimited.later.results.643d0a")}`;
+};
+
 export const SettingsPage: React.FC = () => {
   const { preference } = useI18n();
   const [changingLanguage, setChangingLanguage] = useState(false);
@@ -155,7 +165,7 @@ export const SettingsPage: React.FC = () => {
                 ? monetization.access.monthlyActive
                   ? t("settings-page.pro.monthly.renews.automatically.until.cancelled.in.f0d32b")
                   : t("settings-page.pro.lifetime.is.a.one.time.purchase.ff132b")
-                : t("settings-page.successful.jobs.remain.in.this.7.day.b6a9cf", { v0: monetization.freeRemaining ?? 0 })}
+                : freeJobsDetail(monetization.freeRemaining ?? 0)}
               stacked
             >
               <div className="flex flex-wrap gap-2">
@@ -206,8 +216,8 @@ export const SettingsPage: React.FC = () => {
                     .catch(caught => setProblem(caught instanceof Error ? localizeError(caught) : t("settings-page.restore.could.not.be.completed.ccc989")));
                 }}>{t("settings-page.restore.purchases.c63999")}</Button>
                 <Button tone="quiet" disabled={!monetization.access?.monthlyActive} onClick={() => void monetization.manageSubscriptions()}>{t("settings-page.manage.subscription.9041c6")}</Button>
-                <Link to="/terms" className="chef-pressable chef-target inline-flex items-center rounded-[var(--radius-control)] px-3 text-sm font-semibold text-[var(--accent-text)] underline underline-offset-2">{t("settings-page.terms.ede548")}</Link>
-                <Link to="/privacy" className="chef-pressable chef-target inline-flex items-center rounded-[var(--radius-control)] px-3 text-sm font-semibold text-[var(--accent-text)] underline underline-offset-2">{t("settings-page.privacy.54a57c")}</Link>
+                <Link to="/terms" state={BACK_TO_SETTINGS} className="chef-pressable chef-target inline-flex items-center rounded-[var(--radius-control)] px-3 text-sm font-semibold text-[var(--accent-text)] underline underline-offset-2">{t("settings-page.terms.ede548")}</Link>
+                <Link to="/privacy" state={BACK_TO_SETTINGS} className="chef-pressable chef-target inline-flex items-center rounded-[var(--radius-control)] px-3 text-sm font-semibold text-[var(--accent-text)] underline underline-offset-2">{t("settings-page.privacy.54a57c")}</Link>
               </div>
             </Row>
           </Group>
@@ -345,15 +355,15 @@ export const SettingsPage: React.FC = () => {
           <Row stacked>
             <div className="flex flex-wrap gap-2">
               <Link
-                to="/help"
+                to="/help" state={BACK_TO_SETTINGS}
                 className="chef-pressable chef-target inline-flex items-center rounded-[var(--radius-control)] border border-[var(--border-strong)] px-3 font-semibold text-[var(--text-primary)]"
               >{t("settings-page.help.b79cac")}</Link>
               <Link
-                to="/privacy"
+                to="/privacy" state={BACK_TO_SETTINGS}
                 className="chef-pressable chef-target inline-flex items-center rounded-[var(--radius-control)] border border-[var(--border-strong)] px-3 font-semibold text-[var(--text-primary)]"
               >{t("settings-page.privacy.54a57c")}</Link>
               <Link
-                to="/terms"
+                to="/terms" state={BACK_TO_SETTINGS}
                 className="chef-pressable chef-target inline-flex items-center rounded-[var(--radius-control)] border border-[var(--border-strong)] px-3 font-semibold text-[var(--text-primary)]"
               >{t("settings-page.terms.ede548")}</Link>
             </div>

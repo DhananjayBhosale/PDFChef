@@ -384,7 +384,7 @@ export const SignPDF: React.FC = () => {
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const [signatures, setSignatures] = useState<SignatureItem[]>([]);
   const [savedSignatures, setSavedSignatures] = useState<SignatureItem[] | null>(null);
-  useConfirmDiscard(signatures.length > 0 && signatures !== savedSignatures);
+  const discardSheet = useConfirmDiscard(signatures.length > 0 && signatures !== savedSignatures);
   const [selectedSignatureId, setSelectedSignatureId] = useState<string | null>(null);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [mobilePanel, setMobilePanel] = useState<'document' | 'stamps'>('document');
@@ -1113,6 +1113,7 @@ export const SignPDF: React.FC = () => {
       )}
 
       <StatusToast status={status} />
+      {discardSheet}
     </div>
   );
 };
