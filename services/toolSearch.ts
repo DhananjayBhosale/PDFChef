@@ -29,14 +29,6 @@ const STOP_WORDS = new Set([
 
 const DOMAIN_STOP_TERMS = new Set(['pdf']);
 
-const UNSUPPORTED_SEARCH_PHRASES = new Set([
-  'doc to pdf',
-  'docs to pdf',
-  'docx to pdf',
-  'word to pdf',
-  'word document to pdf',
-]);
-
 const QUERY_TOKEN_EXPANSIONS: Record<string, string[]> = {
   add: ['insert', 'create', 'make'],
   annotate: ['annotation', 'edit', 'note'],
@@ -112,7 +104,8 @@ const QUERY_TOKEN_EXPANSIONS: Record<string, string[]> = {
   recover: ['repair', 'fix'],
   resize: ['size', 'compress', 'scale'],
   remove: ['delete', 'unlock', 'clear'],
-  rotate: ['turn', 'landscape', 'portrait'],
+  // Not "turn": the converters say "Turn slides into a PDF", so "rotate" listed them.
+  rotate: ['landscape', 'portrait'],
   scan: ['scanner', 'camera', 'document', 'text'],
   scanned: ['scanner', 'camera', 'document', 'text'],
   scanner: ['scan', 'camera', 'document'],
@@ -134,7 +127,8 @@ const QUERY_TOKEN_EXPANSIONS: Record<string, string[]> = {
   unified: ['merge', 'combine', 'single'],
   unlock: ['password', 'remove', 'open'],
   webp: ['image', 'picture', 'photo'],
-  word: ['doc', 'docx', 'document'],
+  // Not "document": nearly every tool says it, so "word" listed Protect and Rotate.
+  word: ['docx'],
   write: ['edit', 'annotation', 'note'],
 };
 
@@ -296,6 +290,22 @@ const levenshteinDistanceAtMost = (left: string, right: string, maxDistance: num
   return previous[right.length] <= maxDistance;
 };
 
+const UNSPACED_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}]/u;
+
+/**
+ * A match has to start a word, so "merg" still finds "merge" but "word" no longer finds
+ * "password". Scripts written without spaces between words can match anywhere. Both sides are
+ * already normalised, so a word starts at the beginning or after a space.
+ */
+const containsAtWordStart = (text: string, phrase: string): boolean => {
+  if (!phrase) return false;
+  if (UNSPACED_SCRIPT.test(phrase[0])) return text.includes(phrase);
+  for (let at = text.indexOf(phrase); at >= 0; at = text.indexOf(phrase, at + 1)) {
+    if (at === 0 || text[at - 1] === ' ') return true;
+  }
+  return false;
+};
+
 const fuzzyTokenMatch = (queryToken: string, indexedToken: string): boolean => {
   if (queryToken.length < 4 || indexedToken.length < 4) return false;
   if (indexedToken.startsWith(queryToken) || queryToken.startsWith(indexedToken)) {
@@ -370,7 +380,6 @@ const expandQueryPhrases = (normalizedQuery: string, tokens: string[]): Set<stri
 export const toolSearchScore = (tool: ToolCardData, query: string): number => {
   const normalizedQuery = normalizeSearchText(query);
   if (normalizedQuery.length === 0) return 1;
-  if (UNSUPPORTED_SEARCH_PHRASES.has(normalizedQuery)) return 0;
 
   const queryTokens = tokenizeSearchText(normalizedQuery);
   if (queryTokens.length === 0) return 0;
@@ -384,28 +393,28 @@ export const toolSearchScore = (tool: ToolCardData, query: string): number => {
 
   if (profile.title === normalizedQuery) score += 900;
   if (profile.title.startsWith(normalizedQuery)) score += 650;
-  if (profile.title.includes(normalizedQuery)) score += 500;
-  if (profile.subtitle.includes(normalizedQuery)) score += 300;
+  if (containsAtWordStart(profile.title, normalizedQuery)) score += 500;
+  if (containsAtWordStart(profile.subtitle, normalizedQuery)) score += 300;
 
   if (terms.some((term) => term === normalizedQuery)) score += 620;
   if (terms.some((term) => term.startsWith(normalizedQuery))) score += 480;
-  if (terms.some((term) => term.includes(normalizedQuery))) score += 360;
+  if (terms.some((term) => containsAtWordStart(term, normalizedQuery))) score += 360;
 
   let phraseHits = 0;
   expandedPhrases.forEach((phrase) => {
-    if (terms.some((term) => term === phrase || term.includes(phrase))) phraseHits += 1;
+    if (terms.some((term) => term === phrase || containsAtWordStart(term, phrase))) phraseHits += 1;
   });
   score += phraseHits * 420;
 
   const exactOriginalTokenHits = queryTokens.filter(
-    (token) => profile.tokens.has(token) || terms.some((term) => term.includes(token)),
+    (token) => profile.tokens.has(token) || terms.some((term) => containsAtWordStart(term, token)),
   ).length;
   const fuzzyOriginalTokenHits = queryTokens.filter(
     (token) => !profile.tokens.has(token) && [...profile.tokens].some((indexed) => fuzzyTokenMatch(token, indexed)),
   ).length;
   const expandedTokenHits = [...expandedTokens]
     .filter((token) => !queryTokens.includes(token))
-    .filter((token) => profile.tokens.has(token) || terms.some((term) => term.includes(token))).length;
+    .filter((token) => profile.tokens.has(token) || terms.some((term) => containsAtWordStart(term, token))).length;
 
   score += exactOriginalTokenHits * 130;
   score += fuzzyOriginalTokenHits * 95;
