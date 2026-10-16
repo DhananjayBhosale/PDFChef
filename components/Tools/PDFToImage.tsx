@@ -1,4 +1,4 @@
-import { formatBytes } from '../UI/format';
+import { formatBytes, toolOutputName, splitFilename } from '../UI/format';
 import { localizeError } from '../../services/i18n/errors.ts';
 import { t, formatNumber } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
@@ -16,19 +16,7 @@ import {
 } from '../../services/pdfBrowser';
 import { downloadBlob, isPdfFile, revokeObjectUrls } from '../../services/pdfShared';
 import { parseBoundedPageRange } from '../../services/pageRange';
-import {
-  DEFAULT_IMAGE_EXPORT_QUALITY,
-  DEFAULT_IMAGE_EXPORT_SCALE,
-  MAX_IMAGE_EXPORT_SCALE,
-  MIN_IMAGE_EXPORT_QUALITY,
-  MIN_IMAGE_EXPORT_SCALE,
-  androidExportDirectoryName,
-  androidExportFileName,
-  imageExportExtension,
-  imageExportPageFileName,
-  imageExportRenderScale,
-  resolveOptionalPageSelection,
-} from '../../services/androidParity';
+import { DEFAULT_IMAGE_EXPORT_QUALITY, DEFAULT_IMAGE_EXPORT_SCALE, MAX_IMAGE_EXPORT_SCALE, MIN_IMAGE_EXPORT_QUALITY, MIN_IMAGE_EXPORT_SCALE, imageExportExtension, imageExportPageFileName, imageExportRenderScale, resolveOptionalPageSelection } from '../../services/androidParity';
 import { Download, FileImage, ImageIcon, Loader2, Settings2, Undo2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
@@ -93,7 +81,6 @@ const PageImagePreview: React.FC<{
 };
 
 
-const getBaseName = (filename: string) => filename.replace(/\.pdf$/i, '');
 
 /** Comma and range syntax, as in the app's `pages=1,3-5` option token. */
 
@@ -352,7 +339,7 @@ export const PDFToImage: React.FC = () => {
         const { blob } = await renderPage(exportIndices[0]);
         downloadBlob(
           blob,
-          androidExportFileName('pdf_to_jpg', file.name, extension),
+          `${splitFilename(file.name).stem.trim() || 'document'}.${extension}`,
           config.format,
         );
         setStatus({ isProcessing: false, progress: 100, message: t("pdfto-image.done.b4e19e") });
@@ -373,7 +360,7 @@ export const PDFToImage: React.FC = () => {
 
       setStatus({ isProcessing: true, progress: 100, message: t("pdfto-image.putting.the.pictures.into.one.zip.file.1a0af7") });
       const content = await zip.generateAsync({ type: 'blob' });
-      downloadBlob(content, `${androidExportDirectoryName(file.name, 'images')}.zip`);
+      downloadBlob(content, toolOutputName('images', file.name, 'zip'));
       setStatus({ isProcessing: false, progress: 100, message: t("pdfto-image.done.b4e19e") });
     } catch (error) {
       setStatus({
@@ -393,10 +380,9 @@ export const PDFToImage: React.FC = () => {
   const downloadEmbeddedImages = async (images: EmbeddedPdfImageAsset[]) => {
     if (!file || images.length === 0) return;
 
-    const baseName = getBaseName(file.name);
     if (images.length === 1) {
       const image = images[0];
-      downloadBlob(image.blob, `${baseName}-embedded-image-pages-${image.pageNumbers.join('-')}.png`, 'image/png');
+      downloadBlob(image.blob, toolOutputName('image', file.name, 'png'), 'image/png');
       setStatus({ isProcessing: false, progress: 100, message: t("pdfto-image.done.b4e19e") });
       return;
     }
@@ -419,7 +405,7 @@ export const PDFToImage: React.FC = () => {
       }
 
       const content = await zip.generateAsync({ type: 'blob' });
-      downloadBlob(content, `${baseName}-embedded-images.zip`);
+      downloadBlob(content, toolOutputName('images', file.name, 'zip'));
       setStatus({ isProcessing: false, progress: 100, message: t("pdfto-image.done.b4e19e") });
     } catch (error) {
       console.error(error);

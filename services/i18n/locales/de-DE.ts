@@ -156,6 +156,7 @@ export default {
   "recent-page.clear.all.29a390": "Alles leeren",
   "recent-page.delete.files.only.911496": "Nur Dateien löschen",
   "recent-page..b6dda3": "{v0} · {v1} · {v2}",
+  "recent-page..6a5b16": "{v0} · {v1}",
   "recent-page.these.files.are.no.longer.on.this.8f69ee": "Diese Dateien befinden sich nicht mehr auf diesem Gerät.",
   "recent-page.this.file.is.no.longer.on.this.d65cb3": "Diese Datei befindet sich nicht mehr auf diesem Gerät.",
   "recent-page.open.ed077f": "Öffnen",
@@ -1607,7 +1608,6 @@ export default {
   "app-shell.privacy.54a57c": "Datenschutz",
   "app-shell.terms.ede548": "Nutzungsbedingungen",
   "recent-page.item.count.not.recorded.e68cd6": "Elementanzahl nicht erfasst",
-  "recent-page.tool.not.recorded.8cf14c": "Tool nicht erfasst",
   "recent-page.untitled.document.9f6d7c": "Dokument ohne Titel",
   "recent-page.files.from.the.older.android.app.are.ce5f36": "Dateien aus der älteren Android-App sind hier schreibgeschützt.",
   "recent-page.kept.in.this.browser.so.deleting.it.d39ecb": "In diesem Browser gespeichert. Beim Löschen wird die Datei endgültig entfernt.",
@@ -1788,7 +1788,6 @@ export default {
   "ocrpdf.the.words.could.not.be.read.from.f9fba8": "Der Text konnte aus diesem PDF nicht gelesen werden. Wenn es sich um einen Scan handelt, wählen Sie oben „Gescannte Seiten“.",
   "ocrpdf.choose.a.pdf.file.c2a7df": "Wählen Sie eine PDF-Datei aus.",
   "ocrpdf.this.is.a.large.pdf.and.may.848eab": "Dieses PDF ist groß und kann viel Arbeitsspeicher im Browser beanspruchen. Fortfahren?",
-  "ocrpdf.ocr.text.5120f8": " (OCR-Text)",
   "ocrpdf.showing.of.pages.increase.the.ocr.page.947d19": "{v0} von {v1} Seiten werden angezeigt. Erhöhen Sie das OCR-Seitenlimit, um weitere Seiten zu verarbeiten.",
   "ocrpdf.showing.page.c19f4d": {
     "one": "{count} Seite wird angezeigt.",

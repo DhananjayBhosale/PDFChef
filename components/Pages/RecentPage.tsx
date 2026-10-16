@@ -103,16 +103,20 @@ export const collectionActionLabel = (verb: 'Save' | 'Share', count: number): st
     : t(verb === 'Save' ? 'recent.collection.saveUnknown' : 'recent.collection.shareUnknown');
 
 /**
- * A record written by an older build may carry no tool path at all. That is a
- * fact about the record, not a reason to crash or to invent a tool name.
+ * Android's file store and older builds keep no tool path. Null means no tool
+ * label is shown at all: an empty fact is not worth a badge, and none is invented.
  */
-const toolNameFor = (toolId: unknown): string => {
-  if (typeof toolId !== 'string' || !toolId.trim()) return t("recent-page.tool.not.recorded.8cf14c");
+export const toolNameFor = (toolId: unknown): string | null => {
+  if (typeof toolId !== 'string' || !toolId.trim()) return null;
   const tool = tools.find((item) => item.path === toolId);
   if (tool) return tool.name;
   const label = toolId.replace(/^\//, '').replace(/-/g, ' ').trim();
-  return label ? label.replace(/\b\w/g, (letter) => letter.toUpperCase()) : t("recent-page.tool.not.recorded.8cf14c");
+  return label ? label.replace(/\b\w/g, (letter) => letter.toUpperCase()) : null;
 };
+
+/** "Merge PDF · 14 Oct 2026, 7:27 PM · 176.7 kB", without the tool when none is known. */
+export const actionSheetDescription = (tool: string | null, when: string, size: string): string =>
+  tool ? t("recent-page..b6dda3", { v0: tool, v1: when, v2: size }) : t("recent-page..6a5b16", { v0: when, v1: size });
 
 /** Safe display name. Never blank, never "undefined". */
 const displayName = (name: unknown): string =>
@@ -389,6 +393,7 @@ const RecentRow: React.FC<{
   // Nothing here can delete a legacy row, so it never joins a bulk selection.
   const selectable = selectionMode && !legacy;
   const name = displayName(entry.name);
+  const toolName = toolNameFor(entry.toolId);
   const holdTimer = useRef<number | null>(null);
   const held = useRef(false);
 
@@ -472,9 +477,11 @@ const RecentRow: React.FC<{
           <span className="block truncate font-semibold text-[var(--text-primary)]">{name}</span>
 
           <span className="type-footnote tabular mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[var(--text-secondary)]">
-            <span className="rounded-[var(--radius-pill)] bg-[var(--accent-quiet)] px-2 py-0.5 font-semibold text-[var(--accent-on-quiet)]">
-              {toolNameFor(entry.toolId)}
-            </span>
+            {toolName && (
+              <span className="rounded-[var(--radius-pill)] bg-[var(--accent-quiet)] px-2 py-0.5 font-semibold text-[var(--accent-on-quiet)]">
+                {toolName}
+              </span>
+            )}
             <span>{collection ? collectionItemLabel(items) : formatBytes(entry.outputSizeBytes)}</span>
             {legacy && <span className="text-[var(--text-tertiary)]">{t("recent-page.read.only.72bb90")}</span>}
             {/* The one thing a row must say on its own: the record is here but
@@ -542,7 +549,7 @@ export const RecentPage: React.FC = () => {
     const query = searchQuery.trim().toLocaleLowerCase();
     const matching = query
       ? records.filter((record) => {
-          const searchable = `${displayName(record.entry.name)} ${toolNameFor(record.entry.toolId)}`.toLocaleLowerCase();
+          const searchable = `${displayName(record.entry.name)} ${toolNameFor(record.entry.toolId) ?? ''}`.toLocaleLowerCase();
           return searchable.includes(query);
         })
       : records;
@@ -1088,7 +1095,7 @@ export const RecentPage: React.FC = () => {
         title={active ? displayName(active.entry.name) : ''}
         description={
           active
-            ? t("recent-page..b6dda3", { v0: toolNameFor(active.entry.toolId), v1: hasTime(active.entry.createdAt) ? formatTimestampLong(active.entry.createdAt) : t("recent-page.time.not.recorded.9bfe70"), v2: activeIsCollection ? collectionItemLabel(activeItems) : formatBytes(active.entry.outputSizeBytes) })
+            ? actionSheetDescription(toolNameFor(active.entry.toolId), hasTime(active.entry.createdAt) ? formatTimestampLong(active.entry.createdAt) : t("recent-page.time.not.recorded.9bfe70"), activeIsCollection ? collectionItemLabel(activeItems) : formatBytes(active.entry.outputSizeBytes))
             : undefined
         }
       >

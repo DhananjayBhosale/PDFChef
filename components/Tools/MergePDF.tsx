@@ -6,7 +6,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { FileUpload } from '../UI/FileUpload';
 import { PDFFile, ProcessingStatus } from '../../types';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
-import { androidExportFileName } from '../../services/androidParity';
 import { Plus, ArrowDown, ArrowUp, Download, GripVertical, Loader2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
@@ -14,7 +13,7 @@ import { createPortal } from 'react-dom';
 import { useDragReorder } from '../../hooks/useDragReorder';
 import { StatusToast } from '../UI/StatusToast';
 import { ToolHeader, ToolShell } from '../UI/ToolLayout';
-import { formatBytes } from '../UI/format';
+import { formatBytes, datedOutputName } from '../UI/format';
 
 const idleStatus = (): ProcessingStatus => ({ isProcessing: false, progress: 0, message: '' });
 
@@ -148,7 +147,7 @@ export const MergePDF: React.FC = () => {
       setStatus({ isProcessing: true, progress: 95, message: t("merge-pdf.preparing.the.merged.pdf.b21792") });
       downloadBlob(
         new Blob([mergedPdfBytes], { type: 'application/pdf' }),
-        androidExportFileName('merge', queuedFiles[0].name, 'pdf'),
+        datedOutputName(t("tool-catalog.merge.pdf.566bfc"), 'pdf'),
       );
       setStatus({
         isProcessing: false,

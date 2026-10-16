@@ -155,6 +155,7 @@ export default {
   "recent-page.clear.all.29a390": "Clear all",
   "recent-page.delete.files.only.911496": "Delete files only",
   "recent-page..b6dda3": "{v0} · {v1} · {v2}",
+  "recent-page..6a5b16": "{v0} · {v1}",
   "recent-page.these.files.are.no.longer.on.this.8f69ee": "These files are no longer on this device.",
   "recent-page.this.file.is.no.longer.on.this.d65cb3": "This file is no longer on this device.",
   "recent-page.open.ed077f": "Open",
@@ -1561,7 +1562,6 @@ export default {
   "app-shell.privacy.54a57c": "Privacy",
   "app-shell.terms.ede548": "Terms",
   "recent-page.item.count.not.recorded.e68cd6": "Item count not recorded",
-  "recent-page.tool.not.recorded.8cf14c": "Tool not recorded",
   "recent-page.untitled.document.9f6d7c": "Untitled document",
   "recent-page.files.from.the.older.android.app.are.ce5f36": "Files from the older Android app are read-only here.",
   "recent-page.kept.in.this.browser.so.deleting.it.d39ecb": "Kept in this browser, so deleting it is permanent.",
@@ -1742,7 +1742,6 @@ export default {
   "ocrpdf.the.words.could.not.be.read.from.f9fba8": "The words could not be read from this PDF. If it is a scan, switch to Scanned pages above.",
   "ocrpdf.choose.a.pdf.file.c2a7df": "Choose a PDF file.",
   "ocrpdf.this.is.a.large.pdf.and.may.848eab": "This is a large PDF and may use substantial browser memory. Continue?",
-  "ocrpdf.ocr.text.5120f8": " (OCR text)",
   "ocrpdf.showing.of.pages.increase.the.ocr.page.947d19": "Showing {v0} of {v1} pages. Increase the OCR page limit to process more.",
   "ocrpdf.showing.page.c19f4d": {
     "one": "Showing {count} page.",

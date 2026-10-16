@@ -27,9 +27,9 @@ import { useConfirmDiscard } from '../../hooks/useConfirmDiscard';
 import { loadPDFDocument } from '../../services/pdfBrowser';
 import { applySignaturesToPDF } from '../../services/pdfDocument';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
-import { androidExportFileName } from '../../services/androidParity';
 import { SegmentedControl } from '../UI/Primitives';
 import { StatusToast } from '../UI/StatusToast';
+import { toolOutputName } from '../UI/format';
 
 interface SignatureItem {
   localId: string;
@@ -634,7 +634,7 @@ export const SignPDF: React.FC = () => {
     setStatus({ isProcessing: true, progress: 10, message: t("sign-pdf.applying.signatures.331407") });
     try {
       const bytes = await applySignaturesToPDF(file.file, signatures);
-      const outputName = androidExportFileName('sign', file.name, 'pdf');
+      const outputName = toolOutputName('sign', file.name, 'pdf');
       downloadBlob(new Blob([bytes], { type: 'application/pdf' }), outputName);
       setSavedSignatures(signatures);
       setStatus({ isProcessing: false, progress: 100, message: t("sign-pdf.signed.copy.ready.f2efbd", { v0: outputName }) });

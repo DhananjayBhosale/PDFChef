@@ -118,7 +118,7 @@ try {
       releaseWorker();
       await page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true }).click();
       await page.getByRole('dialog').getByRole('button', { name: 'Show in Recent', exact: true }).click();
-      await page.getByText('pdf-chef-compress-batch.zip', { exact: true }).waitFor();
+      await page.getByText(/^Batch processing \d{1,2} [A-Z][a-z]{2}\.zip$/).waitFor();
       assert.equal(await page.getByText('No files yet', { exact: true }).count(), 0);
       console.log('PASS: History-off Batch completion followed by explicit Save appears in the already-open Recent list.');
     } finally {

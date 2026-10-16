@@ -160,6 +160,7 @@ export default {
   "recent-page.clear.all.29a390": "مسح الكل",
   "recent-page.delete.files.only.911496": "حذف الملفات فقط",
   "recent-page..b6dda3": "{v0} · {v1} · {v2}",
+  "recent-page..6a5b16": "{v0} · {v1}",
   "recent-page.these.files.are.no.longer.on.this.8f69ee": "لم تعد هذه الملفات موجودة على هذا الجهاز.",
   "recent-page.this.file.is.no.longer.on.this.d65cb3": "لم يعد هذا الملف موجوداً على هذا الجهاز.",
   "recent-page.open.ed077f": "فتح",
@@ -1663,7 +1664,6 @@ export default {
   "app-shell.privacy.54a57c": "الخصوصية",
   "app-shell.terms.ede548": "الشروط",
   "recent-page.item.count.not.recorded.e68cd6": "لم يُسجل عدد العناصر",
-  "recent-page.tool.not.recorded.8cf14c": "لم تُسجل الأداة",
   "recent-page.untitled.document.9f6d7c": "مستند بدون عنوان",
   "recent-page.files.from.the.older.android.app.are.ce5f36": "الملفات الواردة من تطبيق Android الأقدم للقراءة فقط هنا.",
   "recent-page.kept.in.this.browser.so.deleting.it.d39ecb": "محفوظ في هذا المتصفح، لذا فإن حذفه نهائي.",
@@ -1868,7 +1868,6 @@ export default {
   "ocrpdf.the.words.could.not.be.read.from.f9fba8": "تعذرت قراءة الكلمات من ملف PDF هذا. إذا كان مسحاً ضوئياً، فانتقل إلى الصفحات الممسوحة ضوئياً بالأعلى.",
   "ocrpdf.choose.a.pdf.file.c2a7df": "اختر ملف PDF.",
   "ocrpdf.this.is.a.large.pdf.and.may.848eab": "هذا ملف PDF كبير وقد يستهلك جزءاً كبيراً من ذاكرة المتصفح. هل تريد المتابعة؟",
-  "ocrpdf.ocr.text.5120f8": " (نص OCR)",
   "ocrpdf.showing.of.pages.increase.the.ocr.page.947d19": "يتم عرض {v0} من أصل {v1} صفحة. ارفع الحد الأقصى لصفحات OCR لمعالجة المزيد.",
   "ocrpdf.showing.page.c19f4d": {
     "zero": "يتم عرض {count} صفحة.",

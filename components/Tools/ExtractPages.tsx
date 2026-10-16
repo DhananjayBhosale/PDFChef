@@ -16,11 +16,7 @@ import { PDFFile, ProcessingStatus } from '../../types';
 import { loadDisposablePDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
 import { extractPages, getPDFPageCount } from '../../services/pdfDocument';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
-
-const extractedOutputName = (filename: string) => {
-  const baseName = filename.replace(/\.pdf$/i, '').trim() || 'document';
-  return `${baseName} (extracted).pdf`;
-};
+import { toolOutputName } from '../UI/format';
 
 export const ExtractPages: React.FC = () => {
   useI18n();
@@ -167,7 +163,7 @@ export const ExtractPages: React.FC = () => {
       setStatus({ isProcessing: true, progress: 90, message: t("extract-pages.preparing.extracted.pdf.c9b02d") });
       downloadBlob(
         new Blob([pdfBytes], { type: 'application/pdf' }),
-        extractedOutputName(sourceFile.name),
+        toolOutputName('extract', sourceFile.name, 'pdf'),
         'application/pdf',
       );
       setStatus({ isProcessing: false, progress: 100, message: t("extract-pages.page.extracted.4dfc6c", { count: pages.length }) });

@@ -156,6 +156,7 @@ export default {
   "recent-page.clear.all.29a390": "सभी साफ़ करें",
   "recent-page.delete.files.only.911496": "केवल फ़ाइलें हटाएं",
   "recent-page..b6dda3": "{v0} · {v1} · {v2}",
+  "recent-page..6a5b16": "{v0} · {v1}",
   "recent-page.these.files.are.no.longer.on.this.8f69ee": "ये फ़ाइलें अब इस डिवाइस पर नहीं हैं।",
   "recent-page.this.file.is.no.longer.on.this.d65cb3": "यह फ़ाइल अब इस डिवाइस पर नहीं है।",
   "recent-page.open.ed077f": "खोलें",
@@ -1607,7 +1608,6 @@ export default {
   "app-shell.privacy.54a57c": "गोपनीयता",
   "app-shell.terms.ede548": "शर्तें",
   "recent-page.item.count.not.recorded.e68cd6": "आइटम संख्या रिकॉर्ड नहीं की गई",
-  "recent-page.tool.not.recorded.8cf14c": "टूल रिकॉर्ड नहीं किया गया",
   "recent-page.untitled.document.9f6d7c": "बिना शीर्षक वाला दस्तावेज़",
   "recent-page.files.from.the.older.android.app.are.ce5f36": "पुराने Android ऐप की फ़ाइलें यहाँ केवल पढ़ने योग्य हैं।",
   "recent-page.kept.in.this.browser.so.deleting.it.d39ecb": "इस ब्राउज़र में रखी गई है, इसलिए इसे हटाना स्थायी होगा।",
@@ -1788,7 +1788,6 @@ export default {
   "ocrpdf.the.words.could.not.be.read.from.f9fba8": "इस PDF से शब्द नहीं पढ़े जा सके। यदि यह एक स्कैन है, तो ऊपर Scanned pages पर स्विच करें।",
   "ocrpdf.choose.a.pdf.file.c2a7df": "एक PDF फ़ाइल चुनें।",
   "ocrpdf.this.is.a.large.pdf.and.may.848eab": "यह एक बड़ी PDF है और ब्राउज़र की काफी मेमोरी का उपयोग कर सकती है। जारी रखें?",
-  "ocrpdf.ocr.text.5120f8": " (OCR टेक्स्ट)",
   "ocrpdf.showing.of.pages.increase.the.ocr.page.947d19": "{v1} में से {v0} पेज दिखाए जा रहे हैं। अधिक प्रोसेस करने के लिए OCR पेज सीमा बढ़ाएं।",
   "ocrpdf.showing.page.c19f4d": {
     "one": "{count} पेज दिखाया जा रहा है।",

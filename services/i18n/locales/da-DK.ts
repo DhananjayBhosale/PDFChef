@@ -156,6 +156,7 @@ export default {
   "recent-page.clear.all.29a390": "Ryd alt",
   "recent-page.delete.files.only.911496": "Slet kun filer",
   "recent-page..b6dda3": "{v0} · {v1} · {v2}",
+  "recent-page..6a5b16": "{v0} · {v1}",
   "recent-page.these.files.are.no.longer.on.this.8f69ee": "Disse filer findes ikke længere på denne enhed.",
   "recent-page.this.file.is.no.longer.on.this.d65cb3": "Denne fil findes ikke længere på denne enhed.",
   "recent-page.open.ed077f": "Åbn",
@@ -1563,7 +1564,6 @@ export default {
   "app-shell.privacy.54a57c": "Privatliv",
   "app-shell.terms.ede548": "Vilkår",
   "recent-page.item.count.not.recorded.e68cd6": "Elementantal ikke registreret",
-  "recent-page.tool.not.recorded.8cf14c": "Værktøj ikke registreret",
   "recent-page.untitled.document.9f6d7c": "Dokument uden titel",
   "recent-page.files.from.the.older.android.app.are.ce5f36": "Filer fra den ældre Android-app er skrivebeskyttede her.",
   "recent-page.kept.in.this.browser.so.deleting.it.d39ecb": "Beholdes i denne browser, så sletning er permanent.",
@@ -1744,7 +1744,6 @@ export default {
   "ocrpdf.the.words.could.not.be.read.from.f9fba8": "Ordene kunne ikke læses fra denne PDF. Hvis det er en scanning, skal du skifte til Scannede sider ovenfor.",
   "ocrpdf.choose.a.pdf.file.c2a7df": "Vælg en PDF-fil.",
   "ocrpdf.this.is.a.large.pdf.and.may.848eab": "Dette er en stor PDF og kan bruge en betydelig mængde browserhukommelse. Fortsæt?",
-  "ocrpdf.ocr.text.5120f8": " (OCR-tekst)",
   "ocrpdf.showing.of.pages.increase.the.ocr.page.947d19": "Viser {v0} af {v1} sider. Forøg grænsen for OCR-sider for at behandle flere.",
   "ocrpdf.showing.page.c19f4d": {
     "one": "Viser {count} side.",

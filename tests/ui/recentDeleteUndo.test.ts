@@ -482,3 +482,12 @@ test('a rename keeps the original extension and never doubles or swaps it', () =
   assert.equal(rename('   ', 'old.pdf'), 'old.pdf');
   assert.equal(rename('notes', 'legacy'), 'notes');
 });
+
+test('a file with no recorded tool shows no tool badge instead of "Tool not recorded"', () => {
+  assert.equal(page.toolNameFor(null), null);
+  assert.equal(page.toolNameFor('  '), null);
+  assert.equal(page.toolNameFor('/merge'), 'Merge PDF');
+  assert.equal(page.actionSheetDescription(null, '14 Oct 2026', '176.7 kB'), '14 Oct 2026 · 176.7 kB');
+  assert.equal(page.actionSheetDescription('Merge PDF', '14 Oct 2026', '176.7 kB'), 'Merge PDF · 14 Oct 2026 · 176.7 kB');
+  assert.match(source, /\{toolName && \(/);
+});

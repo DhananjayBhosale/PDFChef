@@ -84,8 +84,8 @@ const useVisualViewportInsets = () => {
     let currentTyping = false;
     // Android resizes the window for the keyboard instead of covering it, so nothing
     // measures as covered there; a window that shrank while typing is the sign instead.
-    let restingHeight = window.innerHeight;
-    let restingWidth = window.innerWidth;
+    // Kept per width, so turning the phone mid-typing compares like with like.
+    const restingHeights = new Map([[window.innerWidth, window.innerHeight]]);
 
     const update = () => {
       frame = 0;
@@ -95,12 +95,13 @@ const useVisualViewportInsets = () => {
       const editing = isKeyboardEditable(document.activeElement);
       const keyboardVisible = editing && unzoomed && coveredHeight >= 80;
       const nextInset = keyboardVisible ? Math.round(coveredHeight) : 0;
-      if (!editing || window.innerWidth !== restingWidth) {
-        restingHeight = window.innerHeight;
-        restingWidth = window.innerWidth;
-      }
-      // The tab bar would sit on the keyboard, over the field being typed in.
-      const typing = keyboardVisible || (editing && restingHeight - window.innerHeight >= 120);
+      if (!editing) restingHeights.set(window.innerWidth, window.innerHeight);
+      const restingHeight = restingHeights.get(window.innerWidth);
+      // The tab bar would sit on the keyboard, over the field being typed in. Turned to a width
+      // never seen without the keyboard, keep the last answer until the field is left.
+      const typing = keyboardVisible || (editing && (restingHeight === undefined
+        ? currentTyping
+        : restingHeight - window.innerHeight >= 120));
       if (typing !== currentTyping) {
         currentTyping = typing;
         document.documentElement.toggleAttribute('data-chef-keyboard', typing);

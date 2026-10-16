@@ -21,6 +21,7 @@ import { textFromSelectionTargets } from '../../services/pdfToolResults';
 import { shouldWarnForFiles } from '../../services/workspace';
 import { useOpenedPdf, type OpenedPdfRouteState } from '../../hooks/useOpenedPdf';
 import { useMonetization, type JobAccessGrant } from '../../hooks/useMonetization';
+import { toolOutputName } from '../UI/format';
 
 /**
  * Written by a page that found nothing. It is a placeholder for the on-screen preview only and
@@ -515,12 +516,11 @@ export const OCRPDF: React.FC = () => {
 
   const downloadExtractedText = async () => {
     if (!file || !hasExtractedText) return;
-    const baseName = file.name.replace(/\.pdf$/i, '') || 'extracted-text';
-    const suffix = mode === 'ocr' ? t("ocrpdf.ocr.text.5120f8") : ' (text)';
+    const outputName = toolOutputName(mode === 'ocr' ? 'ocr' : 'text', file.name, 'txt');
     const operationId = extractionOperationIdRef.current;
     if (!operationId) return;
     const download = async () => {
-      downloadBlob(new Blob([exportText], { type: 'text/plain;charset=utf-8' }), `${baseName}${suffix}.txt`, 'text/plain', { operationId });
+      downloadBlob(new Blob([exportText], { type: 'text/plain;charset=utf-8' }), outputName, 'text/plain', { operationId });
       setStatus({ isProcessing: false, progress: 100, message: t("ocrpdf.text.file.ready.8917e3") });
     };
     if (extractionGrantRef.current !== 'preview-only') {
@@ -778,7 +778,7 @@ export const OCRPDF: React.FC = () => {
                           )}
                         </div>
 
-                        <pre className="chef-scroller max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-[var(--radius-field)] bg-[var(--surface-sunken)] p-3 text-sm text-[var(--text-body)]">
+                        <pre className="select-text chef-scroller max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-[var(--radius-field)] bg-[var(--surface-sunken)] p-3 text-sm text-[var(--text-body)]">
                           {page.text === NO_TEXT_LAYER_PLACEHOLDER ? t("ocrpdf.this.page.has.no.words.stored.in.e875a3")
                             : page.text === NO_OCR_TEXT_PLACEHOLDER ? t("ocrpdf.no.words.could.be.read.from.this.8ce507") : page.text}
                         </pre>

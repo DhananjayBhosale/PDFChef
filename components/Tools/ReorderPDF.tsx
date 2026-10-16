@@ -14,10 +14,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
 import { createPortal } from 'react-dom';
 import { PDFPreviewModal } from '../UI/PDFPreviewModal';
-import { androidExportFileName } from '../../services/androidParity';
 import { StatusToast } from '../UI/StatusToast';
 import { Button } from '../UI/Primitives';
 import { ToolChoiceRow, ToolHeader, ToolPanel, ToolSelectionBar, ToolShell } from '../UI/ToolLayout';
+import { toolOutputName } from '../UI/format';
 
 interface PageItem {
   id: string;
@@ -337,7 +337,7 @@ export const ReorderPDF: React.FC = () => {
       const pdfBytes = await reorderPDFPages(file.file, newOrderIndices);
       downloadBlob(
         new Blob([pdfBytes], { type: 'application/pdf' }),
-        androidExportFileName('reorder_pages', file.name, 'pdf'),
+        toolOutputName('reorder', file.name, 'pdf'),
       );
       setStatus({ isProcessing: false, progress: 100, message: t("reorder-pdf.reordered.pdf.ready.cef728") });
     } catch (error) {

@@ -74,18 +74,40 @@ export const renameKeepingExtension = (typed: string, extension: string, current
   return stem ? `${stem}${extension}` : currentName;
 };
 
-/** "Scanned PDF 14 October": says what it is and the day it was made, in the app's language. */
-export const datedFileStem = (word: string, date: Date, locale: string): string => {
-  // English reads "14 October" rather than the US "October 14".
-  const dayMonth = new Intl.DateTimeFormat(locale.startsWith('en') ? 'en-GB' : locale, { day: 'numeric', month: 'long' });
-  return `${word} ${dayMonth.format(date)}`;
+/** "13 Oct" in the app's language. Dots are dropped so none sits next to the extension. */
+export const shortDayMonth = (date: Date, locale: string): string => {
+  if (locale.startsWith('en')) {
+    // English reads "13 Oct" everywhere, and every month keeps three letters ("Sep", not "Sept").
+    const parts = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short' }).formatToParts(date);
+    const part = (type: string) => parts.find((item) => item.type === type)?.value ?? '';
+    return `${part('day')} ${part('month')}`;
+  }
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(date)
+    .replace(/\./g, '').replace(/\s+/g, ' ').trim();
 };
 
-// Android's photo picker hides real names, so the WebView names a photo by its media id
-// ("66.png"). A bare number is no name at all.
-export const imagePdfOutputName = (filename: string): string => {
-  const baseName = filename.replace(/\.[^/.]+$/, '').trim();
-  return `${baseName && !/^\d+$/u.test(baseName) ? baseName : 'images'}.pdf`;
+/** "Scanned PDF 13 Oct": says what it is and the day it was made, in the app's language. */
+export const datedFileStem = (word: string, date: Date, locale: string): string =>
+  `${word} ${shortDayMonth(date, locale)}`;
+
+// Android's file store refuses a name longer than 180 UTF-16 units, extension included.
+const outputName = (stem: string, extension: string): string => {
+  let result = '';
+  for (const character of sanitizeFilenameStem(stem)) {
+    if (result.length + character.length + extension.length + 1 > 180) break;
+    result += character;
+  }
+  return `${result.trim()}.${extension}`;
+};
+
+/** "Merge PDF 13 Oct.pdf": for a result that has no single file's name to build on. */
+export const datedOutputName = (word: string, extension: string, date = new Date(), locale = getLocale()): string =>
+  outputName(datedFileStem(word, date, locale), extension);
+
+/** "compress-Invoice.pdf": the tool, then the name the file already had. */
+export const toolOutputName = (toolWord: string, sourceName: string, extension: string): string => {
+  const stem = sourceName.trim().replace(/\.[^.]*$/u, '').trim();
+  return outputName(`${toolWord}-${stem || 'document'}`, extension);
 };
 
 /** Keep editable names safe for the iOS Files/share handoff and its byte limit. */

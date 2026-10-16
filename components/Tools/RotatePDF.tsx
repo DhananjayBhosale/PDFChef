@@ -15,7 +15,8 @@ import { PageThumbnail } from '../UI/PageThumbnail';
 import { StatusToast } from '../UI/StatusToast';
 import { Button } from '../UI/Primitives';
 import { ToolChoiceRow, ToolHeader, ToolPanel, ToolSelectionBar, ToolShell } from '../UI/ToolLayout';
-import { androidExportFileName, sanitizePageRotationDegrees } from '../../services/androidParity';
+import { sanitizePageRotationDegrees } from '../../services/androidParity';
+import { toolOutputName } from '../UI/format';
 
 export const RotatePDF: React.FC = () => {
   useI18n();
@@ -156,7 +157,7 @@ export const RotatePDF: React.FC = () => {
       
       downloadBlob(
         new Blob([pdfBytes], { type: 'application/pdf' }),
-        androidExportFileName('rotate_pages', file.name, 'pdf'),
+        toolOutputName('rotate', file.name, 'pdf'),
       );
       setStatus({ isProcessing: false, progress: 100, message: t("rotate-pdf.rotated.pdf.ready.d9ab7a") });
     } catch (error) {

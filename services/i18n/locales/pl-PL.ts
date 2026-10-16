@@ -158,6 +158,7 @@ export default {
   "recent-page.clear.all.29a390": "Wyczyść wszystko",
   "recent-page.delete.files.only.911496": "Usuń tylko pliki",
   "recent-page..b6dda3": "{v0} · {v1} · {v2}",
+  "recent-page..6a5b16": "{v0} · {v1}",
   "recent-page.these.files.are.no.longer.on.this.8f69ee": "Tych plików nie ma już na tym urządzeniu.",
   "recent-page.this.file.is.no.longer.on.this.d65cb3": "Tego pliku nie ma już na tym urządzeniu.",
   "recent-page.open.ed077f": "Otwórz",
@@ -1613,7 +1614,6 @@ export default {
   "app-shell.privacy.54a57c": "Prywatność",
   "app-shell.terms.ede548": "Warunki",
   "recent-page.item.count.not.recorded.e68cd6": "Nie zarejestrowano liczby elementów",
-  "recent-page.tool.not.recorded.8cf14c": "Nie zarejestrowano narzędzia",
   "recent-page.untitled.document.9f6d7c": "Dokument bez tytułu",
   "recent-page.files.from.the.older.android.app.are.ce5f36": "Pliki ze starszej aplikacji na Androida są tutaj tylko do odczytu.",
   "recent-page.kept.in.this.browser.so.deleting.it.d39ecb": "Przechowywane w tej przeglądarce, więc usunięcie jest trwałe.",
@@ -1806,7 +1806,6 @@ export default {
   "ocrpdf.the.words.could.not.be.read.from.f9fba8": "Nie udało się odczytać słów z tego pliku PDF. Jeśli jest to skan, przełącz na Zeskanowane strony powyżej.",
   "ocrpdf.choose.a.pdf.file.c2a7df": "Wybierz plik PDF.",
   "ocrpdf.this.is.a.large.pdf.and.may.848eab": "Ten plik PDF jest duży i może zużywać znaczną ilość pamięci przeglądarki. Kontynuować?",
-  "ocrpdf.ocr.text.5120f8": " (tekst OCR)",
   "ocrpdf.showing.of.pages.increase.the.ocr.page.947d19": "Wyświetlanie {v0} z {v1} stron. Zwiększ limit stron OCR, aby przetworzyć więcej.",
   "ocrpdf.showing.page.c19f4d": {
     "one": "Wyświetlanie {count} strony.",

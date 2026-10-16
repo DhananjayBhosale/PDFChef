@@ -22,11 +22,11 @@ import { ZoomControls } from '../UI/ZoomControls';
 import { useZoom } from '../../hooks/useZoom';
 import { getPageTextSignatures, loadPDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
 import { downloadBlob } from '../../services/pdfShared';
-import { androidExportFileName } from '../../services/androidParity';
 import { ProcessingStatus } from '../../types';
 import { compareExtractedPageText } from '../../services/pdfToolResults';
 import { createComparisonReport } from '../../services/comparisonReport.ts';
 import { useMonetization, type JobAccessGrant } from '../../hooks/useMonetization';
+import { datedOutputName } from '../UI/format';
 
 interface PreviewState {
   left: string;
@@ -279,7 +279,7 @@ export const ComparePDF: React.FC = () => {
         commonPages,
       });
 
-      const reportName = androidExportFileName('compare_summary', file1.name, 'txt');
+      const reportName = datedOutputName(t("tool-catalog.compare.summary.62ec42"), 'txt');
       const grant = await completeJob(operationId).catch(() => 'preview-only' as const);
       if (comparisonOperationIdRef.current !== operationId) return;
       comparisonGrantRef.current = grant;

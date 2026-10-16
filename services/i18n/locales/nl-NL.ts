@@ -156,6 +156,7 @@ export default {
   "recent-page.clear.all.29a390": "Alles wissen",
   "recent-page.delete.files.only.911496": "Alleen bestanden verwijderen",
   "recent-page..b6dda3": "{v0} · {v1} · {v2}",
+  "recent-page..6a5b16": "{v0} · {v1}",
   "recent-page.these.files.are.no.longer.on.this.8f69ee": "Deze bestanden staan niet meer op dit apparaat.",
   "recent-page.this.file.is.no.longer.on.this.d65cb3": "Dit bestand staat niet meer op dit apparaat.",
   "recent-page.open.ed077f": "Openen",
@@ -1563,7 +1564,6 @@ export default {
   "app-shell.privacy.54a57c": "Privacy",
   "app-shell.terms.ede548": "Voorwaarden",
   "recent-page.item.count.not.recorded.e68cd6": "Aantal items niet vastgelegd",
-  "recent-page.tool.not.recorded.8cf14c": "Tool niet vastgelegd",
   "recent-page.untitled.document.9f6d7c": "Naamloos document",
   "recent-page.files.from.the.older.android.app.are.ce5f36": "Bestanden uit de oudere Android-app zijn hier alleen-lezen.",
   "recent-page.kept.in.this.browser.so.deleting.it.d39ecb": "Bewaard in deze browser, dus verwijderen is definitief.",
@@ -1744,7 +1744,6 @@ export default {
   "ocrpdf.the.words.could.not.be.read.from.f9fba8": "De woorden konden niet worden gelezen uit deze PDF. Als het een scan is, schakel dan hierboven over naar Gescande pagina's.",
   "ocrpdf.choose.a.pdf.file.c2a7df": "Kies een PDF-bestand.",
   "ocrpdf.this.is.a.large.pdf.and.may.848eab": "Dit is een grote PDF en kan aanzienlijk veel browsergeheugen gebruiken. Doorgaan?",
-  "ocrpdf.ocr.text.5120f8": " (OCR-tekst)",
   "ocrpdf.showing.of.pages.increase.the.ocr.page.947d19": "{v0} van {v1} pagina's worden weergegeven. Verhoog de OCR-paginalimiet om meer te verwerken.",
   "ocrpdf.showing.page.c19f4d": {
     "one": "{count} pagina wordt weergegeven.",

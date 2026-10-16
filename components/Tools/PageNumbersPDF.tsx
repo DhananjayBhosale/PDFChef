@@ -14,21 +14,11 @@ import { getPdfPreviewLayoutSize } from '../../services/pdfPageGeometry';
 import { getPdfPreviewFont, unsupportedPdfPreviewCharacter } from '../../services/pdfPreviewFont';
 import type { PDFFont } from 'pdf-lib';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
-import {
-  DEFAULT_PAGE_NUMBER_FONT_SIZE,
-  DEFAULT_PAGE_NUMBER_FORMAT,
-  DEFAULT_PAGE_NUMBER_X_PERCENT,
-  DEFAULT_PAGE_NUMBER_Y_PERCENT,
-  MAX_PAGE_NUMBER_FONT_SIZE,
-  MAX_PDF_TEXT_LENGTH,
-  MIN_PAGE_NUMBER_FONT_SIZE,
-  androidExportFileName,
-  buildPageNumberText,
-  pageNumberLayout,
-} from '../../services/androidParity';
+import { DEFAULT_PAGE_NUMBER_FONT_SIZE, DEFAULT_PAGE_NUMBER_FORMAT, DEFAULT_PAGE_NUMBER_X_PERCENT, DEFAULT_PAGE_NUMBER_Y_PERCENT, MAX_PAGE_NUMBER_FONT_SIZE, MAX_PDF_TEXT_LENGTH, MIN_PAGE_NUMBER_FONT_SIZE, buildPageNumberText, pageNumberLayout } from '../../services/androidParity';
 import { StatusToast } from '../UI/StatusToast';
 import { Button } from '../UI/Primitives';
 import { ToolHeader, ToolPanel, ToolShell } from '../UI/ToolLayout';
+import { toolOutputName } from '../UI/format';
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -278,7 +268,7 @@ export const PageNumbersPDF: React.FC = () => {
 
       downloadBlob(
         new Blob([bytes], { type: 'application/pdf' }),
-        androidExportFileName('page_numbers', file.name, 'pdf'),
+        toolOutputName('page-numbers', file.name, 'pdf'),
       );
       setStatus({ isProcessing: false, progress: 100, message: t("page-numbers-pdf.numbered.pdf.ready.ff0828") });
     } catch (error) {

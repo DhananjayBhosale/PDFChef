@@ -157,6 +157,7 @@ export default {
   "recent-page.clear.all.29a390": "Tout effacer",
   "recent-page.delete.files.only.911496": "Supprimer uniquement les fichiers",
   "recent-page..b6dda3": "{v0} · {v1} · {v2}",
+  "recent-page..6a5b16": "{v0} · {v1}",
   "recent-page.these.files.are.no.longer.on.this.8f69ee": "Ces fichiers ne sont plus présents sur cet appareil.",
   "recent-page.this.file.is.no.longer.on.this.d65cb3": "Ce fichier n'est plus présent sur cet appareil.",
   "recent-page.open.ed077f": "Ouvrir",
@@ -1643,7 +1644,6 @@ export default {
   "app-shell.privacy.54a57c": "Confidentialité",
   "app-shell.terms.ede548": "Conditions d’utilisation",
   "recent-page.item.count.not.recorded.e68cd6": "Nombre d’éléments non enregistré",
-  "recent-page.tool.not.recorded.8cf14c": "Outil non enregistré",
   "recent-page.untitled.document.9f6d7c": "Document sans titre",
   "recent-page.files.from.the.older.android.app.are.ce5f36": "Les fichiers de l’ancienne application Android sont en lecture seule ici.",
   "recent-page.kept.in.this.browser.so.deleting.it.d39ecb": "Conservé dans ce navigateur, sa suppression est donc définitive.",
@@ -1830,7 +1830,6 @@ export default {
   "ocrpdf.the.words.could.not.be.read.from.f9fba8": "Les mots n’ont pas pu être lus à partir de ce PDF. S’il s’agit d’une numérisation, basculez sur Pages numérisées ci-dessus.",
   "ocrpdf.choose.a.pdf.file.c2a7df": "Choisissez un fichier PDF.",
   "ocrpdf.this.is.a.large.pdf.and.may.848eab": "Ce PDF est volumineux et peut consommer une grande quantité de mémoire du navigateur. Continuer ?",
-  "ocrpdf.ocr.text.5120f8": " (texte OCR)",
   "ocrpdf.showing.of.pages.increase.the.ocr.page.947d19": "Affichage de {v0} sur {v1} pages. Augmentez la limite de pages OCR pour en traiter davantage.",
   "ocrpdf.showing.page.c19f4d": {
     "one": "Affichage de {count} page.",

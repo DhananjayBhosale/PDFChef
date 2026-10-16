@@ -156,6 +156,7 @@ export default {
   "recent-page.clear.all.29a390": "Rensa alla",
   "recent-page.delete.files.only.911496": "Radera endast filer",
   "recent-page..b6dda3": "{v0} · {v1} · {v2}",
+  "recent-page..6a5b16": "{v0} · {v1}",
   "recent-page.these.files.are.no.longer.on.this.8f69ee": "Dessa filer finns inte längre på den här enheten.",
   "recent-page.this.file.is.no.longer.on.this.d65cb3": "Den här filen finns inte längre på den här enheten.",
   "recent-page.open.ed077f": "Öppna",
@@ -1563,7 +1564,6 @@ export default {
   "app-shell.privacy.54a57c": "Integritet",
   "app-shell.terms.ede548": "Villkor",
   "recent-page.item.count.not.recorded.e68cd6": "Antal objekt har inte registrerats",
-  "recent-page.tool.not.recorded.8cf14c": "Verktyg har inte registrerats",
   "recent-page.untitled.document.9f6d7c": "Namnlöst dokument",
   "recent-page.files.from.the.older.android.app.are.ce5f36": "Filer från den äldre Android-appen är skrivskyddade här.",
   "recent-page.kept.in.this.browser.so.deleting.it.d39ecb": "Sparas i den här webbläsaren, så borttagningen är permanent.",
@@ -1744,7 +1744,6 @@ export default {
   "ocrpdf.the.words.could.not.be.read.from.f9fba8": "Orden kunde inte läsas från den här PDF-filen. Om det är en skanning växlar du till Skannade sidor ovan.",
   "ocrpdf.choose.a.pdf.file.c2a7df": "Välj en PDF-fil.",
   "ocrpdf.this.is.a.large.pdf.and.may.848eab": "Det här är en stor PDF-fil och den kan använda mycket webbläsarminne. Vill du fortsätta?",
-  "ocrpdf.ocr.text.5120f8": " (OCR-text)",
   "ocrpdf.showing.of.pages.increase.the.ocr.page.947d19": "Visar {v0} av {v1} sidor. Höj gränsen för OCR-sidor för att bearbeta fler.",
   "ocrpdf.showing.page.c19f4d": {
     "one": "Visar {count} sida.",

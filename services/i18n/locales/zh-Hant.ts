@@ -155,6 +155,7 @@ export default {
   "recent-page.clear.all.29a390": "全部清除",
   "recent-page.delete.files.only.911496": "僅刪除檔案",
   "recent-page..b6dda3": "{v0} · {v1} · {v2}",
+  "recent-page..6a5b16": "{v0} · {v1}",
   "recent-page.these.files.are.no.longer.on.this.8f69ee": "這些檔案已不再存在於此裝置上。",
   "recent-page.this.file.is.no.longer.on.this.d65cb3": "此檔案已不再存在於此裝置上。",
   "recent-page.open.ed077f": "開啟",
@@ -1538,7 +1539,6 @@ export default {
   "app-shell.privacy.54a57c": "隱私權",
   "app-shell.terms.ede548": "條款",
   "recent-page.item.count.not.recorded.e68cd6": "未記錄項目數量",
-  "recent-page.tool.not.recorded.8cf14c": "未記錄工具",
   "recent-page.untitled.document.9f6d7c": "未命名文件",
   "recent-page.files.from.the.older.android.app.are.ce5f36": "舊版 Android 應用程式的檔案在此處僅供讀取。",
   "recent-page.kept.in.this.browser.so.deleting.it.d39ecb": "檔案保留在此瀏覽器中，因此刪除後將無法復原。",
@@ -1713,7 +1713,6 @@ export default {
   "ocrpdf.the.words.could.not.be.read.from.f9fba8": "無法從此 PDF 讀取文字。若為掃描檔，請切換至上方的「掃描頁面」。",
   "ocrpdf.choose.a.pdf.file.c2a7df": "選擇 PDF 檔案。",
   "ocrpdf.this.is.a.large.pdf.and.may.848eab": "此 PDF 檔案較大，可能會耗用大量瀏覽器記憶體。是否要繼續？",
-  "ocrpdf.ocr.text.5120f8": " (OCR 文字)",
   "ocrpdf.showing.of.pages.increase.the.ocr.page.947d19": "正在顯示 {v0} / {v1} 頁。請提高 OCR 頁數上限以處理更多頁面。",
   "ocrpdf.showing.page.c19f4d": {
     "other": "正在顯示 {count} 頁。"

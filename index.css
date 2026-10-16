@@ -295,6 +295,19 @@ html[data-text-scale='larger'] .chef-chrome {
 /* The bar grows with the readable-text size, so the inset does too.
    `--size-tab-bar-readable` is the bar's measured height; both this inset and
    every floating surface read it, so they cannot disagree at large text. */
+/* In the installed app a long press on a label or button selects nothing, as in any native
+   app. Fields, editable text and selectable PDF page text keep their selection. */
+:root[data-chef-native] body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+:root[data-chef-native] :is(input, textarea, [contenteditable]:not([contenteditable="false"]), .select-text) {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
 /* Hidden while the keyboard is up, so it never covers the field being typed in. */
 :root[data-chef-keyboard] .chef-tab-bar {
   display: none;

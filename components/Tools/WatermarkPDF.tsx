@@ -18,24 +18,8 @@ import { loadPDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
 import { getPdfPreviewLayoutSize } from '../../services/pdfPageGeometry';
 import { getPdfPreviewFont, unsupportedPdfPreviewCharacter } from '../../services/pdfPreviewFont';
 import type { PDFFont } from 'pdf-lib';
-import {
-  DEFAULT_WATERMARK_COLOR_HEX,
-  DEFAULT_WATERMARK_OPACITY,
-  DEFAULT_WATERMARK_ROTATION_DEGREES,
-  DEFAULT_WATERMARK_SIZE,
-  DEFAULT_WATERMARK_TEXT,
-  DEFAULT_WATERMARK_X_PERCENT,
-  DEFAULT_WATERMARK_Y_PERCENT,
-  MAX_PDF_TEXT_LENGTH,
-  WATERMARK_MAX_ROTATION_DEGREES,
-  WATERMARK_MAX_SIZE,
-  WATERMARK_MIN_OPACITY,
-  WATERMARK_MIN_ROTATION_DEGREES,
-  WATERMARK_MIN_SIZE,
-  androidExportFileName,
-  sanitizeWatermarkText,
-  watermarkLayout,
-} from '../../services/androidParity';
+import { toolOutputName } from '../UI/format';
+import { DEFAULT_WATERMARK_COLOR_HEX, DEFAULT_WATERMARK_OPACITY, DEFAULT_WATERMARK_ROTATION_DEGREES, DEFAULT_WATERMARK_SIZE, DEFAULT_WATERMARK_TEXT, DEFAULT_WATERMARK_X_PERCENT, DEFAULT_WATERMARK_Y_PERCENT, MAX_PDF_TEXT_LENGTH, WATERMARK_MAX_ROTATION_DEGREES, WATERMARK_MAX_SIZE, WATERMARK_MIN_OPACITY, WATERMARK_MIN_ROTATION_DEGREES, WATERMARK_MIN_SIZE, sanitizeWatermarkText, watermarkLayout } from '../../services/androidParity';
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -228,7 +212,7 @@ export const WatermarkPDF: React.FC = () => {
         xPercent,
         yPercent,
       });
-      const outputName = androidExportFileName('watermark', file.name, 'pdf');
+      const outputName = toolOutputName('watermark', file.name, 'pdf');
       downloadBlob(new Blob([bytes], { type: 'application/pdf' }), outputName);
       setStatus({
         isProcessing: false,

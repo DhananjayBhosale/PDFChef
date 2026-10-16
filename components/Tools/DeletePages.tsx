@@ -14,8 +14,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { StatusToast } from '../UI/StatusToast';
 import { Button } from '../UI/Primitives';
 import { ToolHeader, ToolPanel, ToolSelectionBar, ToolShell } from '../UI/ToolLayout';
-import { androidExportFileName } from '../../services/androidParity';
 import { parseBoundedPageRange } from '../../services/pageRange';
+import { toolOutputName } from '../UI/format';
 
 export const DeletePages: React.FC = () => {
   useI18n();
@@ -123,7 +123,7 @@ export const DeletePages: React.FC = () => {
       
       downloadBlob(
         new Blob([pdfBytes], { type: 'application/pdf' }),
-        androidExportFileName('delete_pages', file.name, 'pdf'),
+        toolOutputName('delete-pages', file.name, 'pdf'),
       );
       setStatus({ isProcessing: false, progress: 100, message: t("delete-pages.trimmed.pdf.ready.fb86b7") });
     } catch (error) {

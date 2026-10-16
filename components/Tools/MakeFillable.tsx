@@ -14,6 +14,7 @@ import { createFillablePdf, detectVisualFormFields, type FillableFieldKind, type
 import { downloadBytes, revokeObjectUrls } from '../../services/pdfShared';
 import { shouldWarnForFiles } from '../../services/workspace';
 import type { ProcessingStatus } from '../../types';
+import { toolOutputName } from '../UI/format';
 
 const fieldKinds: Array<{ value: FillableFieldKind; label: string }> = [
   { value: 'text', get label() { return t("make-fillable.text.71988c"); } },
@@ -242,7 +243,7 @@ export const MakeFillable: React.FC = () => {
     setStatus({ isProcessing: true, progress: 20, message: t("make-fillable.adding.the.boxes.to.the.pdf.a8caa8") });
     try {
       const bytes = await createFillablePdf(file, fields);
-      downloadBytes(bytes, `${file.name.replace(/\.pdf$/i, '')}-fillable.pdf`, 'application/pdf');
+      downloadBytes(bytes, toolOutputName('fillable', file.name, 'pdf'), 'application/pdf');
       setStatus({ isProcessing: false, progress: 100, message: t("make-fillable.fillable.pdf.downloaded.with.reviewed.field.test.25220b", { count: fields.length }) });
     } catch (error) {
       setStatus({ isProcessing: false, progress: 0, message: '', error: error instanceof Error ? localizeError(error) : t("make-fillable.unable.to.create.the.fillable.pdf.d1f600") });

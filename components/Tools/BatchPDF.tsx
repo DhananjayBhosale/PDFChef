@@ -25,7 +25,7 @@ import { convertPDFToDocx } from '../../services/docxExport';
 import { downloadBlob, revokeObjectUrl } from '../../services/pdfShared';
 import { recordSavings, shouldWarnForFiles } from '../../services/workspace';
 import type { ProcessingStatus } from '../../types';
-import { formatBytes } from '../UI/format';
+import { formatBytes, toolOutputName, datedOutputName } from '../UI/format';
 
 type BatchAction = 'compress' | 'split' | 'pdf-to-image' | 'pdf-to-word' | 'rotate' | 'protect' | 'unlock' | 'metadata' | 'flatten' | 'extract-text' | 'watermark' | 'page-numbers' | 'repair';
 type BatchItemPhase = 'queued' | 'processing' | 'completed' | 'failed' | 'canceled';
@@ -191,11 +191,11 @@ export const BatchPDF: React.FC = () => {
       // Like Compress PDF: when the new copy is not smaller, the original is what is kept.
       if (result.data.length === 0 || result.data.length >= file.size) return { blob: file, filename: file.name };
       recordSavings(file.size, result.data.length);
-      return { blob: bytesBlob(result.data), filename: `${baseName(file.name)}-compressed.pdf` };
+      return { blob: bytesBlob(result.data), filename: toolOutputName('compress', file.name, 'pdf') };
     }
     if (action === 'split') {
       const result = finish(await splitPDFByPagesPerFile(file, pagesPerSplit));
-      return { blob: result.blob, filename: `${baseName(file.name)}-parts.${result.isArchive ? 'zip' : 'pdf'}` };
+      return { blob: result.blob, filename: toolOutputName('split', file.name, result.isArchive ? 'zip' : 'pdf') };
     }
     if (action === 'pdf-to-image') {
       const pdf = await loadPDFDocument(file);
@@ -211,18 +211,18 @@ export const BatchPDF: React.FC = () => {
         onProgress(((pageIndex + 1) / pdf.numPages) * 90);
       }
       const blob = await zip.generateAsync({ type: 'blob' }, (metadata) => onProgress(90 + metadata.percent / 10));
-      return { blob: finish(blob), filename: `${baseName(file.name)}-images.zip` };
+      return { blob: finish(blob), filename: toolOutputName('images', file.name, 'zip') };
     }
     if (action === 'pdf-to-word') return { blob: finish(await convertPDFToDocx(file)), filename: `${baseName(file.name)}.docx` };
-    if (action === 'rotate') return { blob: bytesBlob(finish(await rotatePDF(file, rotation))), filename: `${baseName(file.name)}-rotated.pdf` };
-    if (action === 'protect') return { blob: bytesBlob(finish(await protectPDF(file, password))), filename: `${baseName(file.name)}-protected.pdf` };
-    if (action === 'unlock') return { blob: bytesBlob(finish(await unlockPDF(file, password))), filename: `${baseName(file.name)}-unlocked.pdf` };
-    if (action === 'metadata') return { blob: bytesBlob(finish(await removePDFMetadata(file))), filename: `${baseName(file.name)}-metadata-cleared.pdf` };
-    if (action === 'flatten') return { blob: bytesBlob(finish(await flattenPDF(file))), filename: `${baseName(file.name)}-flattened.pdf` };
+    if (action === 'rotate') return { blob: bytesBlob(finish(await rotatePDF(file, rotation))), filename: toolOutputName('rotate', file.name, 'pdf') };
+    if (action === 'protect') return { blob: bytesBlob(finish(await protectPDF(file, password))), filename: toolOutputName('protect', file.name, 'pdf') };
+    if (action === 'unlock') return { blob: bytesBlob(finish(await unlockPDF(file, password))), filename: toolOutputName('unlock', file.name, 'pdf') };
+    if (action === 'metadata') return { blob: bytesBlob(finish(await removePDFMetadata(file))), filename: toolOutputName('metadata', file.name, 'pdf') };
+    if (action === 'flatten') return { blob: bytesBlob(finish(await flattenPDF(file))), filename: toolOutputName('flatten', file.name, 'pdf') };
     if (action === 'extract-text') return { blob: new Blob([finish(await extractTextFromPDF(file))], { type: 'text/plain' }), filename: `${baseName(file.name)}.txt` };
     if (action === 'watermark') {
       const bytes = finish(await addWatermarkToPDF(file, { text: watermark, size: 50, opacity: 0.3, rotation: -45, color: '#000000' }));
-      return { blob: bytesBlob(bytes), filename: `${baseName(file.name)}-watermarked.pdf` };
+      return { blob: bytesBlob(bytes), filename: toolOutputName('watermark', file.name, 'pdf') };
     }
     if (action === 'page-numbers') {
       const numbered = await loadPDFDocument(file);
@@ -238,12 +238,12 @@ export const BatchPDF: React.FC = () => {
             endPage: lastPage,
           }),
         );
-        return { blob: bytesBlob(bytes), filename: `${baseName(file.name)}-numbered.pdf` };
+        return { blob: bytesBlob(bytes), filename: toolOutputName('page-numbers', file.name, 'pdf') };
       } finally {
         if (numbered?.destroy) void numbered.destroy();
       }
     }
-    return { blob: bytesBlob(finish(await repairPDF(file))), filename: `${baseName(file.name)}-repaired.pdf` };
+    return { blob: bytesBlob(finish(await repairPDF(file))), filename: toolOutputName('repair', file.name, 'pdf') };
   };
 
   const runBatch = async () => {
@@ -337,7 +337,7 @@ export const BatchPDF: React.FC = () => {
         });
         return;
       }
-      const outputName = `pdf-chef-${action}-batch.zip`;
+      const outputName = datedOutputName(t("tool-catalog.batch.processing.36bf5b"), 'zip');
       downloadBlob(archive, outputName, 'application/zip');
       setStatus({
         isProcessing: false,

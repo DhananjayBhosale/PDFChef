@@ -139,6 +139,8 @@ const readCapacitorPlatform = (): string | null => {
 // engines serialise as "null" for the iOS custom scheme.
 const shellOrigin = originOf(window.location);
 const shellTarget = resolveShellTarget(readCapacitorPlatform(), shellOrigin);
+// Lets the stylesheet behave like an installed app, e.g. no text selection on a long press.
+if (isPackagedNativeShell(shellTarget, shellOrigin)) document.documentElement.setAttribute('data-chef-native', '');
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

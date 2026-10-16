@@ -465,8 +465,9 @@ export const ViewPDF: React.FC = () => {
                 <h1 className="chef-filename text-base font-bold text-[var(--text-primary)]">{openedPdf.name}</h1>
                 {openedPdf.previewOnly && !access?.unlocked && <Badge tone="caution">{t("view-pdf.preview.only.3673f9")}</Badge>}
               </div>
+              {/* After a failed open the card below says so; "Opening…" here would contradict it. */}
               <p aria-live="polite" className="text-xs font-medium text-[var(--text-secondary)]">
-                {openedPdf.previewOnly && !access?.unlocked
+                {status.error && !pdfDoc ? null : openedPdf.previewOnly && !access?.unlocked
                   ? t("view-pdf.unlock.to.save.share.or.use.tools.5c4c2a", { v0: pdfDoc ? t("view-pdf.page.of.477c22", { v0: currentPage, v1: pdfDoc.numPages }) : t("view-pdf.opening.c926c2") })
                   : pdfDoc ? t("view-pdf.page.of.477c22", { v0: currentPage, v1: pdfDoc.numPages }) : t("view-pdf.opening.c926c2")}
               </p>

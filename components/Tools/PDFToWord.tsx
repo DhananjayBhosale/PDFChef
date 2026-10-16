@@ -68,7 +68,7 @@ export const PDFToWord: React.FC = () => {
       if (activeRun.current !== runId) return;
 
       const baseName = file.name.replace(/\.pdf$/i, '') || 'converted';
-      downloadBlob(blob, `${baseName} (converted).docx`, DOCX_MIME_TYPE);
+      downloadBlob(blob, `${baseName}.docx`, DOCX_MIME_TYPE);
       setStatus({ isProcessing: false, progress: 100, message: t("pdfto-word.word.document.ready.a23679") });
     } catch (error) {
       if (activeRun.current !== runId || isAbortError(error)) return;

@@ -15,7 +15,6 @@ import {
   type SplitResult,
 } from '../../services/pdfDocument';
 import { downloadBlob, isPdfFile, revokeObjectUrls } from '../../services/pdfShared';
-import { androidExportDirectoryName, androidExportFileName } from '../../services/androidParity';
 import { Download, FileText, Loader2, RefreshCw, Scissors } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
@@ -24,7 +23,7 @@ import { PageRangeSelector } from '../UI/PageRangeSelector';
 import { StatusToast } from '../UI/StatusToast';
 import { Button, SegmentedControl } from '../UI/Primitives';
 import { ToolHeader, ToolPanel, ToolSelectionBar, ToolShell } from '../UI/ToolLayout';
-import { formatBytes } from '../UI/format';
+import { formatBytes, toolOutputName } from '../UI/format';
 
 type SplitMode = 'pageCount' | 'maximumSize';
 type ActiveJob = 'split' | 'extract' | null;
@@ -223,10 +222,10 @@ export const SplitPDF: React.FC = () => {
 
   const deliverSplitResult = (result: SplitResult, sourceFile: PDFFile) => {
     if (result.isArchive) {
-      downloadBlob(result.blob, `${androidExportDirectoryName(sourceFile.name, 'split_pdfs')}.zip`);
+      downloadBlob(result.blob, toolOutputName('split', sourceFile.name, 'zip'));
       return;
     }
-    downloadBlob(result.blob, androidExportFileName('split', sourceFile.name, 'pdf'), 'application/pdf');
+    downloadBlob(result.blob, toolOutputName('split', sourceFile.name, 'pdf'), 'application/pdf');
   };
 
   const reportFailure = (error: unknown, fallback: string, controller: AbortController) => {
@@ -341,7 +340,7 @@ export const SplitPDF: React.FC = () => {
       if (controller.signal.aborted || activeJobControllerRef.current !== controller) return;
       downloadBlob(
         new Blob([pdfBytes], { type: 'application/pdf' }),
-        androidExportFileName('extract_pages', sourceFile.name, 'pdf'),
+        toolOutputName('extract', sourceFile.name, 'pdf'),
       );
       setActiveJob(null);
       setStatus({

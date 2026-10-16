@@ -21,7 +21,7 @@ import { StatusToast } from '../UI/StatusToast';
 import { StatusLine } from '../UI/Primitives';
 import { ToolHeader, ToolShell } from '../UI/ToolLayout';
 import { useImmersiveWorkspace } from '../Layout/AppShell';
-import { imagePdfOutputName } from '../UI/format';
+import { datedOutputName } from '../UI/format';
 
 const IMAGE_TO_PDF_TOOL = tools.find((tool) => tool.path === '/image-to-pdf');
 const MAX_IMAGE_TO_PDF_FILES = 100;
@@ -518,7 +518,7 @@ export const ImageToPDF: React.FC = () => {
       const firstImage = pages.flatMap((page) => page.elements)[0];
       downloadBlob(
         new Blob([pdfBytes], { type: 'application/pdf' }),
-        imagePdfOutputName(firstImage?.file.name || 'images'),
+        datedOutputName(t("tool-catalog.image.to.pdf.966eba"), 'pdf'),
         'application/pdf',
       );
       setSavedPages(pages);

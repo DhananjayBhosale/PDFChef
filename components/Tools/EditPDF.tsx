@@ -94,6 +94,7 @@ import { layoutTextBox, PdfTextBoxError, TEXT_BOX_PADDING_X, TEXT_BOX_PADDING_Y 
 import { pdfPageFromScrollBoundary } from '../../services/pdfZoomGesture';
 import { releaseNativePdfTextDocument } from '../../services/pdfNativeTextEditor';
 import { dismissOutputBanner } from '../../services/workspace';
+import { toolOutputName } from '../UI/format';
 
 const elementAction = (kind: EditorElement['type'], action: 'add' | 'place' | 'properties' | 'selected') => t(`editor.${kind}.${action}`);
 const elementAnnouncement = (kind: EditorElement['type'], selected: boolean, page: number) =>
@@ -2528,7 +2529,7 @@ export const EditPDF: React.FC = () => {
         }
       }
       if (generation !== documentGeneration.current) return;
-      const delivery = await deliverBlob(new Blob([bytes], { type: 'application/pdf' }), `edited-${file.name}`);
+      const delivery = await deliverBlob(new Blob([bytes], { type: 'application/pdf' }), toolOutputName('edit', file.name, 'pdf'));
       if (generation !== documentGeneration.current) return;
       if (delivery.status === 'preview') {
         setStatus({

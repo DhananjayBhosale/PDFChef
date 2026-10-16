@@ -155,6 +155,7 @@ export default {
   "recent-page.clear.all.29a390": "全部清除",
   "recent-page.delete.files.only.911496": "仅删除文件",
   "recent-page..b6dda3": "{v0} · {v1} · {v2}",
+  "recent-page..6a5b16": "{v0} · {v1}",
   "recent-page.these.files.are.no.longer.on.this.8f69ee": "这些文件已不在该设备上。",
   "recent-page.this.file.is.no.longer.on.this.d65cb3": "此文件已不在该设备上。",
   "recent-page.open.ed077f": "打开",
@@ -1571,7 +1572,6 @@ export default {
   "app-shell.privacy.54a57c": "隐私",
   "app-shell.terms.ede548": "条款",
   "recent-page.item.count.not.recorded.e68cd6": "未记录项目数",
-  "recent-page.tool.not.recorded.8cf14c": "未记录工具",
   "recent-page.untitled.document.9f6d7c": "无标题文档",
   "recent-page.files.from.the.older.android.app.are.ce5f36": "来自旧版 Android 应用的文件在此处为只读。",
   "recent-page.kept.in.this.browser.so.deleting.it.d39ecb": "保存在此浏览器中，因此删除后将无法恢复。",
@@ -1746,7 +1746,6 @@ export default {
   "ocrpdf.the.words.could.not.be.read.from.f9fba8": "无法从此 PDF 中读取文字。如果是扫描件，请切换到上方的扫描页面。",
   "ocrpdf.choose.a.pdf.file.c2a7df": "选择一个 PDF 文件。",
   "ocrpdf.this.is.a.large.pdf.and.may.848eab": "此 PDF 文件较大，可能会占用大量浏览器内存。是否继续？",
-  "ocrpdf.ocr.text.5120f8": " (OCR 文本)",
   "ocrpdf.showing.of.pages.increase.the.ocr.page.947d19": "显示 {v0} / {v1} 页。提高 OCR 页数限制以处理更多页面。",
   "ocrpdf.showing.page.c19f4d": {
     "other": "显示 {count} 页。"

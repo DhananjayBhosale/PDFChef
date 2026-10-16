@@ -155,6 +155,7 @@ export default {
   "recent-page.clear.all.29a390": "모두 지우기",
   "recent-page.delete.files.only.911496": "파일만 삭제",
   "recent-page..b6dda3": "{v0} · {v1} · {v2}",
+  "recent-page..6a5b16": "{v0} · {v1}",
   "recent-page.these.files.are.no.longer.on.this.8f69ee": "이 파일들은 더 이상 이 기기에 없습니다.",
   "recent-page.this.file.is.no.longer.on.this.d65cb3": "이 파일은 더 이상 이 기기에 없습니다.",
   "recent-page.open.ed077f": "열기",
@@ -1538,7 +1539,6 @@ export default {
   "app-shell.privacy.54a57c": "개인정보처리방침",
   "app-shell.terms.ede548": "이용약관",
   "recent-page.item.count.not.recorded.e68cd6": "항목 수가 기록되지 않음",
-  "recent-page.tool.not.recorded.8cf14c": "도구가 기록되지 않음",
   "recent-page.untitled.document.9f6d7c": "제목 없는 문서",
   "recent-page.files.from.the.older.android.app.are.ce5f36": "이전 Android 앱의 파일은 여기에서 읽기 전용입니다.",
   "recent-page.kept.in.this.browser.so.deleting.it.d39ecb": "이 브라우저에 저장되어 있으므로 삭제하면 영구적으로 삭제됩니다.",
@@ -1713,7 +1713,6 @@ export default {
   "ocrpdf.the.words.could.not.be.read.from.f9fba8": "이 PDF에서 텍스트를 읽을 수 없습니다. 스캔본인 경우 위의 '스캔된 페이지'로 전환하세요.",
   "ocrpdf.choose.a.pdf.file.c2a7df": "PDF 파일을 선택하세요.",
   "ocrpdf.this.is.a.large.pdf.and.may.848eab": "대용량 PDF이므로 상당한 브라우저 메모리를 사용할 수 있습니다. 계속하시겠습니까?",
-  "ocrpdf.ocr.text.5120f8": " (OCR 텍스트)",
   "ocrpdf.showing.of.pages.increase.the.ocr.page.947d19": "{v1}페이지 중 {v0}페이지를 표시하고 있습니다. 더 많이 처리하려면 OCR 페이지 제한을 늘리세요.",
   "ocrpdf.showing.page.c19f4d": {
     "other": "{count}페이지 표시 중."

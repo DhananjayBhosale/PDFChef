@@ -155,6 +155,7 @@ export default {
   "recent-page.clear.all.29a390": "すべてクリア",
   "recent-page.delete.files.only.911496": "ファイルのみ削除",
   "recent-page..b6dda3": "{v0} · {v1} · {v2}",
+  "recent-page..6a5b16": "{v0} · {v1}",
   "recent-page.these.files.are.no.longer.on.this.8f69ee": "これらのファイルはこのデバイス上にもう存在しません。",
   "recent-page.this.file.is.no.longer.on.this.d65cb3": "このファイルはこのデバイス上にもう存在しません。",
   "recent-page.open.ed077f": "開く",
@@ -1571,7 +1572,6 @@ export default {
   "app-shell.privacy.54a57c": "プライバシー",
   "app-shell.terms.ede548": "利用規約",
   "recent-page.item.count.not.recorded.e68cd6": "項目数が記録されていません",
-  "recent-page.tool.not.recorded.8cf14c": "ツールが記録されていません",
   "recent-page.untitled.document.9f6d7c": "無題のドキュメント",
   "recent-page.files.from.the.older.android.app.are.ce5f36": "以前のAndroidアプリのファイルは、ここでは読み取り専用です。",
   "recent-page.kept.in.this.browser.so.deleting.it.d39ecb": "このブラウザに保存されているため、削除すると元に戻せません。",
@@ -1746,7 +1746,6 @@ export default {
   "ocrpdf.the.words.could.not.be.read.from.f9fba8": "このPDFからテキストを読み取れませんでした。スキャンの場合は、上部の「スキャンしたページ」に切り替えてください。",
   "ocrpdf.choose.a.pdf.file.c2a7df": "PDFファイルを選択してください。",
   "ocrpdf.this.is.a.large.pdf.and.may.848eab": "大容量のPDFのため、ブラウザのメモリを大量に消費する可能性があります。続行しますか？",
-  "ocrpdf.ocr.text.5120f8": " (OCRテキスト)",
   "ocrpdf.showing.of.pages.increase.the.ocr.page.947d19": "{v1}ページ中{v0}ページを表示しています。さらに処理するにはOCRのページ上限を増やしてください。",
   "ocrpdf.showing.page.c19f4d": {
     "other": "{count}ページを表示しています。"

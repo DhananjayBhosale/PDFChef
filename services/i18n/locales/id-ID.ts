@@ -155,6 +155,7 @@ export default {
   "recent-page.clear.all.29a390": "Hapus semua",
   "recent-page.delete.files.only.911496": "Hapus file saja",
   "recent-page..b6dda3": "{v0} · {v1} · {v2}",
+  "recent-page..6a5b16": "{v0} · {v1}",
   "recent-page.these.files.are.no.longer.on.this.8f69ee": "File ini sudah tidak ada lagi di perangkat ini.",
   "recent-page.this.file.is.no.longer.on.this.d65cb3": "File ini sudah tidak ada lagi di perangkat ini.",
   "recent-page.open.ed077f": "Buka",
@@ -1538,7 +1539,6 @@ export default {
   "app-shell.privacy.54a57c": "Privasi",
   "app-shell.terms.ede548": "Ketentuan",
   "recent-page.item.count.not.recorded.e68cd6": "Jumlah item tidak dicatat",
-  "recent-page.tool.not.recorded.8cf14c": "Alat tidak dicatat",
   "recent-page.untitled.document.9f6d7c": "Dokumen tanpa judul",
   "recent-page.files.from.the.older.android.app.are.ce5f36": "File dari aplikasi Android versi lama hanya bisa dibaca di sini.",
   "recent-page.kept.in.this.browser.so.deleting.it.d39ecb": "Disimpan di browser ini, jadi menghapusnya bersifat permanen.",
@@ -1713,7 +1713,6 @@ export default {
   "ocrpdf.the.words.could.not.be.read.from.f9fba8": "Kata-kata tidak dapat dibaca dari PDF ini. Jika file ini adalah hasil pemindaian, beralih ke Halaman hasil pemindaian di atas.",
   "ocrpdf.choose.a.pdf.file.c2a7df": "Pilih file PDF.",
   "ocrpdf.this.is.a.large.pdf.and.may.848eab": "Ini adalah PDF berukuran besar dan mungkin menggunakan banyak memori browser. Lanjutkan?",
-  "ocrpdf.ocr.text.5120f8": " (teks OCR)",
   "ocrpdf.showing.of.pages.increase.the.ocr.page.947d19": "Menampilkan {v0} dari {v1} halaman. Tingkatkan batas halaman OCR untuk memproses lebih banyak.",
   "ocrpdf.showing.page.c19f4d": {
     "other": "Menampilkan {count} halaman."

@@ -157,6 +157,7 @@ export default {
   "recent-page.clear.all.29a390": "Tümünü temizle",
   "recent-page.delete.files.only.911496": "Yalnızca dosyaları sil",
   "recent-page..b6dda3": "{v0} · {v1} · {v2}",
+  "recent-page..6a5b16": "{v0} · {v1}",
   "recent-page.these.files.are.no.longer.on.this.8f69ee": "Bu dosyalar artık bu cihazda yok.",
   "recent-page.this.file.is.no.longer.on.this.d65cb3": "Bu dosya artık bu cihazda yok.",
   "recent-page.open.ed077f": "Aç",
@@ -1563,7 +1564,6 @@ export default {
   "app-shell.privacy.54a57c": "Gizlilik",
   "app-shell.terms.ede548": "Koşullar",
   "recent-page.item.count.not.recorded.e68cd6": "Öğe sayısı kaydedilmedi",
-  "recent-page.tool.not.recorded.8cf14c": "Araç kaydedilmedi",
   "recent-page.untitled.document.9f6d7c": "Başlıksız belge",
   "recent-page.files.from.the.older.android.app.are.ce5f36": "Daha eski Android uygulamasındaki dosyalar burada salt okunurdur.",
   "recent-page.kept.in.this.browser.so.deleting.it.d39ecb": "Bu tarayıcıda tutulur, bu nedenle silme işlemi kalıcıdır.",
@@ -1744,7 +1744,6 @@ export default {
   "ocrpdf.the.words.could.not.be.read.from.f9fba8": "Bu PDF'deki sözcükler okunamadı. Dosya bir taramaysa yukarıdan Taranmış sayfalar'a geçin.",
   "ocrpdf.choose.a.pdf.file.c2a7df": "Bir PDF dosyası seçin.",
   "ocrpdf.this.is.a.large.pdf.and.may.848eab": "Bu büyük bir PDF'dir ve önemli miktarda tarayıcı belleği kullanabilir. Devam edilsin mi?",
-  "ocrpdf.ocr.text.5120f8": " (OCR metni)",
   "ocrpdf.showing.of.pages.increase.the.ocr.page.947d19": "{v1} sayfadan {v0} tanesi gösteriliyor. Daha fazlasını işlemek için OCR sayfa sınırını artırın.",
   "ocrpdf.showing.page.c19f4d": {
     "one": "{count} sayfa gösteriliyor.",

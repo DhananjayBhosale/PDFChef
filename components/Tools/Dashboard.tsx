@@ -76,9 +76,9 @@ const homeTools: ToolCardData[] = [
 
 /**
  * Android's proportional segment weights, so the strip keeps the same shape:
- * the longest label gets the most room instead of every option getting a fifth
+ * the longest label gets the most room instead of every option getting a sixth
  * of the width. They are grow factors over natural width, so a label is never
- * squeezed — if the five no longer fit on one line they wrap onto a second.
+ * squeezed — if the six no longer fit on one line the strip scrolls.
  */
 const CATEGORY_WEIGHT: Record<CategoryFilter, number> = {
   All: 4,
@@ -393,28 +393,20 @@ export const Dashboard: React.FC = () => {
             {resultSummary}
           </p>
 
-          {/* 46px shell, 3px inset, 38px segments. At normal phone text sizes
-              the five share one row, matching Android without wasting a second
-              row on a lone category. They may still wrap under text zoom so
-              every category stays reachable without horizontal scrolling.
+          {/* 46px shell, 3px inset, 38px segments, always one row. Where the six
+              don't fit (a narrow phone, large text) the strip scrolls sideways
+              rather than leaving a lone category on a second line. The page
+              itself never scrolls sideways. The 2px side padding is what lets
+              them fit a 360px phone, since the segments grow to fill the row anyway.
 
               Selection is a raised chip on a sunken track — the shape a native
-              segmented control uses — rather than a flat red field. Android
-              gets its structure from a hairline between every pair of segments,
-              which a wrapping strip cannot keep; the chip supplies the same
-              structure and survives the wrap. The accent stays, on the label,
-              because selection is one of the things the accent is for.
-
-              The two gaps differ on purpose. Side by side, 2px is the Android
-              spacing and the height-only hit extension keeps the segments out
-              of each other. Once the strip wraps, the extension reaches five
-              pixels above and below each 38px segment, so the rows need ten
-              between them or two targets would overlap. At default text the
-              five fit on one line and the row gap never appears. */}
+              segmented control uses — rather than a flat red field. The accent
+              stays, on the label, because selection is one of the things the
+              accent is for. */}
           <div
             role="group"
             aria-label={t("dashboard.filter.tools.by.category.72789b")}
-            className="mt-3 flex w-full flex-wrap items-stretch gap-x-[2px] gap-y-[10px] rounded-[20px] border border-[var(--border-hairline)] bg-[var(--surface-sunken)] p-[3px] md:w-fit md:max-w-full"
+            className="chef-no-scrollbar mt-3 flex w-full flex-nowrap items-stretch gap-x-[2px] overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-[20px] border border-[var(--border-hairline)] bg-[var(--surface-sunken)] p-[3px] md:w-fit md:max-w-full"
           >
             {categoryOrder.map((item) => {
               const selected = item === category;
@@ -428,7 +420,7 @@ export const Dashboard: React.FC = () => {
                   onClick={() => setCategory(item)}
                   style={{ flexGrow: CATEGORY_WEIGHT[item] }}
                   className={cx(
-                    'chef-pressable chef-hit-y flex min-h-[38px] min-w-touch max-w-full grow shrink-0 basis-auto items-center justify-center whitespace-normal rounded-[var(--radius-row)] px-[5px] py-1 md:grow-0',
+                    'chef-pressable chef-hit-y flex min-h-[38px] min-w-touch grow shrink-0 basis-auto items-center justify-center whitespace-nowrap rounded-[var(--radius-row)] px-[2px] py-1 md:grow-0',
                     'text-[0.75rem] leading-[1.3333] transition-colors duration-transition ease-settle min-[360px]:text-[0.8125rem] min-[420px]:text-[0.875rem]',
                     selected
                       ? 'bg-[var(--surface-raised)] font-semibold text-[var(--accent-on-quiet)] shadow-[var(--elevation-raised)] ring-1 ring-inset ring-[var(--border-strong)]'

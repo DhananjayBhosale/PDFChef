@@ -5,13 +5,13 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Eye, EyeOff, Lock, ShieldCheck } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { PDFFile, ProcessingStatus } from '../../types';
-import { androidExportFileName } from '../../services/androidParity';
 import { protectPDF } from '../../services/pdfDocument';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
 import { Button, StatusLine } from '../UI/Primitives';
 import { FileUpload } from '../UI/FileUpload';
 import { StatusToast } from '../UI/StatusToast';
 import { ToolHeader, ToolPanel, ToolShell } from '../UI/ToolLayout';
+import { toolOutputName } from '../UI/format';
 
 const EMPTY_STATUS: ProcessingStatus = { isProcessing: false, progress: 0, message: '' };
 
@@ -77,7 +77,7 @@ export const SecurityPDF: React.FC = () => {
 
     try {
       const pdfBytes = await protectPDF(file.file, password);
-      const outputName = androidExportFileName('protect', file.name, 'pdf');
+      const outputName = toolOutputName('protect', file.name, 'pdf');
       downloadBlob(new Blob([pdfBytes], { type: 'application/pdf' }), outputName);
 
       // Credentials are needed only for this operation. Do not keep them in the finished screen.

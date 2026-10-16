@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Eye, EyeOff, Unlock, UnlockKeyhole } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import { androidExportFileName, UNLOCK_FAILED_MESSAGE } from '../../services/androidParity';
+import { UNLOCK_FAILED_MESSAGE } from '../../services/androidParity';
 import { unlockPDF } from '../../services/pdfDocument';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
 import { PDFFile, ProcessingStatus } from '../../types';
@@ -12,6 +12,7 @@ import { Button, StatusLine } from '../UI/Primitives';
 import { FileUpload } from '../UI/FileUpload';
 import { StatusToast } from '../UI/StatusToast';
 import { ToolHeader, ToolPanel, ToolShell } from '../UI/ToolLayout';
+import { toolOutputName } from '../UI/format';
 
 const EMPTY_STATUS: ProcessingStatus = { isProcessing: false, progress: 0, message: '' };
 
@@ -49,7 +50,7 @@ export const UnlockPDF: React.FC = () => {
     setStatus({ isProcessing: true, progress: 10, message: t("unlock-pdf.checking.the.password.on.this.device.9727b5") });
     try {
       const pdfBytes = await unlockPDF(file.file, password);
-      const outputName = androidExportFileName('unlock', file.name, 'pdf');
+      const outputName = toolOutputName('unlock', file.name, 'pdf');
       downloadBlob(new Blob([pdfBytes], { type: 'application/pdf' }), outputName);
 
       setPassword('');

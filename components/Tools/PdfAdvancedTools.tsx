@@ -17,7 +17,7 @@ import {
 } from '../../services/pdfDocument';
 import { extractEmbeddedImagesFromPDF, loadPDFDocument, type EmbeddedPdfImageAsset } from '../../services/pdfBrowser';
 import { downloadBlob } from '../../services/pdfShared';
-import { formatBytes } from '../UI/format';
+import { formatBytes, toolOutputName } from '../UI/format';
 import { useMonetization, type JobAccessGrant } from '../../hooks/useMonetization';
 
 interface ToolShellProps {
@@ -202,7 +202,7 @@ const SimpleTransformTool: React.FC<SimpleTransformToolProps> = ({
     setStatus({ isProcessing: true, progress: 20, message: t("pdf-advanced-tools.processing.pdf.3087fc") });
     try {
       const bytes = await transform(file.file);
-      const outputName = `${outputPrefix}-${file.name}`;
+      const outputName = toolOutputName(outputPrefix, file.name, 'pdf');
       downloadBlob(new Blob([bytes], { type: 'application/pdf' }), outputName);
       setStatus({ isProcessing: false, progress: 100, message: t("pdf-advanced-tools.created.21ab7c", { v0: outputName }) });
     } catch (error) {
@@ -235,7 +235,7 @@ export const RemoveMetadataPDF: React.FC = () => { useI18n(); return (
     description={t("pdf-advanced-tools.clears.the.author.the.dates.and.the.3fc978")}
     uploadLabel={t("pdf-advanced-tools.choose.a.pdf.to.clean.e0a661")}
     actionLabel={t("pdf-advanced-tools.remove.hidden.info.fa4793")}
-    outputPrefix="hidden-info-removed"
+    outputPrefix="remove-hidden-info"
     transform={removePDFMetadata}
   />
 ); };
@@ -246,7 +246,7 @@ export const RemoveAnnotationsPDF: React.FC = () => { useI18n(); return (
     description={t("pdf-advanced-tools.removes.comments.notes.highlights.and.links.form.e7de67")}
     uploadLabel={t("pdf-advanced-tools.choose.a.pdf.to.clean.e0a661")}
     actionLabel={t("pdf-advanced-tools.remove.comments.0788e6")}
-    outputPrefix="annotations-removed"
+    outputPrefix="remove-comments"
     transform={removePDFAnnotations}
   />
 ); };
@@ -257,7 +257,7 @@ export const SanitizePDF: React.FC = () => { useI18n(); return (
     description={t("pdf-advanced-tools.removes.hidden.info.and.comments.in.one.732679")}
     uploadLabel={t("pdf-advanced-tools.choose.a.pdf.to.clean.e0a661")}
     actionLabel={t("pdf-advanced-tools.clean.up.pdf.0b4aaa")}
-    outputPrefix="cleaned"
+    outputPrefix="clean"
     transform={sanitizePDF}
   />
 ); };
@@ -278,7 +278,7 @@ export const CropPDF: React.FC = () => {
     setStatus({ isProcessing: true, progress: 20, message: t("pdf-advanced-tools.trimming.the.edges.bf7d52") });
     try {
       const bytes = await cropPDFMargins(file.file, margins);
-      const outputName = `cropped-${file.name}`;
+      const outputName = toolOutputName('crop', file.name, 'pdf');
       downloadBlob(new Blob([bytes], { type: 'application/pdf' }), outputName);
       setStatus({ isProcessing: false, progress: 100, message: t("pdf-advanced-tools.created.21ab7c", { v0: outputName }) });
     } catch (error) {
@@ -357,7 +357,7 @@ export const HeaderFooterPDF: React.FC = () => {
     setStatus({ isProcessing: true, progress: 20, message: t("pdf-advanced-tools.adding.header.and.footer.c9c262") });
     try {
       const bytes = await addHeaderFooterToPDF(file.file, { headerText, footerText, fontSize, includePageNumbers });
-      const outputName = `header-footer-${file.name}`;
+      const outputName = toolOutputName('header-footer', file.name, 'pdf');
       downloadBlob(new Blob([bytes], { type: 'application/pdf' }), outputName);
       setStatus({ isProcessing: false, progress: 100, message: t("pdf-advanced-tools.created.21ab7c", { v0: outputName }) });
     } catch (error) {
@@ -469,7 +469,7 @@ export const RemoveBlankPagesPDF: React.FC = () => {
         },
       });
       setRemovedPages(result.removedPages);
-      const outputName = `blank-pages-removed-${file.name}`;
+      const outputName = toolOutputName('remove-blank-pages', file.name, 'pdf');
       downloadBlob(new Blob([result.bytes], { type: 'application/pdf' }), outputName);
       setStatus({
         isProcessing: false,
@@ -591,7 +591,7 @@ export const ExtractImagesPDF: React.FC = () => {
           message: t("pdf-advanced-tools.packing.images.e1a3a2"),
         });
       });
-      const outputName = `extracted-images-${file.name.replace(/\.pdf$/i, '')}.zip`;
+      const outputName = toolOutputName('images', file.name, 'zip');
       const download = async () => {
         downloadBlob(blob, outputName, 'application/zip', { operationId });
       };

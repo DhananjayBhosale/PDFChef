@@ -65,12 +65,12 @@ test('the catalog stays one divided list, not a card grid', () => {
   assert.match(appCss, /margin-inline-start: 64px;/);
 });
 
-test('every category is reachable without the page scrolling sideways', () => {
+test('the categories stay on one row and scroll sideways when they do not fit', () => {
   const strip = dashboard.slice(dashboard.indexOf('categoryOrder.map'));
-  // Wrapping, not a horizontal scroller: at 320px and at 200% text the options
-  // move onto another line instead of hiding past an edge.
-  assert.match(dashboard, /flex w-full flex-wrap items-stretch gap-x-\[2px\] gap-y-\[10px\] rounded-\[20px\]/);
-  assert.doesNotMatch(dashboard, /overflow-x-auto/);
+  // A second line held a lone category; the strip scrolls instead, the page never does.
+  assert.match(dashboard, /flex w-full flex-nowrap items-stretch gap-x-\[2px\] overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-\[20px\]/);
+  assert.doesNotMatch(dashboard, /flex-wrap items-stretch gap-x-\[2px\]/);
+  assert.match(strip, /shrink-0 basis-auto items-center justify-center whitespace-nowrap/);
   // 46px shell, 3px inset plus the 1px border, 38px segments inside a 48x48
   // practical target. The width floor is on the box itself, and the height
   // extension is vertical only, so the target is real on both axes and no
@@ -234,7 +234,17 @@ test('the tab bar hides while the keyboard is up, including Android windows that
   const shell = read('components/Layout/AppShell.tsx');
   const css = read('index.css');
   assert.match(shell, /restingHeight - window\.innerHeight >= 120/);
+  // A turn mid-typing must not take the keyboard-shortened window as the resting one.
+  assert.match(shell, /if \(!editing\) restingHeights\.set\(window\.innerWidth, window\.innerHeight\)/);
   assert.match(shell, /toggleAttribute\('data-chef-keyboard', typing\)/);
   assert.match(shell, /className="chef-chrome chef-tab-bar /);
   assert.match(css, /:root\[data-chef-keyboard\] \.chef-tab-bar \{\s*display: none;/);
+});
+
+test('the installed app does not select label text on a long press, but fields stay selectable', () => {
+  const css = read('index.css');
+  const boot = read('index.tsx');
+  assert.match(boot, /if \(isPackagedNativeShell\(shellTarget, shellOrigin\)\) document\.documentElement\.setAttribute\('data-chef-native', ''\);/);
+  assert.match(css, /:root\[data-chef-native\] body \{\s*-webkit-user-select: none;\s*user-select: none;/);
+  assert.match(css, /:root\[data-chef-native\] :is\(input, textarea, \[contenteditable\]:not\(\[contenteditable="false"\]\), \.select-text\) \{\s*-webkit-user-select: text;/);
 });

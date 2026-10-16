@@ -11,8 +11,7 @@ import { PDFFile, ProcessingStatus } from '../../types';
 import { repairPDF } from '../../services/pdfDocument';
 import { loadPDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
-import { androidExportFileName } from '../../services/androidParity';
-import { formatBytes } from '../UI/format';
+import { formatBytes, toolOutputName } from '../UI/format';
 
 interface RepairPreview {
   objectUrl: string;
@@ -107,7 +106,7 @@ export const RepairPDF: React.FC = () => {
       const bytes = await repairPDF(file.file);
       downloadBlob(
         new Blob([bytes], { type: 'application/pdf' }),
-        androidExportFileName('repair', file.name, 'pdf'),
+        toolOutputName('repair', file.name, 'pdf'),
         'application/pdf',
       );
       setStatus({

@@ -157,6 +157,7 @@ export default {
   "recent-page.clear.all.29a390": "Limpar tudo",
   "recent-page.delete.files.only.911496": "Excluir apenas arquivos",
   "recent-page..b6dda3": "{v0} · {v1} · {v2}",
+  "recent-page..6a5b16": "{v0} · {v1}",
   "recent-page.these.files.are.no.longer.on.this.8f69ee": "Estes arquivos não estão mais neste dispositivo.",
   "recent-page.this.file.is.no.longer.on.this.d65cb3": "Este arquivo não está mais neste dispositivo.",
   "recent-page.open.ed077f": "Abrir",
@@ -1588,7 +1589,6 @@ export default {
   "app-shell.privacy.54a57c": "Privacidade",
   "app-shell.terms.ede548": "Termos",
   "recent-page.item.count.not.recorded.e68cd6": "Contagem de itens não registrada",
-  "recent-page.tool.not.recorded.8cf14c": "Ferramenta não registrada",
   "recent-page.untitled.document.9f6d7c": "Documento sem título",
   "recent-page.files.from.the.older.android.app.are.ce5f36": "Arquivos do aplicativo Android antigo são somente leitura aqui.",
   "recent-page.kept.in.this.browser.so.deleting.it.d39ecb": "Mantido neste navegador; portanto, a exclusão é permanente.",
@@ -1775,7 +1775,6 @@ export default {
   "ocrpdf.the.words.could.not.be.read.from.f9fba8": "Não foi possível ler as palavras deste PDF. Se for uma digitalização, alterne para Páginas digitalizadas acima.",
   "ocrpdf.choose.a.pdf.file.c2a7df": "Escolha um arquivo PDF.",
   "ocrpdf.this.is.a.large.pdf.and.may.848eab": "Este é um PDF grande e pode usar uma quantidade considerável da memória do navegador. Continuar?",
-  "ocrpdf.ocr.text.5120f8": " (texto OCR)",
   "ocrpdf.showing.of.pages.increase.the.ocr.page.947d19": "Exibindo {v0} de {v1} páginas. Aumente o limite de páginas de OCR para processar mais.",
   "ocrpdf.showing.page.c19f4d": {
     "one": "Exibindo {count} página.",

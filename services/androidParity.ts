@@ -17,42 +17,6 @@ export const MAX_PDF_TEXT_LENGTH = 140;
 export const sanitizePdfText = (text: string): string =>
   text.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
 
-/**
- * `outputBaseName` in `data/repository/OfflinePdfRepository.kt`.
- *
- * Splits on the *last* dot, so `report.v2.pdf` keeps `report.v2` instead of losing the middle,
- * and replaces everything outside `[A-Za-z0-9._-]` so the name survives any filesystem.
- */
-export const outputBaseName = (sourceDisplayName: string): string => {
-  const lastDot = sourceDisplayName.lastIndexOf('.');
-  const withoutExtension = lastDot > 0 ? sourceDisplayName.slice(0, lastDot) : sourceDisplayName;
-  const base = withoutExtension.trim() === '' ? 'document' : withoutExtension;
-  return base.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 60);
-};
-
-/**
- * `createOutputFile` in `data/repository/OfflinePdfRepository.kt`:
- * `${tool.storageSlug}_${timestamp}_${baseName}.${extension}`.
- *
- * The slug and timestamp are what make an app export identifiable after the fact, which is the
- * same reason a browser download needs them — `watermarked-file.pdf` collides with itself the
- * second time you run the tool.
- */
-export const androidExportFileName = (
-  storageSlug: string,
-  sourceDisplayName: string,
-  extension: string,
-): string => `${storageSlug}_${Date.now()}_${outputBaseName(sourceDisplayName)}.${extension}`;
-
-/**
- * `createOutputDirectory` in `data/repository/OfflinePdfRepository.kt`. The app writes a folder;
- * a browser can only hand back one file, so the same name becomes the zip name.
- */
-export const androidExportDirectoryName = (
-  sourceDisplayName: string,
-  suffix: 'split_pdfs' | 'images' | 'files',
-): string => `${outputBaseName(sourceDisplayName)}_${suffix}`;
-
 /** `buildPageExportLabel` in `processors/OfflinePdfToolOptions.kt`. Takes 0-based indices. */
 export const buildPageExportLabel = (pageIndices: number[]): string => {
   if (pageIndices.length === 0) return 'pages';

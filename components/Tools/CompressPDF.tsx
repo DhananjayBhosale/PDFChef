@@ -267,7 +267,7 @@ export const CompressPDF: React.FC = () => {
         results.push({
           id: selectedFile.id,
           name: selectedFile.name,
-          outputStem: sanitizeFilenameStem(`compressed-${splitFilename(selectedFile.name).stem}`),
+          outputStem: sanitizeFilenameStem(`compress-${splitFilename(selectedFile.name).stem}`),
           originalSize: selectedFile.size,
           blob: new Blob([resultObj.data], { type: 'application/pdf' }),
           skipped,

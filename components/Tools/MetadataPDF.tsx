@@ -12,8 +12,7 @@ import { PDFFile, PDFMetadata, ProcessingStatus } from '../../types';
 import { getPDFMetadata, setPDFMetadata } from '../../services/pdfDocument';
 import { loadPDFDocument } from '../../services/pdfBrowser';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
-import { androidExportFileName } from '../../services/androidParity';
-import { formatBytes } from '../UI/format';
+import { formatBytes, toolOutputName } from '../UI/format';
 
 type MetadataTextField = 'title' | 'author' | 'subject' | 'keywords' | 'creator' | 'producer';
 
@@ -113,7 +112,7 @@ export const MetadataPDF: React.FC = () => {
       const pdfBytes = await setPDFMetadata(file.file, metadata, { clearAll: clearAllPending });
       downloadBlob(
         new Blob([pdfBytes], { type: 'application/pdf' }),
-        androidExportFileName('metadata', file.name, 'pdf'),
+        toolOutputName('metadata', file.name, 'pdf'),
         'application/pdf',
       );
       setStatus({

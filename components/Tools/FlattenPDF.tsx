@@ -12,12 +12,7 @@ import { PDFPreviewModal } from '../UI/PDFPreviewModal';
 import { StatusToast } from '../UI/StatusToast';
 import { Button, StatusLine } from '../UI/Primitives';
 import { ToolHeader, ToolPanel, ToolShell } from '../UI/ToolLayout';
-import { formatBytes } from '../UI/format';
-
-const flattenedOutputName = (filename: string) => {
-  const baseName = filename.replace(/\.pdf$/i, '').trim() || 'document';
-  return `${baseName} (flattened).pdf`;
-};
+import { formatBytes, toolOutputName } from '../UI/format';
 
 export const FlattenPDF: React.FC = () => {
   useI18n();
@@ -46,7 +41,7 @@ export const FlattenPDF: React.FC = () => {
       setStatus({ isProcessing: true, progress: 90, message: t("flatten-pdf.getting.your.pdf.ready.3a0d56") });
       downloadBlob(
         new Blob([pdfBytes], { type: 'application/pdf' }),
-        flattenedOutputName(file.name),
+        toolOutputName('flatten', file.name, 'pdf'),
         'application/pdf',
       );
       setStatus({ isProcessing: false, progress: 100, message: t("flatten-pdf.flattened.pdf.is.ready.642c71") });
