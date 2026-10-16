@@ -27,6 +27,8 @@ const sliderForDPI = (dpi: number, isTextHeavy: boolean): number => {
 };
 
 const PRESET_DPI = { Low: 72, Medium: 144, High: 200 } as const;
+// File extensions are the same in every language.
+const PDF_EXTENSION = '.pdf';
 type PresetName = keyof typeof PRESET_DPI;
 
 const qualityLabel = (dpi: number): string => (dpi < 110 ? t("compress-pdf.low.f793de") : dpi < 175 ? t("compress-pdf.medium.8e588c") : t("compress-pdf.high.c4ebc6"));
@@ -403,7 +405,7 @@ export const CompressPDF: React.FC = () => {
                           ? { ...item, outputStem: sanitizeFilenameStem(event.target.value) }
                           : item) ?? null)}
                       />
-                      <span id={`compress-extension-${result.id}`} className="pe-3 text-[var(--text-secondary)]">.pdf</span>
+                      <span id={`compress-extension-${result.id}`} className="pe-3 text-[var(--text-secondary)]">{PDF_EXTENSION}</span>
                     </span>
                   </label>
                 ))}

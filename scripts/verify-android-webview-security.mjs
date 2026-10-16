@@ -53,7 +53,7 @@ for (const [method, label] of [
 ]) requireMatch(policy, new RegExp(method), label);
 
 requireMatch(activity, /bridge\.setWebViewClient\(new PdfChefWebViewClient\(bridge\)\)/, 'policy WebView client installation');
-requireMatch(activity, /config = CapConfig\.loadDefault\(this\)[\s\S]*PdfChefWebViewPolicy\.apply\(webView\);\s*super\.load\(\);/, 'pre-bridge WebView hardening');
+requireMatch(activity, /config = CapConfig\.loadDefault\(this\)[\s\S]*PdfChefWebViewPolicy\.apply\(webView\);\s*(?:configureGraphicsLayer\(webView\);\s*)?super\.load\(\);/, 'pre-bridge WebView hardening');
 requireMatch(activity, /!PdfChefWebViewPolicy\.isTrustedConfig\(bridge\.getConfig\(\)\)[\s\S]*!PdfChefWebViewPolicy\.isPackagedOrigin\(bridge\.getAppUrl\(\)\)/, 'fail-closed configured bridge origin');
 requireMatch(activity, /OPEN_EXTERNAL_BROWSER[\s\S]*startActivity\(new Intent\(Intent\.ACTION_VIEW, request\.getUrl\(\)\)\)/, 'visible external HTTP(S) link handoff');
 requireMatch(policy, /"mailto"\.equals\(scheme\)/, 'existing email-link handoff');
