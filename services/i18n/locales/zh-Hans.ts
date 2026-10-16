@@ -66,7 +66,7 @@ export default {
   "privacy-policy.summary.8e76a9": "摘要",
   "privacy-policy.pdf.chef.processes.documents.locally.on.your.bab7de": "PDF Chef 在您的设备本地处理文档。我们不会将您的 PDF、图像、签名、密码或生成的文件上传到 PDF Chef 服务器进行处理。",
   "privacy-policy.the.android.and.ios.apps.do.not.5b978c": "Android 和 iOS 应用无需账号，且不展示第三方广告。当前的 Android 版本不包含任何分析或崩溃报告 SDK，iOS 隐私清单亦声明不进行跟踪且不收集任何数据。",
-  "privacy-policy.network.access.exists.only.for.google.play.5726b5": "网络访问仅用于 Android 上的 Google Play 应用内更新和 Google Play 服务扫描仪支持、网页端的正常网站分发，以及您选择在浏览器中打开的任何链接。iOS 上的核心处理不需要服务器。Apple 处理可选的 Pro 应用内购买付款和订阅记录；PDF Chef 不会收到支付凭据。",
+  "privacy-policy.network.access.exists.only.for.google.play.5726b5": "网络访问仅用于 Android 上的 Google Play 应用内更新和 Google Play 服务扫描仪支持、iOS 上的 App Store 更新检查、网页端的正常网站分发，以及您选择在浏览器中打开的任何链接。iOS 上的核心处理不需要服务器。Apple 处理可选的 Pro 应用内购买付款和订阅记录；PDF Chef 不会收到支付凭据。",
   "privacy-policy.1.who.we.are.78bb62": "1. 我们是谁",
   "privacy-policy.pdf.chef.is.provided.by.dhananjay.tech.cbfd48": "PDF Chef 由 Dhananjay Tech 提供。本隐私政策适用于 PDF Chef Android 应用、PDF Chef iOS 应用以及位于 pdfchef.dhananjaytech.app 的 PDF Chef 网站。",
   "privacy-policy.2.information.we.collect.1c9c7f": "2. 我们收集的信息",

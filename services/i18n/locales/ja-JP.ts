@@ -66,7 +66,7 @@ export default {
   "privacy-policy.summary.8e76a9": "概要",
   "privacy-policy.pdf.chef.processes.documents.locally.on.your.bab7de": "PDF Chefはドキュメントをお使いのデバイス上でローカルに処理します。処理のためにPDF、画像、署名、パスワード、または生成されたファイルをPDF Chefのサーバーにアップロードすることはありません。",
   "privacy-policy.the.android.and.ios.apps.do.not.5b978c": "AndroidおよびiOSアプリはアカウントを必要とせず、サードパーティの広告を表示しません。現在のAndroidビルドにはアナリティクスやクラッシュレポート用のSDKは含まれておらず、iOSのプライバシーマニフェストではトラッキングなし、収集データなしと宣言されています。",
-  "privacy-policy.network.access.exists.only.for.google.play.5726b5": "ネットワークアクセスは、AndroidでのGoogle Playアプリ内アップデートおよびGoogle Play開発者サービスのスキャナー機能のサポート、Web版における通常のWebサイト配信、およびブラウザで開くことを選択したリンクにのみ使用されます。iOSにおけるコア処理にサーバーは不要です。Appleは任意のProアプリ内課金の決済およびサブスクリプション記録を処理します。PDF Chefはお支払い認証情報を受け取りません。",
+  "privacy-policy.network.access.exists.only.for.google.play.5726b5": "ネットワークアクセスは、AndroidでのGoogle Playアプリ内アップデートおよびGoogle Play開発者サービスのスキャナー機能のサポート、iOSでのApp Storeのアップデート確認、Web版における通常のWebサイト配信、およびブラウザで開くことを選択したリンクにのみ使用されます。iOSにおけるコア処理にサーバーは不要です。Appleは任意のProアプリ内課金の決済およびサブスクリプション記録を処理します。PDF Chefはお支払い認証情報を受け取りません。",
   "privacy-policy.1.who.we.are.78bb62": "1. 提供者について",
   "privacy-policy.pdf.chef.is.provided.by.dhananjay.tech.cbfd48": "PDF ChefはDhananjay Techによって提供されています。本プライバシーポリシーは、PDF Chef Androidアプリ、PDF Chef iOSアプリ、およびpdfchef.dhananjaytech.appのPDF Chef Webサイトに適用されます。",
   "privacy-policy.2.information.we.collect.1c9c7f": "2. 収集する情報",

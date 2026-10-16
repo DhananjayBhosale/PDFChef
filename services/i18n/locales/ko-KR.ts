@@ -66,7 +66,7 @@ export default {
   "privacy-policy.summary.8e76a9": "요약",
   "privacy-policy.pdf.chef.processes.documents.locally.on.your.bab7de": "PDF Chef는 사용자의 기기에서 문서를 로컬로 처리합니다. 당사는 처리를 위해 사용자의 PDF, 이미지, 서명, 비밀번호 또는 생성된 파일을 PDF Chef 서버로 업로드하지 않습니다.",
   "privacy-policy.the.android.and.ios.apps.do.not.5b978c": "Android 및 iOS 앱은 계정을 요구하지 않으며 제3자 광고를 표시하지 않습니다. 현재 Android 빌드에는 분석 또는 오류 보고 SDK가 포함되어 있지 않으며, iOS 개인정보 처리 매니페스트에는 추적 없음 및 수집되는 데이터 없음으로 명시되어 있습니다.",
-  "privacy-policy.network.access.exists.only.for.google.play.5726b5": "네트워크 접근은 Android의 Google Play 인앱 업데이트 및 Google Play 서비스 스캐너 지원, 웹상의 일반적인 웹사이트 전송, 브라우저에서 열도록 선택한 링크에 대해서만 이루어집니다. iOS의 핵심 처리는 서버를 필요로 하지 않습니다. Apple이 선택적 Pro 인앱 구매 결제 및 구독 기록을 처리하며, PDF Chef는 결제 자격 증명을 수신하지 않습니다.",
+  "privacy-policy.network.access.exists.only.for.google.play.5726b5": "네트워크 접근은 Android의 Google Play 인앱 업데이트 및 Google Play 서비스 스캐너 지원, iOS의 App Store 업데이트 확인, 웹상의 일반적인 웹사이트 전송, 브라우저에서 열도록 선택한 링크에 대해서만 이루어집니다. iOS의 핵심 처리는 서버를 필요로 하지 않습니다. Apple이 선택적 Pro 인앱 구매 결제 및 구독 기록을 처리하며, PDF Chef는 결제 자격 증명을 수신하지 않습니다.",
   "privacy-policy.1.who.we.are.78bb62": "1. 당사 소개",
   "privacy-policy.pdf.chef.is.provided.by.dhananjay.tech.cbfd48": "PDF Chef는 Dhananjay Tech에서 제공합니다. 본 개인정보 처리방침은 PDF Chef Android 앱, PDF Chef iOS 앱 및 웹사이트(pdfchef.dhananjaytech.app)에 적용됩니다.",
   "privacy-policy.2.information.we.collect.1c9c7f": "2. 수집하는 정보",

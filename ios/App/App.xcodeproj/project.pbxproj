@@ -41,6 +41,8 @@
 		A60000000000000000000011 /* wide-gap-plain.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000012 /* wide-gap-plain.pdf */; };
 		A60000000000000000000013 /* indirect-comment-plain.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000014 /* indirect-comment-plain.pdf */; };
 		A60000000000000000000015 /* PdfChefVerifiedCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000016 /* PdfChefVerifiedCopy.swift */; };
+		A70000000000000000000001 /* PdfChefAppUpdate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70000000000000000000002 /* PdfChefAppUpdate.swift */; };
+		A70000000000000000000003 /* PdfChefAppUpdatePolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70000000000000000000004 /* PdfChefAppUpdatePolicyTests.swift */; };
 		A60000000000000000000017 /* layered-appearance-rc4.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000018 /* layered-appearance-rc4.pdf */; };
 		A60000000000000000000019 /* layered-mixed-offset-rc4.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000020 /* layered-mixed-offset-rc4.pdf */; };
 		A60000000000000000000021 /* layered-hex-status-rc4.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000022 /* layered-hex-status-rc4.pdf */; };
@@ -87,6 +89,8 @@
 		A60000000000000000000012 /* wide-gap-plain.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = wide-gap-plain.pdf; path = ../../../tests/fixtures/signatures/wide-gap-plain.pdf; sourceTree = "<group>"; };
 		A60000000000000000000014 /* indirect-comment-plain.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = indirect-comment-plain.pdf; path = ../../../tests/fixtures/signatures/indirect-comment-plain.pdf; sourceTree = "<group>"; };
 		A60000000000000000000016 /* PdfChefVerifiedCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefVerifiedCopy.swift; sourceTree = "<group>"; };
+		A70000000000000000000002 /* PdfChefAppUpdate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefAppUpdate.swift; sourceTree = "<group>"; };
+		A70000000000000000000004 /* PdfChefAppUpdatePolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefAppUpdatePolicyTests.swift; sourceTree = "<group>"; };
 		A60000000000000000000018 /* layered-appearance-rc4.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = layered-appearance-rc4.pdf; path = ../../../tests/fixtures/signatures/layered-appearance-rc4.pdf; sourceTree = "<group>"; };
 		A60000000000000000000020 /* layered-mixed-offset-rc4.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = layered-mixed-offset-rc4.pdf; path = ../../../tests/fixtures/signatures/layered-mixed-offset-rc4.pdf; sourceTree = "<group>"; };
 		A60000000000000000000022 /* layered-hex-status-rc4.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = layered-hex-status-rc4.pdf; path = ../../../tests/fixtures/signatures/layered-hex-status-rc4.pdf; sourceTree = "<group>"; };
@@ -153,6 +157,7 @@
 				A20000000000000000000005 /* PdfChefSignatureVerifier.swift */,
 				A20000000000000000000010 /* PdfChefSignatureReportViewController.swift */,
 				A60000000000000000000016 /* PdfChefVerifiedCopy.swift */,
+				A70000000000000000000002 /* PdfChefAppUpdate.swift */,
 				A40000000000000000000002 /* PdfChefReaderViewController.swift */,
 				A50000000000000000000002 /* PdfChefPdfBatcher.swift */,
 				A20000000000000000000007 /* OpenSSL-LICENSE.txt */,
@@ -181,6 +186,7 @@
 				A10000000000000000000005 /* PdfChefDocumentStoreTests.swift */,
 				A50000000000000000000004 /* PdfChefPdfBatcherTests.swift */,
 				A30000000000000000000009 /* PdfChefPurchasesPolicyTests.swift */,
+				A70000000000000000000004 /* PdfChefAppUpdatePolicyTests.swift */,
 				A20000000000000000000009 /* PdfChefSignatureVerifierTests.swift */,
 				A60000000000000000000004 /* detached-sha256-rc4.pdf */,
 				A60000000000000000000006 /* cades-sha256-plain.pdf */,
@@ -330,6 +336,7 @@
 				A10000000000000000000015 /* PdfChefDocumentStoreTests.swift in Sources */,
 				A50000000000000000000003 /* PdfChefPdfBatcherTests.swift in Sources */,
 				A30000000000000000000008 /* PdfChefPurchasesPolicyTests.swift in Sources */,
+				A70000000000000000000003 /* PdfChefAppUpdatePolicyTests.swift in Sources */,
 				A20000000000000000000008 /* PdfChefSignatureVerifierTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -343,6 +350,7 @@
 				A20000000000000000000004 /* PdfChefSignatureVerifier.swift in Sources */,
 				A20000000000000000000011 /* PdfChefSignatureReportViewController.swift in Sources */,
 				A60000000000000000000015 /* PdfChefVerifiedCopy.swift in Sources */,
+				A70000000000000000000001 /* PdfChefAppUpdate.swift in Sources */,
 				A40000000000000000000001 /* PdfChefReaderViewController.swift in Sources */,
 				A50000000000000000000001 /* PdfChefPdfBatcher.swift in Sources */,
 				A10000000000000000000012 /* PdfChefDocumentInbox.swift in Sources */,
