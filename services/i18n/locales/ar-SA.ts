@@ -1848,6 +1848,7 @@ export default {
   "make-pdf.that.scan.could.not.be.opened.it.7a1de2": "تعذر فتح هذا المسح الضوئي. لا يزال محفوظاً على هذا الجهاز.",
   "make-pdf.the.pdf.could.not.be.made.try.cd3740": "تعذر إنشاء ملف PDF. حاول مرة أخرى، أو أزل آخر صورة أضفتها.",
   "make-pdf.scan.ea1c51": "مسح ضوئي",
+  "make-pdf.scanned.pdf.370cd5": "ملف PDF ممسوح ضوئيًا",
   "merge-pdf.choose.one.or.more.pdf.files.69411e": "اختر ملف PDF واحداً أو أكثر.",
   "merge-pdf.add.at.least.two.pdfs.before.merging.6daff4": "أضف ملفي PDF على الأقل قبل الدمج.",
   "merge-pdf.merge.failed.b356f1": "فشل الدمج.",

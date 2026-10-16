@@ -1755,6 +1755,7 @@ export default {
   "make-pdf.that.scan.could.not.be.opened.it.7a1de2": "Não foi possível abrir essa digitalização. Ela ainda está mantida neste dispositivo.",
   "make-pdf.the.pdf.could.not.be.made.try.cd3740": "Não foi possível criar o PDF. Tente novamente ou remova a última foto adicionada.",
   "make-pdf.scan.ea1c51": "Digitalizar",
+  "make-pdf.scanned.pdf.370cd5": "PDF digitalizado",
   "merge-pdf.choose.one.or.more.pdf.files.69411e": "Escolha um ou mais arquivos PDF.",
   "merge-pdf.add.at.least.two.pdfs.before.merging.6daff4": "Adicione pelo menos dois PDFs antes de mesclar.",
   "merge-pdf.merge.failed.b356f1": "Falha ao mesclar.",

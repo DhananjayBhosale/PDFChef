@@ -1786,6 +1786,7 @@ export default {
   "make-pdf.that.scan.could.not.be.opened.it.7a1de2": "Nie udało się otworzyć tego skanu. Jest on nadal zachowany na tym urządzeniu.",
   "make-pdf.the.pdf.could.not.be.made.try.cd3740": "Nie udało się utworzyć pliku PDF. Spróbuj ponownie lub usuń ostatnio dodane zdjęcie.",
   "make-pdf.scan.ea1c51": "Skanuj",
+  "make-pdf.scanned.pdf.370cd5": "Zeskanowany PDF",
   "merge-pdf.choose.one.or.more.pdf.files.69411e": "Wybierz jeden lub więcej plików PDF.",
   "merge-pdf.add.at.least.two.pdfs.before.merging.6daff4": "Dodaj co najmniej dwa pliki PDF przed scaleniem.",
   "merge-pdf.merge.failed.b356f1": "Scalanie nie powiodło się.",

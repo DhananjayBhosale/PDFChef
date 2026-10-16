@@ -1755,6 +1755,7 @@ export default {
   "make-pdf.that.scan.could.not.be.opened.it.7a1de2": "Cette numérisation n'a pas pu être ouverte. Elle est toujours conservée sur cet appareil.",
   "make-pdf.the.pdf.could.not.be.made.try.cd3740": "Impossible de créer le PDF. Réessayez ou supprimez la dernière photo ajoutée.",
   "make-pdf.scan.ea1c51": "Numériser",
+  "make-pdf.scanned.pdf.370cd5": "PDF numérisé",
   "merge-pdf.choose.one.or.more.pdf.files.69411e": "Choisissez un ou plusieurs fichiers PDF.",
   "merge-pdf.add.at.least.two.pdfs.before.merging.6daff4": "Ajoutez au moins deux PDF avant de fusionner.",
   "merge-pdf.merge.failed.b356f1": "Échec de la fusion.",

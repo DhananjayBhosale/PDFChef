@@ -1768,6 +1768,7 @@ export default {
   "make-pdf.that.scan.could.not.be.opened.it.7a1de2": "Der Scan konnte nicht geöffnet werden. Er ist weiterhin auf diesem Gerät gespeichert.",
   "make-pdf.the.pdf.could.not.be.made.try.cd3740": "Das PDF konnte nicht erstellt werden. Versuchen Sie es erneut oder entfernen Sie das zuletzt hinzugefügte Foto.",
   "make-pdf.scan.ea1c51": "Scannen",
+  "make-pdf.scanned.pdf.370cd5": "Gescanntes PDF",
   "merge-pdf.choose.one.or.more.pdf.files.69411e": "Wählen Sie mindestens eine PDF-Datei aus.",
   "merge-pdf.add.at.least.two.pdfs.before.merging.6daff4": "Fügen Sie mindestens zwei PDFs hinzu, bevor Sie sie zusammenführen.",
   "merge-pdf.merge.failed.b356f1": "Zusammenführen fehlgeschlagen.",

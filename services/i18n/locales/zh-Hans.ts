@@ -1726,6 +1726,7 @@ export default {
   "make-pdf.that.scan.could.not.be.opened.it.7a1de2": "无法打开该扫描内容。它仍保留在此设备上。",
   "make-pdf.the.pdf.could.not.be.made.try.cd3740": "无法生成 PDF。请重试，或移除您添加的最后一张照片。",
   "make-pdf.scan.ea1c51": "扫描",
+  "make-pdf.scanned.pdf.370cd5": "扫描的 PDF",
   "merge-pdf.choose.one.or.more.pdf.files.69411e": "选择一个或多个 PDF 文件。",
   "merge-pdf.add.at.least.two.pdfs.before.merging.6daff4": "合并前请至少添加两个 PDF 文件。",
   "merge-pdf.merge.failed.b356f1": "合并失败。",

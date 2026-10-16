@@ -305,6 +305,13 @@ export const dismissOutputBanner = () => {
   window.dispatchEvent(new Event(OUTPUT_DISMISS_EVENT));
 };
 
+export const OUTPUT_RENAMED_EVENT = 'pdfchef:output-renamed';
+
+/** A tool renamed its own result, so the result sheet must share and save under the new name. */
+export const announceOutputRenamed = (id: string, filename: string) => {
+  window.dispatchEvent(new CustomEvent<{ id: string; filename: string }>(OUTPUT_RENAMED_EVENT, { detail: { id, filename } }));
+};
+
 export const announceOutput = (record: OutputRecord) => {
   window.dispatchEvent(new CustomEvent<OutputRecord>(OUTPUT_EVENT, { detail: record }));
 };

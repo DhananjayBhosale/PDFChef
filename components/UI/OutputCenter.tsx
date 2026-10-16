@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { CheckCircle2, Clock, Download, ExternalLink, MoreHorizontal, Pencil, Share2, Wrench, X } from 'lucide-react';
 import type { OutputReadyRecord } from '../../services/pdfShared';
-import { OUTPUT_DISMISS_EVENT, OUTPUT_EVENT, announceRecordsChanged, getWorkspaceSettings } from '../../services/workspace';
+import { OUTPUT_DISMISS_EVENT, OUTPUT_EVENT, OUTPUT_RENAMED_EVENT, announceOutputRenamed, announceRecordsChanged, getWorkspaceSettings } from '../../services/workspace';
 import { Button, Sheet, StatusLine, cx } from './Primitives';
 import { formatBytes, renameKeepingExtension, sanitizeFilenameStem, splitFilename } from './format';
 import {
@@ -96,6 +96,25 @@ export const OutputCenter: React.FC = () => {
     window.addEventListener(OUTPUT_DISMISS_EVENT, onDismiss);
     return () => window.removeEventListener(OUTPUT_DISMISS_EVENT, onDismiss);
   }, [dismiss]);
+
+  useEffect(() => {
+    const onRenamed = (event: Event) => {
+      const { id, filename } = (event as CustomEvent<{ id: string; filename: string }>).detail;
+      if (recordRef.current?.id !== id) return;
+      setRecord(current => current?.id !== id ? current : {
+        ...current,
+        filename,
+        recentRecord: current.recentRecord ? {
+          ...current.recentRecord,
+          entry: { ...current.recentRecord.entry, name: filename },
+          document: current.recentRecord.document ? { ...current.recentRecord.document, name: filename } : null,
+        } : current.recentRecord,
+      });
+      setName(filename);
+    };
+    window.addEventListener(OUTPUT_RENAMED_EVENT, onRenamed);
+    return () => window.removeEventListener(OUTPUT_RENAMED_EVENT, onRenamed);
+  }, []);
 
   // A failed save must remain retryable across navigation until dismissed.
   useEffect(() => {
@@ -336,6 +355,8 @@ export const OutputCenter: React.FC = () => {
                       document: recent.document ? { ...recent.document, name: nextName } : null,
                     },
                   } : current);
+                  // The tool that made this result may still show its name (Create PDF's scan card).
+                  announceOutputRenamed(record.id, nextName);
                 }
                 if (recordRef.current?.id !== record.id) return;
                 setName(nextName);

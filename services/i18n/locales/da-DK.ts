@@ -1724,6 +1724,7 @@ export default {
   "make-pdf.that.scan.could.not.be.opened.it.7a1de2": "Scanningen kunne ikke åbnes. Den er stadig gemt på denne enhed.",
   "make-pdf.the.pdf.could.not.be.made.try.cd3740": "PDF'en kunne ikke oprettes. Prøv igen, eller fjern det senest tilføjede foto.",
   "make-pdf.scan.ea1c51": "Scanning",
+  "make-pdf.scanned.pdf.370cd5": "Scannet PDF",
   "merge-pdf.choose.one.or.more.pdf.files.69411e": "Vælg en eller flere PDF-filer.",
   "merge-pdf.add.at.least.two.pdfs.before.merging.6daff4": "Tilføj mindst to PDF'er før fletning.",
   "merge-pdf.merge.failed.b356f1": "Fletning mislykkedes.",

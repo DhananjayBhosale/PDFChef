@@ -1726,6 +1726,7 @@ export default {
   "make-pdf.that.scan.could.not.be.opened.it.7a1de2": "スキャンデータを開けませんでした。端末には保存されたままです。",
   "make-pdf.the.pdf.could.not.be.made.try.cd3740": "PDFを作成できませんでした。もう一度試すか、最後に追加した写真を削除してください。",
   "make-pdf.scan.ea1c51": "スキャン",
+  "make-pdf.scanned.pdf.370cd5": "スキャンしたPDF",
   "merge-pdf.choose.one.or.more.pdf.files.69411e": "1つ以上のPDFファイルを選択してください。",
   "merge-pdf.add.at.least.two.pdfs.before.merging.6daff4": "結合する前に、PDFを2つ以上追加してください。",
   "merge-pdf.merge.failed.b356f1": "結合に失敗しました。",

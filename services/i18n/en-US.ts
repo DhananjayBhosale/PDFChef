@@ -1722,6 +1722,7 @@ export default {
   "make-pdf.that.scan.could.not.be.opened.it.7a1de2": "That scan could not be opened. It is still kept on this device.",
   "make-pdf.the.pdf.could.not.be.made.try.cd3740": "The PDF could not be made. Try again, or remove the last photo you added.",
   "make-pdf.scan.ea1c51": "Scan",
+  "make-pdf.scanned.pdf.370cd5": "Scanned PDF",
   "merge-pdf.choose.one.or.more.pdf.files.69411e": "Choose one or more PDF files.",
   "merge-pdf.add.at.least.two.pdfs.before.merging.6daff4": "Add at least two PDFs before merging.",
   "merge-pdf.merge.failed.b356f1": "Merge failed.",

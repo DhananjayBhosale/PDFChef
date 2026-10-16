@@ -1768,6 +1768,7 @@ export default {
   "make-pdf.that.scan.could.not.be.opened.it.7a1de2": "वह स्कैन खोला नहीं जा सका। यह अभी भी इस डिवाइस पर रखा गया है।",
   "make-pdf.the.pdf.could.not.be.made.try.cd3740": "PDF नहीं बनाई जा सकी। पुनः प्रयास करें, या अपनी जोड़ी गई आखिरी फ़ोटो हटाएं।",
   "make-pdf.scan.ea1c51": "स्कैन",
+  "make-pdf.scanned.pdf.370cd5": "स्कैन की गई PDF",
   "merge-pdf.choose.one.or.more.pdf.files.69411e": "एक या अधिक PDF फ़ाइलें चुनें।",
   "merge-pdf.add.at.least.two.pdfs.before.merging.6daff4": "मर्ज करने से पहले कम से कम दो PDF जोड़ें।",
   "merge-pdf.merge.failed.b356f1": "मर्ज विफल रहा।",

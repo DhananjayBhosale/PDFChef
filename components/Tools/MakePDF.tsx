@@ -1,5 +1,5 @@
 import english from '../../services/i18n/en-US.ts';
-import { t } from '../../services/i18n/core.ts';
+import { getLocale, t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -14,6 +14,7 @@ import {
   ExternalLink,
   FileImage,
   Loader2,
+  Pencil,
   RefreshCw,
   ScanLine,
   Trash2,
@@ -22,10 +23,10 @@ import { ProcessingStatus } from '../../types';
 import { createPDFFromImages } from '../../services/pdfDocument';
 import { preparePdfImageAsset } from '../../services/imageBrowser';
 import { downloadBlob, type OutputReadyRecord } from '../../services/pdfShared';
-import { announceOutput } from '../../services/workspace';
+import { OUTPUT_RENAMED_EVENT, announceOutput, announceOutputRenamed, announceRecordsChanged } from '../../services/workspace';
 import { StatusToast } from '../UI/StatusToast';
 import { ToolHeader, ToolShell } from '../UI/ToolLayout';
-import { Button, ConfirmSheet, StatusLine } from '../UI/Primitives';
+import { Button, ConfirmSheet, Sheet, StatusLine } from '../UI/Primitives';
 import {
   useHaptics,
   useWorkspacePlatform,
@@ -33,7 +34,7 @@ import {
 } from '../../hooks/useWorkspaceRuntime';
 import { useOpenedPdf } from '../../hooks/useOpenedPdf';
 import type { StoredDocument } from '../../services/domain/workspaceModels';
-import { formatBytes } from '../UI/format';
+import { datedFileStem, formatBytes, renameKeepingExtension, sanitizeFilenameStem, splitFilename } from '../UI/format';
 
 interface CapturedImage {
   id: string;
@@ -103,6 +104,10 @@ export const MakePDF: React.FC = () => {
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const freshPdfName = () => datedFileStem(t("make-pdf.scanned.pdf.370cd5"), new Date(), getLocale());
+  // Null until the person types, so the suggested name follows today's date and language.
+  const [typedPdfName, setTypedPdfName] = useState<string | null>(null);
+  const pdfName = typedPdfName ?? freshPdfName();
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const previewUrlsRef = useRef(new Set<string>());
@@ -120,6 +125,10 @@ export const MakePDF: React.FC = () => {
   const [scanNotice, setScanNotice] = useState<string | null>(null);
   const [scanned, setScanned] = useState<ScanOutcome | null>(null);
   const [openingScan, setOpeningScan] = useState(false);
+  const [scanRenameOpen, setScanRenameOpen] = useState(false);
+  const [scanRenameValue, setScanRenameValue] = useState('');
+  const [scanRenameBusy, setScanRenameBusy] = useState(false);
+  const [scanRenameError, setScanRenameError] = useState('');
 
   /**
    * One latch for Scan, Open and Scan again. State alone is a frame too slow:
@@ -155,17 +164,29 @@ export const MakePDF: React.FC = () => {
       // page returns exactly as it was, with nothing announced and nothing
       // saved or downloaded.
       if (result.status === 'cancelled') return;
-      setScanned({ document: result.document, pageCount: result.pageCount });
+      // The device scanner calls every scan "Scanned document.pdf"; give it the
+      // same dated name a photo PDF gets. If that fails the scan keeps its name.
+      let scan = result.document;
+      if (platform.rename && scan.name === 'Scanned document.pdf') {
+        const dated = `${freshPdfName()}.pdf`;
+        try {
+          await platform.rename(recordFor(scan), dated);
+          scan = { ...scan, name: dated };
+        } catch {
+          // Renaming is a courtesy; the scan itself is already safe.
+        }
+      }
+      setScanned({ document: scan, pageCount: result.pageCount });
       const output: OutputReadyRecord = {
-        id: `scan-${result.document.ref}`,
-        filename: result.document.name ?? 'scan.pdf',
-        mimeType: result.document.mimeType ?? 'application/pdf',
-        size: result.document.sizeBytes ?? 0,
+        id: `scan-${scan.ref}`,
+        filename: scan.name ?? 'scan.pdf',
+        mimeType: scan.mimeType ?? 'application/pdf',
+        size: scan.sizeBytes ?? 0,
         toolPath: '/make-pdf',
-        createdAt: result.document.retainedAt ?? Date.now(),
+        createdAt: scan.retainedAt ?? Date.now(),
         blob: null,
         historyRetained: true,
-        recentRecord: recordFor(result.document),
+        recentRecord: recordFor(scan),
       };
       announceOutput(output);
       haptic('commit');
@@ -206,6 +227,49 @@ export const MakePDF: React.FC = () => {
     } finally {
       setOpeningScan(false);
       operationRef.current = false;
+    }
+  };
+
+  // A rename from the result sheet must reach the card, or Open and Rename would use the old name.
+  useEffect(() => {
+    const onRenamed = (event: Event) => {
+      const { id, filename } = (event as CustomEvent<{ id: string; filename: string }>).detail;
+      setScanned((current) => current && `scan-${current.document.ref}` === id
+        ? { ...current, document: { ...current.document, name: filename } }
+        : current);
+    };
+    window.addEventListener(OUTPUT_RENAMED_EVENT, onRenamed);
+    return () => window.removeEventListener(OUTPUT_RENAMED_EVENT, onRenamed);
+  }, []);
+
+  const scannedName = scanned?.document.name ?? t("make-pdf.scan.ea1c51");
+
+  const startScanRename = () => {
+    setScanRenameValue(splitFilename(scannedName).stem);
+    setScanRenameError('');
+    setScanRenameOpen(true);
+  };
+
+  const saveScanName = async () => {
+    if (!scanned || !platform.rename) return;
+    const { document } = scanned;
+    const nextName = renameKeepingExtension(scanRenameValue, '.pdf', document.name ?? `${freshPdfName()}.pdf`);
+    setScanRenameBusy(true);
+    setScanRenameError('');
+    try {
+      await platform.rename(recordFor(document), nextName);
+      setScanned((current) => current?.document.ref === document.ref
+        ? { ...current, document: { ...current.document, name: nextName } }
+        : current);
+      announceOutputRenamed(`scan-${document.ref}`, nextName);
+      announceRecordsChanged();
+      setScanRenameOpen(false);
+      haptic('commit');
+    } catch {
+      setScanRenameError(t("output-center.that.file.could.not.be.saved.4d740f"));
+      haptic('error');
+    } finally {
+      setScanRenameBusy(false);
     }
   };
 
@@ -275,6 +339,7 @@ export const MakePDF: React.FC = () => {
     });
     setImages([]);
     setSelectionNotice(null);
+    setTypedPdfName(null);
   };
 
   const moveImage = (fromIndex: number, toIndex: number) => {
@@ -294,7 +359,8 @@ export const MakePDF: React.FC = () => {
     setStatus({ isProcessing: true, progress: 10, message: t("make-pdf.building.page.pdf.on.this.device.85fead", { count: images.length }) });
     try {
       const bytes = await createPDFFromImages(images.map((item) => item.file));
-      downloadBlob(new Blob([bytes], { type: 'application/pdf' }), `scanned-${Date.now()}.pdf`);
+      const fallback = `${freshPdfName()}.pdf`;
+      downloadBlob(new Blob([bytes], { type: 'application/pdf' }), renameKeepingExtension(pdfName, '.pdf', fallback));
       setStatus({ isProcessing: false, progress: 100, message: t("make-pdf.scanned.pdf.ready.with.page.02e105", { count: images.length }) });
     } catch (error) {
       console.error(error);
@@ -342,7 +408,7 @@ export const MakePDF: React.FC = () => {
                 <CheckCircle2 aria-hidden size={20} className="mt-0.5 shrink-0 text-[var(--status-success-text)]" />
                 <div className="min-w-0">
                   <p role="status" className="text-[1.0625rem] font-semibold text-[var(--text-primary)]">{t("make-pdf.message.93ad0d32b8", { count: scanned.pageCount })}</p>
-                  <p className="type-footnote chef-filename text-[var(--text-secondary)]">{t("make-pdf.message.d22425d581", { v0: scanned.document.name ?? t("make-pdf.scan.ea1c51"), v1: formatBytes(scanned.document.sizeBytes) })}</p>
+                  <p className="type-footnote chef-filename text-[var(--text-secondary)]">{t("make-pdf.message.d22425d581", { v0: scannedName, v1: formatBytes(scanned.document.sizeBytes) })}</p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -354,6 +420,15 @@ export const MakePDF: React.FC = () => {
                   onClick={() => void openScan()}
                   className="min-h-12 flex-1 basis-[11rem]"
                 >{t("make-pdf.open.scanned.pdf.213753")}</Button>
+                {platform.rename && (
+                  <Button
+                    tone="secondary"
+                    disabled={scanning || openingScan || status.isProcessing}
+                    icon={<Pencil aria-hidden size={16} />}
+                    onClick={startScanRename}
+                    className="min-h-12 flex-1 basis-[9rem]"
+                  >{t("output-center.rename.3064d7")}</Button>
+                )}
                 <Button
                   tone="secondary"
                   busy={scanning}
@@ -435,7 +510,20 @@ export const MakePDF: React.FC = () => {
           page in the list behind itself; in flow it is anchored to the control
           that produced the pages and cannot cover anything. */}
       {images.length > 0 && (
-        <div className="mb-3">
+        <div className="mb-3 space-y-2">
+          <div>
+            <label htmlFor="make-pdf-name" className="type-footnote block font-semibold text-[var(--text-secondary)]">{t("output-center.file.name.3efed3")}</label>
+            <input
+              id="make-pdf-name"
+              className="chef-field mt-1 sm:max-w-md"
+              value={pdfName}
+              maxLength={200}
+              autoComplete="off"
+              spellCheck={false}
+              disabled={status.isProcessing}
+              onChange={(event) => setTypedPdfName(sanitizeFilenameStem(event.target.value))}
+            />
+          </div>
           <button
             type="button"
             onClick={() => void handleBuildPdf()}
@@ -512,6 +600,39 @@ export const MakePDF: React.FC = () => {
           setConfirmClear(false);
         }}
       />
+
+      <Sheet
+        open={scanRenameOpen}
+        onClose={() => setScanRenameOpen(false)}
+        title={t("output-center.rename.3064d7")}
+        dismissible={!scanRenameBusy}
+        footer={
+          <>
+            <Button tone="secondary" disabled={scanRenameBusy} onClick={() => setScanRenameOpen(false)}>{t("output-center.cancel.19766e")}</Button>
+            <Button
+              tone="primary"
+              busy={scanRenameBusy}
+              disabled={scanRenameBusy || !scanRenameValue.trim()}
+              onClick={() => void saveScanName()}
+            >{t("output-center.save.name.b72972")}</Button>
+          </>
+        }
+      >
+        <label htmlFor="make-pdf-scan-name" className="type-footnote block font-semibold text-[var(--text-secondary)]">{t("output-center.file.name.3efed3")}</label>
+        <input
+          id="make-pdf-scan-name"
+          className="chef-field mt-1"
+          value={scanRenameValue}
+          maxLength={200}
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(event) => {
+            setScanRenameValue(sanitizeFilenameStem(event.target.value));
+            setScanRenameError('');
+          }}
+        />
+        {scanRenameError && <div className="mt-2"><StatusLine tone="danger">{scanRenameError}</StatusLine></div>}
+      </Sheet>
 
       <StatusToast status={status} />
     </ToolShell>

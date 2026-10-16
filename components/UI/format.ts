@@ -74,6 +74,13 @@ export const renameKeepingExtension = (typed: string, extension: string, current
   return stem ? `${stem}${extension}` : currentName;
 };
 
+/** "Scanned PDF 14 October": says what it is and the day it was made, in the app's language. */
+export const datedFileStem = (word: string, date: Date, locale: string): string => {
+  // English reads "14 October" rather than the US "October 14".
+  const dayMonth = new Intl.DateTimeFormat(locale.startsWith('en') ? 'en-GB' : locale, { day: 'numeric', month: 'long' });
+  return `${word} ${dayMonth.format(date)}`;
+};
+
 // Android's photo picker hides real names, so the WebView names a photo by its media id
 // ("66.png"). A bare number is no name at all.
 export const imagePdfOutputName = (filename: string): string => {

@@ -1724,6 +1724,7 @@ export default {
   "make-pdf.that.scan.could.not.be.opened.it.7a1de2": "Den skanningen kunde inte öppnas. Den finns fortfarande kvar på den här enheten.",
   "make-pdf.the.pdf.could.not.be.made.try.cd3740": "PDF-filen kunde inte skapas. Försök igen eller ta bort det senaste fotot du lade till.",
   "make-pdf.scan.ea1c51": "Skanning",
+  "make-pdf.scanned.pdf.370cd5": "Skannad PDF",
   "merge-pdf.choose.one.or.more.pdf.files.69411e": "Välj en eller flera PDF-filer.",
   "merge-pdf.add.at.least.two.pdfs.before.merging.6daff4": "Lägg till minst två PDF-filer innan du slår samman.",
   "merge-pdf.merge.failed.b356f1": "Sammanslagning misslyckades.",

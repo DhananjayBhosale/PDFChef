@@ -1693,6 +1693,7 @@ export default {
   "make-pdf.that.scan.could.not.be.opened.it.7a1de2": "Hasil pemindaian tersebut tidak dapat dibuka. File ini masih tersimpan di perangkat ini.",
   "make-pdf.the.pdf.could.not.be.made.try.cd3740": "PDF tidak dapat dibuat. Coba lagi, atau hapus foto terakhir yang Anda tambahkan.",
   "make-pdf.scan.ea1c51": "Pindai",
+  "make-pdf.scanned.pdf.370cd5": "PDF hasil pindai",
   "merge-pdf.choose.one.or.more.pdf.files.69411e": "Pilih satu atau beberapa file PDF.",
   "merge-pdf.add.at.least.two.pdfs.before.merging.6daff4": "Tambahkan setidaknya dua PDF sebelum menggabungkan.",
   "merge-pdf.merge.failed.b356f1": "Penggabungan gagal.",

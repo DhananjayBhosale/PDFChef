@@ -1693,6 +1693,7 @@ export default {
   "make-pdf.that.scan.could.not.be.opened.it.7a1de2": "無法開啟該掃描檔。該檔案仍保留在此裝置上。",
   "make-pdf.the.pdf.could.not.be.made.try.cd3740": "無法製作 PDF。請重試，或移除最後新增的相片。",
   "make-pdf.scan.ea1c51": "掃描",
+  "make-pdf.scanned.pdf.370cd5": "掃描的 PDF",
   "merge-pdf.choose.one.or.more.pdf.files.69411e": "選擇一或多個 PDF 檔案。",
   "merge-pdf.add.at.least.two.pdfs.before.merging.6daff4": "合併前請至少新增兩個 PDF。",
   "merge-pdf.merge.failed.b356f1": "合併失敗。",

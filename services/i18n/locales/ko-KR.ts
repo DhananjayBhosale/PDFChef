@@ -1693,6 +1693,7 @@ export default {
   "make-pdf.that.scan.could.not.be.opened.it.7a1de2": "해당 스캔본을 열 수 없습니다. 이 기기에는 여전히 보관되어 있습니다.",
   "make-pdf.the.pdf.could.not.be.made.try.cd3740": "PDF를 만들 수 없습니다. 다시 시도하거나 마지막으로 추가한 사진을 제거하세요.",
   "make-pdf.scan.ea1c51": "스캔",
+  "make-pdf.scanned.pdf.370cd5": "스캔한 PDF",
   "merge-pdf.choose.one.or.more.pdf.files.69411e": "하나 이상의 PDF 파일을 선택하세요.",
   "merge-pdf.add.at.least.two.pdfs.before.merging.6daff4": "병합하기 전에 PDF를 2개 이상 추가하세요.",
   "merge-pdf.merge.failed.b356f1": "병합에 실패했습니다.",

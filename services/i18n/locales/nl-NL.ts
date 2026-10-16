@@ -1724,6 +1724,7 @@ export default {
   "make-pdf.that.scan.could.not.be.opened.it.7a1de2": "Die scan kon niet worden geopend. Deze staat nog steeds op dit apparaat.",
   "make-pdf.the.pdf.could.not.be.made.try.cd3740": "De PDF kon niet worden gemaakt. Probeer het opnieuw of verwijder de laatst toegevoegde foto.",
   "make-pdf.scan.ea1c51": "Scannen",
+  "make-pdf.scanned.pdf.370cd5": "Gescande pdf",
   "merge-pdf.choose.one.or.more.pdf.files.69411e": "Kies een of meer PDF-bestanden.",
   "merge-pdf.add.at.least.two.pdfs.before.merging.6daff4": "Voeg minimaal twee PDF's toe voordat je samenvoegt.",
   "merge-pdf.merge.failed.b356f1": "Samenvoegen mislukt.",

@@ -1755,6 +1755,7 @@ export default {
   "make-pdf.that.scan.could.not.be.opened.it.7a1de2": "Ese escaneo no se pudo abrir. Aún se conserva en este dispositivo.",
   "make-pdf.the.pdf.could.not.be.made.try.cd3740": "No se pudo crear el PDF. Intenta de nuevo o elimina la última foto que agregaste.",
   "make-pdf.scan.ea1c51": "Escanear",
+  "make-pdf.scanned.pdf.370cd5": "PDF escaneado",
   "merge-pdf.choose.one.or.more.pdf.files.69411e": "Elige uno o más archivos PDF.",
   "merge-pdf.add.at.least.two.pdfs.before.merging.6daff4": "Agrega al menos dos PDF antes de combinarlos.",
   "merge-pdf.merge.failed.b356f1": "Error al combinar.",

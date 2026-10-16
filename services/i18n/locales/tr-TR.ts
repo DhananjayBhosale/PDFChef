@@ -1724,6 +1724,7 @@ export default {
   "make-pdf.that.scan.could.not.be.opened.it.7a1de2": "Bu tarama açılamadı. Hâlâ bu cihazda saklanıyor.",
   "make-pdf.the.pdf.could.not.be.made.try.cd3740": "PDF oluşturulamadı. Tekrar deneyin veya eklediğiniz son fotoğrafı kaldırın.",
   "make-pdf.scan.ea1c51": "Tara",
+  "make-pdf.scanned.pdf.370cd5": "Taranmış PDF",
   "merge-pdf.choose.one.or.more.pdf.files.69411e": "Bir veya daha fazla PDF dosyası seçin.",
   "merge-pdf.add.at.least.two.pdfs.before.merging.6daff4": "Birleştirmeden önce en az iki PDF ekleyin.",
   "merge-pdf.merge.failed.b356f1": "Birleştirme başarısız oldu.",
