@@ -295,6 +295,11 @@ html[data-text-scale='larger'] .chef-chrome {
 /* The bar grows with the readable-text size, so the inset does too.
    `--size-tab-bar-readable` is the bar's measured height; both this inset and
    every floating surface read it, so they cannot disagree at large text. */
+/* Hidden while the keyboard is up, so it never covers the field being typed in. */
+:root[data-chef-keyboard] .chef-tab-bar {
+  display: none;
+}
+
 .chef-tab-inset {
   padding-bottom: calc(
     var(--size-tab-bar-readable) + env(safe-area-inset-bottom, 0px) + var(--space-4) +

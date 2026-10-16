@@ -81,14 +81,30 @@ const useVisualViewportInsets = () => {
     let frame = 0;
     let currentInset = -1;
     let currentOffsetTop = -1;
+    let currentTyping = false;
+    // Android resizes the window for the keyboard instead of covering it, so nothing
+    // measures as covered there; a window that shrank while typing is the sign instead.
+    let restingHeight = window.innerHeight;
+    let restingWidth = window.innerWidth;
 
     const update = () => {
       frame = 0;
       const layoutHeight = Math.max(document.documentElement.clientHeight, window.innerHeight);
       const coveredHeight = Math.max(0, layoutHeight - viewport.height - viewport.offsetTop);
       const unzoomed = Math.abs(viewport.scale - 1) <= 0.05;
-      const keyboardVisible = isKeyboardEditable(document.activeElement) && unzoomed && coveredHeight >= 80;
+      const editing = isKeyboardEditable(document.activeElement);
+      const keyboardVisible = editing && unzoomed && coveredHeight >= 80;
       const nextInset = keyboardVisible ? Math.round(coveredHeight) : 0;
+      if (!editing || window.innerWidth !== restingWidth) {
+        restingHeight = window.innerHeight;
+        restingWidth = window.innerWidth;
+      }
+      // The tab bar would sit on the keyboard, over the field being typed in.
+      const typing = keyboardVisible || (editing && restingHeight - window.innerHeight >= 120);
+      if (typing !== currentTyping) {
+        currentTyping = typing;
+        document.documentElement.toggleAttribute('data-chef-keyboard', typing);
+      }
       // While the reader is pinch-zoomed the offset is theirs to pan, so leave the chrome alone
       // and only follow the viewport when the page is at its natural scale.
       const nextOffsetTop = unzoomed ? Math.max(0, Math.round(viewport.offsetTop)) : 0;
@@ -123,6 +139,7 @@ const useVisualViewportInsets = () => {
       document.removeEventListener('focusout', scheduleUpdate);
       if (previousInset) rootStyle.setProperty('--chef-keyboard-inset', previousInset);
       else rootStyle.removeProperty('--chef-keyboard-inset');
+      document.documentElement.removeAttribute('data-chef-keyboard');
       if (previousOffsetTop) rootStyle.setProperty('--chef-viewport-offset-top', previousOffsetTop);
       else rootStyle.removeProperty('--chef-viewport-offset-top');
     };
@@ -139,7 +156,7 @@ const TabBar: React.FC = () => {
   return (
     <nav
       aria-label={t("app-shell.primary.efe10c")}
-      className="chef-chrome chef-safe-bottom chef-safe-x fixed inset-x-0 bottom-0 z-40 border-t md:hidden"
+      className="chef-chrome chef-tab-bar chef-safe-bottom chef-safe-x fixed inset-x-0 bottom-0 z-40 border-t md:hidden"
     >
       <ul className="mx-auto flex max-w-xl">
         {TABS.map(({ to, label, icon: Icon, match }) => {

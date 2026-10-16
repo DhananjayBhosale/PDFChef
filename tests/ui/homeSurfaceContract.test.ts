@@ -229,3 +229,12 @@ test('the brand mark yields room to the product name as the reader text grows', 
   // The chevron column is thirty-four glyphs deep. Android draws it at 0.72.
   assert.match(dashboard, /ChevronRight aria-hidden size=\{22\} className="rtl:rotate-180 shrink-0 text-\[var\(--text-tertiary\)\] opacity-70"/);
 });
+
+test('the tab bar hides while the keyboard is up, including Android windows that resize for it', () => {
+  const shell = read('components/Layout/AppShell.tsx');
+  const css = read('index.css');
+  assert.match(shell, /restingHeight - window\.innerHeight >= 120/);
+  assert.match(shell, /toggleAttribute\('data-chef-keyboard', typing\)/);
+  assert.match(shell, /className="chef-chrome chef-tab-bar /);
+  assert.match(css, /:root\[data-chef-keyboard\] \.chef-tab-bar \{\s*display: none;/);
+});
