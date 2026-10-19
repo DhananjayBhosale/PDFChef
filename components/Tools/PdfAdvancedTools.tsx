@@ -19,6 +19,7 @@ import { extractEmbeddedImagesFromPDF, loadPDFDocument, type EmbeddedPdfImageAss
 import { downloadBlob } from '../../services/pdfShared';
 import { formatBytes, toolOutputName } from '../UI/format';
 import { useMonetization, type JobAccessGrant } from '../../hooks/useMonetization';
+import { useReleasePdfDocument } from '../../hooks/useReleasePdfDocument';
 
 interface ToolShellProps {
   title: string;
@@ -520,6 +521,7 @@ export const RemoveBlankPagesPDF: React.FC = () => {
 export const ExtractImagesPDF: React.FC = () => {
   useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
+  useReleasePdfDocument(file?.file);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const [images, setImages] = useState<EmbeddedPdfImageAsset[]>([]);
   const imageOperationIdRef = useRef<string | null>(null);

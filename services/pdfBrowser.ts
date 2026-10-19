@@ -3,7 +3,7 @@ import { t } from './i18n/core.ts';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import pdfWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 import { PDFDocument, PDFName, PDFNumber, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
-import { canvasToBlob, getSafeBuffer, readFileAsArrayBuffer } from './pdfShared';
+import { canvasToBlob, readFileAsArrayBuffer } from './pdfShared';
 import {
   getAdaptiveConfig,
   projectCompressedSize,
@@ -45,23 +45,20 @@ const pdfjsResourceOptions = {
   cMapUrl: `${PDFJS_ASSET_BASE}/cmaps/`,
   cMapPacked: true,
   standardFontDataUrl: `${PDFJS_ASSET_BASE}/standard_fonts/`,
+  // An embedded image above 16 megapixels is decoded at a reduced size instead of in full. A
+  // 300 dpi A4 scan is under 9 megapixels, so ordinary scans are untouched; only outsized photos
+  // stop costing hundreds of megabytes of pixels on a phone.
+  canvasMaxAreaInBytes: 64 * 1024 * 1024,
 };
 
-const fileBufferCache = new WeakMap<File, Promise<ArrayBuffer>>();
 const pdfDocumentCache = new WeakMap<File, Promise<any>>();
 
-const getFileBuffer = (file: File) => {
-  const cached = fileBufferCache.get(file);
-  if (cached) return cached;
-
-  const next = readFileAsArrayBuffer(file).catch((error) => {
-    fileBufferCache.delete(file);
-    throw error;
-  });
-
-  fileBufferCache.set(file, next);
-  return next;
-};
+/**
+ * PDF.js moves these bytes into its worker, so each open reads the file afresh and hands over
+ * the only copy. Keeping a cached buffer to protect would have meant a second full copy of the
+ * file in memory for as long as it stayed open.
+ */
+const readPdfBytes = async (file: File) => new Uint8Array(await readFileAsArrayBuffer(file));
 
 const nextFrame = () => new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
 
@@ -101,12 +98,17 @@ const renderPageToBlob = async (
     signal?.removeEventListener('abort', cancel);
     canvas.width = 0;
     canvas.height = 0;
+    // The decoded images PDF.js kept for this page are not needed once the pixels are in the blob.
+    try {
+      page.cleanup();
+    } catch {
+      // A page with nothing cached is already where this wants it.
+    }
   }
 };
 
 const loadOwnedPDFDocument = async (file: File, onDestroy?: () => void): Promise<any> => {
-  const arrayBuffer = await getFileBuffer(file);
-  const loadingTask = pdfjs.getDocument({ data: getSafeBuffer(arrayBuffer), ...pdfjsResourceOptions });
+  const loadingTask = pdfjs.getDocument({ data: await readPdfBytes(file), ...pdfjsResourceOptions });
   try {
     const doc = await loadingTask.promise;
     let destroyed = false;
@@ -138,7 +140,12 @@ const loadOwnedPDFDocument = async (file: File, onDestroy?: () => void): Promise
  */
 export const loadDisposablePDFDocument = (file: File) => loadOwnedPDFDocument(file);
 
+// Counts every request for a file's shared document, so a release can tell whether another
+// screen asked for it after the release began.
+const pdfDocumentRequests = new WeakMap<File, number>();
+
 export const loadPDFDocument = async (file: File) => {
+  pdfDocumentRequests.set(file, (pdfDocumentRequests.get(file) ?? 0) + 1);
   const cached = pdfDocumentCache.get(file);
   if (cached) return cached;
 
@@ -152,6 +159,23 @@ export const loadPDFDocument = async (file: File) => {
 
   pdfDocumentCache.set(file, next);
   return next;
+};
+
+/**
+ * Closes the shared document for a file once nothing on screen needs it.
+ *
+ * Every open document keeps a worker and a full copy of the file until it is destroyed, so a
+ * batch that opens one file after another has to let each one go as it finishes.
+ */
+export const releasePDFDocument = async (file: File) => {
+  const cached = pdfDocumentCache.get(file);
+  if (!cached) return;
+  const requests = pdfDocumentRequests.get(file);
+  const doc = await cached.catch(() => null);
+  // The same opened file moves between tools: when the next screen has already picked the
+  // document up, it is still in use and that screen's own release will close it.
+  if (pdfDocumentRequests.get(file) !== requests || pdfDocumentCache.get(file) !== cached) return;
+  if (doc?.destroy) await doc.destroy();
 };
 
 const editablePdfDocumentCache = new WeakMap<File, Promise<any>>();
@@ -169,9 +193,8 @@ export const loadEditablePDFDocument = async (file: File) => {
   if (cached) return cached;
 
   const next = (async () => {
-    const arrayBuffer = await getFileBuffer(file);
     const loadingTask = pdfjs.getDocument({
-      data: getSafeBuffer(arrayBuffer),
+      data: await readPdfBytes(file),
       ...pdfjsResourceOptions,
       fontExtraProperties: true,
       // Local system fonts would render without ever registering a FontFace, leaving the overlay
@@ -206,9 +229,8 @@ export const loadProtectedPDFDocument = async (file: File, password: string): Pr
     throw new LocalizedError("pdf-browser.password.is.required.7aeae1");
   }
 
-  const arrayBuffer = await getFileBuffer(file);
   const loadingTask = pdfjs.getDocument({
-    data: getSafeBuffer(arrayBuffer),
+    data: await readPdfBytes(file),
     ...pdfjsResourceOptions,
     password: exactPassword,
   });

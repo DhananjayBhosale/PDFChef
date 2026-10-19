@@ -6,6 +6,7 @@ import { FileUpload } from '../UI/FileUpload';
 import { ProcessingStatus } from '../../types';
 import { createPDFFromLayout, type PDFPageLayout } from '../../services/pdfDocument';
 import { getContainedImageSize, preparePdfImageAsset, rotatePreparedPdfImageAsset } from '../../services/imageBrowser';
+import { mapWithConcurrency } from '../../services/mapWithConcurrency';
 import { downloadBlob, revokeObjectUrls } from '../../services/pdfShared';
 import { AlertTriangle, X, ArrowDown, Loader2, FileImage, Plus, Trash2, Move, RotateCw, Undo2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -26,24 +27,6 @@ import { datedOutputName } from '../UI/format';
 const IMAGE_TO_PDF_TOOL = tools.find((tool) => tool.path === '/image-to-pdf');
 const MAX_IMAGE_TO_PDF_FILES = 100;
 const IMAGE_PREPARE_CONCURRENCY = 2;
-
-const mapWithConcurrency = async <Input, Output>(
-  items: Input[],
-  concurrency: number,
-  mapper: (item: Input, index: number) => Promise<Output>,
-): Promise<Output[]> => {
-  const results = new Array<Output>(items.length);
-  let cursor = 0;
-  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    while (cursor < items.length) {
-      const index = cursor;
-      cursor += 1;
-      results[index] = await mapper(items[index], index);
-    }
-  });
-  await Promise.all(workers);
-  return results;
-};
 
 
 // Data Model

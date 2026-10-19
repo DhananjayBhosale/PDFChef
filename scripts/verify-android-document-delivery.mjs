@@ -105,6 +105,20 @@ requireText(providerTags.length === 1
 requireText(provider.includes('if (!"r".equals(mode))')
   && count(provider, /throw new SecurityException\("Read-only document provider"\)/g) === 4,
   'FileProvider must reject every write and mutation path');
+// The one write exception: the device camera writes a single file directly inside the
+// capture root. Everything else (other roots, nested paths, insert/update/delete) stays refused.
+const compactProvider = provider.replace(/\s+/g, ' ');
+requireText(compactProvider.includes('static final String CAPTURE_ROOT = "pdfchef_captures";')
+  && compactProvider.includes('if (!"r".equals(mode)) { if (!isCapturePath(uri == null ? null : uri.getPathSegments())) { throw new SecurityException("Read-only document provider"); } } return super.openFile(uri, mode);')
+  && count(provider, /isCapturePath\(/g) === 2
+  && compactProvider.includes('static boolean isCapturePath(List<String> segments) { if (segments == null || segments.size() != 2 || !CAPTURE_ROOT.equals(segments.get(0))) { return false; } String name = segments.get(1); return !name.isEmpty() && !".".equals(name) && !"..".equals(name); }'),
+  'the only FileProvider write exception must be one file directly inside pdfchef_captures');
+for (const method of ['insert(Uri uri, ContentValues values)',
+  'update(Uri uri, ContentValues values, String selection, String[] selectionArgs)',
+  'delete(Uri uri, String selection, String[] selectionArgs)']) {
+  requireText(compactProvider.includes(`${method} { throw new SecurityException("Read-only document provider"); }`),
+    `FileProvider ${method.split('(')[0]} must only throw`);
+}
 
 requireText(exporter.includes('MediaStore.Downloads.IS_PENDING, 1'),
   'MediaStore allocation must be pending');
@@ -182,14 +196,16 @@ requireText(writer.includes('validateOwnedTarget') && writer.includes('sameIdent
   && writer.includes('validateMagic(expected.mimeType, actual.prefix)'),
   'owned recovery must revalidate identity, size, hash, and MIME magic');
 
-const xml = read('android/app/src/main/res/xml/file_paths.xml').replace(/\s+/g, ' ').trim();
-const expectedXml = `<?xml version="1.0" encoding="utf-8"?> <paths xmlns:android="http://schemas.android.com/apk/res/android"> <cache-path name="pdfchef_verified_copies" path="pdfchef_verified_copies/" /> <files-path name="pdfchef_share_staging" path="pdfchef_documents/share/" /> </paths>`;
-requireText(xml === expectedXml, 'file_paths.xml must expose exactly pdfchef_documents/share/ and the reader\'s verified copies');
+const xml = read('android/app/src/main/res/xml/file_paths.xml').replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ').trim();
+const expectedXml = `<?xml version="1.0" encoding="utf-8"?> <paths xmlns:android="http://schemas.android.com/apk/res/android"> <cache-path name="pdfchef_verified_copies" path="pdfchef_verified_copies/" /> <files-path name="pdfchef_share_staging" path="pdfchef_documents/share/" /> <external-files-path name="pdfchef_captures" path="Pictures/" /> </paths>`;
+requireText(xml === expectedXml, 'file_paths.xml must expose exactly pdfchef_documents/share/, the reader\'s verified copies and the camera capture folder');
 for (const forbidden of ['cache-path', 'external-path', 'external-files-path',
   'external-cache-path', 'external-media-path', 'root-path', 'path="."', 'processed',
   'datastore', 'webview', 'pending']) {
   // The reader's verified-copy folder is the one cache path allowed (see PdfVerifiedCopy).
-  const rest = xml.replace('<cache-path name="pdfchef_verified_copies" path="pdfchef_verified_copies/" />', '');
+  // The camera capture folder is the one external-files path allowed (see ReadOnlyDocumentFileProvider).
+  const rest = xml.replace('<cache-path name="pdfchef_verified_copies" path="pdfchef_verified_copies/" />', '')
+    .replace('<external-files-path name="pdfchef_captures" path="Pictures/" />', '');
   requireText(!rest.toLowerCase().includes(forbidden), `broad provider path forbidden: ${forbidden}`);
 }
 

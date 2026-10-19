@@ -26,6 +26,7 @@ import { useFileDrop } from '../../hooks/useFileDrop';
 import { useConfirmDiscard } from '../../hooks/useConfirmDiscard';
 import { loadPDFDocument } from '../../services/pdfBrowser';
 import { applySignaturesToPDF } from '../../services/pdfDocument';
+import { getPdfRenderScale } from '../../services/pdfPageGeometry';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
 import { SegmentedControl } from '../UI/Primitives';
 import { StatusToast } from '../UI/StatusToast';
@@ -325,8 +326,9 @@ const PDFPageCanvas: React.FC<{
     const render = async () => {
       if (!visible || rendered || !canvasRef.current || !pdfDoc) return;
       const page = await pdfDoc.getPage(pageIndex + 1);
-      const viewport = page.getViewport({ scale: 2 });
-      setDimensions({ width: viewport.width / 2, height: viewport.height / 2 });
+      const scale = getPdfRenderScale(page);
+      const viewport = page.getViewport({ scale });
+      setDimensions({ width: viewport.width / scale, height: viewport.height / scale });
 
       const canvas = canvasRef.current;
       const context = canvas.getContext('2d');
@@ -336,7 +338,16 @@ const PDFPageCanvas: React.FC<{
       canvas.height = viewport.height;
       context.fillStyle = '#ffffff';
       context.fillRect(0, 0, canvas.width, canvas.height);
-      await page.render({ canvasContext: context, viewport }).promise;
+      try {
+        await page.render({ canvasContext: context, viewport }).promise;
+      } finally {
+        // The canvas holds the drawn page; the decoded images PDF.js kept to draw it can go.
+        try {
+          page.cleanup();
+        } catch {
+          // A page with nothing cached is already where this wants it.
+        }
+      }
       setRendered(true);
     };
     void render();

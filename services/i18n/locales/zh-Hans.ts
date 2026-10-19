@@ -30,6 +30,7 @@ export default {
   "format.justNow": "刚刚",
   "android-incoming-pdf-handler.the.incoming.pdf.could.not.be.opened.9b5b95": "无法打开传入的 PDF。您可以从“最近”中重试。",
   "android-incoming-pdf-handler.dismiss.48845b": "忽略",
+  "renderer-recovery-notice.pdf.chef.reopened.this.screen.after.4c665a": "PDF Chef 在出现问题后重新打开了此屏幕。未保存的内容已丢失。",
   "app-shell.tools.ea93d6": "工具",
   "app-shell.recent.690dbe": "最近",
   "app-shell.settings.74a883": "设置",

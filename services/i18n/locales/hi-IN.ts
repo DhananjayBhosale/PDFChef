@@ -30,6 +30,7 @@ export default {
   "format.justNow": "अभी-अभी",
   "android-incoming-pdf-handler.the.incoming.pdf.could.not.be.opened.9b5b95": "प्राप्त PDF खोली नहीं जा सकी। आप 'हाल ही के' से फिर कोशिश कर सकते हैं।",
   "android-incoming-pdf-handler.dismiss.48845b": "खारिज करें",
+  "renderer-recovery-notice.pdf.chef.reopened.this.screen.after.4c665a": "एक समस्या के बाद PDF Chef ने यह स्क्रीन फिर से खोली। बिना सहेजा काम खो गया।",
   "app-shell.tools.ea93d6": "टूल्स",
   "app-shell.recent.690dbe": "हाल ही के",
   "app-shell.settings.74a883": "सेटिंग्स",

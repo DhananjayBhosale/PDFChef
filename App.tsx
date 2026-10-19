@@ -6,6 +6,7 @@ import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useLocati
 import { AppShell } from './components/Layout/AppShell';
 import { NativeBackHandler } from './components/Layout/NativeBackHandler';
 import { AndroidIncomingPdfHandler } from './components/Layout/AndroidIncomingPdfHandler';
+import { RendererRecoveryNotice } from './components/Layout/RendererRecoveryNotice';
 import { IosIncomingPdfHandler } from './components/Layout/IosIncomingPdfHandler';
 import { Dashboard } from './components/Tools/Dashboard';
 import { RouteSEO } from './components/SEO/RouteSEO';
@@ -192,6 +193,7 @@ const AppContent = () => {
         <>
           <NativeBackHandler />
           <AndroidIncomingPdfHandler />
+          <RendererRecoveryNotice />
           <IosIncomingPdfHandler />
           <a
             href="#main"

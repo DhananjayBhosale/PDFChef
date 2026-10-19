@@ -18,6 +18,7 @@ import { FileUpload } from '../UI/FileUpload';
 import { ZoomControls } from '../UI/ZoomControls';
 import { StatusToast } from '../UI/StatusToast';
 import { loadDisposablePDFDocument, loadProtectedPDFDocument } from '../../services/pdfBrowser';
+import { getPdfRenderScale } from '../../services/pdfPageGeometry';
 import { downloadBlob } from '../../services/pdfShared';
 import { useOpenedPdf } from '../../hooks/useOpenedPdf';
 import { useZoom } from '../../hooks/useZoom';
@@ -105,15 +106,17 @@ const ViewerPage: React.FC<{
     let renderTask: { promise: Promise<unknown>; cancel?: () => void } | null = null;
     const canvas = canvasRef.current;
     const render = async () => {
+      let page: any = null;
       try {
-        const page = await pdfDoc.getPage(pageIndex + 1);
-        const viewport = page.getViewport({ scale: 2 });
+        page = await pdfDoc.getPage(pageIndex + 1);
+        const scale = getPdfRenderScale(page);
+        const viewport = page.getViewport({ scale });
         if (!canvas || cancelled) return;
 
         const context = canvas.getContext('2d');
         if (!context) return;
 
-        setDimensions({ width: viewport.width / 2, height: viewport.height / 2 });
+        setDimensions({ width: viewport.width / scale, height: viewport.height / scale });
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         context.fillStyle = '#ffffff';
@@ -123,6 +126,14 @@ const ViewerPage: React.FC<{
       } catch (error: any) {
         if (!cancelled && error?.name !== 'RenderingCancelledException') {
           console.error(error);
+        }
+      } finally {
+        // The canvas holds the drawn page; the decoded images PDF.js kept to draw it would
+        // otherwise stay in memory for every page ever scrolled past.
+        try {
+          page?.cleanup();
+        } catch {
+          // A page with nothing cached is already where this wants it.
         }
       }
     };

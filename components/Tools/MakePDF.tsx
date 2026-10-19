@@ -22,6 +22,7 @@ import {
 import { ProcessingStatus } from '../../types';
 import { createPDFFromImages } from '../../services/pdfDocument';
 import { preparePdfImageAsset } from '../../services/imageBrowser';
+import { mapWithConcurrency } from '../../services/mapWithConcurrency';
 import { downloadBlob, type OutputReadyRecord } from '../../services/pdfShared';
 import { OUTPUT_RENAMED_EVENT, announceOutput, announceOutputRenamed, announceRecordsChanged } from '../../services/workspace';
 import { StatusToast } from '../UI/StatusToast';
@@ -71,6 +72,7 @@ const SCAN_FAILURES: Readonly<Record<string, string>> = {
 };
 const SCAN_FAILED = english["make-pdf.that.scan.could.not.be.kept.so.30410c"];
 const SCAN_OPEN_FAILED = english["make-pdf.that.scan.could.not.be.opened.it.7a1de2"];
+const IMAGE_PREPARE_CONCURRENCY = 2;
 
 /** Capacitor reports a fixed code beside the message; the message itself is never shown. */
 const scanFailureFor = (caught: unknown): string => {
@@ -295,7 +297,7 @@ export const MakePDF: React.FC = () => {
         : new File([file], file.name, { type: resolvedType, lastModified: file.lastModified })];
     });
 
-    const checked = await Promise.all(supported.map(async (file) => {
+    const checked = await mapWithConcurrency(supported, IMAGE_PREPARE_CONCURRENCY, async (file) => {
       try {
         // Use the same orientation-normalized pixels for the preview and export.
         const asset = await preparePdfImageAsset(file);
@@ -303,7 +305,7 @@ export const MakePDF: React.FC = () => {
       } catch {
         return null;
       }
-    }));
+    });
 
     const valid = checked.filter((item): item is { file: File; previewUrl: string } => item !== null);
     const skippedCount = picked.length - valid.length;

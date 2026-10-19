@@ -30,6 +30,7 @@ export default {
   "format.justNow": "Alldeles nyss",
   "android-incoming-pdf-handler.the.incoming.pdf.could.not.be.opened.9b5b95": "Det inkommande PDF-dokumentet kunde inte öppnas. Du kan försöka igen från Senaste.",
   "android-incoming-pdf-handler.dismiss.48845b": "Avvisa",
+  "renderer-recovery-notice.pdf.chef.reopened.this.screen.after.4c665a": "PDF Chef öppnade den här skärmen igen efter ett problem. Osparat arbete har gått förlorat.",
   "app-shell.tools.ea93d6": "Verktyg",
   "app-shell.recent.690dbe": "Senaste",
   "app-shell.settings.74a883": "Inställningar",

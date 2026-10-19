@@ -30,6 +30,7 @@ export default {
   "format.justNow": "Przed chwilą",
   "android-incoming-pdf-handler.the.incoming.pdf.could.not.be.opened.9b5b95": "Nie udało się otworzyć odebranego pliku PDF. Możesz spróbować ponownie z Ostatnich.",
   "android-incoming-pdf-handler.dismiss.48845b": "Zamknij",
+  "renderer-recovery-notice.pdf.chef.reopened.this.screen.after.4c665a": "PDF Chef ponownie otworzył ten ekran po problemie. Niezapisana praca została utracona.",
   "app-shell.tools.ea93d6": "Narzędzia",
   "app-shell.recent.690dbe": "Ostatnie",
   "app-shell.settings.74a883": "Ustawienia",

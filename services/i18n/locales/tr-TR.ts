@@ -30,6 +30,7 @@ export default {
   "format.justNow": "Az önce",
   "android-incoming-pdf-handler.the.incoming.pdf.could.not.be.opened.9b5b95": "Gelen PDF açılamadı. Son Kullanılanlar'dan tekrar deneyebilirsiniz.",
   "android-incoming-pdf-handler.dismiss.48845b": "Kapat",
+  "renderer-recovery-notice.pdf.chef.reopened.this.screen.after.4c665a": "PDF Chef bir sorundan sonra bu ekranı yeniden açtı. Kaydedilmemiş çalışma kayboldu.",
   "app-shell.tools.ea93d6": "Araçlar",
   "app-shell.recent.690dbe": "Son Kullanılanlar",
   "app-shell.settings.74a883": "Ayarlar",

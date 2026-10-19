@@ -30,6 +30,7 @@ export default {
   "format.justNow": "Agora mesmo",
   "android-incoming-pdf-handler.the.incoming.pdf.could.not.be.opened.9b5b95": "Não foi possível abrir o PDF recebido. Pode tentar novamente a partir de Recentes.",
   "android-incoming-pdf-handler.dismiss.48845b": "Ignorar",
+  "renderer-recovery-notice.pdf.chef.reopened.this.screen.after.4c665a": "O PDF Chef reabriu este ecrã após um problema. O trabalho não guardado perdeu-se.",
   "app-shell.tools.ea93d6": "Ferramentas",
   "app-shell.recent.690dbe": "Recentes",
   "app-shell.settings.74a883": "Definições",

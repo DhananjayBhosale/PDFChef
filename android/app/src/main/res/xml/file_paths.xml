@@ -6,4 +6,8 @@
     <files-path
         name="pdfchef_share_staging"
         path="pdfchef_documents/share/" />
+    <!-- Where the WebView's camera capture parks a photo until Make PDF has read it. -->
+    <external-files-path
+        name="pdfchef_captures"
+        path="Pictures/" />
 </paths>

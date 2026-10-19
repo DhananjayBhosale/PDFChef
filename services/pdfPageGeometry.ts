@@ -19,6 +19,24 @@ export const getPdfPageVisualGeometry = (page: PDFPage): PdfPageVisualGeometry =
   };
 };
 
+/** The most pixels one page canvas may hold; PDF.js's own viewer uses this cap on phones. */
+export const MAX_PAGE_CANVAS_PIXELS = 5_242_880;
+
+/**
+ * The scale a page is drawn at: 2 for sharp zooming, lowered only when that many pixels would
+ * not fit under the canvas cap. An A4 page at scale 2 is about two megapixels, so ordinary pages
+ * are unchanged; a poster-sized page is drawn softer rather than as a canvas of tens of megabytes.
+ */
+export const getPdfRenderScale = (
+  page: { getViewport: (options: { scale: number }) => { width: number; height: number } },
+  maxScale = 2,
+) => {
+  const { width, height } = page.getViewport({ scale: 1 });
+  const area = width * height;
+  if (!(area > 0)) return maxScale;
+  return Math.min(maxScale, Math.sqrt(MAX_PAGE_CANVAS_PIXELS / area));
+};
+
 /** Page layout uses PDF user units; raster resolution and /UserUnit must not change the overlay. */
 export const getPdfPreviewLayoutSize = (page: {
   userUnit?: number;

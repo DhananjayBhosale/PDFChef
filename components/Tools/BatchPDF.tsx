@@ -9,7 +9,7 @@ import { AlertTriangle, Plus, ArrowDown, ArrowUp, Files, Loader2, Trash2, XCircl
 import { FileUpload } from '../UI/FileUpload';
 import { StatusToast } from '../UI/StatusToast';
 import { ToolHeader, ToolShell } from '../UI/ToolLayout';
-import { analyzePDF, compressPDFAdaptive, extractTextFromPDF, loadPDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
+import { analyzePDF, compressPDFAdaptive, extractTextFromPDF, loadPDFDocument, releasePDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
 import {
   addPageNumbersToPDF,
   addWatermarkToPDF,
@@ -298,6 +298,9 @@ export const BatchPDF: React.FC = () => {
           const message = error instanceof Error ? localizeError(error) : t("batch-pdf.this.file.could.not.be.processed.skip.c11e2e");
           failures.push(`${file.name}: ${message}`);
           setItemStatuses((current) => ({ ...current, [key]: { phase: 'failed', progress: 0, message } }));
+        } finally {
+          // A finished file's PDF.js worker and bytes are released before the next file opens.
+          await releasePDFDocument(file).catch(() => undefined);
         }
       }
 

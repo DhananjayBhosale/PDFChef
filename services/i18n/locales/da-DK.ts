@@ -30,6 +30,7 @@ export default {
   "format.justNow": "For et øjeblik siden",
   "android-incoming-pdf-handler.the.incoming.pdf.could.not.be.opened.9b5b95": "Den modtagne PDF-fil kunne ikke åbnes. Du kan prøve igen fra Seneste.",
   "android-incoming-pdf-handler.dismiss.48845b": "Afvis",
+  "renderer-recovery-notice.pdf.chef.reopened.this.screen.after.4c665a": "PDF Chef åbnede denne skærm igen efter et problem. Ugemt arbejde er gået tabt.",
   "app-shell.tools.ea93d6": "Værktøjer",
   "app-shell.recent.690dbe": "Seneste",
   "app-shell.settings.74a883": "Indstillinger",

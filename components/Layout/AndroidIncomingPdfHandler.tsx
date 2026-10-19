@@ -1,6 +1,7 @@
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useRef, useState } from 'react';
+import { App as CapacitorApp } from '@capacitor/app';
 import { useNavigate } from 'react-router-dom';
 import { useOpenedPdf } from '../../hooks/useOpenedPdf';
 import { useWorkspacePlatform } from '../../hooks/useWorkspaceRuntime';
@@ -32,6 +33,10 @@ export const AndroidIncomingPdfHandler = () => {
             if (disposed) return;
             const opened = openFile.current(file);
             navigate(toolPath, { state: { useOpenedPdf: true, openedPdfId: opened.id } });
+          }, () => {
+            // The PDF came from another app, so closing it goes back to that app
+            // rather than leaving this one's Home on top of it.
+            void CapacitorApp.minimizeApp().catch(() => undefined);
           });
         } catch {
           if (!disposed) setFailed(true);

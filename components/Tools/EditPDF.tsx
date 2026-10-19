@@ -22,6 +22,8 @@ import {
   type ParagraphSaveEdit,
 } from '../../services/pdfDocument';
 import { getPageTextBlocks, resolvePageFonts, type PageTextBlocks } from '../../services/pdfBlockExtraction';
+import { serializeEditorState } from '../../services/pdfEditorSnapshot';
+import { getPdfRenderScale } from '../../services/pdfPageGeometry';
 import { layoutParagraphLines, paragraphLineOrigins } from '../../services/pdfParagraphLayout';
 import {
   documentEmbeddedFontsReady,
@@ -114,23 +116,6 @@ interface EditorSnapshot {
   elements: EditorElement[];
   blockEdits: Record<string, BlockEditState>;
 }
-
-const serializeEditorState = (
-  elements: EditorElement[],
-  formValues: Record<string, PdfFormFieldValue>,
-  blockEdits: Record<string, BlockEditState> = {},
-) => JSON.stringify({
-  elements,
-  formValues,
-  // Only the typed result matters for the dirty check; the cached repaint image does not.
-  blocks: Object.values(blockEdits).map(({ blockId, text, fontOverride, color, fontSize }) => ({
-    blockId,
-    text,
-    fontOverride,
-    color,
-    fontSize,
-  })),
-});
 
 /** Touch input needs bigger targets and cannot rely on hover to reveal anything. */
 const useCoarsePointer = () => {
@@ -329,9 +314,9 @@ const PDFPage: React.FC<{
       const cachedPageText = cachedText?.(pageIndex);
       try {
         const page = await pdfDoc.getPage(pageIndex + 1);
-        // Render at a high fixed scale (e.g. 2.0) for sharpness when zooming in
+        // Render at a high scale (2.0 unless the page is poster-sized) for sharpness when zooming in
         // We do NOT re-render on zoom change, we just scale the CSS
-        const renderScale = 2.0; 
+        const renderScale = getPdfRenderScale(page);
         const viewport = page.getViewport({ scale: renderScale });
         
         // Store logical dimensions (1.0 scale) for layout
@@ -1729,6 +1714,8 @@ export const EditPDF: React.FC = () => {
       setStatus({ isProcessing: false, progress: 0, message: '', error: t("edit-pdf.choose.a.png.or.jpeg.image.e86113") });
       return;
     }
+    // A phone photo takes seconds to decode and shrink; the status line says so meanwhile.
+    setStatus({ isProcessing: true, progress: 0, message: t("status-toast.working.on.this.device.b4ed58") });
     try {
       // Decode and re-encode first. Besides normalising EXIF orientation, this prevents unusual
       // but valid compressed PNG streams from tying up pdf-lib's pure-JavaScript decoder.
@@ -1748,6 +1735,7 @@ export const EditPDF: React.FC = () => {
       commitElements((current) => [...current, newEl]);
       setSelectedId(newEl.id);
       setInsertMode(null);
+      setStatus({ isProcessing: false, progress: 0, message: '' });
     } catch (error) {
       if (generation !== documentGeneration.current) return;
       setStatus({ isProcessing: false, progress: 0, message: '', error: error instanceof Error ? error.message : t("edit-pdf.this.picture.could.not.be.read.try.65070d") });

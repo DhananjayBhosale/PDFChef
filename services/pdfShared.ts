@@ -111,10 +111,6 @@ export const readFileAsArrayBuffer = (file: File): Promise<ArrayBuffer> => {
 export const isPdfFile = (file: File): boolean =>
   file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
-export const getSafeBuffer = (buffer: ArrayBuffer): Uint8Array => {
-  return new Uint8Array(buffer).slice(0);
-};
-
 const canvasDataUrlToBlob = (canvas: HTMLCanvasElement, type: string, quality?: number) => {
   const dataUrl = canvas.toDataURL(type, quality);
   const separator = dataUrl.indexOf(',');

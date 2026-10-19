@@ -18,6 +18,7 @@ import {
 } from '../../services/docxExport';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
 import { shouldWarnForFiles } from '../../services/workspace';
+import { useReleasePdfDocument } from '../../hooks/useReleasePdfDocument';
 import { formatBytes } from '../UI/format';
 
 const idleStatus = (): ProcessingStatus => ({ isProcessing: false, progress: 0, message: '' });
@@ -27,6 +28,7 @@ const isAbortError = (error: unknown) => error instanceof Error && error.name ==
 export const PDFToWord: React.FC = () => {
   useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
+  useReleasePdfDocument(file?.file);
   const [status, setStatus] = useState<ProcessingStatus>(idleStatus);
   const activeRun = useRef(0);
 

@@ -39,6 +39,15 @@ public final class PdfChefWebViewPolicyTest {
                 PdfChefWebViewPolicy.decide("https://user@example.com/"));
     }
 
+    @Test public void reloadsTheSamePackagedRouteWithTheRecoveryMarkerOnly() {
+        assertEquals("https://localhost/compress#renderer-restarted",
+                PdfChefWebViewPolicy.rendererRecoveryUrl("https://localhost/compress"));
+        assertEquals("https://localhost/view?x=1#renderer-restarted",
+                PdfChefWebViewPolicy.rendererRecoveryUrl("https://localhost/view?x=1#/old"));
+        assertEquals(null, PdfChefWebViewPolicy.rendererRecoveryUrl(null));
+        assertEquals(null, PdfChefWebViewPolicy.rendererRecoveryUrl("https://www.example.com/"));
+    }
+
     @Test public void isolatesOnlyTheObservedBrokenGraphicsDriver() {
         assertTrue(PdfChefWebViewPolicy.requiresSoftwareRendering("mt6855", ""));
         assertTrue(PdfChefWebViewPolicy.requiresSoftwareRendering("other", "MT6855"));

@@ -63,6 +63,17 @@ public final class PdfChefWebViewPolicy {
         return "mt6855".equals(lower(hardware)) || "mt6855".equals(lower(socModel));
     }
 
+    /** Fragment added to a route reloaded after the renderer died, so the page can say so once. */
+    public static final String RENDERER_RECOVERY_FRAGMENT = "renderer-restarted";
+
+    /** The same packaged route carrying the recovery fragment, or null for any other URL. */
+    public static String rendererRecoveryUrl(String rawUrl) {
+        if (!isPackagedOrigin(rawUrl)) return null;
+        int fragment = rawUrl.indexOf('#');
+        String route = fragment >= 0 ? rawUrl.substring(0, fragment) : rawUrl;
+        return route + "#" + RENDERER_RECOVERY_FRAGMENT;
+    }
+
     /** Prevents a repeatedly crashing WebView renderer from causing a restart loop. */
     public static boolean mayRestartRenderer(long previousElapsedMillis, long nowElapsedMillis) {
         return nowElapsedMillis >= 0 && (previousElapsedMillis <= 0

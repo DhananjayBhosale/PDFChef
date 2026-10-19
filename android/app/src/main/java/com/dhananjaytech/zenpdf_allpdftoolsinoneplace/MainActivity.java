@@ -35,11 +35,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** Capacitor host that registers the fixed legacy bridge surface before bridge startup. */
 public class MainActivity extends BridgeActivity {
-    private static final String EXTRA_RENDERER_RECOVERY_URL =
-            "com.dhananjaytech.pdfchef.RENDERER_RECOVERY_URL";
+    /** The route a renderer death interrupted; kept in the process so no other app can set it. */
+    private static final AtomicReference<String> PENDING_RENDERER_RECOVERY_URL = new AtomicReference<>();
     private static final AtomicLong LAST_RENDERER_RECOVERY_MILLIS = new AtomicLong();
     private android.view.ViewTreeObserver.OnPreDrawListener systemBarBackgroundListener;
     private Boolean lightSystemBars;
@@ -114,6 +115,8 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onResume() {
         super.onResume();
+        // First resume of a process: no capture can be in flight yet.
+        CapturedPhotoSweep.sweepOncePerProcess(this);
         if (inAppUpdateController != null) inAppUpdateController.checkForUpdate();
     }
 
@@ -200,9 +203,10 @@ public class MainActivity extends BridgeActivity {
         PdfChefWebViewPolicy.apply(webView);
         configureGraphicsLayer(webView);
         bridge.setWebViewClient(new PdfChefWebViewClient(bridge));
-        String recoveryUrl = getIntent().getStringExtra(EXTRA_RENDERER_RECOVERY_URL);
-        getIntent().removeExtra(EXTRA_RENDERER_RECOVERY_URL);
-        if (PdfChefWebViewPolicy.isPackagedOrigin(recoveryUrl)) webView.loadUrl(recoveryUrl);
+        String recoveryUrl = PENDING_RENDERER_RECOVERY_URL.getAndSet(null);
+        // The same screen comes back, and the page is told so it can say what happened.
+        String reload = PdfChefWebViewPolicy.rendererRecoveryUrl(recoveryUrl);
+        if (reload != null) webView.loadUrl(reload);
         synchronizeSystemBarBackground();
         ServiceWorkerController.getInstance().setServiceWorkerClient(new ServiceWorkerClient() {
             @Override public WebResourceResponse shouldInterceptRequest(WebResourceRequest request) {
@@ -305,7 +309,7 @@ public class MainActivity extends BridgeActivity {
             rendererGone = true;
             String recoveryUrl = view.getUrl();
             if (PdfChefWebViewPolicy.isPackagedOrigin(recoveryUrl)) {
-                getIntent().putExtra(EXTRA_RENDERER_RECOVERY_URL, recoveryUrl);
+                PENDING_RENDERER_RECOVERY_URL.set(recoveryUrl);
             }
             ViewParent parent = view.getParent();
             if (parent instanceof ViewGroup) ((ViewGroup) parent).removeView(view);

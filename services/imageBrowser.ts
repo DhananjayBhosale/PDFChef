@@ -1,5 +1,6 @@
 import { LocalizedError } from './i18n/errors.ts';
 import { t } from './i18n/core.ts';
+import { planImageNormalization } from './imageNormalization.ts';
 import { canvasToBlob } from './pdfShared';
 
 export interface PreparedPdfImageAsset {
@@ -22,13 +23,13 @@ const loadImageElement = (file: File): Promise<{ image: HTMLImageElement; url: s
 
 const normalizeImageAsset = async (file: File, rotation = 0) => {
   const { image, url } = await loadImageElement(file);
-  const sourceWidth = image.naturalWidth;
-  const sourceHeight = image.naturalHeight;
+  // The plan decides the pixel size and the encoding; the canvas only ever holds that many pixels.
+  const plan = planImageNormalization(image.naturalWidth, image.naturalHeight, file.type);
   const canvas = document.createElement('canvas');
   const normalizedRotation = ((rotation % 360) + 360) % 360;
   const swapsAxes = normalizedRotation === 90 || normalizedRotation === 270;
-  canvas.width = swapsAxes ? sourceHeight : sourceWidth;
-  canvas.height = swapsAxes ? sourceWidth : sourceHeight;
+  canvas.width = swapsAxes ? plan.height : plan.width;
+  canvas.height = swapsAxes ? plan.width : plan.height;
 
   const context = canvas.getContext('2d');
   if (!context) {
@@ -37,17 +38,22 @@ const normalizeImageAsset = async (file: File, rotation = 0) => {
   }
 
   try {
+    if (plan.fill) {
+      context.fillStyle = plan.fill;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    context.imageSmoothingQuality = 'high';
     context.translate(canvas.width / 2, canvas.height / 2);
     context.rotate(normalizedRotation * Math.PI / 180);
-    context.drawImage(image, -sourceWidth / 2, -sourceHeight / 2);
+    context.drawImage(image, -plan.width / 2, -plan.height / 2, plan.width, plan.height);
   } finally {
     URL.revokeObjectURL(url);
   }
 
-  const outputType = file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png';
+  const { outputType } = plan;
   const width = canvas.width;
   const height = canvas.height;
-  const blob = await canvasToBlob(canvas, outputType, outputType === 'image/jpeg' ? 0.94 : undefined);
+  const blob = await canvasToBlob(canvas, outputType, plan.quality);
   canvas.width = 0;
   canvas.height = 0;
   const extension = outputType === 'image/jpeg' ? 'jpg' : 'png';

@@ -21,6 +21,7 @@ import { textFromSelectionTargets } from '../../services/pdfToolResults';
 import { shouldWarnForFiles } from '../../services/workspace';
 import { useOpenedPdf, type OpenedPdfRouteState } from '../../hooks/useOpenedPdf';
 import { useMonetization, type JobAccessGrant } from '../../hooks/useMonetization';
+import { useReleasePdfDocument } from '../../hooks/useReleasePdfDocument';
 import { toolOutputName } from '../UI/format';
 
 /**
@@ -164,6 +165,7 @@ export const OCRPDF: React.FC = () => {
   const location = useLocation();
   const { openedPdf, takeProtectedPdfPassword } = useOpenedPdf();
   const [file, setFile] = useState<PDFFile | null>(null);
+  useReleasePdfDocument(file?.file);
   const [pageResults, setPageResults] = useState<OCRPageResult[]>([]);
   const [resultMeta, setResultMeta] = useState<OCRResultMeta | null>(null);
   const extractionOperationIdRef = useRef<string | null>(null);

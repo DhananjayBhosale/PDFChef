@@ -30,6 +30,7 @@ export default {
   "format.justNow": "방금 전",
   "android-incoming-pdf-handler.the.incoming.pdf.could.not.be.opened.9b5b95": "수신된 PDF를 열 수 없습니다. 최근 항목에서 다시 시도할 수 있습니다.",
   "android-incoming-pdf-handler.dismiss.48845b": "닫기",
+  "renderer-recovery-notice.pdf.chef.reopened.this.screen.after.4c665a": "문제가 발생하여 PDF Chef가 이 화면을 다시 열었습니다. 저장하지 않은 작업은 사라졌습니다.",
   "app-shell.tools.ea93d6": "도구",
   "app-shell.recent.690dbe": "최근 항목",
   "app-shell.settings.74a883": "설정",

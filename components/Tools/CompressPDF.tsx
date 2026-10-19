@@ -81,6 +81,23 @@ export const CompressPDF: React.FC = () => {
   const [measuring, setMeasuring] = useState(false);
   const measureToken = useRef(0);
 
+  // Analysing, previewing and compressing all open the file through the shared document cache;
+  // closing the tool is what lets those documents, and their workers, go.
+  // The release starts in the same tick the tool closes, so a next screen that picks up the same
+  // file afterwards is counted and keeps its document.
+  const heldFiles = useRef(files);
+  heldFiles.current = files;
+  const pdfBrowser = useRef<typeof import('../../services/pdfBrowser') | null>(null);
+  useEffect(() => () => {
+    const held = heldFiles.current;
+    if (held.length === 0) return;
+    const release = (module: typeof import('../../services/pdfBrowser')) => {
+      held.forEach(({ file }) => void module.releasePDFDocument(file).catch(() => undefined));
+    };
+    if (pdfBrowser.current) release(pdfBrowser.current);
+    else void import('../../services/pdfBrowser').then(release);
+  }, []);
+
   const previewFiles = useMemo(
     () => files.map((selectedFile) => ({ file: selectedFile.file, name: selectedFile.name })),
     [files],
@@ -97,6 +114,10 @@ export const CompressPDF: React.FC = () => {
       setMeasuredEstimate(null);
 
       void import('../../services/pdfBrowser')
+        .then((module) => {
+          pdfBrowser.current = module;
+          return module;
+        })
         .then(({ analyzePDF }) => Promise.all(files.map(async (selectedFile) => {
           const result = await analyzePDF(selectedFile.file);
           return [selectedFile.id, result] as const;

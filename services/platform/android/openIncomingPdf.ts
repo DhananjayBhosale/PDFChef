@@ -6,6 +6,8 @@ export const openIncomingAndroidPdf = async (
   platform: WorkspacePlatform,
   ref: string,
   openWeb: (file: File, toolPath: string) => void,
+  // Closing the native reader ends the hand-over; the caller decides where that leads.
+  onClosed: () => void = () => undefined,
 ): Promise<void> => {
   const record = (await platform.records.list()).find(item => item.document?.ref === ref);
   if (!record?.available || record.document?.mimeType !== 'application/pdf') {
@@ -15,7 +17,10 @@ export const openIncomingAndroidPdf = async (
   if (platform.pdfReader?.isEligible(record.document)) {
     try {
       const result = await platform.pdfReader.open(record.document);
-      if (result.action === 'closed') return;
+      if (result.action === 'closed') {
+        onClosed();
+        return;
+      }
       toolPath = result.toolPath;
     } catch {
       // An unavailable native renderer can still use the shared web viewer.

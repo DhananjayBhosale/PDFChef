@@ -30,6 +30,7 @@ export default {
   "format.justNow": "Zojuist",
   "android-incoming-pdf-handler.the.incoming.pdf.could.not.be.opened.9b5b95": "De inkomende pdf kon niet worden geopend. Je kunt het opnieuw proberen vanuit Recent.",
   "android-incoming-pdf-handler.dismiss.48845b": "Sluiten",
+  "renderer-recovery-notice.pdf.chef.reopened.this.screen.after.4c665a": "PDF Chef heeft dit scherm na een probleem opnieuw geopend. Niet-opgeslagen werk is verloren.",
   "app-shell.tools.ea93d6": "Hulpmiddelen",
   "app-shell.recent.690dbe": "Recente bestanden",
   "app-shell.settings.74a883": "Instellingen",

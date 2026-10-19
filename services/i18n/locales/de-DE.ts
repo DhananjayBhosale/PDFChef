@@ -30,6 +30,7 @@ export default {
   "format.justNow": "Gerade eben",
   "android-incoming-pdf-handler.the.incoming.pdf.could.not.be.opened.9b5b95": "Die eingehende PDF-Datei konnte nicht geöffnet werden. Sie können den Öffnungsversuch unter „Zuletzt verwendet“ wiederholen.",
   "android-incoming-pdf-handler.dismiss.48845b": "Schließen",
+  "renderer-recovery-notice.pdf.chef.reopened.this.screen.after.4c665a": "PDF Chef hat diesen Bildschirm nach einem Problem neu geöffnet. Nicht gespeicherte Arbeit ist verloren.",
   "app-shell.tools.ea93d6": "Werkzeuge",
   "app-shell.recent.690dbe": "Zuletzt verwendet",
   "app-shell.settings.74a883": "Einstellungen",

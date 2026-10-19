@@ -36,3 +36,17 @@ test('incoming reader tools receive the original PDF and failed reader falls bac
 test('missing external refs never read a different recent file', async () => {
   await assert.rejects(openIncomingAndroidPdf(platform(), 'd1_' + 'B'.repeat(22), () => assert.fail('Unexpected navigation')));
 });
+
+test('closing the reader on a handed-over PDF reports the close, and nothing else does', async () => {
+  const closes: number[] = [];
+  const closed = () => closes.push(1);
+  const native = platform();
+  native.pdfReader = { isEligible: () => true, open: async () => ({ action: 'closed' }) };
+  await openIncomingAndroidPdf(native, ref, () => assert.fail('Unexpected navigation'), closed);
+  assert.equal(closes.length, 1);
+  native.pdfReader = { isEligible: () => true, open: async () => ({ action: 'tool', toolPath: '/edit' }) };
+  await openIncomingAndroidPdf(native, ref, () => undefined, closed);
+  native.pdfReader = { isEligible: () => true, open: async () => { throw new Error('Reader unavailable'); } };
+  await openIncomingAndroidPdf(native, ref, () => undefined, closed);
+  assert.equal(closes.length, 1);
+});
