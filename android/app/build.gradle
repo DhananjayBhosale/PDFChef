@@ -106,6 +106,7 @@ dependencies {
     implementation 'androidx.pdf:pdf-viewer-fragment:1.0.0-beta01'
     implementation 'com.tom-roush:pdfbox-android:2.0.27.0'
     implementation 'com.google.android.play:app-update:2.1.0'
+    implementation 'com.android.billingclient:billing:9.1.0'
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

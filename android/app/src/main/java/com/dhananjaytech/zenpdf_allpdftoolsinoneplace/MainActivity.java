@@ -93,6 +93,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AndroidStorageStatsPlugin.class);
         registerPlugin(AndroidDocumentsPlugin.class);
         registerPlugin(AndroidDocumentScannerPlugin.class);
+        registerPlugin(AndroidSupportPlugin.class);
         // Capacitor passes the launch intent to onNewIntent from inside onCreate; it is
         // handled once below instead.
         creating = true;

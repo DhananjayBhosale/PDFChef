@@ -141,9 +141,11 @@ const documentsRegistration = activityCode.indexOf(
   'registerPlugin(AndroidDocumentsPlugin.class)');
 const scannerRegistration = activityCode.indexOf(
   'registerPlugin(AndroidDocumentScannerPlugin.class)');
+const supportRegistration = activityCode.indexOf(
+  'registerPlugin(AndroidSupportPlugin.class)');
 const superCreate = activityCode.search(/\bsuper\s*\.\s*onCreate\s*\(\s*savedInstanceState\s*\)/);
 for (const plugin of ['AndroidLegacySettingsWriterPlugin', 'AndroidAppMetadataPlugin',
-  'AndroidStorageStatsPlugin', 'AndroidDocumentsPlugin', 'AndroidDocumentScannerPlugin']) {
+  'AndroidStorageStatsPlugin', 'AndroidDocumentsPlugin', 'AndroidDocumentScannerPlugin', 'AndroidSupportPlugin']) {
   if (occurrenceCount(activityCode,
     new RegExp(`\\bregisterPlugin\\s*\\(\\s*${plugin}\\s*\\.\\s*class\\s*\\)`, 'g')) !== 1) {
     throw new Error(`${plugin} must be registered exactly once`);
@@ -153,11 +155,12 @@ if (!(registration >= 0 && registration < writerRegistration
     && writerRegistration < metadataRegistration
     && metadataRegistration < storageRegistration
     && storageRegistration < documentsRegistration
-    && documentsRegistration < scannerRegistration && scannerRegistration < superCreate)) {
-  throw new Error('accepted six-plugin order drifted');
+    && documentsRegistration < scannerRegistration && scannerRegistration < supportRegistration
+    && supportRegistration < superCreate)) {
+  throw new Error('accepted seven-plugin order drifted');
 }
-if (occurrenceCount(activityCode, /\bregisterPlugin\s*\(/g) !== 6) {
-  throw new Error('MainActivity must contain exactly the accepted six registrations');
+if (occurrenceCount(activityCode, /\bregisterPlugin\s*\(/g) !== 7) {
+  throw new Error('MainActivity must contain exactly the accepted seven registrations');
 }
 
 for (const [label, inspector] of [['history', source.history], ['settings', source.settings]]) {

@@ -10,6 +10,8 @@ import { TabHeader } from '../Layout/AppShell';
 import { Button, ConfirmSheet, SegmentedControl, StatusLine, Switch, cx } from '../UI/Primitives';
 import { formatBytes } from '../UI/format';
 import { useMonetization } from '../../hooks/useMonetization';
+import { useSupport } from '../../hooks/useSupport';
+import { SupportChoices } from '../UI/SupportPDFChef';
 import {
   TEXT_SCALE_LABELS,
   useAppearance,
@@ -110,6 +112,7 @@ export const SettingsPage: React.FC = () => {
   const themeFeedback = THEME_SYNC_FEEDBACK[themeSync];
   const platform = useWorkspacePlatform();
   const monetization = useMonetization();
+  const support = useSupport();
   const { state: recentState, refresh } = useRecentRecords();
   const storage = useStorageInformation();
   const metadata = useApplicationMetadata();
@@ -369,6 +372,28 @@ export const SettingsPage: React.FC = () => {
             </div>
           </Row>
         </Group>
+
+        {support.state && (support.state.supporter !== 'none' || support.state.monthlyPrice || support.state.lifetimePrice) && (
+          <Group title={t("support.support.pdf.chef.3b92ab")}>
+            {support.state.supporter === 'none' ? (
+              <Row detail={t("support.pdf.chef.is.free.for.everyone.with.dba2fa")} stacked>
+                <SupportChoices />
+              </Row>
+            ) : (
+              <Row label={t("support.thank.you.for.supporting.pdf.chef.c645eb")} stacked={support.state.supporter === 'monthly'}>
+                {support.state.supporter === 'monthly' && (
+                  <Button
+                    icon={<ExternalLink aria-hidden size={14} />}
+                    onClick={() => {
+                      setProblem('');
+                      void support.manage().catch(() => setProblem(t("support.google.play.could.not.be.opened.14c8dd")));
+                    }}
+                  >{t("support.manage.in.google.play.fc229c")}</Button>
+                )}
+              </Row>
+            )}
+          </Group>
+        )}
 
         <Group title={t("settings-page.about.4efca0")}>
           <Row label="PDF Chef">

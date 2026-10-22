@@ -33,7 +33,7 @@ public final class AndroidDocumentScannerPluginContractTest {
         assertTrue(callback.isAnnotationPresent(ActivityCallback.class));
     }
 
-    @Test public void scannerIsTheExactSixthPluginRegisteredBeforeBridgeStartup()
+    @Test public void scannerIsTheSixthOfSevenPluginsRegisteredBeforeBridgeStartup()
             throws Exception {
         String source = source("android/app/src/main/java/com/dhananjaytech/"
                 + "zenpdf_allpdftoolsinoneplace/MainActivity.java");
@@ -47,7 +47,7 @@ public final class AndroidDocumentScannerPluginContractTest {
         int scannerAt = source.indexOf(scanner);
         int bridgeStartupAt = source.indexOf("super.onCreate(savedInstanceState)");
 
-        assertEquals(6, occurrences(source, "registerPlugin("));
+        assertEquals(7, occurrences(source, "registerPlugin("));
         assertEquals(1, occurrences(source, scanner));
         assertTrue(inspectorAt >= 0);
         assertTrue(inspectorAt < writerAt);

@@ -22,19 +22,20 @@ const metadata = 'registerPlugin(AndroidAppMetadataPlugin.class)';
 const storage = 'registerPlugin(AndroidStorageStatsPlugin.class)';
 const documents = 'registerPlugin(AndroidDocumentsPlugin.class)';
 const scanner = 'registerPlugin(AndroidDocumentScannerPlugin.class)';
+const support = 'registerPlugin(AndroidSupportPlugin.class)';
 const bridge = 'super.onCreate(savedInstanceState)';
-const registrations = [inspector, writer, metadata, storage, documents, scanner];
+const registrations = [inspector, writer, metadata, storage, documents, scanner, support];
 if (![...registrations, bridge].every((needle) => activity.includes(needle))) {
   throw new Error('accepted registrations and bridge creation must remain explicit');
 }
 const registrationOffsets = registrations.map(needle => activity.indexOf(needle));
 if (!registrationOffsets.every((offset, index) => index === 0 || registrationOffsets[index - 1] < offset)
   || registrationOffsets.at(-1) >= activity.indexOf(bridge)) {
-  throw new Error('the accepted six plugins must register in order before bridge creation');
+  throw new Error('the accepted seven plugins must register in order before bridge creation');
 }
 if ((activity.match(/registerPlugin\(/g) ?? []).length !== registrations.length
   || registrations.some(needle => occurrences(activity, needle) !== 1)) {
-  throw new Error('MainActivity may register exactly the accepted six plugins once each');
+  throw new Error('MainActivity may register exactly the accepted seven plugins once each');
 }
 
 requireMatch(config, /allowMixedContent:\s*false/, 'Capacitor mixed-content configuration');

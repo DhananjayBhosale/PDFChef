@@ -704,6 +704,15 @@
   "url": "https://developer.android.com/jetpack/androidx"
  },
  {
+  "name": "com.android.billingclient:billing",
+  "version": "9.1.0",
+  "kind": "android",
+  "license": "LicenseRef-Android-SDK-Terms",
+  "copyright": "Copyright Google LLC",
+  "url": "https://developer.android.com/google/play/billing",
+  "note": "Proprietary Google library; not open source. Used under Google's terms linked in the licence section."
+ },
+ {
   "name": "base64-arraybuffer",
   "version": "1.0.2",
   "kind": "js",
@@ -729,7 +738,7 @@
  },
  {
   "name": "com.google.android.datatransport:transport-api",
-  "version": "2.2.1",
+  "version": "3.0.0",
   "kind": "android",
   "license": "Apache-2.0",
   "copyright": "Copyright 2018 Google LLC",
@@ -737,7 +746,7 @@
  },
  {
   "name": "com.google.android.datatransport:transport-backend-cct",
-  "version": "2.3.3",
+  "version": "3.1.8",
   "kind": "android",
   "license": "Apache-2.0",
   "copyright": "Copyright 2018 Google LLC",
@@ -745,7 +754,7 @@
  },
  {
   "name": "com.google.android.datatransport:transport-runtime",
-  "version": "2.2.6",
+  "version": "3.1.8",
   "kind": "android",
   "license": "Apache-2.0",
   "copyright": "Copyright 2018 Google LLC",
@@ -762,7 +771,16 @@
  },
  {
   "name": "com.google.android.gms:play-services-basement",
-  "version": "18.4.0",
+  "version": "18.9.0",
+  "kind": "android",
+  "license": "LicenseRef-Android-SDK-Terms",
+  "copyright": "Copyright Google LLC",
+  "url": "https://developers.google.com/android/guides/overview",
+  "note": "Proprietary Google library; not open source. Used under Google's terms linked in the licence section."
+ },
+ {
+  "name": "com.google.android.gms:play-services-location",
+  "version": "19.0.0",
   "kind": "android",
   "license": "LicenseRef-Android-SDK-Terms",
   "copyright": "Copyright Google LLC",
@@ -776,6 +794,15 @@
   "license": "LicenseRef-Android-SDK-Terms",
   "copyright": "Copyright Google LLC",
   "url": "https://developers.google.com/ml-kit/vision/doc-scanner",
+  "note": "Proprietary Google library; not open source. Used under Google's terms linked in the licence section."
+ },
+ {
+  "name": "com.google.android.gms:play-services-places-placereport",
+  "version": "17.0.0",
+  "kind": "android",
+  "license": "LicenseRef-Android-SDK-Terms",
+  "copyright": "Copyright Google LLC",
+  "url": "https://developers.google.com/android/guides/overview",
   "note": "Proprietary Google library; not open source. Used under Google's terms linked in the licence section."
  },
  {
@@ -847,7 +874,7 @@
  },
  {
   "name": "com.google.firebase:firebase-encoders",
-  "version": "16.1.0",
+  "version": "17.0.0",
   "kind": "android",
   "license": "Apache-2.0",
   "copyright": "Copyright Google LLC",
@@ -855,7 +882,15 @@
  },
  {
   "name": "com.google.firebase:firebase-encoders-json",
-  "version": "17.1.0",
+  "version": "18.0.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright Google LLC",
+  "url": "https://github.com/firebase/firebase-android-sdk"
+ },
+ {
+  "name": "com.google.firebase:firebase-encoders-proto",
+  "version": "16.0.0",
   "kind": "android",
   "license": "Apache-2.0",
   "copyright": "Copyright Google LLC",

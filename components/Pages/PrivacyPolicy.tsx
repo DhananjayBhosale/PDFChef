@@ -79,6 +79,7 @@ export const PrivacyPolicy: React.FC = () => {
             </ul>
             <p>{t("privacy-policy.these.services.are.governed.by.google.s.976d0b")}</p>
             <p>{t("privacy-policy.the.ios.app.uses.apple.app.store.3f45a7")}</p>
+            <p>{t("privacy-policy.the.android.app.uses.google.play.billing.5633c3")}</p>
           </Section>
 
           <Section title={t("privacy-policy.6.analytics.ads.and.tracking.f2440c")}>

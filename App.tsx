@@ -13,10 +13,12 @@ import { RouteSEO } from './components/SEO/RouteSEO';
 import { OpenedPdfProvider } from './hooks/useOpenedPdf';
 import { FileDropProvider } from './hooks/useFileDrop';
 import { MonetizationProvider } from './hooks/useMonetization';
+import { SupportProvider } from './hooks/useSupport';
 import { AppearanceProvider } from './hooks/useAppearance';
 import { WorkspacePlatformProvider, type WorkspacePlatform } from './hooks/useWorkspaceRuntime';
 import { OutputCenter } from './components/UI/OutputCenter';
 import { ProPaywall } from './components/UI/ProPaywall';
+import { SupportPrompt } from './components/UI/SupportPDFChef';
 import { Onboarding } from './components/UI/Onboarding';
 import { MobileAppWelcome } from './components/UI/MobileAppWelcome';
 import { isMobileAppWelcomeRoute, mobileAppWelcomeDismissedKey, smartphonePlatform } from './services/mobileAppWelcome';
@@ -206,6 +208,7 @@ const AppContent = () => {
           </AppShell>
           <OutputCenter />
           <ProPaywall />
+          <SupportPrompt />
           <Onboarding />
         </>
       )}
@@ -233,11 +236,13 @@ const AppProviders: React.FC<AppRootProps> = ({ platform }) => { return (
     <AppearanceProvider>
       <WorkspacePlatformProvider platform={platform}>
         <MonetizationProvider>
-          <OpenedPdfProvider>
-            <FileDropProvider>
-              <AppContent />
-            </FileDropProvider>
-          </OpenedPdfProvider>
+          <SupportProvider>
+            <OpenedPdfProvider>
+              <FileDropProvider>
+                <AppContent />
+              </FileDropProvider>
+            </OpenedPdfProvider>
+          </SupportProvider>
         </MonetizationProvider>
       </WorkspacePlatformProvider>
     </AppearanceProvider>

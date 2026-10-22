@@ -65,6 +65,7 @@ export const TermsConditions: React.FC = () => {
           <Section title={t("terms-conditions.6.third.party.services.8f0487")}>
             <p>{t("terms-conditions.on.android.pdf.chef.may.rely.on.e8221e")}</p>
             <p>{t("terms-conditions.on.ios.pro.lifetime.and.pro.monthly.3c75e6")}</p>
+            <p>{t("terms-conditions.on.android.monthly.and.lifetime.support.are.71547f")}</p>
             <p>{t("terms-conditions.restore.purchases.is.available.in.settings.and.e310a9")}</p>
           </Section>
 

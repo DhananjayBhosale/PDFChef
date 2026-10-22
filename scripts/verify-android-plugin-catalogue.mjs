@@ -60,13 +60,14 @@ const entries = [
   'registerPlugin(AndroidStorageStatsPlugin.class)',
   'registerPlugin(AndroidDocumentsPlugin.class)',
   'registerPlugin(AndroidDocumentScannerPlugin.class)',
+  'registerPlugin(AndroidSupportPlugin.class)',
   'super.onCreate(savedInstanceState)',
 ];
 const positions = entries.map(entry => activity.indexOf(entry));
 assert(positions.every(value => value >= 0), 'accepted registration missing');
 assert(positions.every((value, index) => index === 0 || value > positions[index - 1]), 'registration order drift');
-assert((activity.match(/registerPlugin\(/g) ?? []).length === 6, 'registration count drift');
-for (const entry of entries.slice(0, 6)) assert(activity.split(entry).length - 1 === 1, `duplicate ${entry}`);
+assert((activity.match(/registerPlugin\(/g) ?? []).length === 7, 'registration count drift');
+for (const entry of entries.slice(0, 7)) assert(activity.split(entry).length - 1 === 1, `duplicate ${entry}`);
 const documentMethods = [
   'readChunk', 'beginWrite', 'appendWrite', 'finishWrite', 'abortWrite',
   'listOwned', 'renameItem', 'trashOwned', 'restoreOwned', 'deleteOwned', 'clearOwned',
@@ -84,6 +85,7 @@ const readerClient = resolve(root, 'services/platform/android/androidPdfReader.t
 const metadataClient = resolve(root, 'services/platform/android/androidAppMetadata.ts');
 const storageClient = resolve(root, 'services/platform/android/androidStorageStats.ts');
 const workspaceComposition = resolve(root, 'services/platform/android/androidWorkspacePlatform.ts');
+const supportClient = resolve(root, 'services/platform/android/androidSupport.ts');
 for (const [file, label] of [
   [androidDocumentsClient, 'AndroidDocuments'],
   [scannerClient, 'AndroidDocumentScanner'],
@@ -91,6 +93,7 @@ for (const [file, label] of [
   [metadataClient, 'AndroidAppMetadata'],
   [storageClient, 'AndroidStorageStats'],
   [workspaceComposition, 'Android workspace composition'],
+  [supportClient, 'AndroidSupport'],
 ]) {
   assert(entryGraph.has(file), `${label} must enter the activated production graph`);
 }
@@ -123,7 +126,7 @@ for (const pluginName of ['AndroidAppMetadata', 'AndroidStorageStats']) {
   `runtime catalogue proof missing ${pluginName}`);
 }
 console.log('ANDROID_PLUGIN_CATALOGUE_VERIFIER: PASS');
-console.log(`CATALOGUE: AndroidLegacyInspector -> AndroidLegacySettingsWriter -> AndroidAppMetadata(getMetadata) -> AndroidStorageStats(getStorageStats) -> AndroidDocuments(${documentMethods.join(', ')}) -> AndroidDocumentScanner(scan)`);
+console.log(`CATALOGUE: AndroidLegacyInspector -> AndroidLegacySettingsWriter -> AndroidAppMetadata(getMetadata) -> AndroidStorageStats(getStorageStats) -> AndroidDocuments(${documentMethods.join(', ')}) -> AndroidDocumentScanner(scan) -> AndroidSupport(getSupport, support, manageSupport)`);
 console.log(`FRONTEND_ENTRY_GRAPH: ${entryGraph.size} modules; device facts, scanner and reader activated behind native discovery`);
 console.log('SCANNER_RUNTIME_DISCOVERY: NOT_CHECKED; reserved for disposable-emulator gate');
 console.log('PRODUCTION_RELEASE_READY: REQUIRES_BUILD_AND_RUNTIME_GATES');
