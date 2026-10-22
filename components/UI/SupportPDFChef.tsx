@@ -1,13 +1,14 @@
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useState } from 'react';
+import { Crown, Heart } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { useSupport } from '../../hooks/useSupport';
 import { useApplicationMetadata } from '../../hooks/useWorkspaceRuntime';
 import type { SupportPlan, SupportResult } from '../../services/platform/android/androidSupport';
 import { markSupportPrompted, readFinishedJobs, readPromptedBuild, shouldOfferSupport } from '../../services/supportPrompt';
 import { getWorkspaceSettings } from '../../services/workspace';
-import { Button, Sheet, StatusLine } from './Primitives';
+import { Badge, Button, Sheet, StatusLine } from './Primitives';
 
 const resultMessage = (result: SupportResult): { tone: 'info' | 'success' | 'caution'; text: string } => {
   switch (result) {
@@ -16,6 +17,20 @@ const resultMessage = (result: SupportResult): { tone: 'info' | 'success' | 'cau
     case 'cancelled': return { tone: 'info', text: t("support.no.payment.was.made.83f840") };
     default: return { tone: 'caution', text: t("support.google.play.could.not.take.the.payment.24ebe2") };
   }
+};
+
+/** The Settings header badge. It names the person's support, never what they can use: every tool is free. */
+export const SupporterBadge: React.FC = () => {
+  useI18n();
+  const { state } = useSupport();
+  if (!state) return null;
+  if (state.supporter === 'lifetime') {
+    return <Badge tone="accent"><Crown aria-hidden size={13} />{t("support.lifetime.supporter.9645ff")}</Badge>;
+  }
+  if (state.supporter === 'monthly') {
+    return <Badge tone="accent"><Heart aria-hidden size={13} />{t("support.proud.supporter.1ba564")}</Badge>;
+  }
+  return <Badge>{t("support.free.f411a1")}</Badge>;
 };
 
 /** The Monthly and Lifetime buttons with Google Play's own prices. Nothing here unlocks anything. */

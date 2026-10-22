@@ -11,7 +11,7 @@ import { Button, ConfirmSheet, SegmentedControl, StatusLine, Switch, cx } from '
 import { formatBytes } from '../UI/format';
 import { useMonetization } from '../../hooks/useMonetization';
 import { useSupport } from '../../hooks/useSupport';
-import { SupportChoices } from '../UI/SupportPDFChef';
+import { SupportChoices, SupporterBadge } from '../UI/SupportPDFChef';
 import {
   TEXT_SCALE_LABELS,
   useAppearance,
@@ -138,6 +138,7 @@ export const SettingsPage: React.FC = () => {
       <TabHeader title={t("settings-page.settings.74a883")} />
 
       <div className="mx-auto max-w-4xl px-4 pb-6 md:px-8">
+        {support.state && <div className="mb-3"><SupporterBadge /></div>}
         {(notice || problem) && (
           <div role="status" aria-live="polite" className="mb-2">
             <StatusLine tone={problem ? 'danger' : 'success'}>{problem || notice}</StatusLine>
