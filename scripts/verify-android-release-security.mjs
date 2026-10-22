@@ -76,6 +76,8 @@ function xmltreeNodes(xmltree, types) {
 function expectedPermissions(packageName, binary) {
   const permission = `${packageName}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`;
   return [
+    // Optional Google Play support (AndroidSupportPlugin) needs only the Play Billing permission.
+    { type: 'uses-permission', attrs: { name: 'com.android.vending.BILLING' } },
     { type: 'permission', attrs: { name: permission, protectionLevel: binary ? '0x2' : 'signature' } },
     { type: 'uses-permission', attrs: { name: permission } },
     { type: 'uses-permission', attrs: { name: 'android.permission.ACCESS_NETWORK_STATE' } },
@@ -94,6 +96,8 @@ function expectedComponents(packageName, debug, binary) {
     { type: 'provider', attrs: { authorities: `${packageName}.mlkitinitprovider`, exported: bool(false), initOrder: binary ? '0x63' : '99', name: 'com.google.mlkit.common.internal.MlKitInitProvider' } },
     { type: 'service', attrs: { directBootAware: bool(true), exported: bool(false), name: 'com.google.mlkit.common.internal.MlKitComponentDiscoveryService' } },
     { type: 'service', attrs: { exported: bool(false), isolatedProcess: bool(true), name: 'androidx.pdf.service.PdfDocumentServiceImpl' } },
+    { type: 'activity', attrs: { configChanges: binary ? '0x5b0' : 'keyboard|keyboardHidden|screenLayout|screenSize|orientation', exported: bool(false), name: 'com.android.billingclient.api.ProxyBillingActivity', theme: binary ? ANY_RESOURCE : '@android:style/Theme.Translucent.NoTitleBar' } },
+    { type: 'activity', attrs: { configChanges: binary ? '0x5b0' : 'keyboard|keyboardHidden|screenLayout|screenSize|orientation', exported: bool(false), name: 'com.android.billingclient.api.ProxyBillingActivityV2', theme: binary ? ANY_RESOURCE : '@android:style/Theme.Translucent.NoTitleBar' } },
     { type: 'activity', attrs: { exported: bool(false), name: 'com.google.android.gms.common.api.GoogleApiActivity', theme: binary ? ANY_RESOURCE : '@android:style/Theme.Translucent.NoTitleBar' } },
     { type: 'provider', attrs: { authorities: `${packageName}.androidx-startup`, exported: bool(false), name: 'androidx.startup.InitializationProvider' } },
     { type: 'service', attrs: { exported: bool(false), name: 'com.google.android.datatransport.runtime.backends.TransportBackendDiscovery' } },
