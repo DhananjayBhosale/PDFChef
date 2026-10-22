@@ -11,7 +11,7 @@ export const isSupportOffered = (state: AndroidSupportState | null): state is An
   state !== null
   && state.status === 'ready'
   && state.supporter === 'none'
-  && (state.monthlyPrice !== null || state.lifetimePrice !== null);
+  && (state.monthlyPrice !== null || state.yearlyPrice !== null || state.lifetimePrice !== null);
 
 /** At most one prompt per app update, and never before the person has finished enough jobs. */
 export const shouldOfferSupport = ({ state, finishedJobs, build, promptedBuild }: {

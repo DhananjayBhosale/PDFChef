@@ -42,14 +42,15 @@ public final class AndroidSupportPluginContractTest {
     }
 
     @Test public void productsAndWireMatchPlayConsoleAndTheWebClient() throws Exception {
-        assertEquals("supporter_monthly", AndroidSupportPlugin.MONTHLY_PRODUCT_ID);
+        assertEquals("supporter", AndroidSupportPlugin.SUBSCRIPTION_PRODUCT_ID);
         assertEquals("monthly", AndroidSupportPlugin.MONTHLY_BASE_PLAN_ID);
+        assertEquals("yearly", AndroidSupportPlugin.YEARLY_BASE_PLAN_ID);
         assertEquals("supporter_lifetime", AndroidSupportPlugin.LIFETIME_PRODUCT_ID);
 
         String source = new String(Files.readAllBytes(Path.of(System.getProperty("user.dir"))
                 .resolve("src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/"
                         + "AndroidSupportPlugin.java")), StandardCharsets.UTF_8);
-        for (String key : new String[] {"status", "monthlyPrice", "lifetimePrice", "supporter", "pending"}) {
+        for (String key : new String[] {"status", "monthlyPrice", "yearlyPrice", "lifetimePrice", "supporter", "pending"}) {
             assertTrue(key, source.contains("output.put(\"" + key + "\""));
         }
         // Every purchase is acknowledged, or Google Play refunds it after three days.

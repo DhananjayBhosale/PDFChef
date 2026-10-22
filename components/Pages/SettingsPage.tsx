@@ -12,6 +12,7 @@ import { formatBytes } from '../UI/format';
 import { useMonetization } from '../../hooks/useMonetization';
 import { useSupport } from '../../hooks/useSupport';
 import { SupportChoices, SupporterBadge } from '../UI/SupportPDFChef';
+import { isSupportOffered } from '../../services/supportPrompt';
 import {
   TEXT_SCALE_LABELS,
   useAppearance,
@@ -374,15 +375,15 @@ export const SettingsPage: React.FC = () => {
           </Row>
         </Group>
 
-        {support.state && (support.state.supporter !== 'none' || support.state.monthlyPrice || support.state.lifetimePrice) && (
+        {support.state && (support.state.supporter !== 'none' || isSupportOffered(support.state)) && (
           <Group title={t("support.support.pdf.chef.3b92ab")}>
             {support.state.supporter === 'none' ? (
               <Row detail={t("support.pdf.chef.is.free.for.everyone.with.dba2fa")} stacked>
                 <SupportChoices />
               </Row>
             ) : (
-              <Row label={t("support.thank.you.for.supporting.pdf.chef.c645eb")} stacked={support.state.supporter === 'monthly'}>
-                {support.state.supporter === 'monthly' && (
+              <Row label={t("support.thank.you.for.supporting.pdf.chef.c645eb")} stacked={support.state.supporter === 'subscriber'}>
+                {support.state.supporter === 'subscriber' && (
                   <Button
                     icon={<ExternalLink aria-hidden size={14} />}
                     onClick={() => {

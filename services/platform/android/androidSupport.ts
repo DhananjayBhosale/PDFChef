@@ -4,13 +4,15 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
  * Optional support through Google Play. Every tool stays free for everyone; a support payment
  * unlocks nothing. "unavailable" means Play has no products to offer, so no support is shown.
  */
-export type SupportPlan = 'monthly' | 'lifetime';
+export type SupportPlan = 'monthly' | 'yearly' | 'lifetime';
 
 export interface AndroidSupportState {
   readonly status: 'ready' | 'unavailable';
   readonly monthlyPrice: string | null;
+  readonly yearlyPrice: string | null;
   readonly lifetimePrice: string | null;
-  readonly supporter: 'none' | SupportPlan;
+  /** Google Play does not tell the app which base plan a subscriber is on, only that one is active. */
+  readonly supporter: 'none' | 'subscriber' | 'lifetime';
   readonly pending: boolean;
 }
 
@@ -43,13 +45,13 @@ const isPrice = (value: unknown): value is string | null =>
   value === null || (typeof value === 'string' && value.trim().length > 0 && value.length <= 64);
 
 const parseState = (value: unknown): AndroidSupportState => {
-  const record = exactObject(value, ['lifetimePrice', 'monthlyPrice', 'pending', 'status', 'supporter']);
-  const { status, monthlyPrice, lifetimePrice, supporter, pending } = record;
+  const record = exactObject(value, ['lifetimePrice', 'monthlyPrice', 'pending', 'status', 'supporter', 'yearlyPrice']);
+  const { status, monthlyPrice, yearlyPrice, lifetimePrice, supporter, pending } = record;
   if ((status !== 'ready' && status !== 'unavailable')
-      || !isPrice(monthlyPrice) || !isPrice(lifetimePrice)
-      || (supporter !== 'none' && supporter !== 'monthly' && supporter !== 'lifetime')
+      || !isPrice(monthlyPrice) || !isPrice(yearlyPrice) || !isPrice(lifetimePrice)
+      || (supporter !== 'none' && supporter !== 'subscriber' && supporter !== 'lifetime')
       || typeof pending !== 'boolean') throw invalidResponse();
-  return Object.freeze({ status, monthlyPrice, lifetimePrice, supporter, pending });
+  return Object.freeze({ status, monthlyPrice, yearlyPrice, lifetimePrice, supporter, pending });
 };
 
 const parseResult = (value: unknown): SupportResult => {

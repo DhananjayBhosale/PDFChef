@@ -3,7 +3,7 @@ import test from 'node:test';
 import type { AndroidSupportState } from '../../services/platform/android/androidSupport.ts';
 import { SUPPORT_PROMPT_AFTER_JOBS, isSupportOffered, shouldOfferSupport } from '../../services/supportPrompt.ts';
 
-const ready: AndroidSupportState = { status: 'ready', monthlyPrice: '$0.99', lifetimePrice: '$9.99', supporter: 'none', pending: false };
+const ready: AndroidSupportState = { status: 'ready', monthlyPrice: '₹29.00', yearlyPrice: '₹299.00', lifetimePrice: '₹499.00', supporter: 'none', pending: false };
 const eligible = { state: ready, finishedJobs: SUPPORT_PROMPT_AFTER_JOBS, build: '29', promptedBuild: '28' };
 
 test('the prompt waits for ten finished jobs and shows once per app update', () => {
@@ -17,10 +17,10 @@ test('the prompt waits for ten finished jobs and shows once per app update', () 
 
 test('supporters, pending payments and missing Play products are never asked', () => {
   assert.equal(shouldOfferSupport({ ...eligible, state: null }), false);
-  assert.equal(shouldOfferSupport({ ...eligible, state: { ...ready, supporter: 'monthly' } }), false);
+  assert.equal(shouldOfferSupport({ ...eligible, state: { ...ready, supporter: 'subscriber' } }), false);
   assert.equal(shouldOfferSupport({ ...eligible, state: { ...ready, supporter: 'lifetime' } }), false);
   assert.equal(shouldOfferSupport({ ...eligible, state: { ...ready, pending: true } }), false);
-  const noProducts: AndroidSupportState = { ...ready, status: 'unavailable', monthlyPrice: null, lifetimePrice: null };
+  const noProducts: AndroidSupportState = { ...ready, status: 'unavailable', monthlyPrice: null, yearlyPrice: null, lifetimePrice: null };
   assert.equal(isSupportOffered(noProducts), false);
-  assert.equal(isSupportOffered({ ...ready, monthlyPrice: null }), true);
+  assert.equal(isSupportOffered({ ...ready, monthlyPrice: null, lifetimePrice: null }), true);
 });

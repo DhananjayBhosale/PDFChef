@@ -27,13 +27,13 @@ export const SupporterBadge: React.FC = () => {
   if (state.supporter === 'lifetime') {
     return <Badge tone="accent"><Crown aria-hidden size={13} />{t("support.lifetime.supporter.9645ff")}</Badge>;
   }
-  if (state.supporter === 'monthly') {
+  if (state.supporter === 'subscriber') {
     return <Badge tone="accent"><Heart aria-hidden size={13} />{t("support.proud.supporter.1ba564")}</Badge>;
   }
   return <Badge>{t("support.free.f411a1")}</Badge>;
 };
 
-/** The Monthly and Lifetime buttons with Google Play's own prices. Nothing here unlocks anything. */
+/** The Monthly, Yearly and Lifetime buttons with Google Play's own prices. Nothing here unlocks anything. */
 export const SupportChoices: React.FC<{ onSupported?: () => void }> = ({ onSupported }) => {
   useI18n();
   const { state, busy, support } = useSupport();
@@ -56,6 +56,11 @@ export const SupportChoices: React.FC<{ onSupported?: () => void }> = ({ onSuppo
             {t("support.monthly.755a07", { v0: state.monthlyPrice })}
           </Button>
         )}
+        {state.yearlyPrice && (
+          <Button busy={busy === 'yearly'} disabled={busy !== null || state.pending} onClick={() => void choose('yearly')}>
+            {t("support.yearly.67e003", { v0: state.yearlyPrice })}
+          </Button>
+        )}
         {state.lifetimePrice && (
           <Button busy={busy === 'lifetime'} disabled={busy !== null || state.pending} onClick={() => void choose('lifetime')}>
             {t("support.lifetime.3a44a8", { v0: state.lifetimePrice })}
@@ -63,7 +68,7 @@ export const SupportChoices: React.FC<{ onSupported?: () => void }> = ({ onSuppo
         )}
       </div>
       {message && <StatusLine tone={message.tone}>{message.text}</StatusLine>}
-      <p className="type-footnote text-[var(--text-tertiary)]">{t("support.monthly.support.renews.every.month.until.you.dcafaf")}</p>
+      <p className="type-footnote text-[var(--text-tertiary)]">{t("support.monthly.and.yearly.support.renew.until.you.819b90")}</p>
     </div>
   );
 };

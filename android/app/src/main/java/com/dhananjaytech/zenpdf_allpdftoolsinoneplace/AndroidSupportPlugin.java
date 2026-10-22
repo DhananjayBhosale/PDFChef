@@ -34,15 +34,17 @@ import org.json.JSONObject;
  */
 @CapacitorPlugin(name = "AndroidSupport")
 public final class AndroidSupportPlugin extends Plugin implements PurchasesUpdatedListener {
-    static final String MONTHLY_PRODUCT_ID = "supporter_monthly";
+    /** One subscription with a monthly and a yearly base plan, so a person can hold only one. */
+    static final String SUBSCRIPTION_PRODUCT_ID = "supporter";
     static final String MONTHLY_BASE_PLAN_ID = "monthly";
+    static final String YEARLY_BASE_PLAN_ID = "yearly";
     static final String LIFETIME_PRODUCT_ID = "supporter_lifetime";
     private static final long CONNECT_TIMEOUT_MS = 15_000;
 
     private BillingClient billing;
     private boolean connecting;
     private final List<Waiting> waiting = new ArrayList<>();
-    private ProductDetails monthly;
+    private ProductDetails subscription;
     private ProductDetails lifetime;
     private PluginCall purchaseCall;
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -73,7 +75,7 @@ public final class AndroidSupportPlugin extends Plugin implements PurchasesUpdat
     public void support(PluginCall call) {
         JSObject data = call.getData();
         String plan = data == null || data.length() != 1 ? null : data.getString("plan");
-        if (!"monthly".equals(plan) && !"lifetime".equals(plan)) {
+        if (!"monthly".equals(plan) && !"yearly".equals(plan) && !"lifetime".equals(plan)) {
             call.reject("The support request is invalid.", "SUPPORT_INVALID_ARGUMENT");
             return;
         }
@@ -98,7 +100,7 @@ public final class AndroidSupportPlugin extends Plugin implements PurchasesUpdat
             return;
         }
         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(
-                "https://play.google.com/store/account/subscriptions?sku=" + MONTHLY_PRODUCT_ID
+                "https://play.google.com/store/account/subscriptions?sku=" + SUBSCRIPTION_PRODUCT_ID
                         + "&package=" + getContext().getPackageName()));
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {
@@ -180,8 +182,8 @@ public final class AndroidSupportPlugin extends Plugin implements PurchasesUpdat
     private void loadProducts(Runnable done) {
         queryDetails(LIFETIME_PRODUCT_ID, BillingClient.ProductType.INAPP, onceDetails -> {
             lifetime = onceDetails;
-            queryDetails(MONTHLY_PRODUCT_ID, BillingClient.ProductType.SUBS, monthlyDetails -> {
-                monthly = monthlyDetails;
+            queryDetails(SUBSCRIPTION_PRODUCT_ID, BillingClient.ProductType.SUBS, subscriptionDetails -> {
+                subscription = subscriptionDetails;
                 done.run();
             });
         });
@@ -224,24 +226,27 @@ public final class AndroidSupportPlugin extends Plugin implements PurchasesUpdat
 
     private JSObject state(List<Purchase> once, List<Purchase> subscriptions) {
         String lifetimePrice = lifetimePrice();
-        String monthlyPrice = monthlyPrice();
+        String monthlyPrice = subscriptionPrice(MONTHLY_BASE_PLAN_ID);
+        String yearlyPrice = subscriptionPrice(YEARLY_BASE_PLAN_ID);
         String supporter = "none";
         boolean pending = false;
         List<Purchase> all = new ArrayList<>(subscriptions);
         all.addAll(once);
         for (Purchase purchase : all) {
             boolean ours = purchase.getProducts().contains(LIFETIME_PRODUCT_ID)
-                    || purchase.getProducts().contains(MONTHLY_PRODUCT_ID);
+                    || purchase.getProducts().contains(SUBSCRIPTION_PRODUCT_ID);
             if (!ours) continue;
             if (purchase.getPurchaseState() == Purchase.PurchaseState.PENDING) pending = true;
             if (purchase.getPurchaseState() != Purchase.PurchaseState.PURCHASED) continue;
             acknowledge(purchase);
             if (purchase.getProducts().contains(LIFETIME_PRODUCT_ID)) supporter = "lifetime";
-            else if (!"lifetime".equals(supporter)) supporter = "monthly";
+            else if (!"lifetime".equals(supporter)) supporter = "subscriber";
         }
         JSObject output = new JSObject();
-        output.put("status", lifetimePrice != null || monthlyPrice != null ? "ready" : "unavailable");
+        output.put("status", lifetimePrice != null || monthlyPrice != null || yearlyPrice != null
+                ? "ready" : "unavailable");
         output.put("monthlyPrice", monthlyPrice == null ? JSONObject.NULL : monthlyPrice);
+        output.put("yearlyPrice", yearlyPrice == null ? JSONObject.NULL : yearlyPrice);
         output.put("lifetimePrice", lifetimePrice == null ? JSONObject.NULL : lifetimePrice);
         output.put("supporter", supporter);
         output.put("pending", pending);
@@ -254,25 +259,29 @@ public final class AndroidSupportPlugin extends Plugin implements PurchasesUpdat
         return offer == null ? null : offer.getFormattedPrice();
     }
 
-    private ProductDetails.SubscriptionOfferDetails monthlyOffer() {
-        if (monthly == null || monthly.getSubscriptionOfferDetails() == null) return null;
-        for (ProductDetails.SubscriptionOfferDetails offer : monthly.getSubscriptionOfferDetails()) {
-            if (MONTHLY_BASE_PLAN_ID.equals(offer.getBasePlanId()) && offer.getOfferId() == null) {
-                return offer;
-            }
+    /** The base plan itself, not a promotional offer on it. */
+    private ProductDetails.SubscriptionOfferDetails subscriptionOffer(String basePlanId) {
+        if (subscription == null || subscription.getSubscriptionOfferDetails() == null) return null;
+        for (ProductDetails.SubscriptionOfferDetails offer : subscription.getSubscriptionOfferDetails()) {
+            if (basePlanId.equals(offer.getBasePlanId()) && offer.getOfferId() == null) return offer;
         }
         return null;
     }
 
-    private String monthlyPrice() {
-        ProductDetails.SubscriptionOfferDetails offer = monthlyOffer();
+    private String subscriptionPrice(String basePlanId) {
+        ProductDetails.SubscriptionOfferDetails offer = subscriptionOffer(basePlanId);
         if (offer == null) return null;
         List<ProductDetails.PricingPhase> phases = offer.getPricingPhases().getPricingPhaseList();
         return phases.isEmpty() ? null : phases.get(phases.size() - 1).getFormattedPrice();
     }
 
+    private static String basePlanFor(String plan) {
+        return "yearly".equals(plan) ? YEARLY_BASE_PLAN_ID : MONTHLY_BASE_PLAN_ID;
+    }
+
     private ProductDetails detailsFor(String plan) {
-        return "monthly".equals(plan) ? (monthlyOffer() == null ? null : monthly) : lifetime;
+        if ("lifetime".equals(plan)) return lifetime;
+        return subscriptionOffer(basePlanFor(plan)) == null ? null : subscription;
     }
 
     private void launch(String plan) {
@@ -285,7 +294,9 @@ public final class AndroidSupportPlugin extends Plugin implements PurchasesUpdat
         }
         BillingFlowParams.ProductDetailsParams.Builder product =
                 BillingFlowParams.ProductDetailsParams.newBuilder().setProductDetails(details);
-        if ("monthly".equals(plan)) product.setOfferToken(monthlyOffer().getOfferToken());
+        if (!"lifetime".equals(plan)) {
+            product.setOfferToken(subscriptionOffer(basePlanFor(plan)).getOfferToken());
+        }
         BillingFlowParams flow = BillingFlowParams.newBuilder()
                 .setProductDetailsParamsList(List.of(product.build()))
                 .build();
@@ -354,6 +365,7 @@ public final class AndroidSupportPlugin extends Plugin implements PurchasesUpdat
         JSObject output = new JSObject();
         output.put("status", "unavailable");
         output.put("monthlyPrice", JSONObject.NULL);
+        output.put("yearlyPrice", JSONObject.NULL);
         output.put("lifetimePrice", JSONObject.NULL);
         output.put("supporter", "none");
         output.put("pending", false);

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { AndroidSupportClient, type AndroidSupportNativePlugin } from '../../services/platform/android/androidSupport.ts';
 
-const ready = { status: 'ready', monthlyPrice: '₹89.00', lifetimePrice: '₹899.00', supporter: 'none', pending: false };
+const ready = { status: 'ready', monthlyPrice: '₹29.00', yearlyPrice: '₹299.00', lifetimePrice: '₹499.00', supporter: 'none', pending: false };
 
 const nativeStub = (overrides: Partial<AndroidSupportNativePlugin> = {}): AndroidSupportNativePlugin => ({
   getSupport: async () => ready,
@@ -11,12 +11,14 @@ const nativeStub = (overrides: Partial<AndroidSupportNativePlugin> = {}): Androi
   ...overrides,
 });
 
-test('state accepts exactly the five public fields and is frozen', async () => {
+test('state accepts exactly the six public fields and is frozen', async () => {
   const state = await new AndroidSupportClient(nativeStub()).getSupport();
   assert.deepEqual(state, ready);
   assert.equal(Object.isFrozen(state), true);
 
-  const unavailable = { status: 'unavailable', monthlyPrice: null, lifetimePrice: null, supporter: 'none', pending: false };
+  const unavailable = { status: 'unavailable', monthlyPrice: null, yearlyPrice: null, lifetimePrice: null, supporter: 'none', pending: false };
+  const subscriber = { ...ready, supporter: 'subscriber' };
+  assert.deepEqual(await new AndroidSupportClient(nativeStub({ getSupport: async () => subscriber })).getSupport(), subscriber);
   assert.deepEqual(await new AndroidSupportClient(nativeStub({ getSupport: async () => unavailable })).getSupport(), unavailable);
 });
 
@@ -25,6 +27,8 @@ test('state rejects extra keys, unknown values and blank prices', async () => {
     { ...ready, unlocked: true },
     { ...ready, status: 'loading' },
     { ...ready, supporter: 'pro' },
+    { ...ready, supporter: 'monthly' },
+    { ...ready, yearlyPrice: '' },
     { ...ready, monthlyPrice: ' ' },
     { ...ready, lifetimePrice: 899 },
     { ...ready, pending: 'no' },
@@ -43,8 +47,8 @@ test('support sends only the plan and returns the Play outcome', async () => {
       return { status: 'pending' };
     },
   }));
-  assert.equal(await client.support('monthly'), 'pending');
-  assert.deepEqual(plans, [{ plan: 'monthly' }]);
+  assert.equal(await client.support('yearly'), 'pending');
+  assert.deepEqual(plans, [{ plan: 'yearly' }]);
   await assert.rejects(
     new AndroidSupportClient(nativeStub({ support: async () => ({ status: 'unlocked' }) })).support('lifetime'),
     TypeError,
