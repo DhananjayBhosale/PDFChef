@@ -1,5 +1,5 @@
 import { formatBytes, toolOutputName, splitFilename } from '../UI/format';
-import { localizeError } from '../../services/i18n/errors.ts';
+import { localizeError, pdfProblemMessage } from '../../services/i18n/errors.ts';
 import { t, formatNumber } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -14,7 +14,7 @@ import {
   type EmbeddedPdfImageAsset,
   type ImageExportConfig,
 } from '../../services/pdfBrowser';
-import { downloadBlob, isPdfFile, revokeObjectUrls } from '../../services/pdfShared';
+import { deliverBlob, isPdfFile, revokeObjectUrls } from '../../services/pdfShared';
 import { parseBoundedPageRange } from '../../services/pageRange';
 import { DEFAULT_IMAGE_EXPORT_QUALITY, DEFAULT_IMAGE_EXPORT_SCALE, MAX_IMAGE_EXPORT_SCALE, MIN_IMAGE_EXPORT_QUALITY, MIN_IMAGE_EXPORT_SCALE, imageExportExtension, imageExportPageFileName, imageExportRenderScale, resolveOptionalPageSelection } from '../../services/androidParity';
 import { Download, FileImage, ImageIcon, Loader2, Settings2, Undo2 } from 'lucide-react';
@@ -68,13 +68,15 @@ const PageImagePreview: React.FC<{
     };
   }, [pdfDoc, scale]);
 
+  // The page is fitted inside the preview box, never taller than it. A fixed 64dvh cap was taller
+  // than the box on a phone, so the box clipped the page and showed only its blank middle.
   return (
-    <figure className="flex max-w-full flex-col items-center">
+    <figure className="absolute inset-0">
       <canvas
         ref={canvasRef}
         role="img"
         aria-label={t("pdfto-image.page.1.preview.b4963a")}
-        className="block max-h-[64dvh] max-w-full select-none rounded-[2px] border border-[var(--border-strong)] bg-white object-contain shadow-[var(--elevation-panel)] md:max-h-[78vh]"
+        className="absolute inset-0 m-auto block max-h-full max-w-full select-none rounded-[2px] border border-[var(--border-strong)] bg-white shadow-[var(--elevation-panel)]"
       />
     </figure>
   );
@@ -183,7 +185,7 @@ export const PDFToImage: React.FC = () => {
       void scanEmbeddedImages(doc);
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: t("pdfto-image.this.pdf.could.not.be.opened.choose.2b90a7") });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: pdfProblemMessage(error) ?? t("pdfto-image.this.pdf.could.not.be.opened.choose.2b90a7") });
     }
   };
 
@@ -299,6 +301,25 @@ export const PDFToImage: React.FC = () => {
   }, [config.format, config.quality, config.scale, file?.id, pageSelection]);
 
   /**
+   * Stays busy until the file is written. On Android a zip can take a minute to reach storage;
+   * saying "Done!" and freeing Convert before then was not true.
+   */
+  const saveResult = async (blob: Blob, name: string, mimeType?: string) => {
+    setStatus({ isProcessing: true, progress: 0, message: t("pdfto-image.saving.23e392") });
+    try {
+      await deliverBlob(blob, name, mimeType);
+    } catch (error) {
+      // A closed save picker is a choice; the result strip already offers the file again.
+      if (error instanceof Error && error.name === 'AbortError') {
+        setStatus({ isProcessing: false, progress: 0, message: '' });
+        return;
+      }
+      throw error;
+    }
+    setStatus({ isProcessing: false, progress: 100, message: t("pdfto-image.done.b4e19e") });
+  };
+
+  /**
    * `PdfToJpgToolProcessor` in the Android app: an empty page selection means every page, a single
    * exported page is delivered as one image rather than a one-entry archive, and multi-page names
    * are zero padded so a listing sorts the way the document reads.
@@ -337,12 +358,11 @@ export const PDFToImage: React.FC = () => {
       if (exportIndices.length === 1) {
         setStatus({ isProcessing: true, progress: 50, message: t("pdfto-image.rendering.page.f14d93", { v0: exportIndices[0] + 1 }) });
         const { blob } = await renderPage(exportIndices[0]);
-        downloadBlob(
+        await saveResult(
           blob,
           `${splitFilename(file.name).stem.trim() || 'document'}.${extension}`,
           config.format,
         );
-        setStatus({ isProcessing: false, progress: 100, message: t("pdfto-image.done.b4e19e") });
         return;
       }
 
@@ -360,8 +380,7 @@ export const PDFToImage: React.FC = () => {
 
       setStatus({ isProcessing: true, progress: 100, message: t("pdfto-image.putting.the.pictures.into.one.zip.file.1a0af7") });
       const content = await zip.generateAsync({ type: 'blob' });
-      downloadBlob(content, toolOutputName('images', file.name, 'zip'));
-      setStatus({ isProcessing: false, progress: 100, message: t("pdfto-image.done.b4e19e") });
+      await saveResult(content, toolOutputName('images', file.name, 'zip'));
     } catch (error) {
       setStatus({
         isProcessing: false,
@@ -380,16 +399,13 @@ export const PDFToImage: React.FC = () => {
   const downloadEmbeddedImages = async (images: EmbeddedPdfImageAsset[]) => {
     if (!file || images.length === 0) return;
 
-    if (images.length === 1) {
-      const image = images[0];
-      downloadBlob(image.blob, toolOutputName('image', file.name, 'png'), 'image/png');
-      setStatus({ isProcessing: false, progress: 100, message: t("pdfto-image.done.b4e19e") });
-      return;
-    }
-
-    setStatus({ isProcessing: true, progress: 10, message: t("pdfto-image.getting.the.pictures.ready.13eef3") });
-
     try {
+      if (images.length === 1) {
+        await saveResult(images[0].blob, toolOutputName('image', file.name, 'png'), 'image/png');
+        return;
+      }
+
+      setStatus({ isProcessing: true, progress: 10, message: t("pdfto-image.getting.the.pictures.ready.13eef3") });
       const zip = new JSZip();
       for (let index = 0; index < images.length; index += 1) {
         const image = images[index];
@@ -405,8 +421,7 @@ export const PDFToImage: React.FC = () => {
       }
 
       const content = await zip.generateAsync({ type: 'blob' });
-      downloadBlob(content, toolOutputName('images', file.name, 'zip'));
-      setStatus({ isProcessing: false, progress: 100, message: t("pdfto-image.done.b4e19e") });
+      await saveResult(content, toolOutputName('images', file.name, 'zip'));
     } catch (error) {
       console.error(error);
       setStatus({ isProcessing: false, progress: 0, message: '', error: t("pdfto-image.embedded.image.export.failed.e49cf7") });
@@ -584,7 +599,9 @@ export const PDFToImage: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    {/* One slider per row. Side by side they are wider than this card on a
+                        phone, and the Resolution value ended past the edge of the screen. */}
+                    <div className="grid gap-3">
                       {config.format !== 'image/png' && (
                         <ChefSliderField
                           label={t("pdfto-image.quality.1b2c08")}
@@ -598,20 +615,18 @@ export const PDFToImage: React.FC = () => {
                         />
                       )}
 
-                      <div className={config.format === 'image/png' ? 'col-span-2' : undefined}>
-                        <ChefSliderField
-                          label={t("pdfto-image.resolution.d4055f")}
-                          suffix="×"
-                          decimals={2}
-                          fixedDecimals
-                          min={MIN_IMAGE_EXPORT_SCALE}
-                          max={MAX_IMAGE_EXPORT_SCALE}
-                          step={0.05}
-                          value={config.scale}
-                          onChange={(next) => setConfig({ ...config, scale: next })}
-                          ariaLabel={t("pdfto-image.image.resolution.93626a")}
-                        />
-                      </div>
+                      <ChefSliderField
+                        label={t("pdfto-image.resolution.d4055f")}
+                        suffix="×"
+                        decimals={2}
+                        fixedDecimals
+                        min={MIN_IMAGE_EXPORT_SCALE}
+                        max={MAX_IMAGE_EXPORT_SCALE}
+                        step={0.05}
+                        value={config.scale}
+                        onChange={(next) => setConfig({ ...config, scale: next })}
+                        ariaLabel={t("pdfto-image.image.resolution.93626a")}
+                      />
                     </div>
 
                     <div className="space-y-1">
@@ -687,8 +702,9 @@ export const PDFToImage: React.FC = () => {
                     </div>
                   )}
                   {preview ? (
+                    // Starts below the zoom controls, so they never cover the top of the page.
                     <div
-                      className="relative"
+                      className="absolute inset-x-3 bottom-3 top-14 sm:top-16"
                       style={zoom === 1 ? undefined : { transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
                     >
                       <PageImagePreview pdfDoc={pdfDoc} scale={config.scale} />
@@ -776,7 +792,8 @@ export const PDFToImage: React.FC = () => {
                                 type="button"
                                 aria-label={t("pdfto-image.download.image.fdaf13", { v0: index + 1 })}
                                 onClick={() => void downloadEmbeddedImages([image])}
-                                className="chef-target chef-pressable flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] text-sm font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]"
+                                disabled={status.isProcessing}
+                                className="chef-target chef-pressable flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] text-sm font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)] disabled:opacity-55"
                               >
                                 <Download aria-hidden size={16} />{t("pdfto-image.download.image.2fd3a0")}</button>
                             </div>

@@ -525,9 +525,11 @@ public final class PdfReaderActivity extends AppCompatActivity {
                     input.getText().clear();
                     fragment.submitPassword(submitted);
                 })
-                .setNegativeButton(android.R.string.cancel, (dialog, which) ->
-                        fragment.cancelPassword())
-                .setOnCancelListener(dialog -> fragment.cancelPassword())
+                // Choosing not to enter the password closes the reader. Handing the cancel to the
+                // viewer made it fail the load, which showed "could not be opened" for a file
+                // that is fine.
+                .setNegativeButton(android.R.string.cancel, (dialog, which) -> finishClosed())
+                .setOnCancelListener(dialog -> finishClosed())
                 .create();
         passwordDialog.setCanceledOnTouchOutside(false);
         passwordDialog.setOnShowListener(dialog -> input.requestFocus());
@@ -1439,11 +1441,6 @@ public final class PdfReaderActivity extends AppCompatActivity {
         @SuppressLint("RestrictedApi")
         void submitPassword(@NonNull String password) {
             getDocumentViewModel().loadDocument$pdf_viewer_fragment(getDocumentUri(), password);
-        }
-
-        @SuppressLint("RestrictedApi")
-        void cancelPassword() {
-            getDocumentViewModel().passwordDialogCancelled$pdf_viewer_fragment();
         }
 
         @Override

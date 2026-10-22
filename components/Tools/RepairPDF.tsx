@@ -1,4 +1,5 @@
 import { t } from '../../services/i18n/core.ts';
+import { classifyPdfError, pdfProblemMessage } from '../../services/i18n/errors.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -120,7 +121,9 @@ export const RepairPDF: React.FC = () => {
         isProcessing: false,
         progress: 0,
         message: '',
-        error: t("repair-pdf.this.pdf.could.not.be.repaired.if.d256c8"),
+        // The unreadable message suggests Repair PDF, which is this tool, so it keeps its own.
+        error: (classifyPdfError(error) !== 'unreadable' && pdfProblemMessage(error))
+          || t("repair-pdf.this.pdf.could.not.be.repaired.if.d256c8"),
       });
     }
   };

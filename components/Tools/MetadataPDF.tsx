@@ -1,4 +1,5 @@
 import { t } from '../../services/i18n/core.ts';
+import { pdfProblemMessage } from '../../services/i18n/errors.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -67,7 +68,7 @@ export const MetadataPDF: React.FC = () => {
         isProcessing: false,
         progress: 0,
         message: '',
-        error: t("metadata-pdf.this.pdf.s.details.could.not.be.ac723c"),
+        error: pdfProblemMessage(error) ?? t("metadata-pdf.this.pdf.s.details.could.not.be.ac723c"),
       });
     }
   };

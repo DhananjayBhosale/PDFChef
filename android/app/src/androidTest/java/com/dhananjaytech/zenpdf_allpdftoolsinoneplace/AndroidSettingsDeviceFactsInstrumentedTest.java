@@ -68,7 +68,8 @@ public final class AndroidSettingsDeviceFactsInstrumentedTest {
 
             JSONObject storage = bridgeValue(scenario,
                     "Capacitor.Plugins.AndroidStorageStats.getStorageStats({})");
-            assertExactKeys(storage, Set.of("retainedBytes", "availableBytes", "capacityBytes"));
+            assertExactKeys(storage, Set.of("retainedBytes", "availableBytes", "capacityBytes",
+                    "memoryBytes"));
             assertEquals("fresh debug package owned bytes", 0, storage.getLong("retainedBytes"));
             if (!storage.isNull("availableBytes") && !storage.isNull("capacityBytes")) {
                 assertTrue(storage.getLong("availableBytes") <= storage.getLong("capacityBytes"));

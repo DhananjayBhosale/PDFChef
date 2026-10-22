@@ -36,7 +36,7 @@ assert(/@CapacitorPlugin\s*\(\s*name\s*=\s*"AndroidStorageStats"\s*\)/.test(plug
 assert(count(plugin, /@PluginMethod\b/g) === 1, 'plugin must expose exactly one method');
 assert(/@PluginMethod\s+public\s+void\s+getStorageStats\s*\(\s*PluginCall\s+call\s*\)/.test(plugin), 'getStorageStats method missing');
 assert(plugin.includes('request.length() != 0'), 'request must be exactly empty');
-assert(count(plugin, /output\.put\("(?:retainedBytes|availableBytes|capacityBytes)"/g) === 3, 'exact three-field DTO missing');
+assert(count(plugin, /output\.put\("(?:retainedBytes|availableBytes|capacityBytes|memoryBytes)"/g) === 4, 'exact four-field DTO missing');
 assert(!/getMessage\s*\(|printStackTrace\s*\(|\bLog\.|System\.out/.test(plugin), 'plugin detail leak');
 assert(!/addListener|stat\s*\(|exists\s*\(|list\s*\(/.test(plugin), 'unaccepted storage method exposed');
 assert(!/AndroidStorageStatsPlugin/.test(mainActivity), 'registration must remain gated');
@@ -44,7 +44,7 @@ assert(!/AndroidStorageStatsPlugin/.test(mainActivity), 'registration must remai
 assert(/getStorageStats\(\):\s*Promise<unknown>/.test(client), 'strict no-argument native shape missing');
 assert(client.includes("registerPlugin<AndroidStorageStatsNativePlugin>('AndroidStorageStats')"), 'native proxy drift');
 assert(!/export\s+const\s+AndroidStorageStatsNative\b/.test(client), 'raw native proxy must remain private');
-assert(client.includes("OUTPUT_KEYS = ['availableBytes', 'capacityBytes', 'retainedBytes']"), 'exact response keys missing');
+assert(client.includes("OUTPUT_KEYS = ['availableBytes', 'capacityBytes', 'memoryBytes', 'retainedBytes']"), 'exact response keys missing');
 assert(client.includes('Reflect.ownKeys') && client.includes('Object.getPrototypeOf(value) !== Object.prototype'), 'strict plain DTO validation missing');
 assert(client.includes('Number.isSafeInteger(value)') && client.includes('value >= 0'), 'safe nonnegative validation missing');
 assert(!/path|filename|uri|telemetry|permission/i.test(client), 'private or unauthorized client surface');
@@ -53,6 +53,6 @@ for (const path of [calculatorPath, pluginPath, calculatorTestPath, pluginTestPa
   console.log(`OWNED ${hash(path)}  ${path}`);
 }
 console.log('ANDROID_STORAGE_STATS_VERIFIER: PASS');
-console.log('ANDROID_STORAGE_STATS_SURFACE: getStorageStats only; retainedBytes/availableBytes/capacityBytes');
+console.log('ANDROID_STORAGE_STATS_SURFACE: getStorageStats only; retainedBytes/availableBytes/capacityBytes/memoryBytes');
 console.log('RUNTIME_DISCOVERY: NOT_CHECKED');
 console.log('PRODUCTION_RELEASE_READY: NO');

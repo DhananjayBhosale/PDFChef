@@ -27,6 +27,7 @@ const nativeStub = (
   clearOwned: async () => ({ deletedCount: 0 }),
   clearOwnedPayloads: async () => ({ clearedCount: 0 }),
   renameItem: async () => ({ status: 'completed' }),
+  renameExport: async ({ displayName }) => ({ status: 'completed', savedName: displayName }),
   trashOwned: async () => ({ undoRef: `u1_${'U'.repeat(22)}`, expiresAt: 600_000 }),
   restoreOwned: async () => ({ status: 'completed' }),
   takePendingImports: async () => ({ batchRef: null, items: [] }),
@@ -223,7 +224,7 @@ test('native rejection identity is preserved and availability requires Android p
 
 test('native contract exposes the bounded document, picker, pending, rename, undo, delivery, and reader methods', () => {
   const native = nativeStub();
-  assert.deepEqual(Object.keys(native).sort(), ['abortWrite', 'acknowledgePendingImports', 'addListener', 'appendWrite', 'beginWrite', 'clearOwned', 'clearOwnedPayloads', 'deleteOwned', 'exportItem', 'finishWrite', 'listOwned', 'openReader', 'pickDocuments', 'readChunk', 'renameItem', 'restoreOwned', 'shareItem', 'takePendingImports', 'trashOwned']);
+  assert.deepEqual(Object.keys(native).sort(), ['abortWrite', 'acknowledgePendingImports', 'addListener', 'appendWrite', 'beginWrite', 'clearOwned', 'clearOwnedPayloads', 'deleteOwned', 'exportItem', 'finishWrite', 'listOwned', 'openReader', 'pickDocuments', 'readChunk', 'renameExport', 'renameItem', 'restoreOwned', 'shareItem', 'takePendingImports', 'trashOwned']);
 });
 
 test('owned undo uses exact opaque DTOs and rejects malformed or leaking responses', async () => {
@@ -548,4 +549,57 @@ test('external PDF events are separate from picker events and accept only opaque
   incoming!({ ref: ownedRef, toolPath: '/edit' });
   incoming!({ batchRef: 'b1_' + 'A'.repeat(22), itemCount: 1 });
   assert.deepEqual(received, [ownedRef]);
+});
+
+// NAV-45, FIL-31: a refused hand-over now reaches the page, as one of three fixed words.
+test('refused external PDF events carry only an allow-listed reason', async () => {
+  const native = nativeStub();
+  let rejected: ((event: unknown) => void) | undefined;
+  const received: string[] = [];
+  native.addListener = async (name, listener) => {
+    assert.equal(name, 'incomingPdfRejected'); rejected = listener;
+    return { remove: async () => undefined };
+  };
+  await new AndroidDocumentsClient(native).addIncomingPdfRejectedListener(reason => received.push(reason));
+  for (const reason of ['tooLarge', 'notPdf', 'other']) rejected!({ reason });
+  rejected!({ reason: 'DOCUMENT_CORRUPT' });
+  rejected!({ reason: 'notPdf', ref: ownedRef });
+  rejected!({ ref: ownedRef });
+  rejected!(null);
+  assert.deepEqual(received, ['tooLarge', 'notPdf', 'other']);
+});
+
+// Release QA NAV-29 / ORG-51: the app showed one name while Downloads held "Name (1).pdf", and a
+// rename never reached the saved copy. Export now reports the stored name and a rename handle.
+test('export reports the name Downloads kept, and only that copy can be renamed', async () => {
+  const native = nativeStub();
+  const exportRef = `pdfchef-${'B'.repeat(22)}`;
+  native.exportItem = async () => ({ status: 'completed', exportRef, savedName: 'Report (1).pdf' });
+  const calls: unknown[] = [];
+  native.renameExport = async options => {
+    calls.push(options);
+    return { status: 'completed', savedName: 'Invoice.pdf' };
+  };
+  const client = new AndroidDocumentsClient(native);
+  assert.deepEqual(await client.exportItem(ownedRef, 'Report.pdf', 'application/pdf'),
+    { status: 'completed', exportRef, savedName: 'Report (1).pdf' });
+  assert.equal(await client.renameExport(exportRef, 'Invoice.pdf'), 'Invoice.pdf');
+  assert.deepEqual(calls, [{ exportRef, displayName: 'Invoice.pdf' }]);
+
+  await assert.rejects(client.renameExport('content://media/1', 'Invoice.pdf'), TypeError);
+  await assert.rejects(client.renameExport(exportRef, 'a/b.pdf'), TypeError);
+  await assert.rejects(client.renameExport(exportRef, 'x'.repeat(181)), TypeError);
+  for (const invalid of [
+    { status: 'completed', exportRef: 'content://media/1', savedName: 'Report.pdf' },
+    { status: 'completed', exportRef, savedName: '' },
+    { status: 'cancelled', exportRef, savedName: 'Report.pdf' },
+    { status: 'completed', exportRef, savedName: 'Report.pdf', path: '/storage/x' },
+  ]) {
+    native.exportItem = async () => invalid;
+    await assert.rejects(client.exportItem(ownedRef, 'Report.pdf', 'application/pdf'), TypeError);
+  }
+  for (const invalid of [{ status: 'completed' }, { status: 'completed', savedName: 'a/b' }]) {
+    native.renameExport = async () => invalid;
+    await assert.rejects(client.renameExport(exportRef, 'Invoice.pdf'), TypeError);
+  }
 });

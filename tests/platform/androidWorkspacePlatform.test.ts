@@ -1,4 +1,6 @@
 import { downloadBlob, type OutputReadyRecord } from '../../services/pdfShared.ts';
+import { LocalizedError } from '../../services/i18n/errors.ts';
+import { LOW_MEMORY_IMAGE_PIXELS, photoPixelCap, setDeviceMemorySource } from '../../services/imageNormalization.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type {
@@ -56,6 +58,7 @@ const native = (): AndroidDocumentsNativePlugin => ({
   clearOwned: async () => ({ deletedCount: 0 }),
   clearOwnedPayloads: async () => ({ clearedCount: 0 }),
   renameItem: async () => ({ status: 'completed' }),
+  renameExport: async ({ displayName }) => ({ status: 'completed', savedName: displayName }),
   trashOwned: async () => ({ undoRef: `u1_${'U'.repeat(22)}`, expiresAt: 600_000 }),
   restoreOwned: async () => ({ status: 'completed' }),
   takePendingImports: async () => ({ batchRef: null, items: [] }),
@@ -442,7 +445,7 @@ test('T907: accepted metadata and storage clients map to the existing Settings s
       storage: {
         async getStorageStats() {
           calls.push('storage');
-          return { retainedBytes: 45, availableBytes: 100, capacityBytes: 200 };
+          return { retainedBytes: 45, availableBytes: 100, capacityBytes: 200, memoryBytes: 3_900_000_000 };
         },
       },
     },
@@ -452,9 +455,16 @@ test('T907: accepted metadata and storage clients map to the existing Settings s
     name: 'PDF Chef', version: '2.2.4', build: '21',
   });
   assert.deepEqual(await platform.storageInformation!.getStorageInformation(), {
-    retainedBytes: 45, availableBytes: 100, capacityBytes: 200,
+    retainedBytes: 45, availableBytes: 100, capacityBytes: 200, memoryBytes: 3_900_000_000,
   });
   assert.deepEqual(calls, ['metadata', 'storage']);
+  try {
+    // A phone of about 4 GB gets the lower photo cap.
+    assert.equal(await photoPixelCap(), LOW_MEMORY_IMAGE_PIXELS);
+    assert.deepEqual(calls, ['metadata', 'storage', 'storage']);
+  } finally {
+    setDeviceMemorySource(null);
+  }
 });
 
 test('T907: device-fact failures remain failures instead of becoming null or zero', async () => {
@@ -499,7 +509,7 @@ test('T907: each unavailable native fact stays unadvertised independently', () =
     false,
     {
       metadata: null,
-      storage: { getStorageStats: async () => ({ retainedBytes: 0, availableBytes: null, capacityBytes: null }) },
+      storage: { getStorageStats: async () => ({ retainedBytes: 0, availableBytes: null, capacityBytes: null, memoryBytes: null }) },
     },
   );
   assert.equal(storageOnly.applicationMetadata, undefined);
@@ -900,4 +910,64 @@ test('Android automatic output delivery honors all history and download settings
     if (descriptor) Object.defineProperty(globalThis, 'window', descriptor);
     else delete (globalThis as { window?: unknown }).window;
   }
+});
+
+const withSettings = async (settings: object, run: (announced: () => OutputReadyRecord | null) => Promise<void>) => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  let announced: OutputReadyRecord | null = null;
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: {
+    location: { pathname: '/merge' },
+    localStorage: { getItem: () => JSON.stringify(settings) },
+    dispatchEvent: (event: CustomEvent<OutputReadyRecord>) => { announced = event.detail; return true; },
+  } });
+  try {
+    await run(() => announced);
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'window', descriptor);
+    else delete (globalThis as { window?: unknown }).window;
+  }
+};
+
+// Release QA NAV-29, FIL-06: Downloads saved "result (1).pdf" while the sheet and Recent said
+// "result.pdf". The result now carries the stored name, and the Recent row takes it too.
+test('Android automatic download reports the stored name and Recent uses it', async () => {
+  const { plugin, calls, platform } = outputHarness();
+  const exportRef = `pdfchef-${'E'.repeat(22)}`;
+  plugin.exportItem = async () => {
+    calls.push('export'); return { status: 'completed', exportRef, savedName: 'result (1).pdf' };
+  };
+  await withSettings({ keepLocalHistory: true, autoDownload: true }, async (announced) => {
+    downloadBlob(new Blob(['output']), 'result.pdf', 'application/pdf');
+    for (let attempt = 0; attempt < 100 && !announced(); attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    const ready = announced();
+    assert.ok(ready);
+    assert.deepEqual(ready.savedCopy, { savedName: 'result (1).pdf', exportRef });
+    assert.equal(ready.recentRecord?.entry.name, 'result (1).pdf');
+    assert.deepEqual(calls, ['begin', 'finish', 'export', 'rename:result (1).pdf']);
+  });
+  let renamed: unknown = null;
+  plugin.renameExport = async options => { renamed = options; return { status: 'completed', savedName: 'Trip Pack.pdf' }; };
+  assert.equal(await platform.renameSaved!(exportRef, 'Trip Pack.pdf'), 'Trip Pack.pdf');
+  assert.deepEqual(renamed, { exportRef, displayName: 'Trip Pack.pdf' });
+});
+
+// Release QA CRT-33, REG-22: a 480 MB result was announced as ready, then every Save spun for
+// 100 seconds and failed. It is now refused before anything is written or announced.
+test('Android refuses a result over 256 MB before writing or announcing it', async () => {
+  const { calls, platform } = outputHarness();
+  const huge = new Blob(['x']);
+  Object.defineProperty(huge, 'size', { value: 257 * 1024 * 1024 });
+  assert.equal(platform.capabilities.maximumOutputBytes, 256 * 1024 * 1024);
+  await withSettings({ keepLocalHistory: true, autoDownload: true }, async (announced) => {
+    assert.throws(() => downloadBlob(huge, 'big.pdf', 'application/pdf'),
+      (error: unknown) => error instanceof LocalizedError && error.translationKey === 'error.outputTooLarge'
+        && error.values.v0 === 257 && error.values.v1 === 256);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(announced(), null);
+  });
+  await assert.rejects(platform.saveFresh({ blob: huge, name: 'big.pdf', mimeType: 'application/pdf' }),
+    (error: unknown) => error instanceof LocalizedError && error.translationKey === 'error.outputTooLarge');
+  assert.deepEqual(calls, []);
 });

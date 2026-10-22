@@ -4,7 +4,7 @@ import { locales, type LocalePreference } from '../../services/i18n/locales.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ExternalLink } from 'lucide-react';
+import { AlertTriangle, ChevronRight, ExternalLink } from 'lucide-react';
 import { announceRecordsChanged, getWorkspaceSettings, updateWorkspaceSettings, type WorkspaceSettings } from '../../services/workspace';
 import { TabHeader } from '../Layout/AppShell';
 import { Button, ConfirmSheet, SegmentedControl, StatusLine, Switch, cx } from '../UI/Primitives';
@@ -382,10 +382,15 @@ export const SettingsPage: React.FC = () => {
                     : t("settings-page.version.unavailable.c0a7f6")}
             </span>
           </Row>
-          <Row
-            label={t("settings-page.open.source.licenses.c9f6d0")}
-            detail={t("settings-page.pptx.renderer.apache.2.0.jszip.mit.13e9e7")}
-          />
+          <Row stacked>
+            <Link
+              to="/licenses" state={BACK_TO_SETTINGS}
+              className="chef-pressable chef-target flex w-full items-center justify-between gap-3 rounded-[var(--radius-control)] font-semibold text-[var(--text-primary)]"
+            >
+              {t("settings-page.open.source.licenses.c9f6d0")}
+              <ChevronRight aria-hidden size={18} className="shrink-0 text-[var(--text-secondary)] rtl:rotate-180" />
+            </Link>
+          </Row>
           <Row label={t("settings-page.source.code.bf046c")} stacked>
             <a
               href="https://github.com/DhananjayBhosale/PDFChef"

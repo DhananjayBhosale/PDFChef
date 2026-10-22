@@ -1,8 +1,9 @@
 import english from '../../services/i18n/en-US.ts';
+import { LocalizedError, localizeError } from '../../services/i18n/errors.ts';
 import { getLocale, t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useNavigationType } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -22,6 +23,8 @@ import {
 import { ProcessingStatus } from '../../types';
 import { createPDFFromImages } from '../../services/pdfDocument';
 import { preparePdfImageAsset } from '../../services/imageBrowser';
+import { imageProblemOf, skippedImagesMessage, type SkippedImage } from '../../services/imageIntake';
+import { createJpegPhotoPdf } from '../../services/jpegPhotoPdf';
 import { mapWithConcurrency } from '../../services/mapWithConcurrency';
 import { downloadBlob, type OutputReadyRecord } from '../../services/pdfShared';
 import { OUTPUT_RENAMED_EVENT, announceOutput, announceOutputRenamed, announceRecordsChanged } from '../../services/workspace';
@@ -34,8 +37,11 @@ import {
   type RecentRecord,
 } from '../../hooks/useWorkspaceRuntime';
 import { useOpenedPdf } from '../../hooks/useOpenedPdf';
+import { useConfirmDiscard } from '../../hooks/useConfirmDiscard';
+import { historyIndex } from '../Layout/navigationHistory';
+import { keepsMakePdfDraftOnLeave, makePdfDraft, releaseMakePdfDraft } from './makePdfDraft';
 import type { StoredDocument } from '../../services/domain/workspaceModels';
-import { datedFileStem, formatBytes, renameKeepingExtension, sanitizeFilenameStem, splitFilename } from '../UI/format';
+import { datedFileStem, filenameStemLimit, formatBytes, renameKeepingExtension, sanitizeFilenameStem, splitFilename } from '../UI/format';
 
 interface CapturedImage {
   id: string;
@@ -73,6 +79,8 @@ const SCAN_FAILURES: Readonly<Record<string, string>> = {
 const SCAN_FAILED = english["make-pdf.that.scan.could.not.be.kept.so.30410c"];
 const SCAN_OPEN_FAILED = english["make-pdf.that.scan.could.not.be.opened.it.7a1de2"];
 const IMAGE_PREPARE_CONCURRENCY = 2;
+/** A row's thumbnail is 44 x 56 points; 400 x 400 pixels covers it at any phone's density. */
+const THUMBNAIL_PIXELS = 160_000;
 
 /** Capacitor reports a fixed code beside the message; the message itself is never shown. */
 const scanFailureFor = (caught: unknown): string => {
@@ -102,13 +110,21 @@ const recordFor = (document: StoredDocument): RecentRecord => ({
 
 export const MakePDF: React.FC = () => {
   useI18n();
-  const [images, setImages] = useState<CapturedImage[]>([]);
+  const navigationType = useNavigationType();
+  // Back returns to the pages left here; any other way in starts empty.
+  const [entry] = useState(() => {
+    if (navigationType !== 'POP') releaseMakePdfDraft();
+    return { index: historyIndex(), path: window.location.pathname };
+  });
+  const [images, setImages] = useState<CapturedImage[]>(() => makePdfDraft.pages);
+  const [exportedImages, setExportedImages] = useState<CapturedImage[] | null>(() => makePdfDraft.exported);
+  const discardSheet = useConfirmDiscard(images.length > 0 && images !== exportedImages);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const freshPdfName = () => datedFileStem(t("make-pdf.scanned.pdf.370cd5"), new Date(), getLocale());
   // Null until the person types, so the suggested name follows today's date and language.
-  const [typedPdfName, setTypedPdfName] = useState<string | null>(null);
+  const [typedPdfName, setTypedPdfName] = useState<string | null>(() => makePdfDraft.typedName);
   const pdfName = typedPdfName ?? freshPdfName();
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -280,18 +296,34 @@ export const MakePDF: React.FC = () => {
     [images],
   );
 
+  useEffect(() => {
+    makePdfDraft.pages = images;
+    makePdfDraft.typedName = typedPdfName;
+    makePdfDraft.exported = exportedImages;
+  }, [images, typedPdfName, exportedImages]);
+
   useEffect(() => () => {
+    const nextIndex = historyIndex();
+    // StrictMode's rehearsal unmount never leaves this entry, so it keeps everything.
+    if (nextIndex === entry.index && window.location.pathname === entry.path) return;
+    if (keepsMakePdfDraftOnLeave(entry.index, nextIndex)) return;
     previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     previewUrlsRef.current.clear();
+    releaseMakePdfDraft();
   }, []);
 
   const appendFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     const picked = Array.from(files);
+    // Every picture left out is named in one notice, whatever the reason.
+    const skipped: SkippedImage[] = [];
     const supported = picked.flatMap((file) => {
       const extension = file.name.split('.').pop()?.toLowerCase();
       const resolvedType = file.type.startsWith('image/') ? file.type : GALLERY_IMAGE_MIME[extension ?? ''];
-      if (!resolvedType || resolvedType === 'image/svg+xml') return [];
+      if (!resolvedType || resolvedType === 'image/svg+xml') {
+        skipped.push({ name: file.name, problem: 'unreadable' });
+        return [];
+      }
       return [file.type === resolvedType
         ? file
         : new File([file], file.name, { type: resolvedType, lastModified: file.lastModified })];
@@ -299,19 +331,18 @@ export const MakePDF: React.FC = () => {
 
     const checked = await mapWithConcurrency(supported, IMAGE_PREPARE_CONCURRENCY, async (file) => {
       try {
-        // Use the same orientation-normalized pixels for the preview and export.
-        const asset = await preparePdfImageAsset(file);
+        // Use the same orientation-normalized pixels for the export, and a small copy of them for
+        // the row's thumbnail, so a long list never holds every full photo decoded on screen.
+        const asset = await preparePdfImageAsset(file, { previewMaxPixels: THUMBNAIL_PIXELS });
         return { file: asset.file, previewUrl: asset.previewUrl };
-      } catch {
+      } catch (error) {
+        skipped.push({ name: file.name, problem: imageProblemOf(error) });
         return null;
       }
     });
 
     const valid = checked.filter((item): item is { file: File; previewUrl: string } => item !== null);
-    const skippedCount = picked.length - valid.length;
-    setSelectionNotice(skippedCount > 0
-      ? t("image-browser.image.could.not.be.decoded.7984a8")
-      : null);
+    setSelectionNotice(skipped.length > 0 ? skippedImagesMessage(skipped) : null);
     const next = valid.map(({ file, previewUrl }) => {
       previewUrlsRef.current.add(previewUrl);
       return {
@@ -360,13 +391,23 @@ export const MakePDF: React.FC = () => {
     if (images.length === 0 || !claimOperation()) return;
     setStatus({ isProcessing: true, progress: 10, message: t("make-pdf.building.page.pdf.on.this.device.85fead", { count: images.length }) });
     try {
-      const bytes = await createPDFFromImages(images.map((item) => item.file));
+      const files = images.map((item) => item.file);
+      // Photos are JPEGs, written into the PDF as they are; pdf-lib's copies are only for PNGs.
+      const pdf = await createJpegPhotoPdf(files)
+        ?? new Blob([await createPDFFromImages(files)], { type: 'application/pdf' });
       const fallback = `${freshPdfName()}.pdf`;
-      downloadBlob(new Blob([bytes], { type: 'application/pdf' }), renameKeepingExtension(pdfName, '.pdf', fallback));
+      downloadBlob(pdf, renameKeepingExtension(pdfName, '.pdf', fallback));
+      setExportedImages(images);
       setStatus({ isProcessing: false, progress: 100, message: t("make-pdf.scanned.pdf.ready.with.page.02e105", { count: images.length }) });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: t("make-pdf.the.pdf.could.not.be.made.try.cd3740") });
+      // A known reason (such as a PDF too big to save) is said plainly instead of the generic line.
+      setStatus({
+        isProcessing: false,
+        progress: 0,
+        message: '',
+        error: error instanceof LocalizedError ? localizeError(error) : t("make-pdf.the.pdf.could.not.be.made.try.cd3740"),
+      });
     } finally {
       operationRef.current = false;
     }
@@ -519,7 +560,7 @@ export const MakePDF: React.FC = () => {
               id="make-pdf-name"
               className="chef-field mt-1 sm:max-w-md"
               value={pdfName}
-              maxLength={200}
+              maxLength={filenameStemLimit('.pdf')}
               autoComplete="off"
               spellCheck={false}
               disabled={status.isProcessing}
@@ -625,7 +666,7 @@ export const MakePDF: React.FC = () => {
           id="make-pdf-scan-name"
           className="chef-field mt-1"
           value={scanRenameValue}
-          maxLength={200}
+          maxLength={filenameStemLimit('.pdf')}
           autoComplete="off"
           spellCheck={false}
           onChange={(event) => {
@@ -636,6 +677,7 @@ export const MakePDF: React.FC = () => {
         {scanRenameError && <div className="mt-2"><StatusLine tone="danger">{scanRenameError}</StatusLine></div>}
       </Sheet>
 
+      {discardSheet}
       <StatusToast status={status} />
     </ToolShell>
   );

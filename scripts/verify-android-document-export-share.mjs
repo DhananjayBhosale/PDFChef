@@ -29,7 +29,8 @@ const methods = [
   'readChunk', 'beginWrite', 'appendWrite', 'finishWrite', 'abortWrite',
   'listOwned', 'renameItem', 'trashOwned', 'restoreOwned', 'deleteOwned', 'clearOwned',
   'clearOwnedPayloads', 'takePendingImports',
-  'acknowledgePendingImports', 'pickDocuments', 'exportItem', 'shareItem', 'openReader',
+  'acknowledgePendingImports', 'pickDocuments', 'exportItem', 'renameExport', 'shareItem',
+  'openReader',
 ];
 assert(count(plugin, /@PluginMethod\b/g) === methods.length
   && methods.every(method => new RegExp(
@@ -87,7 +88,8 @@ assert(manifest.includes('android:name=".documents.ReadOnlyDocumentFileProvider"
 for (const invariant of [
   'exportItem(options:', 'shareItem(options:',
   "return this.deliver('exportItem'", "return this.deliver('shareItem'",
-  "method: 'exportItem' | 'shareItem'", "exactObject(await this.native[method](options), ['status'])",
+  "method: 'exportItem' | 'shareItem'", "const raw = await this.native[method](options);",
+  "exactObject(raw, ['exportRef', 'savedName', 'status'])", "exactObject(raw, ['status'])",
   "result.status !== 'completed' && result.status !== 'cancelled'",
 ]) assert(client.includes(invariant), `strict TypeScript client invariant missing: ${invariant}`);
 

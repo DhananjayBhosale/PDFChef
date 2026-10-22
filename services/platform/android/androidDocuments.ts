@@ -1,6 +1,8 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 
 export const ANDROID_DOCUMENT_MAXIMUM_CHUNK_BYTES = 512 * 1024;
+/** OwnedDocumentWriter.MAXIMUM_FILE_BYTES: the largest file Android can keep or save. */
+export const ANDROID_DOCUMENT_MAXIMUM_FILE_BYTES = 256 * 1024 * 1024;
 
 export interface AndroidDocumentsNativePlugin {
   readChunk(options: {
@@ -17,6 +19,7 @@ export interface AndroidDocumentsNativePlugin {
   clearOwned(options: Readonly<Record<string, never>>): Promise<unknown>;
   clearOwnedPayloads(options: Readonly<Record<string, never>>): Promise<unknown>;
   renameItem(options: { readonly ref: string; readonly displayName: string }): Promise<unknown>;
+  renameExport(options: { readonly exportRef: string; readonly displayName: string }): Promise<unknown>;
   trashOwned(options: { readonly ref: string }): Promise<unknown>;
   restoreOwned(options: { readonly undoRef: string }): Promise<unknown>;
   takePendingImports(options: Readonly<Record<string, never>>): Promise<unknown>;
@@ -44,10 +47,14 @@ export interface AndroidDocumentsNativePlugin {
     readonly initialAction?: 'verify-signatures';
   }): Promise<unknown>;
   addListener(
-    eventName: 'pendingImportReady' | 'incomingPdfReady',
+    eventName: 'pendingImportReady' | 'incomingPdfReady' | 'incomingPdfRejected',
     listener: (event: unknown) => void,
   ): Promise<PluginListenerHandle>;
 }
+
+/** Why Android refused a PDF another app handed over: over 256 MB, not a PDF, or anything else. */
+export type IncomingPdfRejection = 'tooLarge' | 'notPdf' | 'other';
+const INCOMING_PDF_REJECTIONS: readonly IncomingPdfRejection[] = ['tooLarge', 'notPdf', 'other'];
 
 export type SupportedOwnedMime = 'application/pdf' | 'application/zip' | 'text/plain' | 'image/jpeg' | 'image/png' | 'image/webp' | 'image/heic' | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' | 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 export interface AndroidOwnedDocument { readonly kind: 'file'; readonly ref: string; readonly displayName: string | null; readonly mimeType: SupportedOwnedMime; readonly sizeBytes: number; readonly contentHash: string; readonly createdAt: number; readonly available: boolean; readonly pending: false; }
@@ -60,6 +67,9 @@ export type AndroidPickerResult = Readonly<
 >;
 export type AndroidDeliveryResult = Readonly<{
   readonly status: 'completed' | 'cancelled';
+  /** A single exported file: the name Downloads kept, and a handle to rename it later. */
+  readonly savedName?: string;
+  readonly exportRef?: string;
 }>;
 export type AndroidRenameResult = Readonly<{ readonly status: 'completed' }>;
 export type AndroidUndoReceipt = Readonly<{ readonly undoRef: string; readonly expiresAt: number }>;
@@ -376,6 +386,21 @@ export class AndroidDocumentsClient {
     return async () => handle.remove();
   }
 
+  async addIncomingPdfRejectedListener(
+    listener: (reason: IncomingPdfRejection) => void,
+  ): Promise<() => Promise<void>> {
+    if (typeof listener !== 'function') throw invalidRequest();
+    const handle = await this.native.addListener('incomingPdfRejected', raw => {
+      try {
+        const event = exactObject(raw, ['reason']);
+        if (INCOMING_PDF_REJECTIONS.includes(event.reason)) listener(event.reason);
+      } catch {
+        // Only a fixed reason word is accepted; anything else is ignored.
+      }
+    });
+    return async () => handle.remove();
+  }
+
   async exportItem(
     ref: string,
     displayName?: string,
@@ -410,11 +435,31 @@ export class AndroidDocumentsClient {
     } = { ref };
     if (displayName !== undefined) options.displayName = displayName;
     if (mimeType !== undefined) options.mimeType = mimeType;
-    const result = exactObject(await this.native[method](options), ['status']);
+    const raw = await this.native[method](options);
+    if (method === 'exportItem' && raw && typeof raw === 'object' && 'exportRef' in raw) {
+      const saved = exactObject(raw, ['exportRef', 'savedName', 'status']);
+      if (saved.status !== 'completed' || !EXPORT_REF.test(saved.exportRef)
+          || !isDisplayName(saved.savedName)) throw invalidResponse();
+      return Object.freeze({ status: 'completed', exportRef: saved.exportRef, savedName: saved.savedName });
+    }
+    const result = exactObject(raw, ['status']);
     if (result.status !== 'completed' && result.status !== 'cancelled') {
       throw invalidResponse();
     }
     return Object.freeze({ status: result.status });
+  }
+
+  /** Renames the copy an earlier exportItem put in Downloads; returns the name it kept. */
+  async renameExport(exportRef: string, displayName: string): Promise<string> {
+    if (typeof exportRef !== 'string' || !EXPORT_REF.test(exportRef) || !isDisplayName(displayName)) {
+      throw invalidRequest();
+    }
+    const result = exactObject(
+      await this.native.renameExport({ exportRef, displayName }),
+      ['savedName', 'status'],
+    );
+    if (result.status !== 'completed' || !isDisplayName(result.savedName)) throw invalidResponse();
+    return result.savedName;
   }
 
   async openReader(
@@ -455,6 +500,7 @@ const isWellFormedUtf16 = (value: string): boolean => {
   }
   return true;
 };
+const EXPORT_REF = /^pdfchef-[A-Za-z0-9_-]{22,64}$/;
 const isDisplayName = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0 && !value.includes('\0') && !value.includes('/') && !value.includes('\\') && value !== '.' && value !== '..' && value.length <= 180 && isWellFormedUtf16(value) && new TextEncoder().encode(value).length <= 720;
 const exactObject = (value: unknown, expected: readonly string[]): Record<string, any> => { if (value === null || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) throw invalidResponse(); const record = value as Record<string, any>; const keys = Reflect.ownKeys(record); if (keys.some(key => typeof key !== 'string') || keys.length !== expected.length || !(keys as string[]).sort().every((key, index) => key === expected[index])) throw invalidResponse(); return record; };
 const parseOwnedItem = (value: unknown): AndroidOwnedDocument => {

@@ -55,6 +55,7 @@ public final class AndroidStorageStatsPluginContractTest {
         assertEquals(1, occurrences(source, "output.put(\"retainedBytes\""));
         assertEquals(1, occurrences(source, "output.put(\"availableBytes\""));
         assertEquals(1, occurrences(source, "output.put(\"capacityBytes\""));
+        assertEquals(1, occurrences(source, "output.put(\"memoryBytes\""));
         assertTrue(source.contains("STORAGE_STATS_INVALID_ARGUMENT"));
         assertTrue(source.contains("STORAGE_STATS_FAILED"));
         for (String absent : new String[] {"getMessage()", "printStackTrace(", "Log.",

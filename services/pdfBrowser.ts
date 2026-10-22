@@ -1,4 +1,4 @@
-import { LocalizedError } from './i18n/errors.ts';
+import { LocalizedError, classifyPdfError, hasPdfHeader } from './i18n/errors.ts';
 import { t } from './i18n/core.ts';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import pdfWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
@@ -108,7 +108,10 @@ const renderPageToBlob = async (
 };
 
 const loadOwnedPDFDocument = async (file: File, onDestroy?: () => void): Promise<any> => {
-  const loadingTask = pdfjs.getDocument({ data: await readPdfBytes(file), ...pdfjsResourceOptions });
+  const data = await readPdfBytes(file);
+  // Checked before the bytes move to the worker: pdf.js reports a JPEG and a damaged PDF alike.
+  const startsLikePdf = hasPdfHeader(data);
+  const loadingTask = pdfjs.getDocument({ data, ...pdfjsResourceOptions });
   try {
     const doc = await loadingTask.promise;
     let destroyed = false;
@@ -128,7 +131,11 @@ const loadOwnedPDFDocument = async (file: File, onDestroy?: () => void): Promise
     } catch {
       // Preserve the document-opening error; cleanup failure is secondary.
     }
-    throw error;
+    if (startsLikePdf || classifyPdfError(error) !== 'unreadable') throw error;
+    const notPdf = new LocalizedError('error.pdfNotPdf');
+    notPdf.name = 'InvalidPDFException';
+    notPdf.cause = error;
+    throw notPdf;
   }
 };
 
@@ -139,6 +146,17 @@ const loadOwnedPDFDocument = async (file: File, onDestroy?: () => void): Promise
  * screen can release its PDF.js worker without invalidating another consumer.
  */
 export const loadDisposablePDFDocument = (file: File) => loadOwnedPDFDocument(file);
+
+/** True for a PDF that opens without a password, such as one that only limits printing or changes. */
+export const opensWithoutPassword = async (file: File): Promise<boolean> => {
+  try {
+    const doc = await loadOwnedPDFDocument(file);
+    await doc.destroy();
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 // Counts every request for a file's shared document, so a release can tell whether another
 // screen asked for it after the release began.
@@ -1108,7 +1126,8 @@ export const compressPDFAdaptive = async (
   onProgress: (p: number) => void,
   overrideSafety = false,
   customConfig?: AdaptiveConfig,
-  flatten = true,
+  // Turning every page into a picture is the opt-in; by default text stays selectable.
+  flatten = false,
   isTextHeavy = false,
 ) => {
   const config = customConfig || getAdaptiveConfig(level, isTextHeavy);

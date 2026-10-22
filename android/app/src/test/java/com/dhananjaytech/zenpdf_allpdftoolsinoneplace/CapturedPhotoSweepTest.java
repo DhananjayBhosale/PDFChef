@@ -25,6 +25,16 @@ public final class CapturedPhotoSweepTest {
         assertEquals(0, CapturedPhotoSweep.discardCaptures(null));
     }
 
+    @Test public void matchesCapturesStampedInNativeDigits() {
+        // Arabic-Indic and Devanagari digits, as SimpleDateFormat writes them for those locales.
+        assertTrue(CapturedPhotoSweep.CAPTURE_NAME.matcher(
+                "JPEG_٢٠٢٦١٠٢٠_١١٥٥٠٠_42.jpg").matches());
+        assertTrue(CapturedPhotoSweep.CAPTURE_NAME.matcher(
+                "JPEG_२०२६१०२०_११५५००_42.jpg").matches());
+        assertFalse(CapturedPhotoSweep.CAPTURE_NAME.matcher("JPEG_2026102_115500_42.jpg").matches());
+        assertFalse(CapturedPhotoSweep.CAPTURE_NAME.matcher("JPEG_20261020_115500_.jpg").matches());
+    }
+
     @Test public void theSweepRunsFromMainActivityResumeNotFromApplicationOrOnCreate() throws Exception {
         String activity = new String(Files.readAllBytes(java.nio.file.Paths.get(
                 "src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/MainActivity.java")));

@@ -1,0 +1,1683 @@
+[
+ {
+  "name": "@aiden0z/pptx-renderer",
+  "version": "1.2.4",
+  "kind": "js",
+  "license": "Apache-2.0",
+  "copyright": "Copyright (c) aiden0z and pptx-renderer contributors",
+  "url": "https://github.com/aiden0z/pptx-renderer"
+ },
+ {
+  "name": "@babel/runtime",
+  "version": "7.29.2",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2014-present Sebastian McKenzie and other contributors",
+  "url": "https://babel.dev/docs/en/next/babel-runtime"
+ },
+ {
+  "name": "@capacitor/android",
+  "version": "8.5.3",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2017-present Drifty Co",
+  "url": "https://capacitorjs.com",
+  "note": "Includes the Capacitor Android native library."
+ },
+ {
+  "name": "@capacitor/app",
+  "version": "8.1.1",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright 2020-present Ionic",
+  "url": "https://github.com/ionic-team/capacitor-plugins",
+  "note": "Includes Android native code."
+ },
+ {
+  "name": "@capacitor/core",
+  "version": "8.5.3",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2017-present Drifty Co",
+  "url": "https://capacitorjs.com"
+ },
+ {
+  "name": "@capacitor/ios",
+  "version": "8.5.3",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2017-present Drifty Co",
+  "url": "https://capacitorjs.com",
+  "note": "Used by the iOS project only; not part of the Android build."
+ },
+ {
+  "name": "@capacitor/status-bar",
+  "version": "8.0.3",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright 2020-present Ionic",
+  "url": "https://github.com/ionic-team/capacitor-plugins",
+  "note": "Includes Android native code."
+ },
+ {
+  "name": "@embedpdf/pdfium",
+  "version": "2.15.0",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2024 CloudPDF, Ji Chang",
+  "url": "https://www.embedpdf.com/docs/pdfium/introduction",
+  "note": "JavaScript wrapper. The PDFium WebAssembly module and its libraries are listed separately."
+ },
+ {
+  "name": "@fontsource-variable/inter",
+  "version": "5.3.0",
+  "kind": "js",
+  "license": "OFL-1.1",
+  "copyright": "Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)",
+  "url": "https://fontsource.org/fonts/inter"
+ },
+ {
+  "name": "@fontsource-variable/manrope",
+  "version": "5.3.0",
+  "kind": "js",
+  "license": "OFL-1.1",
+  "copyright": "Copyright 2019 The Manrope Project Authors (https://github.com/sharanda/manrope)",
+  "url": "https://fontsource.org/fonts/manrope"
+ },
+ {
+  "name": "@fontsource/cormorant-garamond",
+  "version": "5.3.0",
+  "kind": "js",
+  "license": "OFL-1.1",
+  "copyright": "Copyright 2015 The Cormorant Project Authors (github.com/CatharsisFonts/Cormorant)",
+  "url": "https://fontsource.org/fonts/cormorant-garamond"
+ },
+ {
+  "name": "@fontsource/noto-sans",
+  "version": "5.3.0",
+  "kind": "js",
+  "license": "OFL-1.1",
+  "copyright": "Copyright 2022 The Noto Project Authors (https://github.com/notofonts/latin-greek-cyrillic)",
+  "url": "https://fontsource.org/fonts/noto-sans"
+ },
+ {
+  "name": "@pdf-lib/fontkit",
+  "version": "1.1.1",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2014 Devon Govett (fontkit); @pdf-lib fork by Andrew Dillon",
+  "url": "https://github.com/Hopding/fontkit"
+ },
+ {
+  "name": "@pdf-lib/standard-fonts",
+  "version": "1.0.0",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2018 Andrew Dillon",
+  "url": "https://github.com/Hopding/standard-fonts"
+ },
+ {
+  "name": "@pdf-lib/upng",
+  "version": "1.0.1",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2017 Photopea",
+  "url": "https://github.com/Hopding/upng"
+ },
+ {
+  "name": "@tesseract.js-data/eng",
+  "version": "1.0.0",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) Balearica and @tesseract.js-data contributors",
+  "url": "https://github.com/naptha/tessdata",
+  "note": "Package wrapper. The trained data it carries is listed separately."
+ },
+ {
+  "name": "Adobe CMap resources",
+  "version": "6.3.289 (via pdfjs-dist); also in pdfbox-android",
+  "kind": "asset",
+  "license": "BSD-3-Clause",
+  "copyright": "Copyright 1990-2009 Adobe Systems Incorporated. All rights reserved.",
+  "url": "https://github.com/adobe-type-tools/cmap-resources",
+  "note": "Shipped in public/vendor/pdfjs/cmaps and in pdfbox-android."
+ },
+ {
+  "name": "Adobe Core 14 AFM font metrics",
+  "version": "bundled in pdfbox-android",
+  "kind": "asset",
+  "license": "LicenseRef-Adobe-Core14-AFM",
+  "copyright": "Copyright (c) 1985, 1987, 1989, 1990, 1997 Adobe Systems Incorporated. All Rights Reserved.",
+  "url": "https://pdfbox.apache.org/"
+ },
+ {
+  "name": "Adobe Glyph List and Zapf Dingbats Glyph List",
+  "version": "bundled in pdfbox-android",
+  "kind": "asset",
+  "license": "BSD-3-Clause",
+  "copyright": "Copyright 1997, 1998, 2002, 2007, 2010 Adobe Systems Incorporated.",
+  "url": "https://github.com/adobe-type-tools/agl-aglfn"
+ },
+ {
+  "name": "androidx.activity:activity",
+  "version": "1.11.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.activity:activity-ktx",
+  "version": "1.11.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.annotation:annotation",
+  "version": "1.8.1",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.annotation:annotation-experimental",
+  "version": "1.5.1",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.annotation:annotation-jvm",
+  "version": "1.8.1",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.appcompat:appcompat",
+  "version": "1.7.1",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.appcompat:appcompat-resources",
+  "version": "1.7.1",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.arch.core:core-common",
+  "version": "2.2.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.arch.core:core-runtime",
+  "version": "2.2.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.autofill:autofill",
+  "version": "1.3.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.cardview:cardview",
+  "version": "1.0.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.collection:collection",
+  "version": "1.4.2",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.collection:collection-jvm",
+  "version": "1.4.2",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.collection:collection-ktx",
+  "version": "1.4.2",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.concurrent:concurrent-futures",
+  "version": "1.1.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.constraintlayout:constraintlayout",
+  "version": "2.1.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.constraintlayout:constraintlayout-core",
+  "version": "1.0.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.coordinatorlayout:coordinatorlayout",
+  "version": "1.3.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.core:core",
+  "version": "1.17.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.core:core-ktx",
+  "version": "1.17.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.core:core-splashscreen",
+  "version": "1.2.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.core:core-viewtree",
+  "version": "1.0.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.cursoradapter:cursoradapter",
+  "version": "1.0.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.customview:customview",
+  "version": "1.2.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.customview:customview-poolingcontainer",
+  "version": "1.0.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.datastore:datastore-preferences-external-protobuf",
+  "version": "1.2.1",
+  "kind": "android",
+  "license": "Apache-2.0 AND BSD-3-Clause",
+  "copyright": "Copyright The Android Open Source Project; repackaged Protocol Buffers Copyright 2008 Google Inc. All rights reserved.",
+  "url": "https://developer.android.com/jetpack/androidx/releases/datastore"
+ },
+ {
+  "name": "androidx.datastore:datastore-preferences-proto",
+  "version": "1.2.1",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.drawerlayout:drawerlayout",
+  "version": "1.1.1",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.dynamicanimation:dynamicanimation",
+  "version": "1.1.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.emoji2:emoji2",
+  "version": "1.3.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.emoji2:emoji2-views-helper",
+  "version": "1.3.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.exifinterface:exifinterface",
+  "version": "1.3.2",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.fragment:fragment",
+  "version": "1.8.9",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.fragment:fragment-ktx",
+  "version": "1.8.9",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.graphics:graphics-shapes",
+  "version": "1.0.1",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.graphics:graphics-shapes-android",
+  "version": "1.0.1",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.interpolator:interpolator",
+  "version": "1.0.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.lifecycle:lifecycle-common",
+  "version": "2.6.2",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.lifecycle:lifecycle-livedata",
+  "version": "2.6.2",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.lifecycle:lifecycle-livedata-core",
+  "version": "2.6.2",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.lifecycle:lifecycle-livedata-core-ktx",
+  "version": "2.6.2",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.lifecycle:lifecycle-process",
+  "version": "2.6.2",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.lifecycle:lifecycle-runtime",
+  "version": "2.6.2",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.lifecycle:lifecycle-runtime-ktx",
+  "version": "2.6.2",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.lifecycle:lifecycle-viewmodel",
+  "version": "2.6.2",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.lifecycle:lifecycle-viewmodel-ktx",
+  "version": "2.6.2",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.lifecycle:lifecycle-viewmodel-savedstate",
+  "version": "2.6.2",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.loader:loader",
+  "version": "1.0.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.pdf:pdf-core",
+  "version": "1.0.0-beta01",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx/releases/pdf"
+ },
+ {
+  "name": "androidx.pdf:pdf-document-service",
+  "version": "1.0.0-beta01",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx/releases/pdf"
+ },
+ {
+  "name": "androidx.pdf:pdf-viewer",
+  "version": "1.0.0-beta01",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx/releases/pdf"
+ },
+ {
+  "name": "androidx.pdf:pdf-viewer-fragment",
+  "version": "1.0.0-beta01",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx/releases/pdf",
+  "note": "Direct dependency."
+ },
+ {
+  "name": "androidx.profileinstaller:profileinstaller",
+  "version": "1.4.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.recyclerview:recyclerview",
+  "version": "1.4.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.resourceinspection:resourceinspection-annotation",
+  "version": "1.0.1",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.savedstate:savedstate",
+  "version": "1.2.1",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.savedstate:savedstate-ktx",
+  "version": "1.2.1",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.startup:startup-runtime",
+  "version": "1.1.1",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.tracing:tracing",
+  "version": "1.2.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.transition:transition",
+  "version": "1.5.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.vectordrawable:vectordrawable",
+  "version": "1.1.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.vectordrawable:vectordrawable-animated",
+  "version": "1.1.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.versionedparcelable:versionedparcelable",
+  "version": "1.1.1",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.viewpager:viewpager",
+  "version": "1.0.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.viewpager2:viewpager2",
+  "version": "1.1.0-beta02",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.webkit:webkit",
+  "version": "1.14.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.window:window",
+  "version": "1.3.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "androidx.window.extensions.core:core",
+  "version": "1.0.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Android Open Source Project",
+  "url": "https://developer.android.com/jetpack/androidx"
+ },
+ {
+  "name": "base64-arraybuffer",
+  "version": "1.0.2",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2012 Niklas von Hertzen",
+  "url": "https://github.com/niklasvh/base64-arraybuffer"
+ },
+ {
+  "name": "bmp-js",
+  "version": "0.1.0",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2014 @丝刀口 (shaozilee)",
+  "url": "https://github.com/shaozilee/bmp-js"
+ },
+ {
+  "name": "canvg",
+  "version": "3.0.11",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2010 - present Gabe Lerner (https://github.com/canvg/canvg)",
+  "url": "https://github.com/canvg/canvg"
+ },
+ {
+  "name": "com.google.android.datatransport:transport-api",
+  "version": "2.2.1",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright 2018 Google LLC",
+  "url": "https://github.com/firebase/firebase-android-sdk"
+ },
+ {
+  "name": "com.google.android.datatransport:transport-backend-cct",
+  "version": "2.3.3",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright 2018 Google LLC",
+  "url": "https://github.com/firebase/firebase-android-sdk"
+ },
+ {
+  "name": "com.google.android.datatransport:transport-runtime",
+  "version": "2.2.6",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright 2018 Google LLC",
+  "url": "https://github.com/firebase/firebase-android-sdk"
+ },
+ {
+  "name": "com.google.android.gms:play-services-base",
+  "version": "18.5.0",
+  "kind": "android",
+  "license": "LicenseRef-Android-SDK-Terms",
+  "copyright": "Copyright Google LLC",
+  "url": "https://developers.google.com/android/guides/overview",
+  "note": "Proprietary Google library; not open source. Used under Google's terms linked in the licence section."
+ },
+ {
+  "name": "com.google.android.gms:play-services-basement",
+  "version": "18.4.0",
+  "kind": "android",
+  "license": "LicenseRef-Android-SDK-Terms",
+  "copyright": "Copyright Google LLC",
+  "url": "https://developers.google.com/android/guides/overview",
+  "note": "Proprietary Google library; not open source. Used under Google's terms linked in the licence section."
+ },
+ {
+  "name": "com.google.android.gms:play-services-mlkit-document-scanner",
+  "version": "16.0.0",
+  "kind": "android",
+  "license": "LicenseRef-Android-SDK-Terms",
+  "copyright": "Copyright Google LLC",
+  "url": "https://developers.google.com/ml-kit/vision/doc-scanner",
+  "note": "Proprietary Google library; not open source. Used under Google's terms linked in the licence section."
+ },
+ {
+  "name": "com.google.android.gms:play-services-tasks",
+  "version": "18.2.0",
+  "kind": "android",
+  "license": "LicenseRef-Android-SDK-Terms",
+  "copyright": "Copyright Google LLC",
+  "url": "https://developers.google.com/android/guides/overview",
+  "note": "Proprietary Google library; not open source. Used under Google's terms linked in the licence section."
+ },
+ {
+  "name": "com.google.android.material:material",
+  "version": "1.13.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Material Components for Android Authors",
+  "url": "https://github.com/material-components/material-components-android"
+ },
+ {
+  "name": "com.google.android.play:app-update",
+  "version": "2.1.0",
+  "kind": "android",
+  "license": "LicenseRef-Android-SDK-Terms",
+  "copyright": "Copyright Google LLC",
+  "url": "https://developer.android.com/guide/playcore",
+  "note": "Proprietary Google library; not open source. Used under Google's terms linked in the licence section."
+ },
+ {
+  "name": "com.google.android.play:core-common",
+  "version": "2.0.3",
+  "kind": "android",
+  "license": "LicenseRef-Android-SDK-Terms",
+  "copyright": "Copyright Google LLC",
+  "url": "https://developer.android.com/guide/playcore",
+  "note": "Proprietary Google library; not open source. Used under Google's terms linked in the licence section."
+ },
+ {
+  "name": "com.google.code.gson:gson",
+  "version": "2.13.2",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright 2008 Google Inc.",
+  "url": "https://github.com/google/gson"
+ },
+ {
+  "name": "com.google.errorprone:error_prone_annotations",
+  "version": "2.41.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright 2015 The Error Prone Authors",
+  "url": "https://errorprone.info/"
+ },
+ {
+  "name": "com.google.firebase:firebase-annotations",
+  "version": "16.0.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright Google LLC",
+  "url": "https://github.com/firebase/firebase-android-sdk"
+ },
+ {
+  "name": "com.google.firebase:firebase-components",
+  "version": "16.1.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright Google LLC",
+  "url": "https://github.com/firebase/firebase-android-sdk"
+ },
+ {
+  "name": "com.google.firebase:firebase-encoders",
+  "version": "16.1.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright Google LLC",
+  "url": "https://github.com/firebase/firebase-android-sdk"
+ },
+ {
+  "name": "com.google.firebase:firebase-encoders-json",
+  "version": "17.1.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright Google LLC",
+  "url": "https://github.com/firebase/firebase-android-sdk"
+ },
+ {
+  "name": "com.google.guava:listenablefuture",
+  "version": "1.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright The Guava Authors",
+  "url": "https://github.com/google/guava"
+ },
+ {
+  "name": "com.google.mlkit:common",
+  "version": "18.11.0",
+  "kind": "android",
+  "license": "LicenseRef-Android-SDK-Terms",
+  "copyright": "Copyright Google LLC",
+  "url": "https://developers.google.com/ml-kit",
+  "note": "Proprietary Google library; not open source. Used under Google's terms linked in the licence section."
+ },
+ {
+  "name": "com.tom-roush:pdfbox-android",
+  "version": "2.0.27.0",
+  "kind": "android",
+  "license": "Apache-2.0 AND BSD-3-Clause",
+  "copyright": "Copyright 2014 The Apache Software Foundation; Android port by Tom Roush; includes code Copyright (c) 2002-2007, www.pdfbox.org",
+  "url": "https://github.com/TomRoush/PdfBox-Android",
+  "note": "Includes Adobe CMaps, glyph lists, AFM metrics, Unicode data files and Liberation Sans, listed separately."
+ },
+ {
+  "name": "cookie",
+  "version": "1.1.1",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2012-2014 Roman Shtylman; (c) 2015 Douglas Christopher Wilson",
+  "url": "https://github.com/jshttp/cookie"
+ },
+ {
+  "name": "core-js",
+  "version": "3.49.0",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2013-2025 Denis Pushkarev (zloirock.ru); (c) 2025-2026 CoreJS Company (core-js.io)",
+  "url": "https://core-js.io"
+ },
+ {
+  "name": "core-util-is",
+  "version": "1.0.3",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright Node.js contributors",
+  "url": "https://github.com/isaacs/core-util-is"
+ },
+ {
+  "name": "css-line-break",
+  "version": "2.1.0",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2017 Niklas von Hertzen",
+  "url": "https://github.com/niklasvh/css-line-break"
+ },
+ {
+  "name": "dompurify",
+  "version": "3.4.16",
+  "kind": "js",
+  "license": "Apache-2.0",
+  "copyright": "Copyright (c) Cure53 and other contributors",
+  "url": "https://github.com/cure53/DOMPurify",
+  "note": "Offered as MPL-2.0 OR Apache-2.0; used under the Apache-2.0 terms."
+ },
+ {
+  "name": "echarts",
+  "version": "6.1.0",
+  "kind": "js",
+  "license": "Apache-2.0 AND BSD-3-Clause",
+  "copyright": "Copyright 2017-2026 The Apache Software Foundation; d3 portions Copyright 2010-2016 Mike Bostock",
+  "url": "https://echarts.apache.org"
+ },
+ {
+  "name": "fast-png",
+  "version": "6.4.0",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2015 Michaël Zasso",
+  "url": "https://github.com/image-js/fast-png"
+ },
+ {
+  "name": "fflate",
+  "version": "0.8.3",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2026 Arjun Barrett",
+  "url": "https://101arrowz.github.io/fflate"
+ },
+ {
+  "name": "Foxit standard fonts (PDF.js standard fonts)",
+  "version": "6.3.289 (via pdfjs-dist)",
+  "kind": "asset",
+  "license": "BSD-3-Clause",
+  "copyright": "Copyright 2014 PDFium Authors. All rights reserved.",
+  "url": "https://github.com/mozilla/pdf.js",
+  "note": "Shipped in public/vendor/pdfjs/standard_fonts as the .pfb files."
+ },
+ {
+  "name": "FreeType",
+  "version": "bundled in PDFium",
+  "kind": "asset",
+  "license": "FTL",
+  "copyright": "Portions of this software are copyright (c) The FreeType Project (https://freetype.org). All rights reserved.",
+  "url": "https://freetype.org/",
+  "note": "Offered under FTL or GPL-2.0-only; used under the FreeType Project License. This software is based in part on the work of the FreeType Team."
+ },
+ {
+  "name": "giflib",
+  "version": "bundled in Tesseract",
+  "kind": "asset",
+  "license": "MIT",
+  "copyright": "Copyright (c) 1997 Eric S. Raymond",
+  "url": "https://giflib.sourceforge.net/"
+ },
+ {
+  "name": "html2canvas",
+  "version": "1.4.1",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2012 Niklas von Hertzen",
+  "url": "https://html2canvas.hertzen.com"
+ },
+ {
+  "name": "idb-keyval",
+  "version": "6.2.2",
+  "kind": "js",
+  "license": "Apache-2.0",
+  "copyright": "Copyright 2016, Jake Archibald",
+  "url": "https://github.com/jakearchibald/idb-keyval"
+ },
+ {
+  "name": "immediate",
+  "version": "3.0.6",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2012 Barnesandnoble.com, llc, Donavon West, Domenic Denicola, Brian Cavalier",
+  "url": "https://github.com/calvinmetcalf/immediate"
+ },
+ {
+  "name": "inherits",
+  "version": "2.0.4",
+  "kind": "js",
+  "license": "ISC",
+  "copyright": "Copyright (c) Isaac Z. Schlueter",
+  "url": "https://github.com/isaacs/inherits"
+ },
+ {
+  "name": "iobuffer",
+  "version": "5.4.0",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2015 Michaël Zasso",
+  "url": "https://github.com/image-js/iobuffer"
+ },
+ {
+  "name": "is-url",
+  "version": "1.2.4",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) Segment and is-url contributors",
+  "url": "https://github.com/segmentio/is-url"
+ },
+ {
+  "name": "isarray",
+  "version": "1.0.0",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2013 Julian Gruber",
+  "url": "https://github.com/juliangruber/isarray"
+ },
+ {
+  "name": "javax.inject:javax.inject",
+  "version": "1",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright (C) 2009 The JSR-330 Expert Group",
+  "url": "https://github.com/javax-inject/javax-inject"
+ },
+ {
+  "name": "js-tokens",
+  "version": "4.0.0",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2014, 2015, 2016, 2017, 2018 Simon Lydell",
+  "url": "https://github.com/lydell/js-tokens"
+ },
+ {
+  "name": "jspdf",
+  "version": "4.2.1",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2010-2025 James Hall (https://github.com/MrRio/jsPDF); (c) 2015-2025 yWorks GmbH (https://www.yworks.com/)",
+  "url": "https://github.com/parallax/jsPDF"
+ },
+ {
+  "name": "jszip",
+  "version": "3.10.1",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2009-2016 Stuart Knightley, David Duponchel, Franz Buchinger, Antonio Afonso",
+  "url": "https://github.com/Stuk/jszip",
+  "note": "Offered as MIT OR GPL-3.0-or-later; used under the MIT terms."
+ },
+ {
+  "name": "Leptonica",
+  "version": "bundled in Tesseract",
+  "kind": "asset",
+  "license": "Leptonica",
+  "copyright": "Copyright (C) 2001-2020 Leptonica. All rights reserved.",
+  "url": "http://www.leptonica.org/"
+ },
+ {
+  "name": "Liberation Sans (PDF.js standard fonts)",
+  "version": "1.07.4",
+  "kind": "asset",
+  "license": "LicenseRef-Liberation-Fonts",
+  "copyright": "Copyright (c) 2007 Red Hat, Inc. All rights reserved. LIBERATION is a trademark of Red Hat, Inc.",
+  "url": "https://github.com/liberationfonts/liberation-fonts",
+  "note": "Shipped in public/vendor/pdfjs/standard_fonts."
+ },
+ {
+  "name": "Liberation Sans (PDFBox font)",
+  "version": "2.1.5",
+  "kind": "asset",
+  "license": "OFL-1.1",
+  "copyright": "Digitized data copyright (c) 2010 Google Corporation; Copyright (c) 2012 Red Hat, Inc.",
+  "url": "https://github.com/liberationfonts/liberation-fonts",
+  "note": "LiberationSans-Regular.ttf inside pdfbox-android."
+ },
+ {
+  "name": "libjpeg (IJG)",
+  "version": "bundled in Tesseract and QPDF",
+  "kind": "asset",
+  "license": "IJG",
+  "copyright": "Copyright (C) Thomas G. Lane, Guido Vollbeding and the Independent JPEG Group",
+  "url": "https://www.ijg.org/"
+ },
+ {
+  "name": "libpng",
+  "version": "bundled in PDFium and Tesseract",
+  "kind": "asset",
+  "license": "libpng-2.0",
+  "copyright": "Copyright (c) The PNG Reference Library Authors; Cosmin Truta; Glenn Randers-Pehrson; Andreas Dilger; Guy Eric Schalnat, Group 42, Inc.",
+  "url": "http://www.libpng.org/pub/png/libpng.html"
+ },
+ {
+  "name": "libtiff",
+  "version": "bundled in Tesseract",
+  "kind": "asset",
+  "license": "libtiff",
+  "copyright": "Copyright (c) 1988-1997 Sam Leffler; (c) 1991-1997 Silicon Graphics, Inc.",
+  "url": "https://libtiff.gitlab.io/libtiff/"
+ },
+ {
+  "name": "libwebp",
+  "version": "bundled in Tesseract",
+  "kind": "asset",
+  "license": "BSD-3-Clause",
+  "copyright": "Copyright (c) 2010, Google Inc. All rights reserved.",
+  "url": "https://chromium.googlesource.com/webm/libwebp"
+ },
+ {
+  "name": "lie",
+  "version": "3.3.0",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2014-2018 Calvin Metcalf, Jordan Harband",
+  "url": "https://github.com/calvinmetcalf/lie"
+ },
+ {
+  "name": "Little CMS (lcms2)",
+  "version": "bundled in PDFium",
+  "kind": "asset",
+  "license": "MIT",
+  "copyright": "Copyright (c) Marti Maria Saguer",
+  "url": "https://www.littlecms.com/"
+ },
+ {
+  "name": "loose-envify",
+  "version": "1.4.0",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2015 Andres Suarez",
+  "url": "https://github.com/zertosh/loose-envify"
+ },
+ {
+  "name": "lucide-react",
+  "version": "0.344.0",
+  "kind": "js",
+  "license": "ISC AND MIT",
+  "copyright": "Copyright (c) 2022 Lucide Contributors; portions Copyright (c) 2013-2022 Cole Bemis (Feather)",
+  "url": "https://lucide.dev"
+ },
+ {
+  "name": "Martel",
+  "version": "1.001",
+  "kind": "asset",
+  "license": "OFL-1.1",
+  "copyright": "Copyright (c) 2015 Dan Reynolds. Copyright (c) 2010-2015, Sorkin Type Co (www.sorkintype.com) with Reserved Font Name 'Merriweather'",
+  "url": "https://github.com/mooniak/martel-fonts",
+  "note": "Shipped in assets/fonts/pdf-edit for text editing in PDFs."
+ },
+ {
+  "name": "Mukta",
+  "version": "2.538",
+  "kind": "asset",
+  "license": "OFL-1.1",
+  "copyright": "Copyright (c) 2014, Girish Dalvi, Ek Type. All rights reserved.",
+  "url": "https://github.com/EkType/Mukta",
+  "note": "Shipped in assets/fonts/pdf-edit for text editing in PDFs."
+ },
+ {
+  "name": "node-fetch",
+  "version": "2.7.0",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2016 David Frank",
+  "url": "https://github.com/bitinn/node-fetch",
+  "note": "Declared dependency of tesseract.js; used only by its Node.js entry point, not by the browser build."
+ },
+ {
+  "name": "opencollective-postinstall",
+  "version": "2.0.3",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2018 Open Collective",
+  "url": "https://github.com/opencollective/opencollective-postinstall",
+  "note": "Install-time script of tesseract.js; not part of the app."
+ },
+ {
+  "name": "OpenJPEG",
+  "version": "bundled in PDFium and the PDF.js JPEG 2000 decoder",
+  "kind": "asset",
+  "license": "BSD-2-Clause",
+  "copyright": "Copyright (c) 2002-2014 Universite catholique de Louvain (UCL), Belgium; (c) 2002-2014 Professor Benoit Macq; (c) 2003-2014 Antonin Descampe; (c) 2003-2009 Francois-Olivier Devaux; (c) 2005 Herve Drolon, FreeImage Team; (c) 2002-2003 Yannick Verschueren; (c) 2001-2003 David Janssens; (c) 2011-2012 Centre National d'Etudes Spatiales (CNES), France; (c) 2012 CS Systemes d'Information, France; PDF.js wrapper (c) 2024 Mozilla Foundation",
+  "url": "https://www.openjpeg.org/"
+ },
+ {
+  "name": "org.apache.cordova:framework",
+  "version": "14.0.1",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright 2015-2020 The Apache Software Foundation",
+  "url": "https://cordova.apache.org/",
+  "note": "Pulled in by Capacitor Android."
+ },
+ {
+  "name": "org.bouncycastle:bcpkix-jdk15to18",
+  "version": "1.72",
+  "kind": "android",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2000-2022 The Legion of the Bouncy Castle Inc. (https://www.bouncycastle.org)",
+  "url": "https://www.bouncycastle.org/java.html"
+ },
+ {
+  "name": "org.bouncycastle:bcprov-jdk15to18",
+  "version": "1.72",
+  "kind": "android",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2000-2022 The Legion of the Bouncy Castle Inc. (https://www.bouncycastle.org)",
+  "url": "https://www.bouncycastle.org/java.html"
+ },
+ {
+  "name": "org.bouncycastle:bcutil-jdk15to18",
+  "version": "1.72",
+  "kind": "android",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2000-2022 The Legion of the Bouncy Castle Inc. (https://www.bouncycastle.org)",
+  "url": "https://www.bouncycastle.org/java.html"
+ },
+ {
+  "name": "org.jetbrains:annotations",
+  "version": "23.0.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright 2000-2021 JetBrains s.r.o.",
+  "url": "https://github.com/JetBrains/java-annotations"
+ },
+ {
+  "name": "org.jetbrains.kotlin:kotlin-bom",
+  "version": "1.8.22",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright 2010-2024 JetBrains s.r.o. and Kotlin Programming Language contributors",
+  "url": "https://kotlinlang.org/"
+ },
+ {
+  "name": "org.jetbrains.kotlin:kotlin-stdlib",
+  "version": "2.1.20",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright 2010-2024 JetBrains s.r.o. and Kotlin Programming Language contributors",
+  "url": "https://kotlinlang.org/"
+ },
+ {
+  "name": "org.jetbrains.kotlinx:kotlinx-coroutines-android",
+  "version": "1.9.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright 2016-2024 JetBrains s.r.o. and contributors",
+  "url": "https://github.com/Kotlin/kotlinx.coroutines"
+ },
+ {
+  "name": "org.jetbrains.kotlinx:kotlinx-coroutines-bom",
+  "version": "1.9.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright 2016-2024 JetBrains s.r.o. and contributors",
+  "url": "https://github.com/Kotlin/kotlinx.coroutines"
+ },
+ {
+  "name": "org.jetbrains.kotlinx:kotlinx-coroutines-core",
+  "version": "1.9.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright 2016-2024 JetBrains s.r.o. and contributors",
+  "url": "https://github.com/Kotlin/kotlinx.coroutines"
+ },
+ {
+  "name": "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm",
+  "version": "1.9.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright 2016-2024 JetBrains s.r.o. and contributors",
+  "url": "https://github.com/Kotlin/kotlinx.coroutines"
+ },
+ {
+  "name": "org.jspecify:jspecify",
+  "version": "1.0.0",
+  "kind": "android",
+  "license": "Apache-2.0",
+  "copyright": "Copyright 2018-2023 The JSpecify Authors",
+  "url": "https://jspecify.dev/"
+ },
+ {
+  "name": "pako",
+  "version": "1.0.11",
+  "kind": "js",
+  "license": "MIT AND Zlib",
+  "copyright": "Copyright (C) 2014-2017 Vitaly Puzrin and Andrei Tuputcyn; zlib port Copyright (C) 1995-2013 Jean-loup Gailly and Mark Adler",
+  "url": "https://github.com/nodeca/pako"
+ },
+ {
+  "name": "pako",
+  "version": "2.1.0",
+  "kind": "js",
+  "license": "MIT AND Zlib",
+  "copyright": "Copyright (C) 2014-2017 Vitaly Puzrin and Andrei Tuputcyn; zlib port Copyright (C) 1995-2013 Jean-loup Gailly and Mark Adler",
+  "url": "https://github.com/nodeca/pako"
+ },
+ {
+  "name": "pdf-lib",
+  "version": "1.17.1",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2019 Andrew Dillon",
+  "url": "https://pdf-lib.js.org"
+ },
+ {
+  "name": "PDF.js JBIG2 decoder (jbig2.wasm)",
+  "version": "6.3.289 (via pdfjs-dist)",
+  "kind": "asset",
+  "license": "Apache-2.0 AND BSD-3-Clause",
+  "copyright": "Copyright 2026 Mozilla Foundation; decoder code Copyright 2014 The PDFium Authors",
+  "url": "https://github.com/mozilla/pdf.js",
+  "note": "Shipped in public/vendor/pdfjs/wasm."
+ },
+ {
+  "name": "PDFium",
+  "version": "2.15.0 (via @embedpdf/pdfium)",
+  "kind": "asset",
+  "license": "Apache-2.0 AND BSD-3-Clause",
+  "copyright": "Copyright 2014 PDFium Authors. All rights reserved.",
+  "url": "https://pdfium.googlesource.com/pdfium/",
+  "note": "WebAssembly build shipped by @embedpdf/pdfium. It also contains PDFium's bundled third-party libraries, including those listed here (FreeType, libpng, zlib, OpenJPEG, Little CMS); see https://pdfium.googlesource.com/pdfium/+/main/third_party/ for PDFium's own list."
+ },
+ {
+  "name": "pdfjs-dist",
+  "version": "6.3.289",
+  "kind": "js",
+  "license": "Apache-2.0",
+  "copyright": "Copyright 2024 Mozilla Foundation",
+  "url": "https://mozilla.github.io/pdf.js/",
+  "note": "Also supplies the wasm decoders, CMaps and standard fonts listed separately."
+ },
+ {
+  "name": "performance-now",
+  "version": "2.1.0",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2013 Braveg1rl",
+  "url": "https://github.com/braveg1rl/performance-now"
+ },
+ {
+  "name": "process-nextick-args",
+  "version": "2.0.1",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2015 Calvin Metcalf",
+  "url": "https://github.com/calvinmetcalf/process-nextick-args"
+ },
+ {
+  "name": "qcms colour management (qcms_bg.wasm)",
+  "version": "6.3.289 (via pdfjs-dist)",
+  "kind": "asset",
+  "license": "MIT",
+  "copyright": "Copyright (C) 2009-2024 Mozilla Corporation; (C) 1998-2007 Marti Maria",
+  "url": "https://github.com/FirefoxGraphics/qcms",
+  "note": "Shipped in public/vendor/pdfjs/wasm."
+ },
+ {
+  "name": "QPDF",
+  "version": "bundled in qpdf-run 0.2.1",
+  "kind": "asset",
+  "license": "Apache-2.0",
+  "copyright": "Copyright (c) 2005-2024 Jay Berkenbilt",
+  "url": "https://github.com/qpdf/qpdf",
+  "note": "WebAssembly build served as qpdf.wasm. Earlier QPDF releases were under the Artistic License 2.0; this build is used under Apache-2.0."
+ },
+ {
+  "name": "qpdf-run",
+  "version": "0.2.1",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2026 CrabPDF contributors",
+  "url": "https://github.com/RabbitHols/qpdf-run",
+  "note": "JavaScript wrapper. The QPDF WebAssembly module is listed separately."
+ },
+ {
+  "name": "QuickJS (quickjs-eval.wasm)",
+  "version": "6.3.289 (via pdfjs-dist)",
+  "kind": "asset",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2017-2021 Fabrice Bellard; (c) 2017-2021 Charlie Gordon",
+  "url": "https://bellard.org/quickjs/",
+  "note": "Shipped in public/vendor/pdfjs/wasm. The package does not carry a QuickJS notice, so the copyright line is the upstream project's."
+ },
+ {
+  "name": "raf",
+  "version": "3.4.1",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright 2013 Chris Dickinson",
+  "url": "https://github.com/chrisdickinson/raf"
+ },
+ {
+  "name": "react",
+  "version": "18.3.1",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) Facebook, Inc. and its affiliates",
+  "url": "https://reactjs.org/"
+ },
+ {
+  "name": "react-dom",
+  "version": "18.3.1",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) Facebook, Inc. and its affiliates",
+  "url": "https://reactjs.org/"
+ },
+ {
+  "name": "react-router",
+  "version": "7.18.3",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) React Training LLC 2015-2019; Remix Software Inc. 2020-2021; Shopify Inc. 2022-2023",
+  "url": "https://github.com/remix-run/react-router"
+ },
+ {
+  "name": "react-router-dom",
+  "version": "7.18.3",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) React Training LLC 2015-2019; Remix Software Inc. 2020-2021; Shopify Inc. 2022-2023",
+  "url": "https://github.com/remix-run/react-router"
+ },
+ {
+  "name": "readable-stream",
+  "version": "2.3.8",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright Node.js contributors; Copyright Joyent, Inc. and other Node contributors",
+  "url": "https://github.com/nodejs/readable-stream"
+ },
+ {
+  "name": "regenerator-runtime",
+  "version": "0.13.11",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2014-present, Facebook, Inc",
+  "url": "https://github.com/facebook/regenerator/tree/main/packages/runtime"
+ },
+ {
+  "name": "rgbcolor",
+  "version": "1.0.1",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2016 Stoyan Stefanov",
+  "url": "https://github.com/yetzt/node-rgbcolor",
+  "note": "Offered as MIT or under its FEEL-FREE terms; used under the MIT terms."
+ },
+ {
+  "name": "safe-buffer",
+  "version": "5.1.2",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) Feross Aboukhadijeh",
+  "url": "https://github.com/feross/safe-buffer"
+ },
+ {
+  "name": "scheduler",
+  "version": "0.23.2",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) Facebook, Inc. and its affiliates",
+  "url": "https://reactjs.org/"
+ },
+ {
+  "name": "set-cookie-parser",
+  "version": "2.7.2",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2015 Nathan Friedly (http://nfriedly.com/)",
+  "url": "https://github.com/nfriedly/set-cookie-parser"
+ },
+ {
+  "name": "setimmediate",
+  "version": "1.0.5",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2012 Barnesandnoble.com, llc, Donavon West, and Domenic Denicola",
+  "url": "https://github.com/YuzuJS/setImmediate"
+ },
+ {
+  "name": "stackblur-canvas",
+  "version": "2.7.0",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2010 Mario Klingemann",
+  "url": "http://www.quasimondo.com/StackBlurForCanvas/StackBlurDemo.html"
+ },
+ {
+  "name": "string_decoder",
+  "version": "1.1.1",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright Node.js contributors; Copyright Joyent, Inc. and other Node contributors",
+  "url": "https://github.com/nodejs/string_decoder"
+ },
+ {
+  "name": "svg-pathdata",
+  "version": "6.0.3",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright © 2017 Nicolas Froidure",
+  "url": "https://github.com/nfroidure/svg-pathdata"
+ },
+ {
+  "name": "Tesseract English trained data (tessdata_best)",
+  "version": "4.0.0_best_int",
+  "kind": "asset",
+  "license": "Apache-2.0",
+  "copyright": "Copyright Google Inc. and tessdata_best contributors",
+  "url": "https://github.com/tesseract-ocr/tessdata_best",
+  "note": "Shipped as public/vendor/tesseract/lang/eng.traineddata."
+ },
+ {
+  "name": "Tesseract OCR engine",
+  "version": "7.0.0 (via tesseract.js-core)",
+  "kind": "asset",
+  "license": "Apache-2.0",
+  "copyright": "Copyright Google Inc. and Tesseract OCR contributors",
+  "url": "https://github.com/tesseract-ocr/tesseract",
+  "note": "WebAssembly build in public/vendor/tesseract/core."
+ },
+ {
+  "name": "tesseract.js",
+  "version": "7.0.0",
+  "kind": "js",
+  "license": "Apache-2.0",
+  "copyright": "Copyright (c) tesseract.js contributors",
+  "url": "https://github.com/naptha/tesseract.js"
+ },
+ {
+  "name": "tesseract.js-core",
+  "version": "7.0.0",
+  "kind": "js",
+  "license": "Apache-2.0",
+  "copyright": "Copyright (c) antimatter15 and tesseract.js-core contributors",
+  "url": "https://github.com/naptha/tesseract.js-core",
+  "note": "WebAssembly OCR engine. The libraries compiled into it are listed separately."
+ },
+ {
+  "name": "text-segmentation",
+  "version": "1.0.3",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2021 Niklas von Hertzen",
+  "url": "https://github.com/niklasvh/text-segmentation"
+ },
+ {
+  "name": "tr46",
+  "version": "0.0.3",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) Sebastian Mayr",
+  "url": "https://github.com/Sebmaster/tr46.js",
+  "note": "Dependency of whatwg-url; not part of the browser build."
+ },
+ {
+  "name": "tslib",
+  "version": "1.14.1",
+  "kind": "js",
+  "license": "0BSD",
+  "copyright": "Copyright (c) Microsoft Corporation",
+  "url": "https://www.typescriptlang.org/"
+ },
+ {
+  "name": "tslib",
+  "version": "2.3.0",
+  "kind": "js",
+  "license": "0BSD",
+  "copyright": "Copyright (c) Microsoft Corporation",
+  "url": "https://www.typescriptlang.org/"
+ },
+ {
+  "name": "tslib",
+  "version": "2.8.1",
+  "kind": "js",
+  "license": "0BSD",
+  "copyright": "Copyright (c) Microsoft Corporation",
+  "url": "https://www.typescriptlang.org/"
+ },
+ {
+  "name": "Unicode data files (Scripts.txt, BidiMirroring.txt)",
+  "version": "bundled in pdfbox-android",
+  "kind": "asset",
+  "license": "Unicode-DFS-2016",
+  "copyright": "Copyright (c) 1991-2017 Unicode, Inc. All rights reserved.",
+  "url": "https://www.unicode.org/ucd/"
+ },
+ {
+  "name": "util-deprecate",
+  "version": "1.0.2",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2014 Nathan Rajlich",
+  "url": "https://github.com/TooTallNate/util-deprecate"
+ },
+ {
+  "name": "utrie",
+  "version": "1.0.2",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2021 Niklas von Hertzen",
+  "url": "https://github.com/niklasvh/utrie"
+ },
+ {
+  "name": "uuid",
+  "version": "14.0.2",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2010-2020 Robert Kieffer and other contributors",
+  "url": "https://github.com/uuidjs/uuid"
+ },
+ {
+  "name": "wasm-feature-detect",
+  "version": "1.8.0",
+  "kind": "js",
+  "license": "Apache-2.0",
+  "copyright": "Copyright 2017 Google Inc.",
+  "url": "https://github.com/GoogleChromeLabs/wasm-feature-detect"
+ },
+ {
+  "name": "webidl-conversions",
+  "version": "3.0.1",
+  "kind": "js",
+  "license": "BSD-2-Clause",
+  "copyright": "Copyright (c) 2014, Domenic Denicola",
+  "url": "https://github.com/jsdom/webidl-conversions",
+  "note": "Dependency of whatwg-url; not part of the browser build."
+ },
+ {
+  "name": "whatwg-url",
+  "version": "5.0.0",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2015–2016 Sebastian Mayr",
+  "url": "https://github.com/jsdom/whatwg-url",
+  "note": "Dependency of node-fetch; not part of the browser build."
+ },
+ {
+  "name": "zlib",
+  "version": "bundled in PDFium, QPDF and Tesseract",
+  "kind": "asset",
+  "license": "Zlib",
+  "copyright": "Copyright (C) Jean-loup Gailly and Mark Adler",
+  "url": "https://zlib.net/"
+ },
+ {
+  "name": "zlibjs",
+  "version": "0.3.1",
+  "kind": "js",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2012 imaya",
+  "url": "https://github.com/imaya/zlib.js"
+ },
+ {
+  "name": "zrender",
+  "version": "6.1.0",
+  "kind": "js",
+  "license": "BSD-3-Clause",
+  "copyright": "Copyright (c) 2017, Baidu Inc",
+  "url": "https://github.com/ecomfe/zrender"
+ }
+]

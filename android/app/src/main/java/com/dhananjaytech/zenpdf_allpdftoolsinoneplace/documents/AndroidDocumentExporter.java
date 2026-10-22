@@ -146,19 +146,45 @@ final class AndroidDocumentExporter {
             faults.checkpoint(Checkpoint.AFTER_PENDING_ROW);
             copyToDestination(snapshot, copied.size, copied.hash, address, cancellation);
             faults.checkpoint(Checkpoint.AFTER_DESTINATION_FORCE);
-            destination.publish(address, displayName, mimeType, copied.size);
+            String savedName = destination.publish(address, displayName, mimeType, copied.size);
             faults.checkpoint(Checkpoint.AFTER_PUBLICATION);
-            record = record.asCompleted();
+            record = record.asCompleted(savedName);
             publishRecord(recordPath, record);
             fsyncDirectory(layout.root);
             archiveCompleted(layout, record);
             deleteExact(snapshot);
-            return Result.completed(token, address);
+            return Result.completed(token, address, record.displayName);
         } catch (Failure failure) {
             rollbackIfPositivelyPending(token, address, snapshot, recordPath);
             throw failure;
         } catch (IOException | RuntimeException failure) {
             rollbackIfPositivelyPending(token, address, snapshot, recordPath);
+            throw failed();
+        }
+    }
+
+    /**
+     * Renames a file this app published to Downloads, while its completed record is kept
+     * (one day). Returns the name the provider used, which gains " (n)" on a clash.
+     */
+    String rename(String token, String displayName) throws Failure {
+        if (token == null || !token.matches("pdfchef-[A-Za-z0-9_-]{22,64}")) throw invalid();
+        validateName(displayName);
+        Layout layout = prepare();
+        try {
+            Path path = layout.completed(token);
+            if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) throw notFound();
+            ExportRecord record = decode(readRecord(path));
+            if (!record.completed || !token.equals(record.token) || record.address == null
+                    || now() - record.createdAt >= COMPLETED_EXPIRY_MILLIS) throw notFound();
+            if (probe(record.address) != PublicationState.PUBLISHED) throw notFound();
+            String savedName = destination.rename(record.address, displayName);
+            publishRecord(path, record.asCompleted(savedName));
+            fsyncDirectory(layout.root);
+            return savedName;
+        } catch (Failure failure) {
+            throw failure;
+        } catch (IOException | RuntimeException failure) {
             throw failed();
         }
     }
@@ -357,11 +383,16 @@ final class AndroidDocumentExporter {
 
     private static void validate(OwnedDocumentWriter.DocumentSource source, String displayName,
             String mimeType, OwnedPendingImportStore.CancellationSignal cancellation) throws Failure {
-        if (source == null || cancellation == null || displayName == null || displayName.isBlank()
-                || displayName.length() > 180 || displayName.indexOf('\0') >= 0
-                || displayName.contains("/") || displayName.contains("\\")
+        validateName(displayName);
+        if (source == null || cancellation == null
                 || mimeType == null || !mimeType.equals(source.mimeType())
                 || !OwnedDocumentWritePolicy.isSupportedMimeType(mimeType)) throw invalid();
+    }
+
+    private static void validateName(String displayName) throws Failure {
+        if (displayName == null || displayName.isBlank()
+                || displayName.length() > 180 || displayName.indexOf('\0') >= 0
+                || displayName.contains("/") || displayName.contains("\\")) throw invalid();
     }
 
     private static byte[] encode(ExportRecord value) throws IOException {
@@ -485,19 +516,25 @@ final class AndroidDocumentExporter {
         private final boolean completed;
         private final String token;
         private final String address;
+        private final String savedName;
         private final int itemCount;
-        private Result(boolean completed, String token, String address, int itemCount) {
+        private Result(boolean completed, String token, String address, String savedName,
+                int itemCount) {
             this.completed = completed; this.token = token; this.address = address;
-            this.itemCount = itemCount;
+            this.savedName = savedName; this.itemCount = itemCount;
         }
-        static Result completed(String token, String address) {
-            return new Result(true, token, address, 1);
+        static Result completed(String token, String address, String savedName) {
+            return new Result(true, token, address, savedName, 1);
         }
         static Result collectionCompleted(int itemCount) {
-            return new Result(true, null, null, itemCount);
+            return new Result(true, null, null, null, itemCount);
         }
         boolean completedValue() { return completed; }
         int itemCount() { return itemCount; }
+        /** The handle a later rename uses; null for a collection. */
+        String token() { return token; }
+        /** The name the file got in Downloads; null for a collection. */
+        String savedName() { return savedName; }
     }
 
     static final class Failure extends Exception {
@@ -513,7 +550,10 @@ final class AndroidDocumentExporter {
             return allocate(token, mimeType);
         }
         Output open(String address) throws IOException;
-        void publish(String address, String displayName, String mimeType, long size) throws IOException;
+        /** Returns the name the provider stored, which may differ on a clash. */
+        String publish(String address, String displayName, String mimeType, long size) throws IOException;
+        /** Renames a published row and returns the name the provider stored. */
+        String rename(String address, String displayName) throws IOException;
         PublicationState publicationState(String address) throws IOException;
         void deleteAddress(String address) throws IOException;
         void deletePendingToken(String token) throws IOException;
@@ -565,7 +605,7 @@ final class AndroidDocumentExporter {
                 }
             };
         }
-        @Override public void publish(String address, String displayName, String mimeType, long size)
+        @Override public String publish(String address, String displayName, String mimeType, long size)
                 throws IOException {
             ContentValues values = new ContentValues();
             values.put(MediaStore.Downloads.DISPLAY_NAME, displayName);
@@ -573,11 +613,32 @@ final class AndroidDocumentExporter {
             values.put(MediaStore.Downloads.IS_PENDING, 0);
             if (resolver.update(Uri.parse(address), values, null, null) != 1) throw new IOException("publish");
             try (Cursor cursor = resolver.query(Uri.parse(address),
-                    new String[] {MediaStore.Downloads.SIZE, MediaStore.Downloads.IS_PENDING},
+                    new String[] {MediaStore.Downloads.SIZE, MediaStore.Downloads.IS_PENDING,
+                            MediaStore.Downloads.DISPLAY_NAME},
                     null, null, null)) {
                 if (cursor == null || !cursor.moveToFirst() || cursor.getLong(0) != size
                         || cursor.getInt(1) != 0) throw new IOException("verify");
+                return storedName(cursor.getString(2), displayName);
             }
+        }
+        @Override public String rename(String address, String displayName) throws IOException {
+            // The same name is a check that the file is still there, not a change.
+            try (Cursor cursor = resolver.query(Uri.parse(address),
+                    new String[] {MediaStore.Downloads.DISPLAY_NAME}, null, null, null)) {
+                if (cursor == null || !cursor.moveToFirst()) throw new IOException("missing");
+                if (displayName.equals(cursor.getString(0))) return displayName;
+            }
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.Downloads.DISPLAY_NAME, displayName);
+            if (resolver.update(Uri.parse(address), values, null, null) != 1) throw new IOException("rename");
+            try (Cursor cursor = resolver.query(Uri.parse(address),
+                    new String[] {MediaStore.Downloads.DISPLAY_NAME}, null, null, null)) {
+                if (cursor == null || !cursor.moveToFirst()) throw new IOException("verify");
+                return storedName(cursor.getString(0), displayName);
+            }
+        }
+        private static String storedName(String stored, String requested) {
+            return stored == null || stored.isBlank() ? requested : stored;
         }
         @Override public PublicationState publicationState(String address) throws IOException {
             try (Cursor cursor = resolver.query(Uri.parse(address),
@@ -609,8 +670,9 @@ final class AndroidDocumentExporter {
             String address, boolean completed, boolean durabilityUncertain) {
         ExportRecord withAddress(String value) { return new ExportRecord(token, displayName,
                 mimeType, createdAt, value, completed, durabilityUncertain); }
-        ExportRecord asCompleted() { return new ExportRecord(token, displayName, mimeType,
-                createdAt, address, true, false); }
+        ExportRecord asCompleted() { return asCompleted(displayName); }
+        ExportRecord asCompleted(String savedName) { return new ExportRecord(token, savedName,
+                mimeType, createdAt, address, true, false); }
     }
 
     private static final class Layout {
@@ -639,6 +701,7 @@ final class AndroidDocumentExporter {
         }
     }
 
+    private static Failure notFound() { return new Failure("DOCUMENT_NOT_FOUND", "The document is unavailable."); }
     private static Failure invalid() { return new Failure("DOCUMENT_INVALID_ARGUMENT", "The document request is invalid."); }
     private static Failure busy() { return new Failure("DOCUMENT_LIMIT_EXCEEDED", "A document export is already active."); }
     private static Failure storageFull() { return new Failure("DOCUMENT_STORAGE_FULL", "There is not enough storage."); }

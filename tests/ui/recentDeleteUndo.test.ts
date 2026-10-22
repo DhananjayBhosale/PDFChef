@@ -250,7 +250,7 @@ test('the action names itself honestly before and after a refused restore', () =
 
 test('a standing undo is one panel, not a strip with a loose control beneath it', () => {
   const region = source.slice(
-    source.indexOf('<div role="status" aria-live="polite">'),
+    source.search(/<div\s+role="status"\s+aria-live="polite"/),
     source.indexOf('{state.status === \'ready\' && records.length > 0 && ('),
   );
   // One bordered, status-toned panel in the page rhythm, carrying the line and
@@ -262,8 +262,10 @@ test('a standing undo is one panel, not a strip with a loose control beneath it'
   assert.match(region, /<Button\s+block\s+tone="secondary"/);
   const panelStart = region.indexOf('rounded-[var(--radius-panel)]');
   assert.ok(panelStart > -1 && region.indexOf('<Button') > panelStart);
-  // In flow above the list: never a floating toast.
+  // In flow above the list: never a floating toast. It sticks to the top while the list
+  // scrolls, so an Undo for a row far down the list is still in view (release QA NAV-20).
   assert.doesNotMatch(region, /fixed|absolute|z-\[|inset-x/);
+  assert.match(region, /undoOffered \? 'sticky /);
   // Entrance only, which already has its reduced-motion equivalent.
   assert.match(region, /chef-enter/);
 });

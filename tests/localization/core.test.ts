@@ -115,8 +115,7 @@ test('every supported catalog loads locally and is cached for synchronous lookup
       assert.notEqual(first['settings.language'], (await loadCatalog('en-US'))['settings.language'], `${locale}: real localized catalog, not an English fallback copy`);
       const english = await loadCatalog('en-US');
       for (const [key, value] of Object.entries(english)) {
-        // Library/license names and URLs are retained; full English UI sentences are not.
-        if (key === 'settings-page.pptx.renderer.apache.2.0.jszip.mit.13e9e7') continue;
+        // URLs are retained; full English UI sentences are not.
         if (typeof value !== 'string' || value.replace(/https?:\/\/\S+/g, '').length <= 35) continue;
         assert.notEqual(first[key as keyof typeof first], value, `${locale}:${key}: untranslated English sentence`);
       }

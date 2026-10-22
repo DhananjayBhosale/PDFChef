@@ -12,20 +12,21 @@ const nativeStub = (
     retainedBytes: 0,
     availableBytes: null,
     capacityBytes: null,
+    memoryBytes: null,
   }),
 ): AndroidStorageStatsNativePlugin => ({ getStorageStats: implementation });
 
-test('client requests no arguments and accepts exactly the three public byte fields', async () => {
+test('client requests no arguments and accepts exactly the four public byte fields', async () => {
   let calls = 0;
   const client = new AndroidStorageStatsClient(nativeStub(async (...args) => {
     calls += 1;
     assert.deepEqual(args, []);
-    return { retainedBytes: 7, availableBytes: 100, capacityBytes: 200 };
+    return { retainedBytes: 7, availableBytes: 100, capacityBytes: 200, memoryBytes: 5_900_000_000 };
   }));
 
   const stats = await client.getStorageStats();
   assert.equal(calls, 1);
-  assert.deepEqual(stats, { retainedBytes: 7, availableBytes: 100, capacityBytes: 200 });
+  assert.deepEqual(stats, { retainedBytes: 7, availableBytes: 100, capacityBytes: 200, memoryBytes: 5_900_000_000 });
   assert.equal(Object.isFrozen(stats), true);
 });
 
@@ -34,28 +35,32 @@ test('nullable filesystem values are accepted without substituting defaults', as
     retainedBytes: 0,
     availableBytes: null,
     capacityBytes: null,
+    memoryBytes: null,
   }))).getStorageStats();
-  assert.deepEqual(stats, { retainedBytes: 0, availableBytes: null, capacityBytes: null });
+  assert.deepEqual(stats, { retainedBytes: 0, availableBytes: null, capacityBytes: null, memoryBytes: null });
 });
 
 test('response must be a plain exact DTO with safe nonnegative values', async () => {
-  const withHiddenField = { retainedBytes: 0, availableBytes: null, capacityBytes: null };
+  const withHiddenField = { retainedBytes: 0, availableBytes: null, capacityBytes: null, memoryBytes: null };
   Object.defineProperty(withHiddenField, 'hiddenPath', { value: '/private/file' });
   const invalid: unknown[] = [
     null,
     [],
     Object.create(null),
     { retainedBytes: 0, availableBytes: null },
-    { retainedBytes: 0, availableBytes: null, capacityBytes: null, path: '/private/file' },
+    { retainedBytes: 0, availableBytes: null, capacityBytes: null },
+    { retainedBytes: 0, availableBytes: null, capacityBytes: null, memoryBytes: null, path: '/private/file' },
     withHiddenField,
-    Object.assign({ retainedBytes: 0, availableBytes: null, capacityBytes: null }, { [Symbol('x')]: true }),
-    { retainedBytes: -1, availableBytes: null, capacityBytes: null },
-    { retainedBytes: 0.5, availableBytes: null, capacityBytes: null },
-    { retainedBytes: Number.MAX_SAFE_INTEGER + 1, availableBytes: null, capacityBytes: null },
-    { retainedBytes: 0, availableBytes: -1, capacityBytes: null },
-    { retainedBytes: 0, availableBytes: null, capacityBytes: Number.NaN },
-    { retainedBytes: 0, availableBytes: '0', capacityBytes: null },
-    { retainedBytes: 0, availableBytes: 201, capacityBytes: 200 },
+    Object.assign({ retainedBytes: 0, availableBytes: null, capacityBytes: null, memoryBytes: null }, { [Symbol('x')]: true }),
+    { retainedBytes: -1, availableBytes: null, capacityBytes: null, memoryBytes: null },
+    { retainedBytes: 0.5, availableBytes: null, capacityBytes: null, memoryBytes: null },
+    { retainedBytes: Number.MAX_SAFE_INTEGER + 1, availableBytes: null, capacityBytes: null, memoryBytes: null },
+    { retainedBytes: 0, availableBytes: -1, capacityBytes: null, memoryBytes: null },
+    { retainedBytes: 0, availableBytes: null, capacityBytes: Number.NaN, memoryBytes: null },
+    { retainedBytes: 0, availableBytes: '0', capacityBytes: null, memoryBytes: null },
+    { retainedBytes: 0, availableBytes: 201, capacityBytes: 200, memoryBytes: null },
+    { retainedBytes: 0, availableBytes: null, capacityBytes: null, memoryBytes: -1 },
+    { retainedBytes: 0, availableBytes: null, capacityBytes: null, memoryBytes: '4' },
   ];
 
   for (const response of invalid) {

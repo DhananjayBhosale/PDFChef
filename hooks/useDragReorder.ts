@@ -8,6 +8,8 @@ interface Slot {
   right: number;
   centerX: number;
   centerY: number;
+  /** Another item sits beside this one, as in a grid of thumbnails. */
+  sharesRow: boolean;
 }
 
 interface UseDragReorderOptions<T> {
@@ -21,6 +23,12 @@ interface UseDragReorderOptions<T> {
    * the one that drives auto-scroll and slot geometry.
    */
   scrollContainerRef?: React.RefObject<HTMLElement | null>;
+  /**
+   * Called once when the finger lifts, with the order the drag left behind.
+   * `onReorder` fires on every step of a drag; Reorder Pages keeps one undo
+   * step per drag, so it records history here instead.
+   */
+  onDragEnd?: (items: T[]) => void;
 }
 
 export function useDragReorder<T>({
@@ -28,6 +36,7 @@ export function useDragReorder<T>({
   onReorder,
   keyExtractor,
   scrollContainerRef,
+  onDragEnd,
 }: UseDragReorderOptions<T>) {
   // State
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -54,6 +63,8 @@ export function useDragReorder<T>({
   itemsRef.current = items;
   const onReorderRef = useRef(onReorder);
   onReorderRef.current = onReorder;
+  const onDragEndRef = useRef(onDragEnd);
+  onDragEndRef.current = onDragEnd;
   const keyExtractorRef = useRef(keyExtractor);
   keyExtractorRef.current = keyExtractor;
   /** A reorder moved the nodes, so the frozen slots describe the old order. */
@@ -98,12 +109,14 @@ export function useDragReorder<T>({
     for (let i = 0; i < slots.length; i++) {
       const s = slots[i];
 
-      // Above this row entirely.
-      if (docY < s.top) return i;
-
-      // Inside this row: decide by the horizontal midpoint.
-      if (docY >= s.top && docY <= s.bottom) {
-        if (docX < s.centerX) return i;
+      if (s.sharesRow) {
+        // A grid: above the row, or left of a tile's midpoint, lands before that tile.
+        if (docY < s.top) return i;
+        if (docY <= s.bottom && docX < s.centerX) return i;
+      } else if (docY < s.centerY) {
+        // A one-column list: the item passes a row once the finger passes that
+        // row's midpoint, the same going up as going down, wherever the grip is.
+        return i;
       }
     }
 
@@ -131,6 +144,9 @@ export function useDragReorder<T>({
       const [moved] = newItems.splice(fromIndex, 1);
       newItems.splice(targetIndex, 0, moved);
       needsRemeasureRef.current = true;
+      // The next move, or the lift, can arrive before React renders this
+      // order, so it is the live list from here on.
+      itemsRef.current = newItems;
       onReorderRef.current(newItems);
     }
   }, [toContentSpace]);
@@ -155,14 +171,17 @@ export function useDragReorder<T>({
         right: bottomRight.x,
         centerX: topLeft.x + r.width / 2,
         centerY: topLeft.y + r.height / 2,
+        sharesRow: false,
       });
     });
 
     // Sort visually so linear index mapping matches visual flow.
+    const sameRow = (a: Slot, b: Slot) => Math.abs(a.top - b.top) <= 10;
     slots.sort((a, b) => {
-      if (Math.abs(a.top - b.top) > 10) return a.top - b.top;
+      if (!sameRow(a, b)) return a.top - b.top;
       return a.left - b.left;
     });
+    for (const slot of slots) slot.sharesRow = slots.some(other => other !== slot && sameRow(other, slot));
 
     slotsRef.current = slots;
     needsRemeasureRef.current = false;
@@ -180,6 +199,7 @@ export function useDragReorder<T>({
   }, [measureSlots, performReorder]);
 
   const handlePointerUp = useCallback(() => {
+    const wasDragging = isDraggingRef.current;
     isDraggingRef.current = false;
     stopAutoScroll();
     draggedIdRef.current = null;
@@ -196,6 +216,8 @@ export function useDragReorder<T>({
     }
     moveHandlerRef.current = null;
     upHandlerRef.current = null;
+
+    if (wasDragging) onDragEndRef.current?.(itemsRef.current);
   }, []);
 
   const handlePointerDown = useCallback((e: React.PointerEvent | React.MouseEvent, id: string) => {

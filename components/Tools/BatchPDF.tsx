@@ -183,7 +183,8 @@ export const BatchPDF: React.FC = () => {
         (progress) => onProgress(progress),
         false,
         undefined,
-        true,
+        // Keep text selectable, as Compress PDF does by default.
+        false,
         analysis.isTextHeavy,
       );
       checkCanceled();

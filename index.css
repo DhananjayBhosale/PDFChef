@@ -314,9 +314,11 @@ html[data-text-scale='larger'] .chef-chrome {
 }
 
 .chef-tab-inset {
+  /* --chef-output-strip-space is the result strip's height while it shows, so the last row
+     and a tool's main button can scroll above it instead of sitting underneath. */
   padding-bottom: calc(
     var(--size-tab-bar-readable) + env(safe-area-inset-bottom, 0px) + var(--space-4) +
-      var(--chef-keyboard-inset, 0px)
+      var(--chef-keyboard-inset, 0px) + var(--chef-output-strip-space, 0px)
   );
 }
 

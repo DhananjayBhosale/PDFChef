@@ -2,12 +2,15 @@ import { localizeError } from '../../services/i18n/errors.ts';
 import { formatDate, t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Eye, Image as ImageIcon, Plus, Save, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Eye, Image as ImageIcon, Plus, Save, Trash2, X } from 'lucide-react';
 import { PDFPreviewModal } from '../UI/PDFPreviewModal';
 import { StatusToast } from '../UI/StatusToast';
-import { Button } from '../UI/Primitives';
+import { Button, StatusLine } from '../UI/Primitives';
 import { ToolHeader, ToolPanel, ToolShell } from '../UI/ToolLayout';
 import { deliverBlob } from '../../services/pdfShared';
+import { normalizeImageFile } from '../../services/imageBrowser';
+import { imageProblemOf } from '../../services/imageIntake';
+import { useConfirmDiscard } from '../../hooks/useConfirmDiscard';
 import type { ProcessingStatus } from '../../types';
 import {
   businessDocumentFileName,
@@ -98,6 +101,9 @@ interface LineItemDraft {
 
 const blankItem = (): LineItemDraft => ({ description: '', quantity: '1', unitPrice: '' });
 
+/** A logo prints at most 150 x 54 points; half a megapixel is still sharp there. */
+const MAX_LOGO_PIXELS = 500_000;
+
 const numberOf = parseDocumentNumber;
 
 const itemOf = (draft: LineItemDraft): DocumentLineItem => ({
@@ -139,7 +145,15 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
   const [items, setItems] = useState<LineItemDraft[]>([blankItem()]);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const [preview, setPreview] = useState<File | null>(null);
+  // Shown beside the control they belong to; a toast at the foot of the screen covered the buttons.
+  const [logoError, setLogoError] = useState('');
+  const [buildError, setBuildError] = useState('');
   const logoInputRef = useRef<HTMLInputElement>(null);
+
+  // The sender is remembered as it is typed, so only the rest of the form is lost by leaving.
+  const work = JSON.stringify([recipient, reference, issuedOn, settledOn, paymentMethod, notes, items, logoName, logo !== null]);
+  const [savedWork, setSavedWork] = useState(work);
+  const discardSheet = useConfirmDiscard(work !== savedWork);
 
   // Remember the sender as they type, so the next one starts filled in.
   useEffect(() => {
@@ -186,17 +200,16 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
   const chooseLogo = async (files: FileList | null) => {
     const file = files?.[0];
     if (!file) return;
-    const format = /\.png$/i.test(file.name) || file.type === 'image/png' ? 'png' : 'jpg';
+    setLogoError('');
     try {
-      setLogo({ bytes: new Uint8Array(await file.arrayBuffer()), format });
+      // Redrawn upright and small: a phone photo used to go in whole, 8 MB and on its side.
+      const normalized = await normalizeImageFile(file, { maxPixels: MAX_LOGO_PIXELS });
+      setLogo({ bytes: new Uint8Array(await normalized.arrayBuffer()), format: normalized.type === 'image/png' ? 'png' : 'jpg' });
       setLogoName(file.name);
-    } catch {
-      setStatus({
-        isProcessing: false,
-        progress: 0,
-        message: '',
-        error: t("business-document-builder.that.picture.could.not.be.read.try.6ca5a1"),
-      });
+    } catch (error) {
+      setLogoError(imageProblemOf(error) === 'too-large'
+        ? t("image-intake.this.picture.is.too.large.to.open.c199e6")
+        : t("business-document-builder.that.picture.could.not.be.read.try.6ca5a1"));
     }
   };
 
@@ -207,23 +220,24 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
     });
   }, [document]);
 
+  // A message about the form goes away once the form changes.
+  useEffect(() => setBuildError(''), [document]);
+
   const handlePreview = async () => {
+    setBuildError('');
     setStatus({ isProcessing: true, progress: 40, message: t(`business.${kind}.drawing`) });
     try {
       setPreview(await build());
       setStatus({ isProcessing: false, progress: 100, message: '' });
     } catch (error) {
       console.error(error);
-      setStatus({
-        isProcessing: false,
-        progress: 0,
-        message: '',
-        error: error instanceof BusinessDocumentValidationError ? localizeError(error) : t(`business.${kind}.cannotDraw`),
-      });
+      setStatus({ isProcessing: false, progress: 0, message: '' });
+      setBuildError(error instanceof BusinessDocumentValidationError ? localizeError(error) : t(`business.${kind}.cannotDraw`));
     }
   };
 
   const handleSave = async () => {
+    setBuildError('');
     setStatus({ isProcessing: true, progress: 40, message: t(`business.${kind}.drawing`) });
     try {
       const file = await build();
@@ -236,6 +250,7 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
         });
         return;
       }
+      setSavedWork(work);
       setStatus({ isProcessing: false, progress: 100, message: t(`business.${kind}.ready`) });
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
@@ -243,12 +258,8 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
         return;
       }
       console.error(error);
-      setStatus({
-        isProcessing: false,
-        progress: 0,
-        message: '',
-        error: error instanceof BusinessDocumentValidationError ? localizeError(error) : t(`business.${kind}.cannotSave`),
-      });
+      setStatus({ isProcessing: false, progress: 0, message: '' });
+      setBuildError(error instanceof BusinessDocumentValidationError ? localizeError(error) : t(`business.${kind}.cannotSave`));
     }
   };
 
@@ -361,6 +372,11 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
                   </>
                 ) : null}
               </div>
+              {logoError ? (
+                <div role="alert" className="mt-2">
+                  <StatusLine tone="danger" icon={<AlertTriangle size={16} />}>{logoError}</StatusLine>
+                </div>
+              ) : null}
             </div>
           </div>
         </ToolPanel>
@@ -544,6 +560,12 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
           </Field>
         </ToolPanel>
 
+        {/* Above the buttons, in the page's flow, so it never covers them. */}
+        {buildError ? (
+          <div role="alert">
+            <StatusLine tone="danger" icon={<AlertTriangle size={16} />}>{buildError}</StatusLine>
+          </div>
+        ) : null}
         <div className="grid gap-2 sm:grid-cols-2">
           <Button icon={<Eye aria-hidden size={18} />} onClick={() => void handlePreview()} block>{t("business-document-builder.see.it.first.04adbf")}</Button>
           <Button
@@ -565,6 +587,7 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
         />
       ) : null}
 
+      {discardSheet}
       <StatusToast status={status} />
     </ToolShell>
   );

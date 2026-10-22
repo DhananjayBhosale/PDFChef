@@ -152,6 +152,37 @@ public final class AndroidDocumentsPlugin extends Plugin {
         }
     }
 
+    @PluginMethod public void renameExport(PluginCall call) {
+        JSObject data = call.getData();
+        Object rawRef = data == null ? null : data.opt("exportRef");
+        Object rawName = data == null ? null : data.opt("displayName");
+        if (data == null || data.length() != 2 || !(rawRef instanceof String)
+                || !(rawName instanceof String)
+                || !OwnedDocumentWritePolicy.isValidDisplayName((String) rawName)) {
+            rejectInvalid(call);
+            return;
+        }
+        try {
+            execute(() -> completeRenameExport(call, (String) rawRef, (String) rawName));
+        } catch (RuntimeException failure) {
+            unavailable(call);
+        }
+    }
+
+    private void completeRenameExport(PluginCall call, String exportRef, String displayName) {
+        try {
+            String savedName = application().getDocumentLifecycleCoordinator()
+                    .renameExportedDocument(exportRef, displayName);
+            JSObject output = deliveryStatus("completed");
+            output.put("savedName", savedName);
+            call.resolve(output);
+        } catch (DocumentLifecycleCoordinator.Failure failure) {
+            reject(call, failure);
+        } catch (Exception ignored) {
+            unavailable(call);
+        }
+    }
+
     @PluginMethod public void trashOwned(PluginCall call) {
         JSObject data = call.getData();
         Object rawRef = data == null ? null : data.opt("ref");
@@ -337,9 +368,18 @@ public final class AndroidDocumentsPlugin extends Plugin {
 
     private void completeExportItem(PluginCall call, DeliveryRequest request) {
         try {
-            boolean completed = application().getDocumentLifecycleCoordinator().exportDocument(
+            AndroidDocumentExporter.Result result = application()
+                    .getDocumentLifecycleCoordinator().exportDocumentResult(
                     request.ref(), request.displayName(), request.mimeType(), call::isReleased);
-            call.resolve(deliveryStatus(completed ? "completed" : "cancelled"));
+            if (!result.completedValue()) { call.resolve(deliveryStatus("cancelled")); return; }
+            JSObject output = deliveryStatus("completed");
+            // A single file can be renamed later through renameExport, under the name
+            // MediaStore actually kept (it may add " (1)" when the name was taken).
+            if (result.token() != null && result.savedName() != null) {
+                output.put("exportRef", result.token());
+                output.put("savedName", result.savedName());
+            }
+            call.resolve(output);
         } catch (DocumentLifecycleCoordinator.Failure failure) {
             if ("DOCUMENT_CANCELLED".equals(failure.code())) {
                 call.resolve(deliveryStatus("cancelled"));
@@ -766,6 +806,14 @@ public final class AndroidDocumentsPlugin extends Plugin {
         JSObject event = new JSObject();
         event.put("ref", ref);
         notifyListeners("incomingPdfReady", event, true);
+    }
+
+    /** A handed-over file this app refused. Only a fixed reason word crosses, never the file. */
+    public void announceIncomingPdfRejected(String reason) {
+        if (!"tooLarge".equals(reason) && !"notPdf".equals(reason) && !"other".equals(reason)) return;
+        JSObject event = new JSObject();
+        event.put("reason", reason);
+        notifyListeners("incomingPdfRejected", event, true);
     }
 
     private PdfChefApplication application() { return (PdfChefApplication) getContext().getApplicationContext(); }

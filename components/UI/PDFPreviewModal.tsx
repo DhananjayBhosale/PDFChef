@@ -82,15 +82,19 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
     };
   }, []);
 
-  // Close on ESC
+  // Escape closes the preview. Android Back arrives as an Escape sent to the
+  // document, and only a handled one stops it from leaving the tool underneath.
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
       if (e.key === 'ArrowLeft') setCurrentPageIndex((value) => Math.max(0, value - 1));
       if (e.key === 'ArrowRight') setCurrentPageIndex((value) => Math.min(Math.max(0, totalPages - 1), value + 1));
     };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
   }, [onClose, totalPages]);
 
   useEffect(() => {

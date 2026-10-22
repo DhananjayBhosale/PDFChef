@@ -7,6 +7,7 @@
     "/assets/*",
     "/vendor/*",
     "/tool-icons/*",
+    "/webview-update/*",
     "/site.webmanifest",
     "/og-image.png",
     "/pdf-chef-app-icon-512.png",

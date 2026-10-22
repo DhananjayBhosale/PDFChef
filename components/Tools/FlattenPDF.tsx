@@ -1,4 +1,5 @@
 import { t } from '../../services/i18n/core.ts';
+import { pdfProblemMessage } from '../../services/i18n/errors.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useState } from 'react';
 import { FileUpload } from '../UI/FileUpload';
@@ -13,10 +14,13 @@ import { StatusToast } from '../UI/StatusToast';
 import { Button, StatusLine } from '../UI/Primitives';
 import { ToolHeader, ToolPanel, ToolShell } from '../UI/ToolLayout';
 import { formatBytes, toolOutputName } from '../UI/format';
+import { useConfirmDiscard } from '../../hooks/useConfirmDiscard';
 
 export const FlattenPDF: React.FC = () => {
   useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
+  const [savedFile, setSavedFile] = useState<PDFFile | null>(null);
+  const discardSheet = useConfirmDiscard(file !== null && file !== savedFile);
   const [showPreview, setShowPreview] = useState(false);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
 
@@ -44,6 +48,7 @@ export const FlattenPDF: React.FC = () => {
         toolOutputName('flatten', file.name, 'pdf'),
         'application/pdf',
       );
+      setSavedFile(file);
       setStatus({ isProcessing: false, progress: 100, message: t("flatten-pdf.flattened.pdf.is.ready.642c71") });
     } catch (error) {
       console.error(error);
@@ -51,7 +56,7 @@ export const FlattenPDF: React.FC = () => {
         isProcessing: false,
         progress: 0,
         message: '',
-        error: t("flatten-pdf.this.pdf.s.answers.could.not.be.764895"),
+        error: pdfProblemMessage(error) ?? t("flatten-pdf.this.pdf.s.answers.could.not.be.764895"),
       });
     }
   };
@@ -105,6 +110,7 @@ export const FlattenPDF: React.FC = () => {
           onClose={() => setShowPreview(false)}
         />
       )}
+      {discardSheet}
       <StatusToast status={status} />
     </ToolShell>
   );

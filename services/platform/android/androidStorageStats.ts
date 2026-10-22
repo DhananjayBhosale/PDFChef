@@ -8,6 +8,8 @@ export interface AndroidStorageStats {
   readonly retainedBytes: number;
   readonly availableBytes: number | null;
   readonly capacityBytes: number | null;
+  /** Total RAM, so photos can be sized to suit the phone. */
+  readonly memoryBytes: number | null;
 }
 
 const AndroidStorageStatsNative =
@@ -17,7 +19,7 @@ export const isAndroidStorageStatsAvailable = (): boolean =>
   Capacitor.getPlatform() === 'android'
   && Capacitor.isPluginAvailable('AndroidStorageStats');
 
-const OUTPUT_KEYS = ['availableBytes', 'capacityBytes', 'retainedBytes'] as const;
+const OUTPUT_KEYS = ['availableBytes', 'capacityBytes', 'memoryBytes', 'retainedBytes'] as const;
 
 const invalidResponse = (): TypeError => new TypeError('Android storage stats response is invalid.');
 
@@ -46,6 +48,7 @@ const parseStorageStats = (value: unknown): AndroidStorageStats => {
   if (!isPublicByteCount(record.retainedBytes)
       || !isNullablePublicByteCount(record.availableBytes)
       || !isNullablePublicByteCount(record.capacityBytes)
+      || !isNullablePublicByteCount(record.memoryBytes)
       || (record.availableBytes !== null
         && record.capacityBytes !== null
         && record.availableBytes > record.capacityBytes)) {
@@ -56,6 +59,7 @@ const parseStorageStats = (value: unknown): AndroidStorageStats => {
     retainedBytes: record.retainedBytes,
     availableBytes: record.availableBytes,
     capacityBytes: record.capacityBytes,
+    memoryBytes: record.memoryBytes,
   });
 };
 

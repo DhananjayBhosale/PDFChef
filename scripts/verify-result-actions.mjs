@@ -113,7 +113,7 @@ try {
     name: 'source.pdf', mimeType: 'application/pdf',
     buffer: Buffer.from(await compressible.save({ useObjectStreams: false })),
   });
-  await compressPage.getByRole('switch', { name: 'Keep text selectable' }).click();
+  await compressPage.getByRole('switch', { name: 'Keep text selectable' }).check();
   await compressPage.getByRole('button', { name: 'Compress', exact: true }).click();
   await compressPage.getByText('Ready to save').waitFor().catch(async error => {
     throw new Error(`Compress result did not become saveable: ${(await compressPage.locator('body').innerText()).slice(0, 2000)}`, { cause: error });

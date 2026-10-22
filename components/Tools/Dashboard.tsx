@@ -1,6 +1,6 @@
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
-import React, { useCallback, useDeferredValue, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Search, ShieldCheck, X } from 'lucide-react';
 import { categoryOrder, tools } from './toolCatalog';
@@ -13,6 +13,13 @@ import { useMonetization } from '../../hooks/useMonetization';
 import { ToolIdentity } from './ToolIdentity';
 
 type CategoryFilter = 'All' | ToolCategory;
+
+/**
+ * Tools home as it was left: the search, the category and how far down the
+ * list it was. Kept for this session, so Back from a tool, or the Tools tab,
+ * lands in the same place instead of the top of 'All'.
+ */
+const toolsHome: { query: string; category: CategoryFilter; scrollY: number } = { query: '', category: 'All', scrollY: 0 };
 
 /**
  * The bubble wash behind each mark, recovered from the Android app's
@@ -194,10 +201,25 @@ export const Dashboard: React.FC = () => {
   const { revision } = useI18n();
   const platform = useWorkspacePlatform();
   const { available: monetizationAvailable, loading: monetizationLoading, access, freeRemaining } = useMonetization();
-  const [query, setQuery] = useState('');
-  const [category, setCategory] = useState<CategoryFilter>('All');
+  const [query, setQuery] = useState(toolsHome.query);
+  const [category, setCategory] = useState<CategoryFilter>(toolsHome.category);
   const deferredQuery = useDeferredValue(query);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    toolsHome.query = query;
+    toolsHome.category = category;
+  }, [query, category]);
+
+  // Before paint, so the list never shows a frame at the top before it jumps back.
+  useLayoutEffect(() => {
+    window.scrollTo({ top: toolsHome.scrollY, behavior: 'auto' });
+    const remember = () => {
+      toolsHome.scrollY = window.scrollY;
+    };
+    window.addEventListener('scroll', remember, { passive: true });
+    return () => window.removeEventListener('scroll', remember);
+  }, []);
 
   const categoryCounts = useMemo(() => {
     const counts: Record<CategoryFilter, number> = { All: tools.length, Create: 0, Edit: 0, Convert: 0, Secure: 0, Optimize: 0 };

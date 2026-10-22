@@ -98,6 +98,20 @@ public final class IncomingPdfIntake {
         return displayNameOf(resolver, uriOf(intent));
     }
 
+    /**
+     * Why a handed-over file was refused, as one of the fixed words the page understands, or
+     * null when the app is going away and there is no one to tell. An empty file and a type
+     * the sender got wrong both arrive as an invalid request, so they share "other".
+     */
+    public static String rejectionReason(String failureCode) {
+        if ("DOCUMENT_CANCELLED".equals(failureCode) || "DOCUMENT_INTERRUPTED".equals(failureCode)) {
+            return null;
+        }
+        if ("DOCUMENT_LIMIT_EXCEEDED".equals(failureCode)) return "tooLarge";
+        if ("DOCUMENT_CORRUPT".equals(failureCode)) return "notPdf";
+        return "other";
+    }
+
     /** True when Android relaunched the task from Recents with its original intent. */
     public static boolean isReplayedFromRecents(int intentFlags) {
         return (intentFlags & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0;

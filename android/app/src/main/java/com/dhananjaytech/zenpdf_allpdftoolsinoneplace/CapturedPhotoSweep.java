@@ -11,10 +11,11 @@ import java.util.regex.Pattern;
  *
  * Capacitor writes each shot as {@code JPEG_<stamp>_<random>.jpg} there and never deletes it.
  * Make PDF reads the bytes as soon as a shot arrives, so the files only take up space. Once per
- * process, before the page can start any capture, nothing can be using them.
+ * process, before the page can start any capture, nothing can be using them. The stamp comes from
+ * the phone's locale, so on Arabic, Persian, Marathi or Bengali phones its digits are not ASCII.
  */
 final class CapturedPhotoSweep {
-    static final Pattern CAPTURE_NAME = Pattern.compile("JPEG_\\d{8}_\\d{6}_\\d+\\.jpg");
+    static final Pattern CAPTURE_NAME = Pattern.compile("JPEG_\\p{Nd}{8}_\\p{Nd}{6}_\\p{Nd}+\\.jpg");
     private static final AtomicBoolean swept = new AtomicBoolean();
 
     private CapturedPhotoSweep() {}

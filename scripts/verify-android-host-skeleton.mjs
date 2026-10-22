@@ -41,11 +41,11 @@ const treeContains = (path, pattern) => {
 const packageJson = JSON.parse(read('package.json'));
 const packageLock = JSON.parse(read('package-lock.json'));
 for (const name of ['@capacitor/core', '@capacitor/ios', '@capacitor/android']) {
-  check(`${name} is exactly 8.5.0 in package.json`, packageJson.dependencies?.[name] === '8.5.0');
-  check(`${name} is exactly 8.5.0 in package-lock root`, packageLock.packages?.['']?.dependencies?.[name] === '8.5.0');
-  check(`${name} is exactly 8.5.0 in package-lock package`, packageLock.packages?.[`node_modules/${name}`]?.version === '8.5.0');
+  check(`${name} is exactly 8.5.3 in package.json`, packageJson.dependencies?.[name] === '8.5.3');
+  check(`${name} is exactly 8.5.3 in package-lock root`, packageLock.packages?.['']?.dependencies?.[name] === '8.5.3');
+  check(`${name} is exactly 8.5.3 in package-lock package`, packageLock.packages?.[`node_modules/${name}`]?.version === '8.5.3');
 }
-check('installed @capacitor/android is exactly 8.5.0', JSON.parse(read('node_modules/@capacitor/android/package.json')).version === '8.5.0');
+check('installed @capacitor/android is exactly 8.5.3', JSON.parse(read('node_modules/@capacitor/android/package.json')).version === '8.5.3');
 
 match('capacitor.config.ts', /appId:\s*'com\.dhananjaytech\.pdfchef'/, 'base Capacitor application ID');
 match('capacitor.config.ts', /webDir:\s*'dist'/, 'bundled dist web directory');

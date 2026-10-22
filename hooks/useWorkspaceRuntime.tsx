@@ -15,6 +15,7 @@ import type {
   PdfOpenHandoffService,
   RecordAbilities,
   RecordRecoveryService,
+  SavedCopy,
   StorageInformation,
   StorageInformationService,
 } from '../services/platform/contracts';
@@ -87,6 +88,10 @@ export interface WorkspaceCapabilities {
   separateClearActions: boolean;
   /** False when an automatic download would only be a blocking system picker. */
   automaticExternalExport?: boolean;
+  /** Where saved copies land, as the phone's Files app shows it (Android: "Download/PDF Chef"). */
+  exportFolder?: string;
+  /** The largest file the platform can keep or save, when it has a fixed limit. */
+  maximumOutputBytes?: number;
 }
 
 /**
@@ -134,14 +139,16 @@ export interface WorkspacePlatform {
    */
   recordRecovery?: RecordRecoveryService;
   /** Save a retained document to wherever the platform puts downloads. */
-  save(record: RecentRecord, name: string): Promise<void>;
+  save(record: RecentRecord, name: string): Promise<void | SavedCopy>;
   /** Hand the document to the platform share sheet, when there is one. */
   share?: (record: RecentRecord, name: string) => Promise<void>;
   /** Re-open a retained document as a File the tool routes already accept. */
   reopen(record: RecentRecord): Promise<File>;
   rename?: (record: RecentRecord, name: string) => Promise<void>;
+  /** Rename a copy an earlier save wrote; resolves to the name the platform kept. */
+  renameSaved?: (exportRef: string, name: string) => Promise<string>;
   /** Save a just-produced result. Falls back to the browser download. */
-  saveFresh(result: FreshResult): Promise<void>;
+  saveFresh(result: FreshResult): Promise<void | SavedCopy>;
   /** Keep a just-produced result in the app's Recent list. */
   keepFresh?: (result: FreshResult) => Promise<void>;
   /** Share a just-produced result, when the platform has a share sheet. */

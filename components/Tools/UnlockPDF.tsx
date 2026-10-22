@@ -1,10 +1,11 @@
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Eye, EyeOff, Unlock, UnlockKeyhole } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { UNLOCK_FAILED_MESSAGE } from '../../services/androidParity';
+import { opensWithoutPassword } from '../../services/pdfBrowser';
 import { unlockPDF } from '../../services/pdfDocument';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
 import { PDFFile, ProcessingStatus } from '../../types';
@@ -22,9 +23,15 @@ export const UnlockPDF: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState<ProcessingStatus>(EMPTY_STATUS);
+  // Null while the file is checked. A PDF that opens without a password can still be locked
+  // against changes; other tools send it here, and it unlocks with no password at all.
+  const [needsPassword, setNeedsPassword] = useState<boolean | null>(null);
+  const probeRef = useRef(0);
 
   const reset = () => {
+    probeRef.current += 1;
     setFile(null);
+    setNeedsPassword(null);
     setPassword('');
     setShowPassword(false);
     setStatus(EMPTY_STATUS);
@@ -37,19 +44,25 @@ export const UnlockPDF: React.FC = () => {
       return;
     }
 
+    const probe = probeRef.current + 1;
+    probeRef.current = probe;
     setFile({ id: uuidv4(), file: selected, name: selected.name, size: selected.size });
+    setNeedsPassword(null);
     setPassword('');
     setShowPassword(false);
     setStatus(EMPTY_STATUS);
+    void opensWithoutPassword(selected).then((opens) => {
+      if (probeRef.current === probe) setNeedsPassword(!opens);
+    });
   };
 
   const handleUnlock = async () => {
     // Any non-empty string is a valid candidate, including whitespace-only passwords.
-    if (!file || password.length === 0 || status.isProcessing) return;
+    if (!file || needsPassword === null || (needsPassword && password.length === 0) || status.isProcessing) return;
 
     setStatus({ isProcessing: true, progress: 10, message: t("unlock-pdf.checking.the.password.on.this.device.9727b5") });
     try {
-      const pdfBytes = await unlockPDF(file.file, password);
+      const pdfBytes = await unlockPDF(file.file, needsPassword ? password : '');
       const outputName = toolOutputName('unlock', file.name, 'pdf');
       downloadBlob(new Blob([pdfBytes], { type: 'application/pdf' }), outputName);
 
@@ -100,7 +113,7 @@ export const UnlockPDF: React.FC = () => {
                 button label does not say. */}
             <StatusLine tone="info">{t("unlock-pdf.the.exported.copy.loses.its.password.and.3b2f40")}</StatusLine>
 
-            <div>
+            {needsPassword && <div>
               <label htmlFor="unlock-password" className="mb-1 block type-footnote font-semibold text-[var(--text-secondary)]">{t("unlock-pdf.enter.password.7014af")}</label>
               <div className="relative">
                 <input
@@ -130,14 +143,14 @@ export const UnlockPDF: React.FC = () => {
                 </button>
               </div>
               <p id="unlock-password-help" className="type-caption mt-1 font-normal normal-case tracking-normal text-[var(--text-tertiary)]">{t("unlock-pdf.leading.trailing.and.whitespace.only.passwords.are.f7b1c0")}</p>
-            </div>
+            </div>}
 
             <div className="flex flex-col gap-2">
               <Button
                 tone="primary"
                 block
-                busy={status.isProcessing}
-                disabled={password.length === 0}
+                busy={status.isProcessing || needsPassword === null}
+                disabled={needsPassword !== false && password.length === 0}
                 icon={<Unlock aria-hidden size={18} />}
                 onClick={() => void handleUnlock()}
               >{t("unlock-pdf.unlock.pdf.893947")}</Button>

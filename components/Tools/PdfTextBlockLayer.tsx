@@ -5,7 +5,14 @@ import { createPortal } from 'react-dom';
 import { blockStyledSegments, planBlockEdit, preserveStyledTextEdit, styledTextEqual, type StyledSegment } from '../../services/pdfBlockEditPlanning';
 export type { StyledSegment } from '../../services/pdfBlockEditPlanning';
 import type { PdfTextAlign, PdfTextBlock, PdfTextLine } from '../../services/pdfTextBlocks';
-import { capturePdfFocusAnchor, pdfCaretScroll, pdfFocusAnchorScroll, type PdfFocusAnchor } from '../../services/pdfEditingFocus';
+import {
+  capturePdfFocusAnchor,
+  pdfCaretScroll,
+  pdfEditingVisibleRect,
+  pdfFocusAnchorScroll,
+  pdfParagraphStartScroll,
+  type PdfFocusAnchor,
+} from '../../services/pdfEditingFocus';
 import { normalizeParagraphLineBreaks } from '../../services/pdfParagraphLayout';
 import {
   fitTextMetrics,
@@ -978,6 +985,8 @@ export const scrollBlockIntoViewport = (container: HTMLElement, element: HTMLEle
 };
 
 const focusedCaretRect = (element: HTMLElement): DOMRect | null => {
+  // A text box's caret lives inside its form control, out of reach of the document selection.
+  if (element instanceof HTMLTextAreaElement) return element.getBoundingClientRect();
   const selection = window.getSelection();
   const range = document.createRange();
   if (selection?.focusNode && element.contains(selection.focusNode)) {
@@ -993,12 +1002,18 @@ const focusedCaretRect = (element: HTMLElement): DOMRect | null => {
   return range.getBoundingClientRect();
 };
 
-/** Preserve the selected PDF point through focus zoom, then keep its caret above the keyboard. */
+/**
+ * Preserve the selected PDF point through focus zoom, then keep its caret between the fixed
+ * header and the bar above the keyboard. Follows the paragraph being edited, or else the text box
+ * being typed into.
+ */
 export const useKeyboardSafeFocus = (
   scrollContainer: HTMLElement | null,
   activeBlockId: string | null,
   zoom: number,
   bottomBar: HTMLElement | null,
+  header: HTMLElement | null,
+  selectedTextId: string | null,
 ) => {
   const preserved = useRef<{ element: HTMLElement; page: HTMLElement; anchor: PdfFocusAnchor } | null>(null);
   const scheduleRef = useRef<((restoreAnchor: boolean) => void) | null>(null);
@@ -1018,8 +1033,11 @@ export const useKeyboardSafeFocus = (
   }, []);
 
   useLayoutEffect(() => {
-    if (!activeBlockId || !scrollContainer) return undefined;
-    const element = scrollContainer.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(activeBlockId)}"]`);
+    const selector = activeBlockId
+      ? `[data-block-id="${CSS.escape(activeBlockId)}"]`
+      : selectedTextId ? `[data-element-id="${CSS.escape(selectedTextId)}"]` : null;
+    if (!selector || !scrollContainer) return undefined;
+    const element = scrollContainer.querySelector<HTMLElement>(selector);
     if (!element) return undefined;
     const originalPadding = scrollContainer.style.paddingBottom;
     const basePadding = Number.parseFloat(window.getComputedStyle(scrollContainer).paddingBottom) || 0;
@@ -1030,17 +1048,13 @@ export const useKeyboardSafeFocus = (
       if (document.activeElement !== element || scrollContainer.dataset.pdfPinching === 'true') return;
       const container = scrollContainer.getBoundingClientRect();
       const visual = window.visualViewport;
-      const visible = {
-        left: Math.max(container.left, visual?.offsetLeft ?? 0),
-        top: Math.max(container.top, visual?.offsetTop ?? 0),
-        right: Math.min(container.right, visual ? visual.offsetLeft + visual.width : window.innerWidth),
-        bottom: Math.min(container.bottom, visual ? visual.offsetTop + visual.height : window.innerHeight),
-      };
-      const bar = bottomBar?.getBoundingClientRect();
-      if (bar && bar.right > visible.left && bar.left < visible.right && bar.bottom > visible.top) {
-        visible.bottom = Math.min(visible.bottom, bar.top);
-      }
-      if (visible.bottom <= visible.top || visible.right <= visible.left) return;
+      const visible = pdfEditingVisibleRect(container, {
+        left: visual?.offsetLeft ?? 0,
+        top: visual?.offsetTop ?? 0,
+        right: visual ? visual.offsetLeft + visual.width : window.innerWidth,
+        bottom: visual ? visual.offsetTop + visual.height : window.innerHeight,
+      }, header?.getBoundingClientRect() ?? null, bottomBar?.getBoundingClientRect() ?? null);
+      if (!visible) return;
       // The last line on a page still needs room to move above an overlapping inspector.
       scrollContainer.style.paddingBottom = `${basePadding + Math.max(0, container.bottom - visible.bottom)}px`;
       const saved = preserved.current;
@@ -1048,6 +1062,11 @@ export const useKeyboardSafeFocus = (
         const delta = pdfFocusAnchorScroll(saved.anchor, saved.page.getBoundingClientRect(), visible);
         scrollContainer.scrollLeft += delta.left;
         scrollContainer.scrollTop += delta.top;
+        // Zooming around the tapped word pushes the start of each line off the left edge.
+        const anchorCaret = focusedCaretRect(element);
+        if (anchorCaret) {
+          scrollContainer.scrollLeft += pdfParagraphStartScroll(element.getBoundingClientRect(), anchorCaret, visible);
+        }
       }
       restorePending = false;
       const caret = focusedCaretRect(element);
@@ -1069,6 +1088,8 @@ export const useKeyboardSafeFocus = (
     window.visualViewport?.addEventListener('resize', resized);
     window.visualViewport?.addEventListener('scroll', resized);
     document.addEventListener('selectionchange', selectionChanged);
+    // A new text box takes focus after this effect has run.
+    element.addEventListener('focus', selectionChanged);
     element.addEventListener('input', typed);
     element.addEventListener('blur', releaseAnchor);
     scrollContainer.addEventListener('touchmove', releaseAnchor, { passive: true });
@@ -1084,12 +1105,13 @@ export const useKeyboardSafeFocus = (
       window.visualViewport?.removeEventListener('resize', resized);
       window.visualViewport?.removeEventListener('scroll', resized);
       document.removeEventListener('selectionchange', selectionChanged);
+      element.removeEventListener('focus', selectionChanged);
       element.removeEventListener('input', typed);
       element.removeEventListener('blur', releaseAnchor);
       scrollContainer.removeEventListener('touchmove', releaseAnchor);
       scrollContainer.removeEventListener('wheel', releaseAnchor);
     };
-  }, [activeBlockId, bottomBar, scrollContainer, zoom]);
+  }, [activeBlockId, bottomBar, header, scrollContainer, selectedTextId, zoom]);
   return captureFocusAnchor;
 };
 

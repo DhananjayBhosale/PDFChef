@@ -66,6 +66,7 @@ const TermsConditions = React.lazy(() => import('./components/Pages/TermsConditi
 const RecentPage = React.lazy(() => import('./components/Pages/RecentPage').then((module) => ({ default: module.RecentPage })));
 const SettingsPage = React.lazy(() => import('./components/Pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 const HelpPage = React.lazy(() => import('./components/Pages/HelpPage').then((module) => ({ default: module.HelpPage })));
+const OpenSourceLicenses = React.lazy(() => import('./components/Pages/OpenSourceLicenses').then((module) => ({ default: module.OpenSourceLicenses })));
 
 const PageLoader = () => { useI18n(); return (
   <div role="status" aria-live="polite" aria-busy="true" className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8">
@@ -132,6 +133,7 @@ const AppRoutes = () => {
             <Route path="/help" element={<HelpPage />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<TermsConditions />} />
+            <Route path="/licenses" element={<OpenSourceLicenses />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/pdf-chef-privacy" element={<PdfChefPrivacy />} />
             <Route path="/terms-and-conditions" element={<TermsConditions />} />

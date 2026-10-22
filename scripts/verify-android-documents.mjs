@@ -25,7 +25,8 @@ const documentMethods = [
   'readChunk', 'beginWrite', 'appendWrite', 'finishWrite', 'abortWrite',
   'listOwned', 'renameItem', 'trashOwned', 'restoreOwned', 'deleteOwned', 'clearOwned',
   'clearOwnedPayloads', 'takePendingImports',
-  'acknowledgePendingImports', 'pickDocuments', 'exportItem', 'shareItem', 'openReader',
+  'acknowledgePendingImports', 'pickDocuments', 'exportItem', 'renameExport', 'shareItem',
+  'openReader',
 ];
 assert(count(plugin, /@PluginMethod\b/g) === documentMethods.length,
   'plugin must expose exactly the accepted promise methods');
@@ -48,8 +49,8 @@ for (const operation of ['listOwnedDocuments()', 'renameOwnedDocument(',
   'deleteOwnedDocument(', 'clearOwnedDocuments()', 'clearOwnedDocumentPayloads()',
   'takePendingImports(', 'acknowledgePendingImports(', 'createPickerIntent(',
   'handlePickerResult(', 'PdfReaderLaunchContract.createIntent(',
-  'PdfReaderLaunchContract.parseResult(', 'exportDocument(', 'prepareShare(',
-  'createShareContentUri(', 'createShareIntent(', 'markShareDispatched(',
+  'PdfReaderLaunchContract.parseResult(', 'exportDocumentResult(', 'renameExportedDocument(', 'prepareShare(',
+  'createShareContentUris(', 'createShareIntent(', 'markShareDispatched(',
   'cancelShareBeforeDispatch(']) {
   assert(plugin.includes(operation), `activated document operation missing: ${operation}`);
 }

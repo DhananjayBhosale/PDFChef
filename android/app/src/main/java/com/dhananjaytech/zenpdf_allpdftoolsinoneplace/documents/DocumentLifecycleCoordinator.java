@@ -309,6 +309,19 @@ public final class DocumentLifecycleCoordinator {
 
     public synchronized boolean exportDocument(String ref, String displayName, String mimeType,
             OwnedPendingImportStore.CancellationSignal cancellation) throws Failure {
+        return exportDocumentResult(ref, displayName, mimeType, cancellation).completedValue();
+    }
+
+    /** Renames a file this app put in Downloads; returns the name it was stored under. */
+    public synchronized String renameExportedDocument(String exportRef, String displayName)
+            throws Failure {
+        try { return graph().exporter.rename(exportRef, displayName); }
+        catch (AndroidDocumentExporter.Failure failure) { throw wrap(failure); }
+    }
+
+    public synchronized AndroidDocumentExporter.Result exportDocumentResult(String ref,
+            String displayName, String mimeType,
+            OwnedPendingImportStore.CancellationSignal cancellation) throws Failure {
         Snapshot snapshot = null;
         OwnedDocumentWriter.DocumentSource source = null;
         LegacyDocumentOpenResolver.CollectionSource collection = null;
@@ -320,7 +333,7 @@ public final class DocumentLifecycleCoordinator {
                 if (mimeType == null) {
                     collection = graph().legacyResolver.openCollection(ref);
                     return graph().exporter.exportCollection(
-                            collection, displayName, cancellation).completedValue();
+                            collection, displayName, cancellation);
                 } else {
                     snapshot = snapshotLegacy(ref, mimeType, cancellation);
                     source = snapshot;
@@ -328,8 +341,7 @@ public final class DocumentLifecycleCoordinator {
             } else {
                 throw invalid();
             }
-            return graph().exporter.export(source, displayName, mimeType, cancellation)
-                    .completedValue();
+            return graph().exporter.export(source, displayName, mimeType, cancellation);
         } catch (OwnedDocumentWriter.Failure failure) { throw wrap(failure); }
         catch (LegacyDocumentOpenResolver.Failure failure) {
             throw wrapLegacy(failure);

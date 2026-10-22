@@ -552,11 +552,15 @@ public final class DocumentLifecycleCoordinatorTest {
                 @Override public void close() { row.bytes = bytes.toByteArray(); }
             };
         }
-        @Override public void publish(String address, String name, String mime, long size)
+        @Override public String publish(String address, String name, String mime, long size)
                 throws IOException {
             Row row = rows.get(address);
             if (!row.forced || row.bytes.length != size) throw new IOException("bad row");
-            row.pending = false;
+            row.pending = false; row.name = name;
+            return name;
+        }
+        @Override public String rename(String address, String name) {
+            rows.get(address).name = name; return name;
         }
         @Override public AndroidDocumentExporter.PublicationState publicationState(String address) {
             return rows.get(address).pending ? AndroidDocumentExporter.PublicationState.PENDING
@@ -567,7 +571,7 @@ public final class DocumentLifecycleCoordinatorTest {
             rows.remove("content://fake/" + token);
         }
         private static final class Row {
-            boolean pending = true; boolean forced; byte[] bytes = new byte[0];
+            boolean pending = true; boolean forced; byte[] bytes = new byte[0]; String name;
         }
     }
 }

@@ -400,18 +400,19 @@ export const convertPptxToPdf = async (
   const orientation = pageWidth >= pageHeight ? 'landscape' : 'portrait';
   const pdf = new jsPdfModule.jsPDF({ unit: 'pt', format: [pageWidth, pageHeight], orientation, compress: true });
 
+  // The slide is laid out at its own size and html2canvas draws it scaled. Scaling the slide with
+  // a CSS transform instead cut every 4:3 slide off at its unscaled size: html2canvas clipped the
+  // shapes to the slide's 960 x 720 box while drawing them at 1280 x 960.
   const longEdge = 1280;
   const scale = longEdge / Math.max(sourceWidth, sourceHeight);
-  const renderWidth = Math.max(1, Math.round(sourceWidth * scale));
-  const renderHeight = Math.max(1, Math.round(sourceHeight * scale));
   const root = document.createElement('div');
   root.setAttribute('aria-hidden', 'true');
   Object.assign(root.style, {
     position: 'fixed',
     left: '-20000px',
     top: '0',
-    width: `${renderWidth}px`,
-    height: `${renderHeight}px`,
+    width: `${sourceWidth}px`,
+    height: `${sourceHeight}px`,
     overflow: 'hidden',
     background: '#ffffff',
     pointerEvents: 'none',
@@ -431,16 +432,14 @@ export const convertPptxToPdf = async (
           position: 'absolute',
           left: '0',
           top: '0',
-          transform: `scale(${scale})`,
-          transformOrigin: 'left top',
         });
         await handle.ready;
         await settleLayout();
         const canvas = await html2canvasModule.default(root, {
           backgroundColor: '#ffffff',
-          width: renderWidth,
-          height: renderHeight,
-          scale: 1,
+          width: sourceWidth,
+          height: sourceHeight,
+          scale,
           logging: false,
           useCORS: false,
         });

@@ -33,8 +33,9 @@ export const encryptPdfWithAes128 = (input: Uint8Array, password: string) => run
   'output.pdf',
 ]);
 
+// With no password, qpdf opens the file with the empty one, which is how an owner-only file opens.
 export const decryptPdf = (input: Uint8Array, password: string) => runQpdf(input, [
-  `--password=${password}`,
+  ...(password ? [`--password=${password}`] : []),
   '--decrypt',
   '--',
   'input.pdf',

@@ -568,6 +568,11 @@ final class OwnedDocumentWriter {
 
     private UndoRecord recoverUndoTransactions(Layout layout, String targetRef)
             throws IOException, Failure {
+        return recoverUndoTransactions(layout, targetRef, 4);
+    }
+
+    private UndoRecord recoverUndoTransactions(Layout layout, String targetRef, int cleanupLimit)
+            throws IOException, Failure {
         List<UndoRecord> records = readUndoRecords(layout);
         if (records.isEmpty()) return null;
         TrashLayout trash = TrashLayout.prepare(layout);
@@ -587,14 +592,14 @@ final class OwnedDocumentWriter {
                     && current >= candidate.restoredAt
                     && current - candidate.restoredAt >= COMPLETED_RECORD_EXPIRY_MILLIS);
             if (!isTarget && !requiresRecovery && !requiresCleanup) continue;
-            if (!isTarget && cleanupCount >= 4) continue;
+            if (!isTarget && cleanupCount >= cleanupLimit) continue;
 
             UndoRecord recovered = recoverUndo(layout, trash, candidate);
             if (!isTarget) cleanupCount++;
             if (recovered == null) continue;
             if (recovered.state == UndoState.TRASHED
                     && current >= recovered.expiresAt) {
-                if (isTarget || cleanupCount < 4) {
+                if (isTarget || cleanupCount < cleanupLimit) {
                     completePurge(layout, trash, recovered.asState(UndoState.PURGING));
                     if (!isTarget) cleanupCount++;
                 }
@@ -604,7 +609,7 @@ final class OwnedDocumentWriter {
                 if (recovered.restoredAt >= 0
                         && current >= recovered.restoredAt
                         && current - recovered.restoredAt >= COMPLETED_RECORD_EXPIRY_MILLIS
-                        && (isTarget || cleanupCount < 4)) {
+                        && (isTarget || cleanupCount < cleanupLimit)) {
                     removeRestoredReceipt(layout, trash, recovered);
                     if (!isTarget) cleanupCount++;
                 }
@@ -922,6 +927,7 @@ final class OwnedDocumentWriter {
         for (OwnedDocument document : documents) {
             if (deleteOwned(document.ref)) removed++;
         }
+        purgeExpiredUndos();
         return removed;
     }
 
@@ -931,7 +937,20 @@ final class OwnedDocumentWriter {
         for (OwnedDocument document : documents) {
             if (clearOwnedPayload(document.ref)) removed++;
         }
+        purgeExpiredUndos();
         return removed;
+    }
+
+    /** Deletes every deleted copy whose undo window has ended, not just the few a trash pass clears. */
+    private void purgeExpiredUndos() throws Failure {
+        Layout layout = prepareAndRecover();
+        try {
+            recoverUndoTransactions(layout, null, Integer.MAX_VALUE);
+        } catch (Failure failure) {
+            throw failure;
+        } catch (IOException | RuntimeException failure) {
+            throw unsafe();
+        }
     }
 
     private boolean clearOwnedPayload(String ref) throws Failure {

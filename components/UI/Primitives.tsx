@@ -291,13 +291,22 @@ export const Sheet: React.FC<{
     const selector = 'button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])';
     const focusables = (): HTMLElement[] =>
       panel.current ? Array.from(panel.current.querySelectorAll<HTMLElement>(selector)) : [];
+    // A rename field opens focused with its text selected, so typing replaces the old name.
+    const field = panel.current?.querySelector<HTMLInputElement>('input[data-sheet-initial-focus]');
     const preferred = panel.current?.querySelector<HTMLElement>('[data-sheet-primary-focus] button:not([disabled])');
-    (preferred || focusables()[0])?.focus();
+    if (field) {
+      field.focus();
+      field.select();
+    } else {
+      (preferred || focusables()[0])?.focus();
+    }
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && dismissible) {
+      // Android Back arrives as Escape. A sheet that cannot close yet still holds it, so Back
+      // does not leave the screen behind a running rename or save.
+      if (event.key === 'Escape') {
         event.preventDefault();
-        onCloseRef.current();
+        if (dismissible) onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab') return;

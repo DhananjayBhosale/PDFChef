@@ -135,8 +135,8 @@ public class MainActivity extends BridgeActivity {
 
     /**
      * Copy the handed-over document into owned storage, then tell the page it is
-     * waiting. The bytes are read off the main thread; a hand-over this app will
-     * not accept simply leaves the app as it was rather than interrupting.
+     * waiting. The bytes are read off the main thread. A file this app refuses is
+     * reported to the page too, or "Open with PDF Chef" would seem to do nothing.
      */
     private void acceptIncomingPdf(Intent intent) {
         if (!IncomingPdfIntake.isIncomingPdf(intent)) return;
@@ -154,7 +154,12 @@ public class MainActivity extends BridgeActivity {
                             getContentResolver(), handedOver);
                     documentRef = new IncomingPdfIntake().accept(
                             coordinator, handedOver, sourceName);
+                } catch (DocumentLifecycleCoordinator.Failure failure) {
+                    String reason = IncomingPdfIntake.rejectionReason(failure.code());
+                    if (reason != null) runOnUiThread(() -> announceRejected(reason));
+                    return;
                 } catch (Exception failure) {
+                    runOnUiThread(() -> announceRejected(IncomingPdfIntake.rejectionReason(null)));
                     return;
                 }
                 if (documentRef == null) return;
@@ -167,14 +172,26 @@ public class MainActivity extends BridgeActivity {
 
     private void announceIncoming(String documentRef) {
         try {
-            PluginHandle handle = getBridge() == null ? null : getBridge().getPlugin("AndroidDocuments");
-            Object plugin = handle == null ? null : handle.getInstance();
-            if (plugin instanceof AndroidDocumentsPlugin documents) {
-                documents.announceIncomingPdf(documentRef);
-            }
+            AndroidDocumentsPlugin documents = documentsPlugin();
+            if (documents != null) documents.announceIncomingPdf(documentRef);
         } catch (Exception ignored) {
             // Without the bridge the copy still exists; the page collects it on its next look.
         }
+    }
+
+    private void announceRejected(String reason) {
+        try {
+            AndroidDocumentsPlugin documents = documentsPlugin();
+            if (documents != null) documents.announceIncomingPdfRejected(reason);
+        } catch (Exception ignored) {
+            // Nothing was copied in, so the app is simply left as it was.
+        }
+    }
+
+    private AndroidDocumentsPlugin documentsPlugin() {
+        PluginHandle handle = getBridge() == null ? null : getBridge().getPlugin("AndroidDocuments");
+        Object plugin = handle == null ? null : handle.getInstance();
+        return plugin instanceof AndroidDocumentsPlugin documents ? documents : null;
     }
 
     @Override
@@ -204,8 +221,11 @@ public class MainActivity extends BridgeActivity {
         configureGraphicsLayer(webView);
         bridge.setWebViewClient(new PdfChefWebViewClient(bridge));
         String recoveryUrl = PENDING_RENDERER_RECOVERY_URL.getAndSet(null);
-        // The same screen comes back, and the page is told so it can say what happened.
-        String reload = PdfChefWebViewPolicy.rendererRecoveryUrl(recoveryUrl);
+        // The same screen comes back, and the page is told so it can say what happened. An older
+        // WebView lacks what PDF.js calls without a fallback, so it gets a page that says to update it.
+        String reload = bridge.isMinimumWebViewInstalled()
+                ? PdfChefWebViewPolicy.rendererRecoveryUrl(recoveryUrl)
+                : PdfChefWebViewPolicy.WEBVIEW_UPDATE_URL;
         if (reload != null) webView.loadUrl(reload);
         synchronizeSystemBarBackground();
         ServiceWorkerController.getInstance().setServiceWorkerClient(new ServiceWorkerClient() {
@@ -308,9 +328,6 @@ public class MainActivity extends BridgeActivity {
             // instead of entering a restart loop.
             rendererGone = true;
             String recoveryUrl = view.getUrl();
-            if (PdfChefWebViewPolicy.isPackagedOrigin(recoveryUrl)) {
-                PENDING_RENDERER_RECOVERY_URL.set(recoveryUrl);
-            }
             ViewParent parent = view.getParent();
             if (parent instanceof ViewGroup) ((ViewGroup) parent).removeView(view);
             view.destroy();
@@ -318,9 +335,15 @@ public class MainActivity extends BridgeActivity {
             long now = SystemClock.elapsedRealtime();
             if (claimRendererRecovery(now)) {
                 getWindow().getDecorView().post(() -> {
-                    if (!isFinishing() && !isDestroyed()) recreate();
+                    if (isFinishing() || isDestroyed()) return;
+                    // Stored only for the rebuild that reads it, so a later launch never reopens it.
+                    if (PdfChefWebViewPolicy.isPackagedOrigin(recoveryUrl)) {
+                        PENDING_RENDERER_RECOVERY_URL.set(recoveryUrl);
+                    }
+                    recreate();
                 });
             } else {
+                PENDING_RENDERER_RECOVERY_URL.set(null);
                 finish();
             }
             return true;

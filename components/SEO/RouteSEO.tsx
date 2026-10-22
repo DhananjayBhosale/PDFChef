@@ -215,6 +215,12 @@ const routeMeta: Record<string, RouteMeta> = {
     get title() { return t("route-seo.terms.and.conditions.pdf.chef.bff6d8"); },
     get description() { return t("route-seo.read.the.pdf.chef.terms.and.conditions.09c956"); },
   },
+  // Reached from Settings. A list of dependencies is nothing for a searcher.
+  '/licenses': {
+    noindex: true,
+    get title() { return t("settings-page.open.source.licenses.c9f6d0"); },
+    get description() { return t("settings-page.open.source.licenses.c9f6d0"); },
+  },
 };
 
 const upsertMetaTag = (name: string, content: string, property = false) => {

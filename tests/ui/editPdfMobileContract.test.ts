@@ -232,7 +232,36 @@ test('the editing overlay leaves scrolling, pinch zoom and native selection to t
   assert.match(editor, /const EDITOR_MAX_ZOOM = 4/);
   assert.match(editor, /setExactZoom\(Math\.min\(EDITOR_MAX_ZOOM, zoom \* \(MINIMUM_EDITING_FONT_PX \/ renderedFontSize\)\)\)/);
   assert.match(blockLayer, /window\.visualViewport/);
-  assert.match(editor, /useKeyboardSafeFocus\(pdfZoomViewportRef\.current, activeBlockId, zoom, immersiveBottomBarRef\.current\)/);
+  assert.match(editor, /useKeyboardSafeFocus\(\s*pdfZoomViewportRef\.current,\s*activeBlockId,\s*zoom,\s*immersiveBottomBarRef\.current,\s*immersiveHeaderRef\.current,\s*selectedTextId,\s*\)/);
+});
+
+// EDT-16: with the keyboard up (the Android window shrinks), the paragraph being edited slid
+// under the fixed header, and a new text box stayed behind the Text inspector and toolbar.
+test('what is being typed stays between the fixed header and the bottom bar', () => {
+  // The caret is kept below the header as well as above the bar.
+  assert.match(blockLayer, /pdfEditingVisibleRect\(container, \{[\s\S]*?\}, header\?\.getBoundingClientRect\(\) \?\? null, bottomBar\?\.getBoundingClientRect\(\) \?\? null\)/);
+  // A new text box is followed too, not only a paragraph of the PDF.
+  assert.match(editor, /const selectedTextId = selectedElement\?\.type === 'text' \? selectedElement\.id : null;/);
+  assert.match(editor, /data-testid="inline-text-editor"\s*data-element-id=\{element\.id\}/);
+  assert.match(blockLayer, /: selectedTextId \? `\[data-element-id="\$\{CSS\.escape\(selectedTextId\)\}"\]` : null;/);
+  assert.match(blockLayer, /if \(element instanceof HTMLTextAreaElement\) return element\.getBoundingClientRect\(\);/);
+  assert.match(blockLayer, /element\.addEventListener\('focus', selectionChanged\)/);
+  assert.match(blockLayer, /\[activeBlockId, bottomBar, header, scrollContainer, selectedTextId, zoom\]/);
+  // The editor is exactly one screen tall and the PDF box takes what the chrome leaves, so a
+  // window shrunk by the keyboard never makes the document itself scroll under the fixed bars.
+  const immersiveStart = editor.indexOf('if (isImmersiveEditor) {');
+  const immersive = editor.slice(immersiveStart, editor.indexOf('mx-auto w-full max-w-6xl', immersiveStart));
+  assert.ok(immersiveStart > 0 && immersive.length > 1000, 'found the immersive editor layout');
+  assert.match(immersive, /className="flex h-\[100dvh\] flex-col bg-\[var\(--surface-canvas\)\]"/);
+  assert.match(immersive, /className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col px-2 py-2 sm:px-4"/);
+  assert.match(immersive, /className="flex max-h-\[48rem\] min-h-0 flex-1 flex-col overflow-hidden rounded-\[var\(--radius-panel\)\] bg-\[var\(--surface-sunken\)\]"/);
+  assert.match(immersive, /chef-pdf-zoom-viewport min-h-0 flex-1 overflow-x-auto overflow-y-auto/);
+  assert.doesNotMatch(immersive, /min-h-\[100dvh\]|min-h-64|100dvh-20\.5rem/);
+});
+
+// EDT-09: focus zoom kept the tapped word in place and pushed every line's start off the left.
+test('focus zoom brings the start of the paragraph back into view', () => {
+  assert.match(blockLayer, /scrollContainer\.scrollLeft \+= pdfParagraphStartScroll\(element\.getBoundingClientRect\(\), anchorCaret, visible\)/);
 });
 
 test('a paragraph edit states whether it rewrites the PDF or redraws the paragraph', () => {

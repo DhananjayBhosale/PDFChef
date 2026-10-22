@@ -913,6 +913,7 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
          <textarea
            ref={inlineTextEditorRef}
            data-testid="inline-text-editor"
+           data-element-id={element.id}
            aria-label={t("edit-pdf.edit.text.on.page.4a02ed", { v0: element.pageIndex + 1 })}
            value={element.content}
            placeholder={t("edit-pdf.text.71988c")}
@@ -1080,7 +1081,15 @@ export const EditPDF: React.FC = () => {
   const compactViewport = useCompactEditorViewport();
   const coarsePointer = useCoarsePointer();
 
-  const captureFocusAnchor = useKeyboardSafeFocus(pdfZoomViewportRef.current, activeBlockId, zoom, immersiveBottomBarRef.current);
+  const selectedTextId = selectedElement?.type === 'text' ? selectedElement.id : null;
+  const captureFocusAnchor = useKeyboardSafeFocus(
+    pdfZoomViewportRef.current,
+    activeBlockId,
+    zoom,
+    immersiveBottomBarRef.current,
+    immersiveHeaderRef.current,
+    selectedTextId,
+  );
   const handlePdfPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse') return;
     const element = (event.target as HTMLElement).closest<HTMLElement>('[data-block-id]');
@@ -2707,8 +2716,12 @@ export const EditPDF: React.FC = () => {
     ) : null;
 
     return (
+      // Exactly one screen tall, with the PDF box taking whatever the header and bottom bar leave.
+      // A box with a minimum height made the document taller than a window shrunk by the keyboard,
+      // and the browser then scrolled the whole page to reveal the caret, sliding the paragraph
+      // under the fixed header and the new text box under the bottom bar.
       <div
-        className="min-h-[100dvh] bg-[var(--surface-canvas)]"
+        className="flex h-[100dvh] flex-col bg-[var(--surface-canvas)]"
         style={{
           paddingTop: `${immersiveHeaderHeight}px`,
           paddingBottom: `calc(${immersiveBottomBarHeight}px + var(--chef-keyboard-inset, 0px))`,
@@ -2750,7 +2763,7 @@ export const EditPDF: React.FC = () => {
           </div>
         </header>
 
-        <div className="mx-auto w-full max-w-4xl px-2 py-2 sm:px-4">
+        <div className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col px-2 py-2 sm:px-4">
           {(status.message || status.error) && (
             <div aria-live="polite" role={status.error ? 'alert' : 'status'} className="mb-2">
               <StatusLine tone={status.error ? 'danger' : status.progress === 100 ? 'success' : 'info'}>
@@ -2777,13 +2790,13 @@ export const EditPDF: React.FC = () => {
             <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} />
           </div>
 
-          <div className="overflow-hidden rounded-[var(--radius-panel)] bg-[var(--surface-sunken)]">
+          <div className="flex max-h-[48rem] min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-panel)] bg-[var(--surface-sunken)]">
             <div
               ref={bindPdfZoomViewport}
               onPointerDownCapture={handlePdfPointerDown}
               data-testid="pdf-zoom-viewport"
               data-pdf-zoom={zoom.toFixed(3)}
-              className={`chef-pdf-zoom-viewport h-[calc(100dvh-20.5rem)] min-h-64 max-h-[48rem] overflow-x-auto overflow-y-auto p-2 sm:p-8 ${insertMode ? 'cursor-crosshair' : ''}`}
+              className={`chef-pdf-zoom-viewport min-h-0 flex-1 overflow-x-auto overflow-y-auto p-2 sm:p-8 ${insertMode ? 'cursor-crosshair' : ''}`}
             >
               <PDFPage
                 key={targetPageIndex}

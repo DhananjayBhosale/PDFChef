@@ -67,7 +67,8 @@ assert(workspace.includes('persistentRename: true')
   'T906 durable d1_ rename activation missing');
 assert(recent.includes('recordAbilities(platform, record)')
   && recent.includes('disabled={!activeAbilities?.rename}')
-  && recent.includes('platform.rename!(target, withOriginalExtension(')
+  && recent.includes('if (!target || !platform.rename) return;')
+  && recent.includes('await platform.rename(target, withOriginalExtension(')
   && recent.includes('{activeReason && <p'),
   'T906 visible rename must use per-row eligibility and a touch-visible reason');
 

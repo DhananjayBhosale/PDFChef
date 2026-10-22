@@ -1,8 +1,9 @@
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate, useNavigationType, type NavigateFunction } from 'react-router-dom';
 import { ChevronLeft, History, LayoutGrid, SlidersHorizontal } from 'lucide-react';
+import { TAB_ENTRY, rememberHistoryEntry, returnToTools } from './navigationHistory';
 import { tools } from '../Tools/toolCatalog';
 import type { ToolCardData } from '../Tools/toolCatalog';
 import { ToolIdentity } from '../Tools/ToolIdentity';
@@ -149,9 +150,21 @@ const useVisualViewportInsets = () => {
 
 /* ------------------------------------------------------------- Tab bar --- */
 
+/**
+ * Tabs replace the current entry instead of stacking (`replace` on every tab
+ * link), so Back never replays tab visits. A plain press on Tools steps back to
+ * Tools home when it is just behind, so the list keeps its place.
+ */
+const pressTab = (to: string, navigate: NavigateFunction) => (event: React.MouseEvent<HTMLAnchorElement>) => {
+  if (to !== '/' || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  returnToTools(navigate);
+};
+
 const TabBar: React.FC = () => {
   useI18n();
   const location = useLocation();
+  const navigate = useNavigate();
   const haptic = useHaptics();
 
   return (
@@ -166,6 +179,9 @@ const TabBar: React.FC = () => {
             <li key={to} className="flex-1">
               <Link
                 to={to}
+                replace
+                state={TAB_ENTRY}
+                onClick={pressTab(to, navigate)}
                 aria-current={active ? 'page' : undefined}
                 onPointerDown={() => haptic('selection')}
                 className={cx(
@@ -195,13 +211,14 @@ const TabBar: React.FC = () => {
 const SideRail: React.FC = () => {
   useI18n();
   const location = useLocation();
+  const navigate = useNavigate();
 
   return (
   <nav
     aria-label={t("app-shell.primary.efe10c")}
     className="chef-safe-top chef-safe-x sticky top-0 hidden h-screen w-[13.5rem] shrink-0 flex-col border-e border-[var(--border-hairline)] bg-[var(--surface-raised)] px-3 py-5 md:flex lg:w-[15rem]"
   >
-    <Link to="/" className="chef-pressable mb-6 flex items-center gap-3 rounded-[var(--radius-control)] px-2 py-1">
+    <Link to="/" replace state={TAB_ENTRY} onClick={pressTab('/', navigate)} className="chef-pressable mb-6 flex items-center gap-3 rounded-[var(--radius-control)] px-2 py-1">
       <img src="/pdf-chef-logo-exact.webp" alt="" aria-hidden className="h-9 w-9 object-contain" />
       <span className="min-w-0">
         <span className="block font-semibold leading-tight text-[var(--text-primary)]">PDF Chef</span>
@@ -216,6 +233,9 @@ const SideRail: React.FC = () => {
           <li key={to}>
             <NavLink
               to={to}
+              replace
+              state={TAB_ENTRY}
+              onClick={pressTab(to, navigate)}
               aria-current={active ? 'page' : undefined}
               className={cx(
                 'chef-pressable chef-target flex items-center gap-3 rounded-[var(--radius-control)] px-3 font-semibold',
@@ -343,6 +363,7 @@ const ROUTE_TITLES: Record<string, string> = {
   get '/privacy-policy'() { return t("app-shell.privacy.54a57c"); },
   get '/pdf-chef-privacy'() { return t("app-shell.privacy.54a57c"); },
   get '/terms'() { return t("app-shell.terms.ede548"); },
+  get '/licenses'() { return t("settings-page.open.source.licenses.c9f6d0"); },
   get '/terms-and-conditions'() { return t("app-shell.terms.ede548"); },
 };
 
@@ -360,12 +381,19 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const [workspaceImmersive, setWorkspaceImmersive] = useState(false);
   const immersive = IMMERSIVE_ROUTES.has(path) && workspaceImmersive;
   const root = isTabRoot(path);
+  const navigationType = useNavigationType();
+
+  // What sits at each history entry, so the Tools tab and Back can tell what is behind.
+  useEffect(() => {
+    rememberHistoryEntry(location.pathname, navigationType === 'PUSH');
+  }, [location.key, location.pathname, navigationType]);
 
   // A route change moves focus to the top of the new view so a screen reader or
   // keyboard user lands where a sighted user's eyes land, not where they were.
+  // Tools home puts back its own scroll position, so returning to it keeps its place.
   useEffect(() => {
     mainRef.current?.focus({ preventScroll: true });
-    window.scrollTo({ top: 0, behavior: 'auto' });
+    if (path !== '/') window.scrollTo({ top: 0, behavior: 'auto' });
   }, [path]);
 
   // The chrome is added and removed around a `<main>` that stays where it is,

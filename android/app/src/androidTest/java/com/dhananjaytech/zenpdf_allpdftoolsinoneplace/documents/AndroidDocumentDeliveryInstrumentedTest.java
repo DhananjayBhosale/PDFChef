@@ -265,9 +265,12 @@ public final class AndroidDocumentDeliveryInstrumentedTest {
         @Override public Output open(String value) throws java.io.IOException {
             return delegate.open(value);
         }
-        @Override public void publish(String value, String name, String mime, long size)
+        @Override public String publish(String value, String name, String mime, long size)
                 throws java.io.IOException {
-            delegate.publish(value, name, mime, size);
+            return delegate.publish(value, name, mime, size);
+        }
+        @Override public String rename(String value, String name) throws java.io.IOException {
+            return delegate.rename(value, name);
         }
         @Override public AndroidDocumentExporter.PublicationState publicationState(String value)
                 throws java.io.IOException {

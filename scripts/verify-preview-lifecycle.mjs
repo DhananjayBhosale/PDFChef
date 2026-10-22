@@ -165,7 +165,7 @@ try {
         const preview = await api.generatePreviewPair(file, config);
         const image = new Image(); image.src = preview.compressed; await image.decode();
         const measurement = await api.measureCompressedSize(file, config, { maxSamples: 1 });
-        const exported = await api.compressPDFAdaptive(file, 'recommended', () => {}, false, config);
+        const exported = await api.compressPDFAdaptive(file, 'recommended', () => {}, false, config, true);
         rows.push({ value, scale: config.scale, dimensions: [image.naturalWidth, image.naturalHeight], jpeg: preview.compressed.split(',')[1], measured: measurement.bytesPerPage, bytes: [...exported.data] });
       }
       // Same JPEG quality must not reuse a sample encoded at a different raster scale.

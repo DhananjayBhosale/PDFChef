@@ -1,5 +1,5 @@
 import { formatPercent } from '../../services/i18n/core.ts';
-import { LocalizedError, localizeError } from '../../services/i18n/errors.ts';
+import { LocalizedError, localizeError, pdfProblemMessage } from '../../services/i18n/errors.ts';
 import english from '../../services/i18n/en-US.ts';
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
@@ -415,11 +415,12 @@ export const OCRPDF: React.FC = () => {
         isProcessing: false,
         progress: 0,
         message: '',
-        error: extractionMode === 'ocr'
+        // A locked or broken file is not fixed by switching modes, so that advice is kept for the rest.
+        error: pdfProblemMessage(error) ?? (extractionMode === 'ocr'
           ? t("ocrpdf.the.words.could.not.be.read.from.1c2bd4")
           : error instanceof LocalizedError
             ? localizeError(error)
-            : t("ocrpdf.the.words.could.not.be.read.from.f9fba8"),
+            : t("ocrpdf.the.words.could.not.be.read.from.f9fba8")),
       });
     }
   };

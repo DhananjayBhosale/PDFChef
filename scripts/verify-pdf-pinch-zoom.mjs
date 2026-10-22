@@ -125,6 +125,8 @@ const verifyCompressionPreview = async mobile => {
   try {
     await page.goto(`${baseUrl}/compress`);
     await page.locator('input[type=file]').setInputFiles(fixture);
+    // The preview shows pages turned into pictures, which is off by default.
+    await page.getByRole('switch', { name: 'Keep text selectable' }).uncheck();
     await page.getByRole('button', { name: 'Preview' }).click();
     const dialog = page.getByRole('dialog');
     const original = page.getByTestId('compression-original-preview');

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { PDFDocument, PDFArray, PDFRawStream } from 'pdf-lib';
+import { PDFDocument, PDFArray, PDFDict, PDFName, PDFRawStream } from 'pdf-lib';
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { inflateSync } from 'node:zlib';
 
 import {
@@ -14,7 +16,11 @@ import {
   renderBusinessDocument,
   totalsOf,
   type BusinessDocument,
+  type BusinessFontName,
+  type BusinessFontSource,
 } from '../../services/documents/businessDocument.ts';
+import { localizeError } from '../../services/i18n/errors.ts';
+import { loadDevanagariFonts, type DevanagariFontId } from '../../services/pdfDevanagari.ts';
 
 const party = { name: 'Harlow & Wren Ltd', address: '4 Cathedral Square', email: 'a@b.co' };
 
@@ -93,11 +99,107 @@ for (const kind of ['invoice', 'receipt', 'quote'] as const) {
   });
 }
 
-test('unsupported characters are refused explicitly rather than removed from the document', async () => {
-  for (const notes of ['नमस्ते', 'Congratulations 🎉', 'Hidden \u0080 control']) {
-    await assert.rejects(renderBusinessDocument(document({ notes })), error =>
-      error instanceof BusinessDocumentValidationError && /cannot display.*U\+/.test(error.message));
+const fontFiles: Record<BusinessFontName, string> = {
+  'LiberationSans-Regular': 'node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf',
+  'LiberationSans-Bold': 'node_modules/pdfjs-dist/standard_fonts/LiberationSans-Bold.ttf',
+  'NotoSans-LatinExt-Regular': 'node_modules/@fontsource/noto-sans/files/noto-sans-latin-ext-400-normal.woff',
+  'NotoSans-LatinExt-Bold': 'node_modules/@fontsource/noto-sans/files/noto-sans-latin-ext-700-normal.woff',
+  'NotoSans-Vietnamese-Regular': 'node_modules/@fontsource/noto-sans/files/noto-sans-vietnamese-400-normal.woff',
+  'NotoSans-Vietnamese-Bold': 'node_modules/@fontsource/noto-sans/files/noto-sans-vietnamese-700-normal.woff',
+};
+const devanagariFiles: Record<DevanagariFontId, string> = {
+  MuktaRegular: 'Mukta-Regular.ttf', MuktaBold: 'Mukta-Bold.ttf', MartelRegular: 'Martel-Regular.ttf', MartelBold: 'Martel-Bold.ttf',
+};
+const fontsRead: BusinessFontName[] = [];
+const diskFonts: BusinessFontSource = {
+  read: async (name) => {
+    fontsRead.push(name);
+    return new Uint8Array(readFileSync(fontFiles[name]));
+  },
+  loadDevanagari: () => loadDevanagariFonts(async (id) => new Uint8Array(readFileSync(
+    new URL(`../../assets/fonts/pdf-edit/${devanagariFiles[id as keyof typeof devanagariFiles]}`, import.meta.url),
+  ))),
+};
+
+const pageText = async (bytes: Uint8Array) => {
+  const pdf = await pdfjs.getDocument({ data: bytes.slice(), useSystemFonts: false }).promise;
+  const pages: string[] = [];
+  for (let number = 1; number <= pdf.numPages; number += 1) {
+    const content = await (await pdf.getPage(number)).getTextContent();
+    pages.push(content.items.map((item: any) => item.str).join(''));
   }
+  return pages.join('\n');
+};
+
+const embeddedFontPrograms = async (bytes: Uint8Array) => {
+  const pdf = await PDFDocument.load(bytes);
+  return pdf.context.enumerateIndirectObjects()
+    .map(([, object]) => object)
+    .filter((object) => object instanceof PDFDict && object.get(PDFName.of('Type'))?.toString() === '/FontDescriptor')
+    .filter((object) => (object as PDFDict).get(PDFName.of('FontFile2')) || (object as PDFDict).get(PDFName.of('FontFile3')))
+    .map((object) => String((object as PDFDict).get(PDFName.of('FontName'))));
+};
+
+test('text Helvetica can write keeps Helvetica, with no font file embedded and none read', async () => {
+  fontsRead.length = 0;
+  const bytes = await renderBusinessDocument(document({ notes: 'Café “Quoted” — and … €' }), diskFonts);
+  assert.deepEqual(fontsRead, []);
+  assert.deepEqual(await embeddedFontPrograms(bytes), []);
+});
+
+test('Polish, Turkish, Vietnamese, Cyrillic and Greek text, and zł, ₺ and ₩, are drawn with embedded fonts', async () => {
+  const samples = {
+    from: 'Łódź Spółka zł',
+    to: 'İstanbul Şirketi Ğ ı ₺',
+    notes: 'Nguyễn Đức Thắng, ước mơ ở Việt Nam ₫',
+    address: 'Москва, улица Ленина',
+    reference: 'Αθήνα 42',
+  };
+  const bytes = await renderBusinessDocument(document({
+    reference: samples.reference,
+    from: { name: samples.from },
+    to: { name: samples.to, address: samples.address },
+    currency: '₩',
+    notes: samples.notes,
+  }), diskFonts);
+  const drawn = await pageText(bytes);
+  for (const sample of Object.values(samples)) assert.ok(drawn.includes(sample), `${sample} is missing from: ${drawn}`);
+  assert.ok(drawn.includes('₩200.00'), 'the won sign prints beside its amount');
+  const fonts = await embeddedFontPrograms(bytes);
+  assert.ok(fonts.some((name) => name.includes('Liberation')) && fonts.some((name) => name.includes('Noto')), String(fonts));
+  // Liberation Sans alone is 140 KB a weight; only the letters used are embedded.
+  assert.ok(bytes.length < 60_000, `a short invoice stays small, got ${bytes.length} bytes`);
+});
+
+test('Hindi is shaped with the Devanagari fonts and reads back in order', async () => {
+  const bytes = await renderBusinessDocument(document({
+    to: { name: 'राहुल शर्मा' },
+    notes: 'धन्यवाद, फिर मिलेंगे।',
+  }), diskFonts);
+  const drawn = await pageText(bytes);
+  assert.ok(drawn.includes('राहुल') && drawn.includes('शर्मा'), drawn);
+  assert.ok(drawn.includes('धन्यवाद') && drawn.includes('मिलेंगे।'), drawn);
+});
+
+test('text no font here can draw is refused, and the message names the field to fix', async () => {
+  const cases: Array<[Partial<BusinessDocument>, RegExp]> = [
+    [{ to: { name: '東京商事' } }, /^Client name uses letters this PDF cannot print yet: 東 京 商 事$/],
+    [{ from: { name: 'Studio', address: 'شارع' } }, /^Your address uses letters this PDF cannot print yet: ش/],
+    [{ items: [{ description: 'Fine', quantity: 1, unitPrice: 1 }, { description: '서울 출장', quantity: 1, unitPrice: 1 }] }, /^Line 2 uses letters this PDF cannot print yet: 서/],
+    [{ notes: 'Congratulations 🎉' }, /^Notes uses letters this PDF cannot print yet: 🎉$/],
+    [{ notes: 'Hidden \u0080 control' }, /^Notes uses letters this PDF cannot print yet: U\+0080$/],
+    [{ reference: '№ 東' }, /^Invoice number uses letters/],
+  ];
+  for (const [over, message] of cases) {
+    await assert.rejects(renderBusinessDocument(document(over), diskFonts), (error: unknown) =>
+      error instanceof BusinessDocumentValidationError && message.test(error.message));
+  }
+});
+
+test('the field named in the message is translated with the rest of it', async () => {
+  const error = await renderBusinessDocument(document({ to: { name: '東' } }), diskFonts).catch((caught) => caught);
+  assert.equal(localizeError(error), 'Client name uses letters this PDF cannot print yet: 東');
+  assert.equal(error.translatedValues.v0, 'business-document.client.name.b6626c');
 });
 
 const pageStreams = async (bytes: Uint8Array) => {

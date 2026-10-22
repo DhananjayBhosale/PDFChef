@@ -1,5 +1,5 @@
 import { t } from '../../services/i18n/core.ts';
-import { localizeError } from '../../services/i18n/errors.ts';
+import { localizeError, pdfFailureMessage, pdfProblemMessage } from '../../services/i18n/errors.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
@@ -60,7 +60,7 @@ export const ExtractPages: React.FC = () => {
         .catch((error) => {
           if (cancelled) return;
           console.error(error);
-          setPreviewError(t("extract-pages.the.pages.could.not.be.shown.choose.9884e4"));
+          setPreviewError(pdfProblemMessage(error) ?? t("extract-pages.the.pages.could.not.be.shown.choose.9884e4"));
           setLoadingPreviews(false);
         });
     } else {
@@ -170,7 +170,7 @@ export const ExtractPages: React.FC = () => {
     } catch (error) {
       if (controller.signal.aborted) return;
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: t("extract-pages.the.selected.pages.could.not.be.extracted.d4ba78") });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: pdfFailureMessage(error, t("extract-pages.the.selected.pages.could.not.be.extracted.d4ba78")) });
     } finally {
       if (activeJobControllerRef.current === controller) activeJobControllerRef.current = null;
     }

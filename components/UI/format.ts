@@ -70,8 +70,24 @@ export const splitFilename = (name: string): { stem: string; extension: string }
 export const renameKeepingExtension = (typed: string, extension: string, currentName: string): string => {
   let stem = sanitizeFilenameStem(typed).trim();
   if (extension && stem.toLowerCase().endsWith(extension.toLowerCase())) stem = stem.slice(0, -extension.length);
-  stem = stem.replace(/[\s.]+$/u, '');
+  stem = limitLength(stem, filenameStemLimit(extension)).replace(/[\s.]+$/u, '');
   return stem ? `${stem}${extension}` : currentName;
+};
+
+/** The longest whole name Android and the native stores accept, in UTF-16 units. */
+export const MAXIMUM_FILENAME_LENGTH = 180;
+
+/** How long the part before the extension can be, for a rename field's maxLength. */
+export const filenameStemLimit = (extension: string): number =>
+  Math.max(1, MAXIMUM_FILENAME_LENGTH - extension.length);
+
+const limitLength = (value: string, limit: number): string => {
+  let result = '';
+  for (const character of value) {
+    if (result.length + character.length > limit) break;
+    result += character;
+  }
+  return result;
 };
 
 /** "13 Oct" in the app's language. Dots are dropped so none sits next to the extension. */
@@ -110,11 +126,15 @@ export const toolOutputName = (toolWord: string, sourceName: string, extension: 
   return outputName(`${toolWord}-${stem || 'document'}`, extension);
 };
 
-/** Keep editable names safe for the iOS Files/share handoff and its byte limit. */
+/**
+ * Keep editable names safe for the iOS Files/share handoff and its byte limit. Android stores
+ * : ? * " < > | as "_", so the app uses "_" too and shows the name the file really has.
+ */
 export const sanitizeFilenameStem = (value: string): string => {
   let result = '';
   let bytes = 0;
-  for (const character of value.replace(/[\\/\0]/g, '-')) {
+  const safe = value.replace(/[\\/\0]/g, '-').replace(/[\u0001-\u001f\u007f]/g, '').replace(/[:?*"<>|]/g, '_');
+  for (const character of safe) {
     const width = new TextEncoder().encode(character).length;
     if (bytes + width > 200) break;
     result += character;

@@ -24,6 +24,18 @@ public final class PdfChefWebViewPolicyTest {
         }
     }
 
+    // GHSA-rvm3-566m-v7fv: the proxy path would serve remote content as https://localhost.
+    @Test public void neverTreatsCapacitorsHttpProxyAsThePackagedOrigin() {
+        for (String url : new String[] {
+                "https://localhost/_capacitor_http_interceptor_?u=https%3A%2F%2Fexample.com",
+                "https://localhost/_capacitor_https_interceptor_/x",
+                "https://localhost/_CAPACITOR_HTTP_INTERCEPTOR_?u=x"}) {
+            assertFalse(url, PdfChefWebViewPolicy.isPackagedOrigin(url));
+            assertEquals(url, PdfChefWebViewPolicy.Navigation.BLOCK, PdfChefWebViewPolicy.decide(url));
+        }
+        assertTrue(PdfChefWebViewPolicy.isPackagedOrigin("https://localhost/assets/index.js"));
+    }
+
     @Test public void keepsExistingWebAndEmailLinksVisibleOutsideTheBridge() {
         assertEquals(PdfChefWebViewPolicy.Navigation.OPEN_EXTERNAL_BROWSER,
                 PdfChefWebViewPolicy.decide("https://www.example.com/help"));
@@ -46,6 +58,12 @@ public final class PdfChefWebViewPolicyTest {
                 PdfChefWebViewPolicy.rendererRecoveryUrl("https://localhost/view?x=1#/old"));
         assertEquals(null, PdfChefWebViewPolicy.rendererRecoveryUrl(null));
         assertEquals(null, PdfChefWebViewPolicy.rendererRecoveryUrl("https://www.example.com/"));
+    }
+
+    @Test public void webViewUpdatePageIsPackagedAndItsStoreLinkOpensOutside() {
+        assertTrue(PdfChefWebViewPolicy.isPackagedOrigin(PdfChefWebViewPolicy.WEBVIEW_UPDATE_URL));
+        assertEquals(PdfChefWebViewPolicy.Navigation.OPEN_EXTERNAL_BROWSER, PdfChefWebViewPolicy.decide(
+                "https://play.google.com/store/apps/details?id=com.google.android.webview"));
     }
 
     @Test public void isolatesOnlyTheObservedBrokenGraphicsDriver() {

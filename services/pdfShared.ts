@@ -1,6 +1,6 @@
 import { LocalizedError } from './i18n/errors.ts';
 import { t } from './i18n/core.ts';
-import type { OutputDeliveryHandler } from './platform/contracts.ts';
+import type { OutputDeliveryHandler, SavedCopy } from './platform/contracts.ts';
 import type { RecentRecord } from './domain/workspaceModels.ts';
 import { Capacitor } from '@capacitor/core';
 import {
@@ -12,7 +12,18 @@ import {
 
 interface InstalledOutputDeliveryHandler {
   handler: OutputDeliveryHandler;
+  maximumBytes?: number;
 }
+
+/**
+ * Refuses a result the platform cannot keep or save, before anything says it is ready.
+ * Without this, Android announced a 480 MB result and every Save failed after 100 seconds.
+ */
+export const assertOutputSize = (size: number, maximumBytes: number | undefined) => {
+  if (maximumBytes === undefined || size <= maximumBytes) return;
+  const megabytes = (bytes: number) => Math.ceil(bytes / (1024 * 1024));
+  throw new LocalizedError('error.outputTooLarge', { v0: megabytes(size), v1: megabytes(maximumBytes) });
+};
 
 /** Delivery feedback is transient; it is never written to local history. */
 export interface OutputReadyRecord extends OutputRecord {
@@ -20,6 +31,8 @@ export interface OutputReadyRecord extends OutputRecord {
   historyRetained?: boolean;
   /** True only after a platform actually wrote a copy outside the app. */
   externallyExported?: boolean;
+  /** The copy written outside the app: the name it was saved under. */
+  savedCopy?: SavedCopy;
   /** A metered iOS preview is intentionally visible only in this transient event. */
   accessLocked?: boolean;
   /** Native scanner results already live in Recent; load bytes only for an action that needs them. */
@@ -87,8 +100,11 @@ const announceRetryableOutput = (record: OutputRecord, error: unknown, historyRe
 let outputDeliveryHandler: InstalledOutputDeliveryHandler | null = null;
 
 /** Installs one process-wide delivery seam. Cleanup cannot remove a newer handler. */
-export const installOutputDeliveryHandler = (handler: OutputDeliveryHandler): (() => void) => {
-  const installation = { handler };
+export const installOutputDeliveryHandler = (
+  handler: OutputDeliveryHandler,
+  options: { readonly maximumBytes?: number } = {},
+): (() => void) => {
+  const installation: InstalledOutputDeliveryHandler = { handler, maximumBytes: options.maximumBytes };
   outputDeliveryHandler = installation;
   let installed = true;
   return () => {
@@ -240,6 +256,7 @@ const deliverWithInstalledHandler = async (
         ? { externallyExported: outcome.externallyExported }
         : {}),
       ...(outcome && outcome.recentRecord ? { recentRecord: outcome.recentRecord } : {}),
+      ...(outcome && outcome.savedCopy ? { savedCopy: outcome.savedCopy } : {}),
     };
     announceOutput(ready);
   } catch (error) {
@@ -259,6 +276,7 @@ export const downloadBlob = (
   const resolvedMimeType = mimeType || blob.type || 'application/octet-stream';
   const toolPath = typeof window !== 'undefined' ? window.location.pathname : '';
   const installation = outputDeliveryHandler;
+  assertOutputSize(blob.size, installation?.maximumBytes);
   const access = options?.accessScope === 'source' ? null : outputAccessHandler;
   if (access) {
     void checkOutputAccess(blob, filename, resolvedMimeType, toolPath, options)
@@ -405,6 +423,7 @@ export const deliverBlob = async (
   const resolvedMimeType = mimeType || blob.type || 'application/octet-stream';
   const toolPath = typeof window !== 'undefined' ? window.location.pathname : '';
   const installation = outputDeliveryHandler;
+  assertOutputSize(blob.size, installation?.maximumBytes);
   const access = await checkOutputAccess(blob, filename, resolvedMimeType, toolPath, options);
   if (access.disposition.status === 'preview') {
     announceOutput(access.preview!);

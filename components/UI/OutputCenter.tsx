@@ -7,7 +7,10 @@ import { CheckCircle2, Clock, Download, ExternalLink, MoreHorizontal, Pencil, Sh
 import type { OutputReadyRecord } from '../../services/pdfShared';
 import { OUTPUT_DISMISS_EVENT, OUTPUT_EVENT, OUTPUT_RENAMED_EVENT, announceOutputRenamed, announceRecordsChanged, getWorkspaceSettings } from '../../services/workspace';
 import { Button, Sheet, StatusLine, cx } from './Primitives';
-import { formatBytes, renameKeepingExtension, sanitizeFilenameStem, splitFilename } from './format';
+import { filenameStemLimit, formatBytes, renameKeepingExtension, sanitizeFilenameStem, splitFilename } from './format';
+import type { SavedCopy } from '../../services/platform/contracts';
+import { useDiscardPrompt } from '../../hooks/useConfirmDiscard';
+import { returnToTools } from '../Layout/navigationHistory';
 import {
   FALLBACK_DOCUMENT_NAME,
   FALLBACK_MIME_TYPE,
@@ -38,6 +41,9 @@ export const OutputCenter: React.FC = () => {
   const [name, setName] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
   const [exported, setExported] = useState(false);
+  // The copy in Downloads, so a rename renames it and Download does not make a duplicate.
+  const [saved, setSaved] = useState<SavedCopy | null>(null);
+  const [shared, setShared] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [error, setError] = useState('');
@@ -45,7 +51,31 @@ export const OutputCenter: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const recordRef = useRef<OutputReadyRecord | null>(null);
   recordRef.current = record;
+  // Nothing else holds this result: not Recent, not Downloads, not a share target.
+  const unsaved = Boolean(record?.blob && !record.recentRecord && !record.accessLocked && !retained && !exported && !shared);
+  const unsavedRef = useRef(false);
+  unsavedRef.current = unsaved;
+  const discardPrompt = useDiscardPrompt({ title: t("output-center.this.result.is.not.saved.discard.it.95f518") });
+  const folder = platform.capabilities.exportFolder;
   const closeMore = useCallback(() => setMoreOpen(false), []);
+  const stripRef = useRef<HTMLElement | null>(null);
+  const stripVisible = Boolean(record?.blob || record?.recentRecord);
+
+  // The page leaves room for the strip, so it never covers a tool's last row or main button.
+  useEffect(() => {
+    const root = document.documentElement;
+    const strip = stripRef.current;
+    if (!stripVisible || !strip) return undefined;
+    const measure = () => root.style.setProperty(
+      '--chef-output-strip-space', `${Math.ceil(strip.getBoundingClientRect().height) + 8}px`);
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(strip);
+    return () => {
+      observer?.disconnect();
+      root.style.removeProperty('--chef-output-strip-space');
+    };
+  }, [stripVisible]);
   const closeRename = useCallback(() => setRenameOpen(false), []);
 
   // A Save waiting behind the paywall belongs to this result. Once the result is
@@ -59,6 +89,8 @@ export const OutputCenter: React.FC = () => {
     setRecord(null);
     setMoreOpen(false);
     setExported(false);
+    setSaved(null);
+    setShared(false);
     setNotice('');
     setRenameOpen(false);
     setError('');
@@ -71,7 +103,10 @@ export const OutputCenter: React.FC = () => {
       const settings = getWorkspaceSettings();
       abandonPendingSave();
       setRecord(next);
-      setName(typeof next.filename === 'string' ? next.filename : '');
+      setSaved(next.savedCopy ?? null);
+      setShared(false);
+      // Downloads adds " (1)" to a name that is taken; show the name the file really has.
+      setName(next.savedCopy?.savedName ?? (typeof next.filename === 'string' ? next.filename : ''));
       setRetained(next.historyRetained ?? settings.keepLocalHistory);
       setExported(next.externallyExported ?? (
         settings.autoDownload && !next.recentRecord && !next.deliveryIssue && !next.accessLocked
@@ -90,9 +125,9 @@ export const OutputCenter: React.FC = () => {
     return () => window.removeEventListener(OUTPUT_EVENT, onOutput);
   }, [abandonPendingSave, haptic]);
 
-  // A failed save stays retryable; any other result gives way to the next document.
+  // A failed or unsaved result stays; any other result gives way to the next document.
   useEffect(() => {
-    const onDismiss = () => { if (!recordRef.current?.deliveryIssue) dismiss(); };
+    const onDismiss = () => { if (!recordRef.current?.deliveryIssue && !unsavedRef.current) dismiss(); };
     window.addEventListener(OUTPUT_DISMISS_EVENT, onDismiss);
     return () => window.removeEventListener(OUTPUT_DISMISS_EVENT, onDismiss);
   }, [dismiss]);
@@ -116,10 +151,12 @@ export const OutputCenter: React.FC = () => {
     return () => window.removeEventListener(OUTPUT_RENAMED_EVENT, onRenamed);
   }, []);
 
-  // A failed save must remain retryable across navigation until dismissed.
+  // A failed save must remain retryable across navigation until dismissed, and a result saved
+  // nowhere must not vanish because the person went back to Tools.
   useEffect(() => {
-    if (!recordRef.current?.deliveryIssue) abandonPendingSave();
-    setRecord(current => current?.deliveryIssue ? current : null);
+    const keep = Boolean(recordRef.current?.deliveryIssue) || unsavedRef.current;
+    if (!keep) abandonPendingSave();
+    setRecord(current => keep ? current : null);
     setMoreOpen(false);
     setRenameOpen(false);
   }, [abandonPendingSave, location.pathname]);
@@ -159,16 +196,43 @@ export const OutputCenter: React.FC = () => {
   const result = record.blob ? { blob: record.blob, name: safeName, mimeType } : null;
   const accessLocked = Boolean(record.accessLocked && !access?.unlocked);
 
+  const savedMessage = (savedName: string) => folder
+    ? t("output-center.saved.to.as.cf91b2", { v0: folder, v1: savedName })
+    : t("output-center.saved.4a9b73", { v0: savedName });
+
   const downloadResult = async () => {
-    const download = () => recent ? platform.save(recent, safeName) : platform.saveFresh(result!);
-    if (!accessLocked) {
-      await download();
-      return;
+    // A copy already in Downloads is reported, not copied again: repeated taps used to leave
+    // "Name.pdf", "Name (1).pdf" and "Name (2).pdf" side by side.
+    if (saved?.exportRef && platform.renameSaved) {
+      try {
+        const savedName = await platform.renameSaved(saved.exportRef, saved.savedName);
+        if (recordRef.current?.id === record.id) setNotice(savedMessage(savedName));
+        return true;
+      } catch {
+        // Deleted from Downloads, or saved more than a day ago: save a new copy.
+      }
     }
-    // The preview's operation ID is its metering key: saving it records that job against
-    // fresh native state instead of trusting a cached free count.
-    const accessResult = await runWithExportAccess(download, { operationId: record.id });
-    return accessResult.status !== 'blocked';
+    let copy: SavedCopy | void = undefined;
+    const download = async () => {
+      copy = await (recent ? platform.save(recent, safeName) : platform.saveFresh(result!));
+    };
+    if (accessLocked) {
+      // The preview's operation ID is its metering key: saving it records that job against
+      // fresh native state instead of trusting a cached free count.
+      const accessResult = await runWithExportAccess(download, { operationId: record.id });
+      if (accessResult.status === 'blocked') return false;
+    } else {
+      await download();
+    }
+    if (recordRef.current?.id !== record.id) return true;
+    const kept = copy as SavedCopy | void;
+    setExported(true);
+    if (kept) {
+      setSaved(kept);
+      setName(kept.savedName);
+    }
+    setNotice(savedMessage(kept ? kept.savedName : safeName));
+    return true;
   };
 
   const keepResult = async () => {
@@ -192,13 +256,16 @@ export const OutputCenter: React.FC = () => {
       provenance: accessLocked ? 'preview' : 'retained',
       previewOnly: accessLocked,
     });
-    dismiss();
+    // An unsaved result stays on the strip, so it can still be saved after a look.
+    if (unsaved) setMoreOpen(false);
+    else dismiss();
     navigate('/view', { state: { openTools: openTools && !accessLocked, openedPdfId: opened.id } });
   };
 
   return (
     <>
       <aside
+        ref={stripRef}
         role="status"
         aria-live="polite"
         className={cx(
@@ -213,7 +280,9 @@ export const OutputCenter: React.FC = () => {
               <span className="chef-filename block truncate">{exported && isPdf ? t("output-center.pdf.exported.67ba14") : t("output-center.result.ready.572c0b")}</span>
               <span className="type-footnote tabular block text-[var(--text-secondary)]">
                 {formatBytes(record.size ?? null)}
-                {retained ? t("output-center.kept.on.this.device.c76dee") : t("output-center.available.until.dismissed.a4288a")}
+                {exported && folder
+                  ? t("output-center.in.6ca2da", { v0: folder })
+                  : retained ? t("output-center.kept.on.this.device.c76dee") : t("output-center.available.until.dismissed.a4288a")}
               </span>
               {accessLocked && (
                 <span className="type-footnote block text-[var(--status-caution-text)]">{t("output-center.preview.only.unlock.to.save.share.or.1b46c3")}</span>
@@ -230,7 +299,7 @@ export const OutputCenter: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={dismiss}
+              onClick={() => { if (unsaved) discardPrompt.ask(dismiss); else dismiss(); }}
               aria-label={t("output-center.dismiss.48845b")}
               className="chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)]"
             >
@@ -265,13 +334,16 @@ export const OutputCenter: React.FC = () => {
               setRenameOpen(true);
             }}
           >{t("output-center.rename.3064d7")}</Button>
-          <Button
-            block
-            busy={busy}
-            disabled={!platform.keepFresh || retained || Boolean(recent)}
-            icon={<CheckCircle2 aria-hidden size={16} />}
-            onClick={() => void act(keepResult, t("output-center.that.file.could.not.be.saved.4d740f"))}
-          >{retained || recent ? t("output-center.saved.b5c120") : t("output-center.save.1509f5")}</Button>
+          {/* Keeping is offered only while the result is not in Recent. A greyed "Saved" here
+              read as "saved to the phone" when the file was only inside the app. */}
+          {platform.keepFresh && !retained && !recent && (
+            <Button
+              block
+              busy={busy}
+              icon={<CheckCircle2 aria-hidden size={16} />}
+              onClick={() => void act(keepResult, t("output-center.that.file.could.not.be.saved.4d740f"))}
+            >{t("output-center.keep.in.recent.36bf88")}</Button>
+          )}
           <Button
             block
             disabled={recent ? !platform.share : !platform.shareFresh}
@@ -279,9 +351,14 @@ export const OutputCenter: React.FC = () => {
             onClick={() => void act(async () => {
               const share = () => recent ? platform.share!(recent, safeName) : platform.shareFresh!(result!);
               if (!(recent ? platform.share : platform.shareFresh)) return false;
-              if (!accessLocked) return share();
-              const accessResult = await runWithExportAccess(share, { operationId: record.id });
-              return accessResult.status !== 'blocked';
+              if (!accessLocked) {
+                await share();
+              } else {
+                const accessResult = await runWithExportAccess(share, { operationId: record.id });
+                if (accessResult.status === 'blocked') return false;
+              }
+              if (recordRef.current?.id === record.id) setShared(true);
+              return true;
             }, t("output-center.sharing.did.not.complete.bf9347"))}
           >{t("output-center.share.29887a")}</Button>
           <Button
@@ -289,10 +366,7 @@ export const OutputCenter: React.FC = () => {
             icon={<Download aria-hidden size={16} />}
             onClick={() => {
               setNotice('');
-              void act(downloadResult, t("output-center.that.file.could.not.be.saved.4d740f")).then((saved) => {
-                // Each press saves another copy; without a word here it looked like nothing happened.
-                if (saved && recordRef.current?.id === record.id) setNotice(`Saved ${safeName}.`);
-              });
+              void act(downloadResult, t("output-center.that.file.could.not.be.saved.4d740f"));
             }}
           >{t("output-center.download.9ce5b1")}</Button>
           {notice && <StatusLine tone="success">{notice}</StatusLine>}
@@ -304,8 +378,9 @@ export const OutputCenter: React.FC = () => {
                 void act(() => openPdf(true), t("output-center.that.file.could.not.be.saved.4d740f"));
                 return;
               }
-              dismiss();
-              navigate('/');
+              if (unsaved) setMoreOpen(false);
+              else dismiss();
+              returnToTools(navigate);
             }}
           >{t("app-shell.tools.ea93d6")}</Button>
           <div className="border-t border-[var(--border-hairline)] pt-2" />
@@ -342,23 +417,43 @@ export const OutputCenter: React.FC = () => {
               busy={busy}
               disabled={busy || !renameValue.trim()}
               onClick={() => void (async () => {
-                const nextName = renameKeepingExtension(renameValue, originalExtension, safeName);
-                if (recent && platform.rename) {
-                  const renamed = await act(() => platform.rename!(recent, nextName), t("output-center.that.file.could.not.be.saved.4d740f"));
-                  if (!renamed) return;
-                  setRecord(current => current?.id === record.id ? {
-                    ...current,
-                    filename: nextName,
-                    recentRecord: {
-                      ...recent,
-                      entry: { ...recent.entry, name: nextName },
-                      document: recent.document ? { ...recent.document, name: nextName } : null,
-                    },
-                  } : current);
-                  // The tool that made this result may still show its name (Create PDF's scan card).
-                  announceOutputRenamed(record.id, nextName);
-                }
+                const requested = renameKeepingExtension(renameValue, originalExtension, safeName);
+                let nextName = requested;
+                let renamedCopy = false;
+                const renamed = await act(async () => {
+                  // The copy in Downloads takes the new name too, and its name decides the
+                  // rest: Downloads adds " (1)" when another file already has it.
+                  if (saved?.exportRef && platform.renameSaved) {
+                    try {
+                      nextName = await platform.renameSaved(saved.exportRef, requested);
+                      renamedCopy = true;
+                    } catch {
+                      // Deleted from Downloads, or saved more than a day ago: the next
+                      // Download saves a new copy under the new name.
+                      if (recordRef.current?.id === record.id) setSaved(null);
+                    }
+                  }
+                  if (recent && platform.rename) await platform.rename(recent, nextName);
+                }, t("output-center.that.file.could.not.be.saved.4d740f"));
+                if (!renamed) return;
+                setRecord(current => current?.id === record.id ? {
+                  ...current,
+                  filename: nextName,
+                  recentRecord: current.recentRecord ? {
+                    ...current.recentRecord,
+                    entry: { ...current.recentRecord.entry, name: nextName },
+                    document: current.recentRecord.document ? { ...current.recentRecord.document, name: nextName } : null,
+                  } : current.recentRecord,
+                } : current);
+                // The tool that made this result may still show its name (Create PDF's scan card).
+                if (recent) announceOutputRenamed(record.id, nextName);
                 if (recordRef.current?.id !== record.id) return;
+                if (renamedCopy) {
+                  setSaved(current => current && { ...current, savedName: nextName });
+                  setNotice(savedMessage(nextName));
+                } else {
+                  setNotice('');
+                }
                 setName(nextName);
                 setRenameOpen(false);
                 setMoreOpen(true);
@@ -372,7 +467,8 @@ export const OutputCenter: React.FC = () => {
           id="output-rename"
           className="chef-field mt-1"
           value={renameValue}
-          maxLength={200}
+          maxLength={filenameStemLimit(originalExtension)}
+          data-sheet-initial-focus
           autoComplete="off"
           spellCheck={false}
           onChange={(event) => {
@@ -382,6 +478,7 @@ export const OutputCenter: React.FC = () => {
         />
         {error && <div className="mt-2"><StatusLine tone="danger">{error}</StatusLine></div>}
       </Sheet>
+      {discardPrompt.sheet}
     </>
   );
 };

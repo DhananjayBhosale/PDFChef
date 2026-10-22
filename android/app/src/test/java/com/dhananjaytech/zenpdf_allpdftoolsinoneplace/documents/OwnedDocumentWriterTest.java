@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.security.MessageDigest;
 import org.junit.Test;
 
@@ -645,6 +647,39 @@ public final class OwnedDocumentWriterTest {
         clock.set(first.expiresAt - 1 + OwnedDocumentWriter.COMPLETED_RECORD_EXPIRY_MILLIS);
         assertFailure("DOCUMENT_NOT_FOUND", () -> writer.restoreOwned(first.undoRef));
         assertFailure("DOCUMENT_NOT_FOUND", () -> writer.loadOwned(document.ref));
+    }
+
+    @Test public void clearPurgesEveryExpiredDeletedCopyButKeepsOnesStillUndoable()
+            throws Exception {
+        Path files = Files.createTempDirectory("owned-undo-clear-purge");
+        AtomicLong clock = new AtomicLong(1_000);
+        AtomicInteger issued = new AtomicInteger();
+        OwnedDocumentWriter writer = new OwnedDocumentWriter(files,
+                required -> required + 1_000_000, clock::get,
+                () -> "abcdefghijklmnopqrs" + (char) ('a' + issued.get() / 26 / 26)
+                        + (char) ('a' + issued.get() / 26 % 26)
+                        + (char) ('a' + issued.getAndIncrement() % 26), ignored -> {});
+        Path trashData = files.resolve("pdfchef_documents/trash/data");
+        for (int index = 0; index < 6; index++) {
+            String session = writer.begin(AndroidDocumentIngressPolicy.MIME_PDF).sessionId;
+            writer.append(session, PDF, () -> false);
+            writer.trashOwned(writer.finish(session, () -> false).ref);
+        }
+        clock.set(1_000 + OwnedDocumentWriter.UNDO_EXPIRY_MILLIS);
+        String session = writer.begin(AndroidDocumentIngressPolicy.MIME_PDF).sessionId;
+        writer.append(session, PDF, () -> false);
+        OwnedDocumentWriter.UndoEntry recent =
+                writer.trashOwned(writer.finish(session, () -> false).ref);
+        try (Stream<Path> listed = Files.list(trashData)) {
+            assertTrue(listed.count() > 1);
+        }
+
+        assertEquals(0, writer.clearOwned());
+        try (Stream<Path> listed = Files.list(trashData)) {
+            assertEquals(List.of(trashData.resolve(recent.undoRef.substring(3) + ".bin")),
+                    listed.collect(Collectors.toList()));
+        }
+        assertTrue(writer.restoreOwned(recent.undoRef));
     }
 
     @Test public void everyUndoMoveCheckpointRecoversWithTheSameToken() throws Exception {

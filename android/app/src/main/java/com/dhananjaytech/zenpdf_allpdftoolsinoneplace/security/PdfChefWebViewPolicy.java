@@ -14,6 +14,8 @@ import java.util.Locale;
 public final class PdfChefWebViewPolicy {
     public static final String PACKAGED_ORIGIN = "https://localhost";
     public static final long RENDERER_RECOVERY_COOLDOWN_MILLIS = 30_000L;
+    /** Shown instead of the app on a WebView older than android.minWebViewVersion. */
+    public static final String WEBVIEW_UPDATE_URL = PACKAGED_ORIGIN + "/webview-update/index.html";
 
     public enum Navigation {
         ALLOW_PACKAGED_ORIGIN,
@@ -102,7 +104,12 @@ public final class PdfChefWebViewPolicy {
         if (!"https".equals(lower(uri.getScheme()))) return false;
         if (!"localhost".equals(lower(uri.getHost()))) return false;
         if (uri.getPort() != -1 && uri.getPort() != 443) return false;
-        return uri.getRawUserInfo() == null;
+        if (uri.getRawUserInfo() != null) return false;
+        // Capacitor's HTTP proxy serves remote content at this origin (GHSA-rvm3-566m-v7fv).
+        // PDF Chef never enables CapacitorHttp, so nothing here may reach it.
+        String path = lower(uri.getRawPath());
+        return !path.startsWith("/_capacitor_http_interceptor_")
+                && !path.startsWith("/_capacitor_https_interceptor_");
     }
 
     private static boolean isSafeExternalLink(URI uri) {

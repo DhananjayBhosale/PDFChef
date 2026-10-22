@@ -49,11 +49,11 @@ public final class AndroidDocumentsPluginContractTest {
             assertArrayEquals(new Class<?>[] {PluginCall.class}, method.getParameterTypes());
             assertEquals(PluginMethod.RETURN_PROMISE, pluginMethod.returnType());
         }
-        assertEquals(18, exposed.size());
+        assertEquals(19, exposed.size());
         assertEquals(Set.of("abortWrite", "appendWrite", "beginWrite", "clearOwned",
                 "clearOwnedPayloads",
                 "deleteOwned", "exportItem", "finishWrite", "listOwned", "openReader",
-                "readChunk", "renameItem", "restoreOwned", "shareItem", "takePendingImports",
+                "readChunk", "renameExport", "renameItem", "restoreOwned", "shareItem", "takePendingImports",
                 "trashOwned",
                 "acknowledgePendingImports", "pickDocuments"), exposed);
         Method readerResult = type.getDeclaredMethod("readerResult", PluginCall.class,
@@ -217,6 +217,32 @@ public final class AndroidDocumentsPluginContractTest {
         assertFalse(AndroidDocumentsPlugin.launchAccepted(true, false));
         assertFalse(AndroidDocumentsPlugin.launchAccepted(false, false));
         assertFalse(AndroidDocumentsPlugin.launchAccepted(true, true));
+    }
+
+    // NAV-45, FIL-31: "Open with PDF Chef" on an empty file, a non-PDF or a 314 MB PDF did nothing.
+    @Test public void aRefusedHandoverTellsThePageWhyWithAFixedWord() throws Exception {
+        assertEquals("tooLarge", IncomingPdfIntake.rejectionReason("DOCUMENT_LIMIT_EXCEEDED"));
+        assertEquals("notPdf", IncomingPdfIntake.rejectionReason("DOCUMENT_CORRUPT"));
+        assertEquals("other", IncomingPdfIntake.rejectionReason("DOCUMENT_INVALID_ARGUMENT"));
+        assertEquals("other", IncomingPdfIntake.rejectionReason("DOCUMENT_UNAVAILABLE"));
+        assertEquals("other", IncomingPdfIntake.rejectionReason(null));
+        // The app is going away; there is no page to tell.
+        assertNull(IncomingPdfIntake.rejectionReason("DOCUMENT_CANCELLED"));
+        assertNull(IncomingPdfIntake.rejectionReason("DOCUMENT_INTERRUPTED"));
+
+        String plugin = source("src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/"
+                + "documents/AndroidDocumentsPlugin.java");
+        assertTrue(plugin.contains("public void announceIncomingPdfRejected(String reason)"));
+        assertTrue(plugin.contains("!\"tooLarge\".equals(reason) && !\"notPdf\".equals(reason)"
+                + " && !\"other\".equals(reason)"));
+        assertTrue(plugin.contains("notifyListeners(\"incomingPdfRejected\", event, true)"));
+
+        String activity = source("src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/"
+                + "MainActivity.java");
+        assertTrue(activity.contains("catch (DocumentLifecycleCoordinator.Failure failure)"));
+        assertTrue(activity.contains("IncomingPdfIntake.rejectionReason(failure.code())"));
+        assertTrue(activity.contains("documents.announceIncomingPdfRejected(reason)"));
+        assertFalse(activity.contains("} catch (Exception failure) {\n                    return;"));
     }
 
     @Test public void pendingBatchIdentityIsVersionedOrderBoundAndOpaque() {

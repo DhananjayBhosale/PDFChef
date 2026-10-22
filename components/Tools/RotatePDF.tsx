@@ -1,4 +1,4 @@
-import { localizeError } from '../../services/i18n/errors.ts';
+import { localizeError, pdfFailureNotice } from '../../services/i18n/errors.ts';
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useState, useEffect } from 'react';
@@ -24,7 +24,7 @@ export const RotatePDF: React.FC = () => {
   const [previews, setPreviews] = useState<string[]>([]);
   const [loadingPreviews, setLoadingPreviews] = useState(false);
   const [previewProgress, setPreviewProgress] = useState<PdfPreviewProgress | null>(null);
-  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<{ title: string; detail?: string } | null>(null);
   const [selectedPages, setSelectedPages] = useState<number[]>([]);
   const [pageRotations, setPageRotations] = useState<Record<number, number>>({}); // Map pageIndex -> rotation
   const [selectionMessage, setSelectionMessage] = useState<string | null>(null);
@@ -65,7 +65,7 @@ export const RotatePDF: React.FC = () => {
         .catch(err => {
           if (cancelled) return;
           console.error(err);
-          setPreviewError(err instanceof Error ? localizeError(err) : t("rotate-pdf.the.pages.could.not.be.shown.choose.9884e4"));
+          setPreviewError(pdfFailureNotice(err, t("rotate-pdf.the.pages.could.not.be.shown.choose.9884e4")));
           setLoadingPreviews(false);
         });
     } else {
@@ -239,13 +239,14 @@ export const RotatePDF: React.FC = () => {
                     },
                   },
                   {
+                    // Clear only drops the selection. Turns stay, and Reset is
+                    // the one control that undoes them.
                     key: 'clear',
                     label: t("rotate-pdf.clear.83b12c"),
-                    disabled: selectedPages.length === 0 && !hasRotationChanges,
+                    disabled: selectedPages.length === 0,
                     onClick: () => {
                       setSelectedPages([]);
-                      resetRotation();
-                      setSelectionMessage(t("rotate-pdf.selection.and.rotations.cleared.5f1e1a"));
+                      setSelectionMessage(null);
                     },
                   },
                   // Reset only exists once there is something to undo. Greyed out
@@ -272,8 +273,8 @@ export const RotatePDF: React.FC = () => {
 
             {loadingPreviews ? null : previewError ? (
               <div className="flex flex-col items-center gap-2 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] px-4 py-4 text-center">
-                <p className="font-semibold text-[var(--status-danger-text)]">{t("rotate-pdf.the.pages.could.not.be.shown.choose.9884e4")}</p>
-                <p className="max-w-measure text-sm text-[var(--text-secondary)]">{previewError}</p>
+                <p className="font-semibold text-[var(--status-danger-text)]">{previewError.title}</p>
+                {previewError.detail && <p className="max-w-measure text-sm text-[var(--text-secondary)]">{previewError.detail}</p>}
                 <Button tone="secondary" onClick={() => setFile(null)}>{t("rotate-pdf.choose.another.pdf.9434e3")}</Button>
               </div>
             ) : (

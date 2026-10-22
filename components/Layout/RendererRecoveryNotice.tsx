@@ -22,7 +22,7 @@ export const RendererRecoveryNotice = () => {
   }, [location.hash, location.pathname, location.search, location.state, navigate]);
 
   if (!shown) return null;
-  return <div role="alert" className="fixed left-4 right-4 top-4 z-[200] rounded-xl border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-4 shadow-lg">
+  return <div role="alert" className="fixed left-4 right-4 top-[calc(1rem+env(safe-area-inset-top))] z-[200] rounded-xl border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-4 shadow-lg">
     <p>{t("renderer-recovery-notice.pdf.chef.reopened.this.screen.after.4c665a")}</p>
     <button type="button" onClick={() => setShown(false)} className="mt-2 min-h-11 underline">{t("android-incoming-pdf-handler.dismiss.48845b")}</button>
   </div>;

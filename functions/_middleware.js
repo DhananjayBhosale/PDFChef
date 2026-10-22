@@ -209,6 +209,12 @@ const routeMeta = {
     title: "Terms and Conditions | PDF Chef",
     description: "Read the PDF Chef terms and conditions.",
   },
+  // Reached from Settings. A list of dependencies is nothing for a searcher.
+  "/licenses": {
+    noindex: true,
+    title: "Open-source licenses",
+    description: "Open-source licenses",
+  },
 };
 
 const escapeAttribute = (value) =>

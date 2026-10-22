@@ -1,6 +1,6 @@
 import { formatPercent } from '../../services/i18n/core.ts';
 import { formatBytes as formatSize, sanitizeFilenameStem, splitFilename } from '../UI/format';
-import { localizeError } from '../../services/i18n/errors.ts';
+import { classifyPdfError, pdfProblemMessage } from '../../services/i18n/errors.ts';
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -71,9 +71,9 @@ export const CompressPDF: React.FC = () => {
 
   /** 0–100, the same axis the preview's own slider uses. Medium to start. */
   const [quality, setQuality] = useState(32);
-  /** Off by default: the point of this tool is a smaller file, and the preview
-      shows exactly what that costs before anything is written. */
-  const [keepText, setKeepText] = useState(false);
+  /** On by default, as Help promises: text stays searchable and copyable, and only
+      embedded photos are re-encoded. Turning it off makes every page a picture. */
+  const [keepText, setKeepText] = useState(true);
 
   /** Sizes measured by encoding real pages, per preset and for the live slider. */
   const [presetSizes, setPresetSizes] = useState<Partial<Record<PresetName, number>>>({});
@@ -161,8 +161,8 @@ export const CompressPDF: React.FC = () => {
       : null
     );
 
+    // The keep-text choice is left as the person set it.
     setStatus({ isProcessing: false, progress: 0, message: '' });
-    setKeepText(false);
 
     setFiles(pdfFiles.map((f) => ({
       id: uuidv4(),
@@ -299,10 +299,10 @@ export const CompressPDF: React.FC = () => {
       setStatus({ isProcessing: false, progress: 100, message: '' });
     } catch (error) {
       console.error(error);
-      const detail = error instanceof Error ? localizeError(error) : '';
-      const message = /password|encrypted/i.test(detail)
+      // Classified from the error itself: the displayed text is translated and cannot be matched.
+      const message = classifyPdfError(error) === 'locked'
         ? t("compress-pdf.this.pdf.is.encrypted.unlock.it.first.7621b1")
-        : t("compress-pdf.compression.failed.your.original.was.not.changed.b7e5e0");
+        : pdfProblemMessage(error) ?? t("compress-pdf.compression.failed.your.original.was.not.changed.b7e5e0");
       setStatus({ isProcessing: false, progress: 0, message: '', error: message });
     }
   };
@@ -345,7 +345,6 @@ export const CompressPDF: React.FC = () => {
     setFiles([]);
     setTrial(null);
     setUploadWarning(null);
-    setKeepText(false);
     setAnalysis({ byId: {}, pageCountById: {}, isTextHeavy: false, done: false });
   };
 
@@ -389,7 +388,16 @@ export const CompressPDF: React.FC = () => {
                 </div>
 
                 {isSkipped ? (
-                  <p className="text-sm text-[var(--text-body)]">{t("compress-pdf.compressing.this.file.would.have.made.it.346a00")}</p>
+                  <>
+                    <p className="text-sm text-[var(--text-body)]">{t("compress-pdf.compressing.this.file.would.have.made.it.346a00")}</p>
+                    {/* With text kept, only photos are re-encoded, so a text-only PDF
+                        cannot shrink. Name the switch that trades text for size. */}
+                    {keepText && (
+                      <p className="mt-2 text-sm text-[var(--text-body)]">
+                        {t("compress-pdf.to.make.it.smaller.turn.off.pages.4ef0d4", { v0: t("compress-pdf.keep.text.selectable.89e827") })}
+                      </p>
+                    )}
+                  </>
                 ) : (
                   <div className="flex items-center justify-between text-sm">
                     <div>

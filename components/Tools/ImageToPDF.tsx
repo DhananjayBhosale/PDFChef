@@ -7,6 +7,7 @@ import { ProcessingStatus } from '../../types';
 import { createPDFFromLayout, type PDFPageLayout } from '../../services/pdfDocument';
 import { getContainedImageSize, preparePdfImageAsset, rotatePreparedPdfImageAsset } from '../../services/imageBrowser';
 import { mapWithConcurrency } from '../../services/mapWithConcurrency';
+import { imageProblemOf, skippedImagesMessage, type SkippedImage } from '../../services/imageIntake';
 import { downloadBlob, revokeObjectUrls } from '../../services/pdfShared';
 import { AlertTriangle, X, ArrowDown, Loader2, FileImage, Plus, Trash2, Move, RotateCw, Undo2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -63,6 +64,25 @@ const createImageElement = async (
     width,
     height,
     aspectRatio: asset.aspectRatio,
+  };
+};
+
+/** Each picture on its own: one that cannot be opened is set aside by name, never the whole choice. */
+const createImageElements = async (
+  files: File[],
+  maxFraction: number,
+  position?: { x: number; y: number },
+) => {
+  const results = await mapWithConcurrency(files, IMAGE_PREPARE_CONCURRENCY, async (file) => {
+    try {
+      return { element: await createImageElement(file, maxFraction, position) };
+    } catch (error) {
+      return { skipped: { name: file.name, problem: imageProblemOf(error) } satisfies SkippedImage };
+    }
+  });
+  return {
+    elements: results.flatMap((result) => result.element ? [result.element] : []),
+    skipped: results.flatMap((result) => result.skipped ? [result.skipped] : []),
   };
 };
 
@@ -418,22 +438,18 @@ export const ImageToPDF: React.FC = () => {
     }
     
     // Create a new page for each image by default (standard flow)
-    try {
-      const newPages = await mapWithConcurrency(acceptedImages, IMAGE_PREPARE_CONCURRENCY, async (file) => ({
-        id: uuidv4(),
-        elements: [await createImageElement(file, 0.8)],
-      }));
-      setPages(prev => [...prev, ...newPages]);
-      setStatus({
-        isProcessing: false,
-        progress: 0,
-        message: acceptedImages.length < images.length
-          ? t("image-to-pdf.added.images.the.image.limit.has.been.83b23e", { count: acceptedImages.length, v1: MAX_IMAGE_TO_PDF_FILES })
-          : '',
-      });
-    } catch {
-      setStatus({ isProcessing: false, progress: 0, message: '', error: t("image-to-pdf.one.or.more.selected.images.could.not.349e50") });
-    }
+    const { elements, skipped } = await createImageElements(acceptedImages, 0.8);
+    setPages(prev => [...prev, ...elements.map((element) => ({ id: uuidv4(), elements: [element] }))]);
+    const limitNotice = acceptedImages.length < images.length
+      ? t("image-to-pdf.added.images.the.image.limit.has.been.83b23e", { count: elements.length, v1: MAX_IMAGE_TO_PDF_FILES })
+      : '';
+    setStatus({
+      isProcessing: false,
+      progress: 0,
+      message: limitNotice,
+      // A picture that cannot be opened is left out by name; the rest of the choice is kept.
+      error: skipped.length ? [skippedImagesMessage(skipped), limitNotice].filter(Boolean).join(' ') : undefined,
+    });
   };
 
   const addEmptyPage = () => {
@@ -651,14 +667,11 @@ export const ImageToPDF: React.FC = () => {
                                     onChange={async e => {
                                        if (e.target.files) {
                                          const files = Array.from(e.target.files) as File[];
-                                          const newElements = await mapWithConcurrency(
-                                            files,
-                                            IMAGE_PREPARE_CONCURRENCY,
-                                            (file) => createImageElement(file, 0.4, { x: 0.1, y: 0.1 }),
-                                          );
+                                          const { elements: newElements, skipped } = await createImageElements(files, 0.4, { x: 0.1, y: 0.1 });
                                           setPages(prev => prev.map(p => p.id === page.id ? { ...p, elements: [...p.elements, ...newElements] } : p));
+                                          if (skipped.length) setStatus({ isProcessing: false, progress: 0, message: '', error: skippedImagesMessage(skipped) });
                                        }
-                                    }} 
+                                    }}
                                  />
                               </label>
                            </div>

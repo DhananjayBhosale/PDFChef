@@ -1,4 +1,5 @@
 import { t, formatPercent } from '../../services/i18n/core.ts';
+import { pdfFailureMessage, pdfProblemMessage } from '../../services/i18n/errors.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -208,7 +209,7 @@ const SimpleTransformTool: React.FC<SimpleTransformToolProps> = ({
       setStatus({ isProcessing: false, progress: 100, message: t("pdf-advanced-tools.created.21ab7c", { v0: outputName }) });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: t("pdf-advanced-tools.this.pdf.could.not.be.changed.if.82905a") });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: pdfProblemMessage(error) ?? t("pdf-advanced-tools.this.pdf.could.not.be.changed.if.82905a") });
     }
   };
 
@@ -284,7 +285,7 @@ export const CropPDF: React.FC = () => {
       setStatus({ isProcessing: false, progress: 100, message: t("pdf-advanced-tools.created.21ab7c", { v0: outputName }) });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: t("pdf-advanced-tools.this.pdf.could.not.be.cropped.try.b13377") });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: pdfProblemMessage(error) ?? t("pdf-advanced-tools.this.pdf.could.not.be.cropped.try.b13377") });
     }
   };
 
@@ -363,7 +364,7 @@ export const HeaderFooterPDF: React.FC = () => {
       setStatus({ isProcessing: false, progress: 100, message: t("pdf-advanced-tools.created.21ab7c", { v0: outputName }) });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: t("pdf-advanced-tools.the.header.and.footer.could.not.be.90a336") });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: pdfProblemMessage(error) ?? t("pdf-advanced-tools.the.header.and.footer.could.not.be.90a336") });
     }
   };
 
@@ -481,7 +482,8 @@ export const RemoveBlankPagesPDF: React.FC = () => {
       });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: t("pdf-advanced-tools.the.blank.pages.could.not.be.removed.e20ac8") });
+      // "All pages look blank" is this tool's own answer, not a fault to send to Repair PDF.
+      setStatus({ isProcessing: false, progress: 0, message: '', error: pdfFailureMessage(error, t("pdf-advanced-tools.the.blank.pages.could.not.be.removed.e20ac8")) });
     }
   };
 
@@ -557,7 +559,7 @@ export const ExtractImagesPDF: React.FC = () => {
       });
     } catch (error) {
       console.error(error);
-      setStatus({ isProcessing: false, progress: 0, message: '', error: t("pdf-advanced-tools.the.pictures.could.not.be.saved.try.7b1ada") });
+      setStatus({ isProcessing: false, progress: 0, message: '', error: pdfProblemMessage(error) ?? t("pdf-advanced-tools.the.pictures.could.not.be.saved.try.7b1ada") });
     }
   };
 

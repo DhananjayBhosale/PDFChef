@@ -1,4 +1,5 @@
 import { t } from '../../services/i18n/core.ts';
+import { pdfProblemMessage } from '../../services/i18n/errors.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
@@ -168,7 +169,7 @@ export const ComparePDF: React.FC = () => {
         isProcessing: false,
         progress: 0,
         message: '',
-        error: t("compare-pdf.could.not.be.opened.choose.a.readable.159d1d", { v0: label }),
+        error: pdfProblemMessage(error) ?? t("compare-pdf.could.not.be.opened.choose.a.readable.159d1d", { v0: label }),
       });
     } finally {
       setSelectingSlot(null);

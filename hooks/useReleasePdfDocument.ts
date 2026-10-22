@@ -10,6 +10,6 @@ import { releasePDFDocument } from '../services/pdfBrowser';
  */
 export const useReleasePdfDocument = (file: File | null | undefined) => {
   useEffect(() => () => {
-    if (file) void releasePDFDocument(file);
+    if (file) void releasePDFDocument(file).catch(() => undefined);
   }, [file]);
 };

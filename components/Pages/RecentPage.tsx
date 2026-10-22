@@ -24,6 +24,7 @@ import {
   Undo2,
 } from 'lucide-react';
 import { TabHeader } from '../Layout/AppShell';
+import { returnToTools } from '../Layout/navigationHistory';
 import {
   Button,
   ConfirmSheet,
@@ -33,7 +34,7 @@ import {
   StatusLine,
   cx,
 } from '../UI/Primitives';
-import { formatBytes, formatTimestamp, formatTimestampLong, renameKeepingExtension, splitFilename } from '../UI/format';
+import { filenameStemLimit, formatBytes, formatTimestamp, formatTimestampLong, renameKeepingExtension, sanitizeFilenameStem, splitFilename } from '../UI/format';
 import {
   knownSpaceSaved,
   recordAbilities,
@@ -201,6 +202,12 @@ export const undoActionLabel = (offer: PendingUndo): string =>
 export const UNDO_EXPIRED = english["recent-page.the.time.to.undo.has.passed.so.d77970"];
 export const UNDO_UNAVAILABLE = english["recent-page.undo.is.not.available.on.this.device.1f9686"];
 export const UNDO_FAILED = english["recent-page.that.could.not.be.restored.it.is.405132"];
+
+/**
+ * The offer outlives this screen: switching tabs used to drop the Undo while the native trash
+ * still held the file for its whole window.
+ */
+let standingUndo: PendingUndo | null = null;
 
 /** The offer stands until the window closes, and not one moment after it. */
 export const undoIsOffered = (
@@ -474,7 +481,9 @@ const RecentRow: React.FC<{
         </span>
 
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-semibold text-[var(--text-primary)]">{name}</span>
+          {/* Two lines, wrapping anywhere: a one-line cut hid the extension and the end that
+              tells "Report (1).pdf" from "Report (2).pdf". */}
+          <span className="chef-filename chef-clamp-2 font-semibold text-[var(--text-primary)]">{name}</span>
 
           <span className="type-footnote tabular mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[var(--text-secondary)]">
             {toolName && (
@@ -531,11 +540,15 @@ export const RecentPage: React.FC = () => {
   const [active, setActive] = useState<RecentRecord | null>(null);
   const [renaming, setRenaming] = useState<RecentRecord | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [renameError, setRenameError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<RecentRecord | null>(null);
   const [confirmClear, setConfirmClear] = useState<'records' | 'documents' | null>(null);
   const [confirmDeleteSelected, setConfirmDeleteSelected] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
-  const [pendingUndo, setPendingUndo] = useState<PendingUndo | null>(null);
+  const [pendingUndo, setPendingUndo] = useState<PendingUndo | null>(
+    () => (undoIsOffered(standingUndo, Date.now()) ? standingUndo : null),
+  );
+  useEffect(() => { standingUndo = pendingUndo; }, [pendingUndo]);
   const [busy, setBusy] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<RecentSortOrder>('date-newest');
@@ -591,12 +604,12 @@ export const RecentPage: React.FC = () => {
   }, []);
 
   const run = useCallback(
-    async (action: () => Promise<void>, successMessage: string, failureMessage: string) => {
+    async <T,>(action: () => Promise<T>, successMessage: string | ((result: T) => string), failureMessage: string) => {
       setBusy(true);
       try {
-        await action();
+        const result = await action();
         haptic('commit');
-        report('success', successMessage);
+        report('success', typeof successMessage === 'function' ? successMessage(result) : successMessage);
         return true;
       } catch (caught) {
         // Closing the Files picker or share sheet is a choice, not a failure.
@@ -890,8 +903,15 @@ export const RecentPage: React.FC = () => {
             a lone control floating in the page reads as debris. The panel takes
             the same radius, sides and rhythm as the result summary below it, so
             it lands as part of the page rather than on top of it. Once there is
-            nothing to reverse the ordinary status line returns. */}
-        <div role="status" aria-live="polite">
+            nothing to reverse the ordinary status line returns.
+
+            While it can be taken back it stays in view as the list scrolls, so
+            deleting a row far down the list still shows the Undo. */}
+        <div
+          role="status"
+          aria-live="polite"
+          className={undoOffered ? 'sticky top-[calc(env(safe-area-inset-top,0px)+0.5rem)] z-20 rounded-[var(--radius-panel)] bg-[var(--surface-raised)]' : undefined}
+        >
           {undoOffered && pendingUndo ? (
             <div
               key={pendingUndo.message}
@@ -1033,7 +1053,7 @@ export const RecentPage: React.FC = () => {
               icon={<Clock size={30} />}
               title={t("recent-page.no.files.yet.cb922b")}
               action={
-                <Button tone="primary" onClick={() => navigate('/')}>{t("recent-page.browse.tools.a4e6fa")}</Button>
+                <Button tone="primary" onClick={() => returnToTools(navigate)}>{t("recent-page.browse.tools.a4e6fa")}</Button>
               }
             />
           ) : visibleRecords.length === 0 ? (
@@ -1131,7 +1151,14 @@ export const RecentPage: React.FC = () => {
               onClick={() =>
                 void run(
                   () => platform.save(active, displayName(active.entry.name)),
-                  `Saved ${displayName(active.entry.name)}.`,
+                  // Downloads adds " (1)" to a name that is taken, so say the name the copy got.
+                  (copy) => {
+                    const savedName = copy ? copy.savedName : displayName(active.entry.name);
+                    const folder = platform.capabilities.exportFolder;
+                    return folder
+                      ? t("recent-page.saved.to.as.cf91b2", { v0: folder, v1: savedName })
+                      : t("recent-page.saved.4a9b73", { v0: savedName });
+                  },
                   t("recent-page.that.file.could.not.be.saved.4d740f"),
                 ).then(closeActions)
               }
@@ -1163,7 +1190,10 @@ export const RecentPage: React.FC = () => {
               icon={<Pencil aria-hidden size={16} />}
               disabled={!activeAbilities?.rename}
               onClick={() => {
-                setRenameValue(displayName(active.entry.name));
+                const current = displayName(active.entry.name);
+                const { stem, extension } = splitFilename(current);
+                setRenameValue(extension ? stem : current);
+                setRenameError('');
                 setRenaming(active);
                 closeActions();
               }}
@@ -1198,24 +1228,35 @@ export const RecentPage: React.FC = () => {
         open={Boolean(renaming)}
         onClose={() => setRenaming(null)}
         title={t("recent-page.rename.3064d7")}
+        dismissible={!busy}
         footer={
           <>
-            <Button tone="secondary" onClick={() => setRenaming(null)}>{t("recent-page.cancel.19766e")}</Button>
+            <Button tone="secondary" disabled={busy} onClick={() => setRenaming(null)}>{t("recent-page.cancel.19766e")}</Button>
             <Button
               tone="primary"
               busy={busy}
               disabled={!renameValue.trim()}
-              onClick={() => {
+              onClick={() => void (async () => {
                 const target = renaming;
                 if (!target || !platform.rename) return;
-                void run(
-                  () => platform.rename!(target, withOriginalExtension(renameValue, target.entry.name)),
-                  'Renamed.',
-                  t("recent-page.that.result.could.not.be.renamed.d87425"),
-                )
-                  .then(refresh)
-                  .then(() => setRenaming(null));
-              }}
+                setBusy(true);
+                setRenameError('');
+                try {
+                  await platform.rename(target, withOriginalExtension(renameValue, target.entry.name));
+                  haptic('commit');
+                  report('success', t("recent-page.renamed.fb1dd5"));
+                  setRenaming(null);
+                  await refresh();
+                } catch (caught) {
+                  // The sheet stays open with the typed name, so it can be fixed and tried again.
+                  haptic('error');
+                  setRenameError(caught instanceof Error && caught.message
+                    ? localizeError(caught)
+                    : t("recent-page.that.result.could.not.be.renamed.d87425"));
+                } finally {
+                  setBusy(false);
+                }
+              })()}
             >{t("recent-page.save.name.b72972")}</Button>
           </>
         }
@@ -1225,10 +1266,16 @@ export const RecentPage: React.FC = () => {
           id="recent-rename"
           className="chef-field mt-1"
           value={renameValue}
-          onChange={(event) => setRenameValue(event.target.value)}
+          maxLength={filenameStemLimit(splitFilename(displayName(renaming?.entry.name)).extension)}
+          onChange={(event) => {
+            setRenameValue(sanitizeFilenameStem(event.target.value));
+            setRenameError('');
+          }}
           autoComplete="off"
           spellCheck={false}
+          data-sheet-initial-focus
         />
+        {renameError && <div className="mt-2"><StatusLine tone="danger">{renameError}</StatusLine></div>}
       </Sheet>
 
       <ConfirmSheet

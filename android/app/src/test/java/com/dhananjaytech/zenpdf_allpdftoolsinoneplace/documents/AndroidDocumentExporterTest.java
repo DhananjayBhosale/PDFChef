@@ -40,6 +40,29 @@ public final class AndroidDocumentExporterTest {
         assertFalse(Files.exists(files.resolve("pdfchef_documents/export/current.export")));
     }
 
+    @Test public void exportReportsStoredNameAndRenamesOnlyItsOwnFreshRow() throws Exception {
+        Path files = Files.createTempDirectory("export-rename");
+        FakeDestination destination = new FakeDestination();
+        AtomicLong clock = new AtomicLong(100);
+        AndroidDocumentExporter exporter = exporter(files, destination, clock::get,
+                tokens("abcdefghijklmnopqrstuv", "zyxwvutsrqponmlkjihgfe"), ignored -> {});
+        AndroidDocumentExporter.Result first = exporter.export(source(PDF), "Report.pdf",
+                AndroidDocumentIngressPolicy.MIME_PDF, () -> false);
+        AndroidDocumentExporter.Result second = exporter.export(source(PDF), "Report.pdf",
+                AndroidDocumentIngressPolicy.MIME_PDF, () -> false);
+        assertEquals("Report.pdf", first.savedName());
+        assertEquals("Report (1).pdf", second.savedName());
+
+        assertEquals("Invoice.pdf", exporter.rename(second.token(), "Invoice.pdf"));
+        assertEquals("Invoice (1).pdf", exporter.rename(first.token(), "Invoice.pdf"));
+        assertFailure("DOCUMENT_INVALID_ARGUMENT", () -> exporter.rename("content://fake/x", "a.pdf"));
+        assertFailure("DOCUMENT_INVALID_ARGUMENT", () -> exporter.rename(first.token(), "a/b.pdf"));
+        assertFailure("DOCUMENT_NOT_FOUND",
+                () -> exporter.rename("pdfchef-unknownunknownunknown00", "a.pdf"));
+        clock.set(100 + AndroidDocumentExporter.COMPLETED_EXPIRY_MILLIS);
+        assertFailure("DOCUMENT_NOT_FOUND", () -> exporter.rename(first.token(), "late.pdf"));
+    }
+
     @Test public void generatedZipTextAndWebpOutputsReachDownloadsUnchanged() throws Exception {
         for (String mime : List.of("application/zip", "text/plain", "image/webp")) {
             Path files = Files.createTempDirectory("export-generated");
@@ -280,13 +303,30 @@ public final class AndroidDocumentExporterTest {
                 @Override public void close() { row.bytes = bytes.toByteArray(); }
             };
         }
-        @Override public void publish(String address, String displayName, String mimeType, long size)
+        @Override public String publish(String address, String displayName, String mimeType, long size)
                 throws IOException {
             Row row = required(address);
             if (!row.forced || row.bytes.length != size) throw new IOException("not forced");
             if (failBeforePublishing) throw new IOException("publish update failed");
-            row.pending = false; row.displayName = displayName; row.mimeType = mimeType;
+            row.pending = false; row.displayName = storedName(displayName, address);
+            row.mimeType = mimeType;
             if (failAfterPublishing) throw new IOException("publication query failed");
+            return row.displayName;
+        }
+        @Override public String rename(String address, String displayName) throws IOException {
+            Row row = required(address);
+            if (row.pending) throw new IOException("pending");
+            row.displayName = storedName(displayName, address);
+            return row.displayName;
+        }
+        /** Like MediaStore, a name another row already uses gets " (1)" before its extension. */
+        private String storedName(String displayName, String address) {
+            boolean taken = rows.entrySet().stream().anyMatch(entry ->
+                    !entry.getKey().equals(address) && displayName.equals(entry.getValue().displayName));
+            if (!taken) return displayName;
+            int dot = displayName.lastIndexOf('.');
+            return dot < 0 ? displayName + " (1)"
+                    : displayName.substring(0, dot) + " (1)" + displayName.substring(dot);
         }
         @Override public AndroidDocumentExporter.PublicationState publicationState(String address)
                 throws IOException {

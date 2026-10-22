@@ -1,4 +1,4 @@
-import { localizeError } from '../../services/i18n/errors.ts';
+import { localizeError, pdfProblemMessage } from '../../services/i18n/errors.ts';
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -123,7 +123,7 @@ export const PageNumbersPDF: React.FC = () => {
     } catch (error) {
       if (requestId !== previewRequestRef.current) return;
       console.error(error);
-      setPreviewError(t("page-numbers-pdf.the.preview.could.not.be.shown.you.e766b7"));
+      setPreviewError(pdfProblemMessage(error) ?? t("page-numbers-pdf.the.preview.could.not.be.shown.you.e766b7"));
     } finally {
       if (requestId === previewRequestRef.current) setPreviewLoading(false);
     }

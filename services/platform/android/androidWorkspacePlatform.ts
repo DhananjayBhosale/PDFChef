@@ -12,6 +12,7 @@ import type {
   PendingImportDeliveryService,
   RecordAbilities,
   RecordRecoveryService,
+  SavedCopy,
   UndoReceipt,
   WorkspacePlatform,
 } from '../contracts.ts';
@@ -19,7 +20,9 @@ import { Capacitor } from '@capacitor/core';
 import {
   ANDROID_PICKER_MIME_TYPES,
   ANDROID_DOCUMENT_MAXIMUM_CHUNK_BYTES,
+  ANDROID_DOCUMENT_MAXIMUM_FILE_BYTES,
   AndroidDocumentsClient,
+  type AndroidDeliveryResult,
   type AndroidOwnedDocument,
   type AndroidPendingDocument,
   type SupportedOwnedMime,
@@ -44,7 +47,8 @@ import {
   AndroidStorageStatsClient,
   isAndroidStorageStatsAvailable,
 } from './androidStorageStats.ts';
-import { installOutputDeliveryHandler } from '../../pdfShared.ts';
+import { setDeviceMemorySource } from '../../imageNormalization.ts';
+import { assertOutputSize, installOutputDeliveryHandler } from '../../pdfShared.ts';
 import type {
   AndroidLegacyCollectionHistoryEntry,
   AndroidLegacyFileHistoryEntry,
@@ -201,6 +205,11 @@ const nativeFile = async (
 ): Promise<File> =>
   new File([await nativeBlob(documents, view)], view.name, { type: view.mimeType });
 
+const savedCopyOf = (result: AndroidDeliveryResult): SavedCopy | undefined =>
+  result.status === 'completed' && result.savedName
+    ? { savedName: result.savedName, ...(result.exportRef ? { exportRef: result.exportRef } : {}) }
+    : undefined;
+
 const ownedRecordOf = (item: AndroidOwnedDocument): RecentRecord => {
   const ref = item.ref as StoredDocument['ref'];
   const document: StoredDocument = {
@@ -340,7 +349,10 @@ export const createAndroidWorkspacePlatform = (
   deviceFactsOverride?: AndroidDeviceFactClients,
   legacyOverride?: AndroidLegacyHistoryClient | null,
 ): WorkspacePlatform => {
-  const platformWithDeviceFacts = withDeviceFacts(base, deviceFactClients(deviceFactsOverride));
+  const deviceFacts = deviceFactClients(deviceFactsOverride);
+  const platformWithDeviceFacts = withDeviceFacts(base, deviceFacts);
+  const storage = deviceFacts.storage;
+  if (storage) setDeviceMemorySource(async () => (await storage.getStorageStats()).memoryBytes);
   // The Android branch is selected by the native shell before this adapter is
   // created. Do not turn a transient Capacitor plugin-header discovery miss
   // into a whole-session empty Recent list: construct the fixed registered
@@ -489,6 +501,10 @@ export const createAndroidWorkspacePlatform = (
       // Session and native records both retain metadata when only their payload
       // bytes are cleared, so the two destructive actions are now independent.
       separateClearActions: true,
+      // AndroidDocumentExporter writes to MediaStore Downloads under RELATIVE_PATH Download/PDF Chef.
+      exportFolder: 'Download/PDF Chef',
+      // OwnedDocumentWriter.MAXIMUM_FILE_BYTES: larger results cannot be kept or saved.
+      maximumOutputBytes: ANDROID_DOCUMENT_MAXIMUM_FILE_BYTES,
     },
 
     documentImport: {
@@ -573,11 +589,16 @@ export const createAndroidWorkspacePlatform = (
     async save(record, name) {
       const view = viewOf(record);
       if (!view) return base.save(record, name);
-      await documents.exportItem(
+      const result = await documents.exportItem(
         view.ref,
         name || view.name,
         view.kind === 'file' ? view.mimeType as SupportedOwnedMime : undefined,
       );
+      return savedCopyOf(result);
+    },
+
+    async renameSaved(exportRef, name) {
+      return documents.renameExport(exportRef, name);
     },
 
     async share(record, name) {
@@ -638,6 +659,8 @@ export const createAndroidWorkspacePlatform = (
     if (request.blob.size < 1 || !RETAINABLE.has(request.mimeType)) {
       throw new LocalizedError("android-workspace-platform.error.48bf1b9e75");
     }
+    // The native writer refuses this only after every chunk has crossed the bridge.
+    assertOutputSize(request.blob.size, ANDROID_DOCUMENT_MAXIMUM_FILE_BYTES);
     const session = await documents.beginWrite(
       request.mimeType as SupportedOwnedMime,
       request.name,
@@ -660,6 +683,8 @@ export const createAndroidWorkspacePlatform = (
     if (!request.keepLocalHistory) transientRefs.add(document.ref);
     let exportIssue: 'cancelled' | 'failed' | undefined;
     let externallyExported = false;
+    let savedCopy: SavedCopy | undefined;
+    let kept = document;
     try {
       if (request.autoDownload) {
         try {
@@ -669,16 +694,28 @@ export const createAndroidWorkspacePlatform = (
             else throw new LocalizedError("android-workspace-platform.error.ff5066dbb7");
           } else {
             externallyExported = true;
+            savedCopy = savedCopyOf(result);
           }
         } catch (failure) {
           if (request.keepLocalHistory) exportIssue = 'failed';
           else throw failure;
         }
       }
+      // Downloads adds " (1)" when the name is taken. Recent then uses the same name, so the
+      // row and the file can be matched up.
+      if (request.keepLocalHistory && savedCopy && savedCopy.savedName !== document.displayName) {
+        try {
+          await documents.renameItem(document.ref, savedCopy.savedName);
+          kept = { ...document, displayName: savedCopy.savedName };
+        } catch {
+          // The saved file is what matters; Recent keeps the requested name.
+        }
+      }
       return {
         externallyExported,
         ...(exportIssue ? { exportIssue } : {}),
-        ...(request.keepLocalHistory ? { recentRecord: ownedRecordOf(document) } : {}),
+        ...(savedCopy ? { savedCopy } : {}),
+        ...(request.keepLocalHistory ? { recentRecord: ownedRecordOf(kept) } : {}),
       };
     } finally {
       // A download-only result must not become a permanent Recent document.
@@ -695,6 +732,7 @@ export const createAndroidWorkspacePlatform = (
     try {
       const delivery = await documents.exportItem(document.ref, result.name, document.mimeType);
       if (delivery.status === 'cancelled') throw new LocalizedError("android-workspace-platform.error.ff5066dbb7");
+      return savedCopyOf(delivery);
     } finally {
       await documents.deleteOwned(document.ref);
       transientRefs.delete(document.ref);
@@ -714,7 +752,7 @@ export const createAndroidWorkspacePlatform = (
     }
   };
 
-  installOutputDeliveryHandler(deliverOutput);
+  installOutputDeliveryHandler(deliverOutput, { maximumBytes: ANDROID_DOCUMENT_MAXIMUM_FILE_BYTES });
 
   return platform;
 };

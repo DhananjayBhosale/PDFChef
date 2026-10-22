@@ -1,4 +1,5 @@
 import { t } from '../../services/i18n/core.ts';
+import { pdfProblemMessage } from '../../services/i18n/errors.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -28,6 +29,9 @@ import { loadPDFDocument } from '../../services/pdfBrowser';
 import { applySignaturesToPDF } from '../../services/pdfDocument';
 import { getPdfRenderScale } from '../../services/pdfPageGeometry';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
+import { normalizeImageFile } from '../../services/imageBrowser';
+import { imageProblemOf } from '../../services/imageIntake';
+import { planImageNormalization } from '../../services/imageNormalization';
 import { SegmentedControl } from '../UI/Primitives';
 import { StatusToast } from '../UI/StatusToast';
 import { toolOutputName } from '../UI/format';
@@ -49,27 +53,27 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 
 const getPoint = (event: PointerEvent | React.PointerEvent) => ({ x: event.clientX, y: event.clientY });
 
-const createTransparentSignature = async (dataUrl: string, threshold = 242, transparent = true) => {
-  const image = new Image();
-  image.decoding = 'async';
+/**
+ * A signature prints a few centimetres wide. 2 MP keeps it sharp at any size it can be dragged
+ * to, where a 50 MP photo kept whole froze the page and made a 100 MB PDF.
+ */
+const MAX_SIGNATURE_PIXELS = 2_000_000;
 
-  await new Promise<void>((resolve, reject) => {
-    image.onload = () => resolve();
-    image.onerror = () => reject(new Error(t("sign-pdf.this.signature.picture.could.not.be.read.43b251")));
-    image.src = dataUrl;
-  });
+/** Decode the picked picture once, upright and at signature size, before anything else uses it. */
+const shrinkSignatureImage = (file: File) => normalizeImageFile(file, { maxPixels: MAX_SIGNATURE_PIXELS });
 
-  const canvas = document.createElement('canvas');
-  canvas.width = image.width;
-  canvas.height = image.height;
+const signaturePictureError = (error: unknown) => imageProblemOf(error) === 'too-large'
+  ? t("image-intake.this.picture.is.too.large.to.open.c199e6")
+  : t("sign-pdf.this.signature.picture.could.not.be.read.43b251");
 
-  const context = canvas.getContext('2d');
-  if (!context) {
-    return dataUrl;
-  }
+const readDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error(t("sign-pdf.unable.to.read.image.146e6e")));
+  reader.onerror = () => reject(new Error(t("sign-pdf.unable.to.read.image.146e6e")));
+  reader.readAsDataURL(blob);
+});
 
-  context.drawImage(image, 0, 0);
-  if (!transparent) return canvas.toDataURL('image/png');
+const makeWhiteClear = (context: CanvasRenderingContext2D, canvas: HTMLCanvasElement, threshold: number) => {
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
   const pixels = imageData.data;
   const softness = 18;
@@ -89,6 +93,35 @@ const createTransparentSignature = async (dataUrl: string, threshold = 242, tran
 
   context.putImageData(imageData, 0, 0);
   return canvas.toDataURL('image/png');
+};
+
+/** The shrunk picture as a stamp, with its white paper made clear or kept as it is. */
+const createSignatureStamp = async (source: File, transparent: boolean, threshold = 242) => {
+  if (!transparent) return readDataUrl(source);
+  const url = URL.createObjectURL(source);
+  const image = new Image();
+  image.decoding = 'async';
+
+  const canvas = document.createElement('canvas');
+  try {
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error(t("sign-pdf.this.signature.picture.could.not.be.read.43b251")));
+      image.src = url;
+    });
+    // Already shrunk; the cap here only guards a caller that forgot.
+    const plan = planImageNormalization(image.naturalWidth, image.naturalHeight, 'image/png', MAX_SIGNATURE_PIXELS);
+    canvas.width = plan.width;
+    canvas.height = plan.height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error(t("sign-pdf.this.signature.picture.could.not.be.read.43b251"));
+    context.drawImage(image, 0, 0, plan.width, plan.height);
+    return makeWhiteClear(context, canvas, threshold);
+  } finally {
+    URL.revokeObjectURL(url);
+    canvas.width = 0;
+    canvas.height = 0;
+  }
 };
 
 const rotateSignatureImage = async (dataUrl: string) => {
@@ -408,8 +441,9 @@ export const SignPDF: React.FC = () => {
   const [signatureMode, setSignatureMode] = useState<'draw' | 'type' | 'upload'>('draw');
   const [inkColor, setInkColor] = useState('#111827');
   const [typedSignature, setTypedSignature] = useState('');
-  const [uploadedSignatureSource, setUploadedSignatureSource] = useState('');
+  const [uploadedSignatureSource, setUploadedSignatureSource] = useState<File | null>(null);
   const [uploadedSignature, setUploadedSignature] = useState('');
+  const [uploadError, setUploadError] = useState('');
   const [transparentUpload, setTransparentUpload] = useState(true);
   const [isPreparingUpload, setIsPreparingUpload] = useState(false);
   const [hasDrawnSignature, setHasDrawnSignature] = useState(false);
@@ -448,15 +482,10 @@ export const SignPDF: React.FC = () => {
       return undefined;
     }
 
-    if (!transparentUpload) {
-      setUploadedSignature(uploadedSignatureSource);
-      setIsPreparingUpload(false);
-      return undefined;
-    }
-
     setIsPreparingUpload(true);
 
-    void createTransparentSignature(uploadedSignatureSource)
+    // Always the shrunk, re-encoded copy: never the picked file, whichever way the toggle is set.
+    void createSignatureStamp(uploadedSignatureSource, transparentUpload)
       .then((nextSignature) => {
         if (!cancelled) {
           setUploadedSignature(nextSignature);
@@ -464,7 +493,8 @@ export const SignPDF: React.FC = () => {
       })
       .catch(() => {
         if (!cancelled) {
-          setUploadedSignature(uploadedSignatureSource);
+          setUploadedSignature('');
+          setUploadError(t("sign-pdf.this.signature.picture.could.not.be.read.43b251"));
         }
       })
       .finally(() => {
@@ -572,12 +602,12 @@ export const SignPDF: React.FC = () => {
       setExactZoom(window.matchMedia('(max-width: 767px)').matches ? 0.5 : 1);
       setStatus({ isProcessing: false, progress: 0, message: '' });
       return true;
-    } catch {
+    } catch (error) {
       setStatus({
         isProcessing: false,
         progress: 0,
         message: '',
-        error: t("sign-pdf.unable.to.open.this.pdf.unlock.password.2ed9cf"),
+        error: pdfProblemMessage(error) ?? t("sign-pdf.unable.to.open.this.pdf.unlock.password.2ed9cf"),
       });
       return false;
     }
@@ -621,19 +651,13 @@ export const SignPDF: React.FC = () => {
         const pdf = files.find(isPdfFile);
         if (pdf && !await handleFilesSelected([pdf])) return;
         for (const image of files.filter((item) => !isPdfFile(item))) {
-          const source = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error(t("sign-pdf.unable.to.read.image.146e6e")));
-            reader.onerror = () => reject(new Error(t("sign-pdf.unable.to.read.image.146e6e")));
-            reader.readAsDataURL(image);
-          });
-          // Normalize browser-readable formats to PNG for both preview and PDF export.
-          const stamp = await createTransparentSignature(source, 242, transparentUpload);
+          // The same shrunk, upright, re-encoded copy the picker makes, for preview and export alike.
+          const stamp = await createSignatureStamp(await shrinkSignatureImage(image), transparentUpload);
           await addSignature(stamp, pdf ? 0 : currentPageIndex);
         }
         setShowModal(false);
-      } catch {
-        setStatus({ isProcessing: false, progress: 0, message: '', error: t("sign-pdf.this.signature.picture.could.not.be.read.43b251") });
+      } catch (error) {
+        setStatus({ isProcessing: false, progress: 0, message: '', error: signaturePictureError(error) });
       } finally {
         dropBusy.current = false;
       }
@@ -698,8 +722,9 @@ export const SignPDF: React.FC = () => {
     window.addEventListener('resize', initializeCanvas);
     setSignatureMode('draw');
     setTransparentUpload(true);
-    setUploadedSignatureSource('');
+    setUploadedSignatureSource(null);
     setUploadedSignature('');
+    setUploadError('');
     setTypedSignature('');
 
     return () => {
@@ -753,14 +778,19 @@ export const SignPDF: React.FC = () => {
     drawingRef.current = false;
   };
 
-  const handleSignatureUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSignatureUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0];
     if (!selected) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') setUploadedSignatureSource(reader.result);
-    };
-    reader.readAsDataURL(selected);
+    setUploadError('');
+    setIsPreparingUpload(true);
+    try {
+      setUploadedSignatureSource(await shrinkSignatureImage(selected));
+    } catch (error) {
+      setUploadedSignatureSource(null);
+      setUploadedSignature('');
+      setIsPreparingUpload(false);
+      setUploadError(signaturePictureError(error));
+    }
   };
 
   const applySignatureFromModal = () => {
@@ -1106,6 +1136,9 @@ export const SignPDF: React.FC = () => {
                 {isPreparingUpload && (
                   <div className="flex items-center justify-center gap-2 text-sm text-[var(--text-secondary)]">
                     <Loader2 className="animate-spin" size={14} />{t("sign-pdf.preparing.transparent.preview.5149d8")}</div>
+                )}
+                {uploadError && !isPreparingUpload && (
+                  <p role="alert" className="chef-filename text-sm font-medium text-[var(--status-danger-text)]">{uploadError}</p>
                 )}
               </div>
             )}

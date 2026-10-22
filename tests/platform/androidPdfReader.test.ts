@@ -31,6 +31,7 @@ const native = (): AndroidDocumentsNativePlugin => ({
   clearOwned: async () => ({ deletedCount: 0 }),
   clearOwnedPayloads: async () => ({ clearedCount: 0 }),
   renameItem: async () => ({ status: 'completed' }),
+  renameExport: async ({ displayName }) => ({ status: 'completed', savedName: displayName }),
   trashOwned: async () => ({ undoRef: `u1_${'U'.repeat(22)}`, expiresAt: 600_000 }),
   restoreOwned: async () => ({ status: 'completed' }),
   takePendingImports: async () => ({ batchRef: null, items: [] }),

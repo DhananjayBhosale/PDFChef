@@ -242,7 +242,7 @@ export const rotatedTextOrigin = (layout: WatermarkLayout): { x: number; y: numb
 // Page numbers — `pagenumbers/PageNumberPlacementSupport.kt`
 // ---------------------------------------------------------------------------
 
-export const DEFAULT_PAGE_NUMBER_FORMAT = 'Page 1';
+export const DEFAULT_PAGE_NUMBER_FORMAT = 'Page {n}';
 export const DEFAULT_PAGE_NUMBER_FONT_SIZE = 10;
 export const MIN_PAGE_NUMBER_FONT_SIZE = 6;
 export const MAX_PAGE_NUMBER_FONT_SIZE = 36;
@@ -259,35 +259,17 @@ export const sanitizePageNumberFontSize = (raw: number): number =>
 /**
  * `buildPageNumberText`.
  *
- * `{n}`/`{total}` win when present. Otherwise the *first* run of digits becomes the page number
- * and the *second* becomes the total, which is what makes the default-looking `Page 1 of 1`
- * behave as a template rather than leaving a stale total behind on every page.
+ * Only `{n}` (the page number) and `{total}` (the page count) are replaced; every other character,
+ * digits included, prints as typed, so `2026 Report {n}` keeps its year. A format with neither
+ * token still numbers the page: the number goes after the text.
  */
 export const buildPageNumberText = (format: string, pageNumber: number, totalPages: number): string => {
   const safeFormat = sanitizePageNumberFormat(format) || DEFAULT_PAGE_NUMBER_FORMAT;
-
-  if (safeFormat.includes('{n}') || safeFormat.includes('{total}')) {
-    return safeFormat
-      .replaceAll('{n}', String(pageNumber))
-      .replaceAll('{total}', String(totalPages))
-      .slice(0, MAX_PDF_TEXT_LENGTH);
-  }
-
-  const matches = [...safeFormat.matchAll(/\d+/g)];
-  if (matches.length > 0) {
-    let rebuilt = '';
-    let lastIndex = 0;
-    matches.forEach((match, index) => {
-      const start = match.index ?? 0;
-      rebuilt += safeFormat.slice(lastIndex, start);
-      rebuilt += index === 0 ? String(pageNumber) : index === 1 ? String(totalPages) : match[0];
-      lastIndex = start + match[0].length;
-    });
-    rebuilt += safeFormat.slice(lastIndex);
-    return rebuilt.slice(0, MAX_PDF_TEXT_LENGTH);
-  }
-
-  return `${safeFormat} ${pageNumber}`.slice(0, MAX_PDF_TEXT_LENGTH);
+  const template = safeFormat.includes('{n}') || safeFormat.includes('{total}') ? safeFormat : `${safeFormat} {n}`;
+  return template
+    .replaceAll('{n}', String(pageNumber))
+    .replaceAll('{total}', String(totalPages))
+    .slice(0, MAX_PDF_TEXT_LENGTH);
 };
 
 export interface PageNumberPlacementState {

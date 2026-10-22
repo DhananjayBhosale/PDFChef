@@ -214,6 +214,7 @@ export const ViewPDF: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [openAttempt, setOpenAttempt] = useState(0);
   const [signatureReportOpening, setSignatureReportOpening] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const passwordAttemptRef = useRef(0);
   const activeOpenedPdfIdRef = useRef(openedPdf?.id);
   activeOpenedPdfIdRef.current = openedPdf?.id;
@@ -335,18 +336,22 @@ export const ViewPDF: React.FC = () => {
     openToolWithAccess(path);
   };
 
+  // The platform shares: the system share sheet on Android, whose WebView has no
+  // navigator.share, and Web Share in a browser. A browser can have Web Share and still
+  // refuse files, so it is asked first.
+  const shareFresh = platform.shareFresh;
   const canShare = Boolean(
     openedPdf &&
-    typeof navigator !== 'undefined' &&
-    typeof navigator.share === 'function' &&
-    (typeof navigator.canShare !== 'function' || navigator.canShare({ files: [openedPdf.file] })),
+    shareFresh &&
+    (typeof navigator === 'undefined' ||
+      typeof navigator.canShare !== 'function' ||
+      navigator.canShare({ files: [openedPdf.file] })),
   );
 
   const sharePdf = async () => {
-    if (!openedPdf || !canShare) return;
-    const performShare = async () => {
-      await navigator.share({ files: [openedPdf.file], title: openedPdf.name });
-    };
+    if (!openedPdf || !canShare || !shareFresh || sharing) return;
+    const performShare = () => shareFresh({ blob: openedPdf.file, name: openedPdf.name, mimeType: 'application/pdf' });
+    setSharing(true);
     try {
       if (openedPdf.previewOnly && !access?.unlocked) {
         await runWithExportAccess(performShare);
@@ -357,6 +362,8 @@ export const ViewPDF: React.FC = () => {
       if (error?.name !== 'AbortError') {
         setStatus({ isProcessing: false, progress: 0, message: '', error: t("view-pdf.this.pdf.could.not.be.shared.save.52d5e3") });
       }
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -589,7 +596,8 @@ export const ViewPDF: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void sharePdf()}
-                className="chef-pressable chef-hit inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] text-[var(--text-primary)] hover:bg-[var(--surface-sunken)]"
+                disabled={sharing}
+                className="chef-pressable chef-hit inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] text-[var(--text-primary)] hover:bg-[var(--surface-sunken)] disabled:opacity-55"
                 title={t("view-pdf.share.pdf.ec74b2")}
                 aria-label={t("view-pdf.share.pdf.ec74b2")}
               >

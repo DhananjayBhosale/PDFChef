@@ -1,4 +1,4 @@
-import { localizeError } from '../../services/i18n/errors.ts';
+import { localizeError, pdfFailureNotice } from '../../services/i18n/errors.ts';
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useState, useEffect, useMemo } from 'react';
@@ -24,7 +24,7 @@ export const DeletePages: React.FC = () => {
   const [pagesToDelete, setPagesToDelete] = useState<number[]>([]);
   const [loadingPreviews, setLoadingPreviews] = useState(false);
   const [previewProgress, setPreviewProgress] = useState<PdfPreviewProgress | null>(null);
-  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<{ title: string; detail?: string } | null>(null);
   const [rangeInput, setRangeInput] = useState('');
   const [selectionMessage, setSelectionMessage] = useState<string | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
@@ -54,7 +54,7 @@ export const DeletePages: React.FC = () => {
         .catch((error) => {
           if (cancelled) return;
           console.error(error);
-          setPreviewError(error instanceof Error ? localizeError(error) : t("delete-pages.the.pages.could.not.be.shown.choose.9884e4"));
+          setPreviewError(pdfFailureNotice(error, t("delete-pages.the.pages.could.not.be.shown.choose.9884e4")));
           setLoadingPreviews(false);
         });
     } else {
@@ -211,8 +211,8 @@ export const DeletePages: React.FC = () => {
 
             {loadingPreviews ? null : previewError ? (
               <div className="flex flex-col items-center gap-2 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] px-4 py-4 text-center">
-                <p className="font-semibold text-[var(--status-danger-text)]">{t("delete-pages.the.pages.could.not.be.shown.choose.9884e4")}</p>
-                <p className="max-w-measure text-sm text-[var(--text-secondary)]">{previewError}</p>
+                <p className="font-semibold text-[var(--status-danger-text)]">{previewError.title}</p>
+                {previewError.detail && <p className="max-w-measure text-sm text-[var(--text-secondary)]">{previewError.detail}</p>}
                 <Button tone="secondary" onClick={() => setFile(null)}>{t("delete-pages.choose.another.pdf.9434e3")}</Button>
               </div>
             ) : (

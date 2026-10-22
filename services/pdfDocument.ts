@@ -1,5 +1,5 @@
 import english from './i18n/en-US.ts';
-import { LocalizedError } from './i18n/errors.ts';
+import { LocalizedError, classifyPdfError, namedPdfError } from './i18n/errors.ts';
 import { t } from './i18n/core.ts';
 import {
   PDFArray,
@@ -106,7 +106,8 @@ export const mergePDFs = async (files: File[], signal?: AbortSignal): Promise<Ui
     const file = files[index];
     const arrayBuffer = await readFileAsArrayBuffer(file);
     throwIfPdfJobAborted(signal);
-    const pdf = await PDFDocument.load(arrayBuffer);
+    // The list holds several files, so a locked or broken one is named.
+    const pdf = await PDFDocument.load(arrayBuffer).catch((error) => { throw namedPdfError(error, file.name); });
     throwIfPdfJobAborted(signal);
     const copiedPages = await copyPagesWithForms(mergedPdf, pdf, pdf.getPageIndices());
     copiedPages.forEach((page) => mergedPdf.addPage(page));
@@ -647,15 +648,21 @@ export const getPDFPageCount = async (file: File): Promise<number> => {
   const cached = pageCountCache.get(file);
   if (cached) return cached;
 
+  // A file that cannot be counted cannot be split or extracted either, so the reason is given now
+  // rather than a count of zero, which read as "this PDF has no pages".
   const next = (async () => {
+    let pdfDoc: PDFDocument;
     try {
-      const arrayBuffer = await readFileAsArrayBuffer(file);
-      const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
-      return pdfDoc.getPageCount();
+      pdfDoc = await PDFDocument.load(await readFileAsArrayBuffer(file), { ignoreEncryption: true });
     } catch (error) {
-      console.error('Error counting pages', error);
-      return 0;
+      if (classifyPdfError(error)) throw error;
+      const unreadable = new LocalizedError('error.pdfUnreadable');
+      unreadable.cause = error;
+      throw unreadable;
     }
+    // Every page-changing tool loads without ignoreEncryption, which an encrypted file fails.
+    if (pdfDoc.isEncrypted) throw new LocalizedError('error.pdfLocked');
+    return pdfDoc.getPageCount();
   })();
 
   pageCountCache.set(file, next);
@@ -895,9 +902,17 @@ export const addHeaderFooterToPDF = async (file: File, options: HeaderFooterOpti
   return pdfDoc.save();
 };
 
+/** A share of ink this small is scanner dust; a one-word line at 8 pt is several times more. */
+const DEFAULT_BLANK_INK_THRESHOLD = 0.0003;
+/** Large enough that small type still leaves dark pixels after anti-aliasing. */
+const BLANK_CHECK_SCALE = 0.4;
+
 const isPageBlank = async (pdfDoc: any, pageIndex: number, threshold: number) => {
   const page = await pdfDoc.getPage(pageIndex + 1);
-  const viewport = page.getViewport({ scale: 0.18 });
+  // Any word on the page means it is not blank, however small it is drawn.
+  const text = await page.getTextContent();
+  if (text.items.some((item: { str?: unknown }) => typeof item.str === 'string' && item.str.trim() !== '')) return false;
+  const viewport = page.getViewport({ scale: BLANK_CHECK_SCALE });
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.floor(viewport.width));
   canvas.height = Math.max(1, Math.floor(viewport.height));
@@ -935,7 +950,7 @@ export const removeBlankPagesFromPDF = async (
   const sourcePdf = await PDFDocument.load(sourceBuffer);
   const renderedPdf = await loadPDFDocument(file);
   const totalPages = sourcePdf.getPageCount();
-  const threshold = Math.max(0.0001, Math.min(0.02, options?.threshold ?? 0.002));
+  const threshold = Math.max(0.0001, Math.min(0.02, options?.threshold ?? DEFAULT_BLANK_INK_THRESHOLD));
   const keptIndices: number[] = [];
   const removedPages: number[] = [];
 
@@ -964,14 +979,13 @@ export const removeBlankPagesFromPDF = async (
   };
 };
 
+/**
+ * An empty password is a real request: a PDF that opens without one can still be encrypted to
+ * limit changes, and every pdf-lib tool refuses it until it is decrypted.
+ */
 export const unlockPDF = async (file: File, password: string): Promise<Uint8Array> => {
-  const exactPassword = password;
-  if (!exactPassword) {
-    throw new LocalizedError("android-parity.password.is.required.to.unlock.the.pdf.be2e2e");
-  }
-
   const input = new Uint8Array(await readFileAsArrayBuffer(file));
-  return decryptPdf(input, exactPassword).catch(() => {
+  return decryptPdf(input, password).catch(() => {
     throw new LocalizedError("android-parity.unable.to.unlock.pdf.check.password.and.5aefc8");
   });
 };

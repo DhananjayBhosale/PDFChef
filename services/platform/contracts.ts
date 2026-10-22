@@ -153,6 +153,16 @@ export interface WorkspaceCapabilities {
   separateClearActions: boolean;
   /** False when the platform cannot write externally without presenting a picker. */
   automaticExternalExport?: boolean;
+  /** Where saved copies land, as the phone's Files app shows it (Android: "Download/PDF Chef"). */
+  exportFolder?: string;
+  /** The largest file the platform can keep or save, when it has a fixed limit. */
+  maximumOutputBytes?: number;
+}
+
+/** A copy written outside the app: the name the platform kept, and a handle to rename it. */
+export interface SavedCopy {
+  readonly savedName: string;
+  readonly exportRef?: string;
 }
 
 /**
@@ -229,6 +239,8 @@ export interface OutputDeliveryResult {
   readonly externallyExported?: boolean;
   /** The exact durable record retained for this output, when history is enabled. */
   readonly recentRecord?: RecentRecord;
+  /** The copy written outside the app, when there was one. */
+  readonly savedCopy?: SavedCopy;
 }
 
 export type OutputDeliveryHandler = (request: OutputDeliveryRequest) => Promise<void | OutputDeliveryResult>;
@@ -254,11 +266,13 @@ export interface WorkspacePlatform {
   pdfSignatureVerification?: PdfSignatureVerificationService;
   pendingImports?: PendingImportDeliveryService;
   recordRecovery?: RecordRecoveryService;
-  save(record: RecentRecord, name: string): Promise<void>;
+  save(record: RecentRecord, name: string): Promise<void | SavedCopy>;
   share?: (record: RecentRecord, name: string) => Promise<void>;
   reopen(record: RecentRecord): Promise<File>;
   rename?: (record: RecentRecord, name: string) => Promise<void>;
-  saveFresh(result: FreshResult): Promise<void>;
+  /** Renames a copy an earlier save wrote; resolves to the name the platform kept. */
+  renameSaved?: (exportRef: string, name: string) => Promise<string>;
+  saveFresh(result: FreshResult): Promise<void | SavedCopy>;
   keepFresh?: (result: FreshResult) => Promise<void>;
   shareFresh?: (result: FreshResult) => Promise<void>;
 }

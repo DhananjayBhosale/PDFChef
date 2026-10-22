@@ -2,6 +2,10 @@ import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useMemo } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+
+// Android saves to a known folder and has a fixed file limit, so its answers say so.
+const isAndroid = () => Capacitor.getPlatform() === 'android';
 
 /**
  * Every answer the product used to bury under a "Help" toggle at the foot of
@@ -67,7 +71,11 @@ const SECTIONS: HelpSection[] = [
       },
       {
         get question() { return t("help-page.is.there.a.size.limit.3e263d"); },
-        get answer() { return t("help-page.no.fixed.limit.very.large.documents.depend.4a99dd"); },
+        get answer() {
+          return isAndroid()
+            ? t("help-page.on.android.pdf.chef.can.open.and.923a4e")
+            : t("help-page.no.fixed.limit.very.large.documents.depend.4a99dd");
+        },
       },
     ],
   },
@@ -80,7 +88,15 @@ const SECTIONS: HelpSection[] = [
       },
       {
         get question() { return t("help-page.where.do.my.results.go.fe9700"); },
-        get answer() { return t("help-page.successful.results.you.can.export.are.kept.db8b0a"); },
+        get answer() {
+          return isAndroid()
+            ? t("help-page.on.android.results.are.saved.in.5d9a54", {
+              v0: 'Download/PDF Chef',
+              v1: t("settings-page.download.automatically.when.a.job.finishes.dcf3b4"),
+              v2: t("settings-page.keep.results.in.recent.bf522d"),
+            })
+            : t("help-page.successful.results.you.can.export.are.kept.db8b0a");
+        },
       },
     ],
   },
