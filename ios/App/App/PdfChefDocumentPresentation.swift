@@ -68,6 +68,8 @@ final class PdfChefDocumentPresentation: NSObject, UIDocumentPickerDelegate, UIA
         // Share the file itself. The copy always ends in ".pdf" for PDFs, so receivers
         // such as WhatsApp get a PDF, and the sheet header shows its name, type and preview.
         let controller = UIActivityViewController(activityItems: [copyURL], applicationActivities: nil)
+        // Saving a picture to Photos needs a Photos permission the app does not ask for.
+        controller.excludedActivityTypes = [.saveToCameraRoll]
         if let popover = controller.popoverPresentationController {
             popover.sourceView = presenter.view
             popover.sourceRect = CGRect(
@@ -107,6 +109,7 @@ final class PdfChefDocumentPresentation: NSObject, UIDocumentPickerDelegate, UIA
             onFinished: { completion(.success(true)) }
         )
         let navigation = UINavigationController(rootViewController: report)
+        followAppLayoutDirection(navigation)
         navigation.modalPresentationStyle = .pageSheet
         navigation.isModalInPresentation = true
         if let sheet = navigation.sheetPresentationController {
@@ -152,6 +155,7 @@ final class PdfChefDocumentPresentation: NSObject, UIDocumentPickerDelegate, UIA
             }
         )
         let navigation = UINavigationController(rootViewController: reader)
+        followAppLayoutDirection(navigation)
         navigation.modalPresentationStyle = .fullScreen
         navigation.isModalInPresentation = true
         presenter.present(navigation, animated: !UIAccessibility.isReduceMotionEnabled)
@@ -167,6 +171,12 @@ final class PdfChefDocumentPresentation: NSObject, UIDocumentPickerDelegate, UIA
 
     func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
         finishPicker(urls: [], completed: false)
+    }
+
+    /// Arabic chosen in the app lays the screen out right to left, even on an English phone.
+    private func followAppLayoutDirection(_ controller: UIViewController) {
+        let direction = PdfChefLocalization.layoutDirection
+        if direction != .unspecified { controller.traitOverrides.layoutDirection = direction }
     }
 
     private func canPresent(from presenter: UIViewController) -> Bool {

@@ -43,6 +43,13 @@
 		A60000000000000000000015 /* PdfChefVerifiedCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000016 /* PdfChefVerifiedCopy.swift */; };
 		A70000000000000000000001 /* PdfChefAppUpdate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70000000000000000000002 /* PdfChefAppUpdate.swift */; };
 		A70000000000000000000003 /* PdfChefAppUpdatePolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70000000000000000000004 /* PdfChefAppUpdatePolicyTests.swift */; };
+		A80000000000000000000001 /* PdfChefRendererRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000002 /* PdfChefRendererRecoveryTests.swift */; };
+		A90000000000000000000001 /* PdfChefLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = A90000000000000000000002 /* PdfChefLocalization.swift */; };
+		A90000000000000000000003 /* PdfChefDocumentScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A90000000000000000000004 /* PdfChefDocumentScanner.swift */; };
+		A90000000000000000000005 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A90000000000000000000006 /* Localizable.xcstrings */; };
+		A90000000000000000000007 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A90000000000000000000008 /* InfoPlist.xcstrings */; };
+		A90000000000000000000009 /* PdfChefDocumentScannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A90000000000000000000010 /* PdfChefDocumentScannerTests.swift */; };
+		A90000000000000000000011 /* PdfChefLocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A90000000000000000000012 /* PdfChefLocalizationTests.swift */; };
 		A60000000000000000000017 /* layered-appearance-rc4.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000018 /* layered-appearance-rc4.pdf */; };
 		A60000000000000000000019 /* layered-mixed-offset-rc4.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000020 /* layered-mixed-offset-rc4.pdf */; };
 		A60000000000000000000021 /* layered-hex-status-rc4.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000022 /* layered-hex-status-rc4.pdf */; };
@@ -91,6 +98,13 @@
 		A60000000000000000000016 /* PdfChefVerifiedCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefVerifiedCopy.swift; sourceTree = "<group>"; };
 		A70000000000000000000002 /* PdfChefAppUpdate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefAppUpdate.swift; sourceTree = "<group>"; };
 		A70000000000000000000004 /* PdfChefAppUpdatePolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefAppUpdatePolicyTests.swift; sourceTree = "<group>"; };
+		A80000000000000000000002 /* PdfChefRendererRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefRendererRecoveryTests.swift; sourceTree = "<group>"; };
+		A90000000000000000000002 /* PdfChefLocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefLocalization.swift; sourceTree = "<group>"; };
+		A90000000000000000000004 /* PdfChefDocumentScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefDocumentScanner.swift; sourceTree = "<group>"; };
+		A90000000000000000000006 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		A90000000000000000000008 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
+		A90000000000000000000010 /* PdfChefDocumentScannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefDocumentScannerTests.swift; sourceTree = "<group>"; };
+		A90000000000000000000012 /* PdfChefLocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PdfChefLocalizationTests.swift; sourceTree = "<group>"; };
 		A60000000000000000000018 /* layered-appearance-rc4.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = layered-appearance-rc4.pdf; path = ../../../tests/fixtures/signatures/layered-appearance-rc4.pdf; sourceTree = "<group>"; };
 		A60000000000000000000020 /* layered-mixed-offset-rc4.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = layered-mixed-offset-rc4.pdf; path = ../../../tests/fixtures/signatures/layered-mixed-offset-rc4.pdf; sourceTree = "<group>"; };
 		A60000000000000000000022 /* layered-hex-status-rc4.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = layered-hex-status-rc4.pdf; path = ../../../tests/fixtures/signatures/layered-hex-status-rc4.pdf; sourceTree = "<group>"; };
@@ -166,6 +180,10 @@
 				A10000000000000000000001 /* PdfChefDocumentStore.swift */,
 				A10000000000000000000003 /* PdfChefDocumentsPlugin.swift */,
 				A10000000000000000000008 /* PdfChefDocumentPresentation.swift */,
+				A90000000000000000000002 /* PdfChefLocalization.swift */,
+				A90000000000000000000004 /* PdfChefDocumentScanner.swift */,
+				A90000000000000000000006 /* Localizable.xcstrings */,
+				A90000000000000000000008 /* InfoPlist.xcstrings */,
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
@@ -187,6 +205,9 @@
 				A50000000000000000000004 /* PdfChefPdfBatcherTests.swift */,
 				A30000000000000000000009 /* PdfChefPurchasesPolicyTests.swift */,
 				A70000000000000000000004 /* PdfChefAppUpdatePolicyTests.swift */,
+				A80000000000000000000002 /* PdfChefRendererRecoveryTests.swift */,
+				A90000000000000000000010 /* PdfChefDocumentScannerTests.swift */,
+				A90000000000000000000012 /* PdfChefLocalizationTests.swift */,
 				A20000000000000000000009 /* PdfChefSignatureVerifierTests.swift */,
 				A60000000000000000000004 /* detached-sha256-rc4.pdf */,
 				A60000000000000000000006 /* cades-sha256-plain.pdf */,
@@ -274,6 +295,26 @@
 			knownRegions = (
 				en,
 				Base,
+				ar,
+				da,
+				de,
+				"es-419",
+				es,
+				"fr-CA",
+				fr,
+				hi,
+				id,
+				it,
+				ja,
+				ko,
+				nl,
+				pl,
+				"pt-BR",
+				"pt-PT",
+				sv,
+				tr,
+				"zh-Hans",
+				"zh-Hant",
 			);
 			mainGroup = 504EC2FB1FED79650016851F;
 			packageReferences = (
@@ -322,6 +363,8 @@
 				50379B232058CBB4000EE86E /* capacitor.config.json in Resources */,
 				504EC30D1FED79650016851F /* Main.storyboard in Resources */,
 				A10000000000000000000017 /* PrivacyInfo.xcprivacy in Resources */,
+				A90000000000000000000005 /* Localizable.xcstrings in Resources */,
+				A90000000000000000000007 /* InfoPlist.xcstrings in Resources */,
 				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -337,6 +380,9 @@
 				A50000000000000000000003 /* PdfChefPdfBatcherTests.swift in Sources */,
 				A30000000000000000000008 /* PdfChefPurchasesPolicyTests.swift in Sources */,
 				A70000000000000000000003 /* PdfChefAppUpdatePolicyTests.swift in Sources */,
+				A80000000000000000000001 /* PdfChefRendererRecoveryTests.swift in Sources */,
+				A90000000000000000000009 /* PdfChefDocumentScannerTests.swift in Sources */,
+				A90000000000000000000011 /* PdfChefLocalizationTests.swift in Sources */,
 				A20000000000000000000008 /* PdfChefSignatureVerifierTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -357,6 +403,8 @@
 				A10000000000000000000011 /* PdfChefDocumentStore.swift in Sources */,
 				A10000000000000000000013 /* PdfChefDocumentsPlugin.swift in Sources */,
 				A10000000000000000000016 /* PdfChefDocumentPresentation.swift in Sources */,
+				A90000000000000000000001 /* PdfChefLocalization.swift in Sources */,
+				A90000000000000000000003 /* PdfChefDocumentScanner.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 			);
@@ -399,7 +447,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.4;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dhananjaytech.pdfchef.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -417,7 +465,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.4;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dhananjaytech.pdfchef.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -476,7 +524,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.4;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
@@ -527,7 +575,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.4;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -542,10 +590,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_TEAM = 8YNW6SHRQ8;
 				INFOPLIST_FILE = App/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.4;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -565,10 +613,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_TEAM = 8YNW6SHRQ8;
 				INFOPLIST_FILE = App/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.4;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

@@ -23,6 +23,15 @@ test('the result sheet renames the saved copy, reports where it went and guards 
   assert.match(source('components/UI/Primitives.tsx'), /field\.select\(\)/);
 });
 
+// On iOS the keyboard covers the layout viewport instead of shrinking it, and the rename sheet
+// sat entirely behind it. Every sheet rises by the covered height and fits the space left.
+test('a sheet with a field stays above the iOS keyboard', () => {
+  const primitives = source('components/UI/Primitives.tsx');
+  assert.match(primitives, /paddingBottom: 'var\(--chef-keyboard-inset, 0px\)'/);
+  assert.match(primitives, /max-h-\[calc\(100dvh-env\(safe-area-inset-top\)-var\(--chef-keyboard-inset,0px\)\)\]/);
+  assert.match(primitives, /sm:max-h-\[calc\(100dvh-2rem-var\(--chef-keyboard-inset,0px\)\)\]/);
+});
+
 // NAV-17, NAV-19: Recent closed the rename sheet on failure and said the wrong saved name.
 test('Recent says the stored name and keeps a failed rename open', () => {
   const recent = source('components/Pages/RecentPage.tsx');

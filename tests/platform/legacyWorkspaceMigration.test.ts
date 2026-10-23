@@ -107,6 +107,8 @@ class MigrationBridge implements IOSDocumentBridge {
   }
   async exists(value: DurableDocumentRef) { return this.documents.has(value); }
   async openReader() { return { action: 'closed' } as const; }
+  async scanDocument() { return { status: 'cancelled' } as const; }
+  async setLanguage() {}
   async listDocuments() {
     return [...this.documents.values()].map(document => ({ document, available: true, pending: false }));
   }

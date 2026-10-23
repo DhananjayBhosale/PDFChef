@@ -2,7 +2,8 @@ import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { loadLicenseTexts, thirdPartyComponents, type LicenseTexts } from '../../services/legal/thirdPartyNotices';
+import { Capacitor } from '@capacitor/core';
+import { componentsForPlatform, licenseIds, loadLicenseTexts, shownOnPlatform, type LicenseTexts } from '../../services/legal/thirdPartyNotices';
 
 /* Component names, versions, copyright lines and licence texts are the authors' own words and are
    shown as written, in English, whatever the app language is. */
@@ -25,6 +26,10 @@ const LicenseText: React.FC<{ title: string; text: string }> = ({ title, text })
   </details>
 );
 
+const platform = Capacitor.getPlatform();
+const components = componentsForPlatform(platform);
+const shownLicenses = new Set(components.flatMap((item) => licenseIds(item.license)));
+
 const panel =
   'divide-y divide-[var(--border-hairline)] rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)]';
 
@@ -45,12 +50,13 @@ export const OpenSourceLicenses: React.FC = () => {
   }, []);
 
   const title = t("settings-page.open.source.licenses.c9f6d0");
+  const notices = texts?.notices.filter((notice) => shownOnPlatform(platform, notice.kind)) ?? [];
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-4 pb-10 sm:py-10 md:px-8">
       <h1 className="mb-4 text-3xl font-bold text-[var(--text-primary)]">{title}</h1>
       <ul aria-label={title} lang="en" dir="ltr" className={`${panel} px-4`}>
-        {thirdPartyComponents.map((item) => (
+        {components.map((item) => (
           <li key={`${item.kind}:${item.name}@${item.version}`} className="py-2.5">
             <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
               <span className="chef-wrap-words font-semibold text-[var(--text-primary)]">{item.name}</span>
@@ -64,13 +70,13 @@ export const OpenSourceLicenses: React.FC = () => {
       {texts && (
         <div lang="en" dir="ltr" className="mt-8 space-y-4">
           <div className={panel}>
-            {Object.keys(texts.licenses).map((id) => (
+            {Object.keys(texts.licenses).filter((id) => shownLicenses.has(id)).map((id) => (
               <LicenseText key={id} title={`${texts.licenses[id].name} (${licenseLabel(id)})`} text={texts.licenses[id].text} />
             ))}
           </div>
-          {texts.notices.length > 0 && (
+          {notices.length > 0 && (
             <div className={panel}>
-              {texts.notices.map((notice) => (
+              {notices.map((notice) => (
                 <LicenseText key={notice.component} title={notice.title} text={notice.text} />
               ))}
             </div>

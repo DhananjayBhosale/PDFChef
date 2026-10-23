@@ -7,6 +7,21 @@ extension Notification.Name {
 
 /// Handles Open In before the provider URL can disappear, then queues only an opaque ref.
 final class PdfChefDocumentInbox {
+    /// Why a file from another app did not open.
+    enum Failure: Equatable {
+        case notPDF
+        case notKept
+
+        var message: String {
+            switch self {
+            case .notPDF: return localized("PDF Chef opens PDF files only.")
+            case .notKept: return localized("This file could not be opened. Please try again.")
+            }
+        }
+    }
+
+    /// Called on the main queue, so the scene can say why a file did not open.
+    var failureHandler: ((Failure) -> Void)?
     private let workQueue = DispatchQueue(label: "com.dhananjaytech.pdfchef.document-inbox", qos: .userInitiated)
     private let storeProvider: () throws -> PdfChefDocumentStore
     private let inboxDirectoryProvider: () -> URL?
@@ -48,17 +63,28 @@ final class PdfChefDocumentInbox {
         let coordinator = NSFileCoordinator(filePresenter: nil)
         var coordinationError: NSError?
         var operationError: Error?
+        var notPDF = false
         var committed = false
         coordinator.coordinate(readingItemAt: url, options: .withoutChanges, error: &coordinationError) { coordinatedURL in
             do {
                 let type = UTType(filenameExtension: coordinatedURL.pathExtension)
-                guard type?.conforms(to: .pdf) == true else { return }
-                _ = try storeProvider().copyIn(
+                guard type?.conforms(to: .pdf) == true else {
+                    notPDF = true
+                    return
+                }
+                let store = try storeProvider()
+                let kept = try store.copyIn(
                     url: coordinatedURL,
                     name: coordinatedURL.lastPathComponent,
                     mimeType: type?.preferredMIMEType,
                     enqueuePending: true
                 )
+                // The same file opened again reopens the copy already kept. It is queued before
+                // the new copy goes, so a crash in between keeps both rather than neither.
+                if let earlier = try store.keptCopy(of: kept) {
+                    try store.enqueuePending(earlier)
+                    try store.delete(ref: kept.ref)
+                }
                 committed = true
             } catch {
                 operationError = error
@@ -67,6 +93,10 @@ final class PdfChefDocumentInbox {
         if coordinationError != nil || operationError != nil {
             // Never log provider URLs, filenames, bookmarks, or other document metadata.
             NSLog("PDF Chef could not retain an incoming document.")
+        }
+        if !committed {
+            let failure: Failure = notPDF ? .notPDF : .notKept
+            DispatchQueue.main.async { self.failureHandler?(failure) }
         }
         if committed {
             removeOwnedInboxSourceIfNeeded(url)

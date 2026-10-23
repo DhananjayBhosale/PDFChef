@@ -2,8 +2,12 @@ import { LegalTranslationNotice } from '../UI/LegalTranslationNotice';
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React from 'react';
+import { Capacitor } from '@capacitor/core';
 import { Link } from 'react-router-dom';
 import { FileText } from 'lucide-react';
+
+// Android's optional support is not offered in the iOS app, so the iOS app does not describe it.
+const isIOSApp = Capacitor.getPlatform() === 'ios';
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => { useI18n(); return (
   <section className="space-y-3">
@@ -65,7 +69,7 @@ export const TermsConditions: React.FC = () => {
           <Section title={t("terms-conditions.6.third.party.services.8f0487")}>
             <p>{t("terms-conditions.on.android.pdf.chef.may.rely.on.e8221e")}</p>
             <p>{t("terms-conditions.on.ios.pro.lifetime.and.pro.monthly.3c75e6")}</p>
-            <p>{t("terms-conditions.on.android.monthly.yearly.and.lifetime.support.e4f064")}</p>
+            {!isIOSApp && <p>{t("terms-conditions.on.android.monthly.yearly.and.lifetime.support.e4f064")}</p>}
             <p>{t("terms-conditions.restore.purchases.is.available.in.settings.and.e310a9")}</p>
           </Section>
 

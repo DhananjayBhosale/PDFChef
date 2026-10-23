@@ -5,7 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { wasRendererRestarted } from '../../services/rendererRecovery';
 
 /**
- * Says so once when the Android shell has reopened this screen after the page's
+ * Says so once when the Android or iOS shell has reopened this screen after the page's
  * renderer died. The marker is taken out of the address at once, so a later
  * refresh of the same screen does not repeat the message.
  */

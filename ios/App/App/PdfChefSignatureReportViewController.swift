@@ -19,14 +19,14 @@ final class PdfChefSignatureReportViewController: UIViewController {
     private var verifiedAt = Date()
     private var copyInProgress = false
     private lazy var printCopyButton = verifiedCopyButton(
-        title: "Print verified copy",
+        title: localized("Print verified copy"),
         symbol: "printer.fill",
-        hint: "Prints this PDF with the verified check mark in its signature box. Nothing is saved."
+        hint: localized("Prints this PDF with the verified check mark in its signature box. Nothing is saved.")
     ) { [weak self] in self?.makeVerifiedCopy(forPrinting: true) }
     private lazy var shareCopyButton = verifiedCopyButton(
-        title: "Share verified copy",
+        title: localized("Share verified copy"),
         symbol: "square.and.arrow.up",
-        hint: "Shares a separate copy with the verified check mark, protected with the same password. The original file is not changed."
+        hint: localized("Shares a separate copy with the verified check mark, protected with the same password. The original file is not changed.")
     ) { [weak self] in self?.makeVerifiedCopy(forPrinting: false) }
 
     init(
@@ -49,7 +49,7 @@ final class PdfChefSignatureReportViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Digital signatures"
+        title = localized("Digital signatures")
         view.backgroundColor = .systemGroupedBackground
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .done,
@@ -91,13 +91,13 @@ final class PdfChefSignatureReportViewController: UIViewController {
         clearContent()
         let spinner = UIActivityIndicatorView(style: .medium)
         spinner.startAnimating()
-        spinner.accessibilityLabel = "Checking digital signatures"
+        spinner.accessibilityLabel = localized("Checking digital signatures")
 
         let label = UILabel()
         label.font = .preferredFont(forTextStyle: .body)
         label.adjustsFontForContentSizeCategory = true
         label.textColor = .secondaryLabel
-        label.text = "Checking signatures…"
+        label.text = localized("Checking signatures…")
 
         let row = UIStackView(arrangedSubviews: [spinner, label])
         row.axis = .horizontal
@@ -131,20 +131,20 @@ final class PdfChefSignatureReportViewController: UIViewController {
     }
 
     private func requestPassword(for document: PDFDocument, message: String?) {
-        let alert = UIAlertController(title: "Password required", message: message, preferredStyle: .alert)
+        let alert = UIAlertController(title: localized("Password required"), message: message, preferredStyle: .alert)
         alert.addTextField { field in
-            field.placeholder = "PDF password"
+            field.placeholder = localized("PDF password")
             field.isSecureTextEntry = true
             field.textContentType = nil
             field.autocorrectionType = .no
             field.autocapitalizationType = .none
         }
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: localized("Cancel"), style: .cancel) { [weak self] _ in
             guard let self else { return }
             self.verificationFinished = true
             self.close()
         })
-        alert.addAction(UIAlertAction(title: "Verify", style: .default) { [weak self, weak alert] _ in
+        alert.addAction(UIAlertAction(title: localized("Verify"), style: .default) { [weak self, weak alert] _ in
             guard let self else { return }
             let transientPassword = alert?.textFields?.first?.text ?? ""
             alert?.textFields?.first?.text = nil
@@ -161,7 +161,7 @@ final class PdfChefSignatureReportViewController: UIViewController {
                     if didUnlock {
                         self.verify(password: transientPassword)
                     } else {
-                        self.requestPassword(for: document, message: "That password did not open this PDF.")
+                        self.requestPassword(for: document, message: localized("That password did not open this PDF."))
                     }
                 }
             }
@@ -182,7 +182,7 @@ final class PdfChefSignatureReportViewController: UIViewController {
                 verificationFinished = true
                 if !closeRequested {
                     render(reports)
-                    UIAccessibility.post(notification: .announcement, argument: "Signature check complete")
+                    UIAccessibility.post(notification: .announcement, argument: localized("Signature check complete"))
                 }
                 finishIfReady()
             }
@@ -197,8 +197,8 @@ final class PdfChefSignatureReportViewController: UIViewController {
             contentStack.addArrangedSubview(
                 messageCard(
                     symbol: "doc.badge.questionmark",
-                    title: "No digital signatures found",
-                    detail: "This PDF does not contain a supported signature field.",
+                    title: localized("No digital signatures found"),
+                    detail: localized("This PDF does not contain a supported signature field."),
                     color: .secondaryLabel
                 )
             )
@@ -206,16 +206,16 @@ final class PdfChefSignatureReportViewController: UIViewController {
         }
 
         for (index, report) in reports.enumerated() {
-            let signer = report.signerName ?? "Unknown signer"
-            let sectionTitle = reports.count == 1 ? signer : "Signature \(index + 1) · \(signer)"
+            let signer = report.signerName ?? localized("Unknown signer")
+            let sectionTitle = reports.count == 1 ? signer : localized("Signature %lld · %@", index + 1, signer)
             contentStack.addArrangedSubview(headerLabel(sectionTitle, style: .title3, color: .label))
 
             let checks: [(String, PdfChefSignatureCheck)] = [
-                ("Document integrity", report.integrity),
-                ("Signer trust", report.trust),
-                ("Certificate validity", report.certificateValidity),
-                ("Revocation", report.revocation),
-                ("Timestamp & long-term validation", report.timestampAndLTV),
+                (localized("Document integrity"), report.integrity),
+                (localized("Signer trust"), report.trust),
+                (localized("Certificate validity"), report.certificateValidity),
+                (localized("Revocation"), report.revocation),
+                (localized("Timestamp & long-term validation"), report.timestampAndLTV),
             ]
             for check in checks {
                 contentStack.addArrangedSubview(checkRow(title: check.0, check: check.1))
@@ -224,8 +224,8 @@ final class PdfChefSignatureReportViewController: UIViewController {
                 contentStack.addArrangedSubview(
                     messageCard(
                         symbol: "exclamationmark.triangle.fill",
-                        title: "Security note",
-                        detail: warning,
+                        title: localized("Security note"),
+                        detail: localized(warning),
                         color: .systemOrange
                     )
                 )
@@ -309,11 +309,11 @@ final class PdfChefSignatureReportViewController: UIViewController {
                 case .failure(let error):
                     try? FileManager.default.removeItem(at: directory)
                     let alert = UIAlertController(
-                        title: "Couldn’t make a verified copy",
+                        title: localized("Couldn’t make a verified copy"),
                         message: error.localizedDescription,
                         preferredStyle: .alert
                     )
-                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    alert.addAction(UIAlertAction(title: localized("OK"), style: .default))
                     self.present(alert, animated: !UIAccessibility.isReduceMotionEnabled)
                 }
             }
@@ -335,7 +335,7 @@ final class PdfChefSignatureReportViewController: UIViewController {
 
         let titleLabel = headerLabel(title, style: .subheadline, color: .secondaryLabel)
         let statusLabel = headerLabel(presentation.label, style: .headline, color: presentation.color)
-        let detailLabel = headerLabel(check.detail, style: .footnote, color: .secondaryLabel)
+        let detailLabel = headerLabel(localized(check.detail), style: .footnote, color: .secondaryLabel)
         detailLabel.numberOfLines = 0
 
         let labels = UIStackView(arrangedSubviews: [titleLabel, statusLabel, detailLabel])
@@ -361,7 +361,7 @@ final class PdfChefSignatureReportViewController: UIViewController {
         ])
         card.isAccessibilityElement = true
         card.accessibilityLabel = title
-        card.accessibilityValue = "\(presentation.label). \(check.detail)"
+        card.accessibilityValue = "\(presentation.label). \(localized(check.detail))"
         card.accessibilityHint = nil
         return card
     }
@@ -426,18 +426,18 @@ final class PdfChefSignatureReportViewController: UIViewController {
 
     private func presentation(for status: PdfChefSignatureStatus) -> (label: String, symbol: String, color: UIColor) {
         switch status {
-        case .valid: return ("Valid", "checkmark.circle.fill", .systemGreen)
-        case .invalid: return ("Invalid", "xmark.octagon.fill", .systemRed)
-        case .trusted: return ("Trusted", "checkmark.shield.fill", .systemGreen)
-        case .untrusted: return ("Not trusted", "xmark.shield.fill", .systemRed)
-        case .expired: return ("Expired", "clock.badge.exclamationmark.fill", .systemOrange)
-        case .notYetValid: return ("Not yet valid", "clock.badge.exclamationmark.fill", .systemOrange)
-        case .revoked: return ("Revoked", "xmark.octagon.fill", .systemRed)
-        case .good: return ("No revocation found", "checkmark.circle.fill", .systemGreen)
-        case .notPresent: return ("Not present", "minus.circle.fill", .secondaryLabel)
-        case .indeterminate: return ("Indeterminate", "questionmark.circle.fill", .systemOrange)
-        case .unsupported: return ("Unsupported", "questionmark.circle.fill", .systemOrange)
-        case .offline: return ("Not checked", "wifi.slash", .systemOrange)
+        case .valid: return (localized("Valid"), "checkmark.circle.fill", .systemGreen)
+        case .invalid: return (localized("Invalid"), "xmark.octagon.fill", .systemRed)
+        case .trusted: return (localized("Trusted"), "checkmark.shield.fill", .systemGreen)
+        case .untrusted: return (localized("Not trusted"), "xmark.shield.fill", .systemRed)
+        case .expired: return (localized("Expired"), "clock.badge.exclamationmark.fill", .systemOrange)
+        case .notYetValid: return (localized("Not yet valid"), "clock.badge.exclamationmark.fill", .systemOrange)
+        case .revoked: return (localized("Revoked"), "xmark.octagon.fill", .systemRed)
+        case .good: return (localized("No revocation found"), "checkmark.circle.fill", .systemGreen)
+        case .notPresent: return (localized("Not present"), "minus.circle.fill", .secondaryLabel)
+        case .indeterminate: return (localized("Indeterminate"), "questionmark.circle.fill", .systemOrange)
+        case .unsupported: return (localized("Unsupported"), "questionmark.circle.fill", .systemOrange)
+        case .offline: return (localized("Not checked"), "wifi.slash", .systemOrange)
         }
     }
 

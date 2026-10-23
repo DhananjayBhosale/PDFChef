@@ -190,7 +190,7 @@ final class PdfChefDocumentStoreTests: XCTestCase {
         XCTAssertTrue([
             "listDocuments", "pickDocuments", "exportDocument", "shareDocument",
             "signalHaptic", "getApplicationMetadata", "takePendingImports",
-            "acknowledgePendingImports"
+            "acknowledgePendingImports", "documentScannerAvailable", "scanDocument", "setLanguage"
         ].allSatisfy(names.contains))
     }
 
@@ -318,6 +318,50 @@ final class PdfChefDocumentStoreTests: XCTestCase {
         wait(for: [ready], timeout: 3)
 
         XCTAssertEqual(try store.takePendingImports().count, 1)
+    }
+
+    func testSameFileOpenedTwiceIsKeptOnceAndQueuedAgain() throws {
+        let first = rootURL.appendingPathComponent("report.pdf")
+        let again = rootURL.appendingPathComponent("report copy.pdf")
+        try Data("%PDF same bytes".utf8).write(to: first)
+        try Data("%PDF same bytes".utf8).write(to: again)
+        let inbox = PdfChefDocumentInbox(storeProvider: { self.store })
+
+        XCTAssertTrue(inbox.acceptSynchronously(url: first))
+        let kept = try XCTUnwrap(store.takePendingImports().first?.document)
+        try store.acknowledgePendingImports(refs: [kept.ref])
+        XCTAssertTrue(inbox.acceptSynchronously(url: again))
+
+        XCTAssertEqual(try store.takePendingImports().map(\.document.ref), [kept.ref])
+        XCTAssertEqual(try store.listDocuments().map(\.document.ref), [kept.ref])
+    }
+
+    func testInboxSaysWhyAFileThatIsNotAPdfDidNotOpen() throws {
+        let source = rootURL.appendingPathComponent("notes.txt")
+        try Data("plain text".utf8).write(to: source)
+        let inbox = PdfChefDocumentInbox(storeProvider: { self.store })
+        let reported = expectation(description: "failure reported")
+        inbox.failureHandler = { failure in
+            XCTAssertEqual(failure, .notPDF)
+            reported.fulfill()
+        }
+
+        XCTAssertFalse(inbox.acceptSynchronously(url: source))
+        wait(for: [reported], timeout: 3)
+        XCTAssertTrue(try store.takePendingImports().isEmpty)
+    }
+
+    func testKeptCopyIgnoresTheDocumentItselfAndTransientCopies() throws {
+        let original = try retain(Data("%PDF kept".utf8))
+        let session = try store.beginWrite(name: "preview.pdf", mimeType: "application/pdf", transient: true)
+        try store.append(sessionID: session, data: Data("%PDF kept".utf8))
+        let preview = try store.finishWrite(sessionID: session)
+        XCTAssertNil(try store.keptCopy(of: original))
+
+        let duplicate = try retain(Data("%PDF kept".utf8))
+        XCTAssertEqual(try store.keptCopy(of: duplicate), original)
+        XCTAssertEqual(try store.keptCopy(of: preview), original)
+        XCTAssertNil(try store.keptCopy(of: retain(Data("%PDF different".utf8))))
     }
 
     func testRecoveryRemovesOnlyAbandonedTempsAndOrphanContent() throws {

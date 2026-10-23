@@ -39,6 +39,9 @@ const nativeStub = (overrides: Partial<PdfChefDocumentsNativePlugin> = {}): PdfC
   signatureVerificationAvailable: async () => ({ available: true }),
   presentSignatureReport: async () => ({ completed: true }),
   openReader: async () => ({ action: 'closed' }),
+  documentScannerAvailable: async () => ({ available: true }),
+  scanDocument: async () => ({ status: 'cancelled' }),
+  setLanguage: async () => ({}),
   signalHaptic: async () => ({}),
   getApplicationMetadata: async () => ({ name: 'PDF Chef', version: '1.0', build: '1' }),
   addListener: async () => ({ remove: async () => undefined }),
@@ -211,4 +214,14 @@ test('native reader validates bounded large-PDF batch completion', async () => {
     openReader: async () => ({ action: 'batched', partCount: 0 }),
   }));
   await assert.rejects(invalid.openReader(ref, 'sample.pdf'), /invalid/);
+});
+
+test('a scan is a kept PDF with its page count, and malformed scan results are refused', async () => {
+  const scan = (payload: unknown) => new PdfChefDocumentsBridge(nativeStub({ scanDocument: async () => payload })).scanDocument();
+  assert.deepEqual(await scan({ status: 'cancelled' }), { status: 'cancelled' });
+  assert.deepEqual(await scan({ status: 'completed', document: stored, pageCount: 2 }), { status: 'completed', document: stored, pageCount: 2 });
+  await assert.rejects(scan({ status: 'completed', document: stored, pageCount: 0 }), TypeError);
+  await assert.rejects(scan({ status: 'completed', document: { ...stored, path: '/private/scan.pdf' }, pageCount: 1 }), TypeError);
+  await assert.rejects(scan({ status: 'done' }), TypeError);
+  assert.equal(await new PdfChefDocumentsBridge(nativeStub()).documentScannerAvailable(), true);
 });

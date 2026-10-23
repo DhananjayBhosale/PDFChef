@@ -15,27 +15,31 @@ enum PdfChefPdfBatcherError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .cancelled:
-            return "Preparing smaller PDFs was cancelled."
+            return localized("Preparing smaller PDFs was cancelled.")
         case .freeJobsExhausted:
-            return "You’ve used this week’s free jobs. Unlock PDF Chef Pro to split large PDFs into smaller parts."
+            return localized("You’ve used this week’s free jobs. Unlock PDF Chef Pro to split large PDFs into smaller parts.")
         case .emptyDocument:
-            return "This PDF has no pages to prepare."
+            return localized("This PDF has no pages to prepare.")
         case .encryptedDocument:
-            return "Encrypted PDFs cannot be split safely in the background. Save an unlocked copy first."
+            return localized("Encrypted PDFs cannot be split safely in the background. Save an unlocked copy first.")
         case .insufficientSpace(let requiredBytes, let availableBytes):
             let formatter = ByteCountFormatter()
             formatter.countStyle = .file
-            return "Preparing this PDF needs about \(formatter.string(fromByteCount: requiredBytes)) of free space. \(formatter.string(fromByteCount: availableBytes)) is available."
+            return localized(
+                "Preparing this PDF needs about %@ of free space. %@ is available.",
+                formatter.string(fromByteCount: requiredBytes),
+                formatter.string(fromByteCount: availableBytes)
+            )
         case .tooManyParts(let maximum):
-            return "This PDF would need more than \(maximum) smaller parts."
+            return localized("This PDF would need more than %lld smaller parts.", maximum)
         case .oversizedPage(let maximumBytes):
             let formatter = ByteCountFormatter()
             formatter.countStyle = .file
-            return "One page is larger than the \(formatter.string(fromByteCount: maximumBytes)) safe processing limit."
+            return localized("One page is larger than the %@ safe processing limit.", formatter.string(fromByteCount: maximumBytes))
         case .pageCopyFailed:
-            return "A page could not be copied safely."
+            return localized("A page could not be copied safely.")
         case .writeFailed:
-            return "A smaller PDF could not be created."
+            return localized("A smaller PDF could not be created.")
         }
     }
 }

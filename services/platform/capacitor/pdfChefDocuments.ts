@@ -6,6 +6,7 @@ import type {
 } from '../../domain/workspaceModels.ts';
 import { toDurableDocumentRef } from '../../domain/workspacePolicy.ts';
 import type {
+  DocumentScanResult,
   ImportedDocument,
   StorageInformation,
 } from '../contracts.ts';
@@ -39,6 +40,9 @@ export interface PdfChefDocumentsNativePlugin {
   signatureVerificationAvailable(): Promise<unknown>;
   presentSignatureReport(options: { ref: string; name?: string }): Promise<unknown>;
   openReader(options: { ref: string; displayName: string }): Promise<unknown>;
+  documentScannerAvailable(): Promise<unknown>;
+  scanDocument(): Promise<unknown>;
+  setLanguage(options: { language: string }): Promise<unknown>;
   signalHaptic(options: { signal: string }): Promise<unknown>;
   getApplicationMetadata(): Promise<unknown>;
   addListener(
@@ -305,6 +309,10 @@ export class PdfChefDocumentsBridge {
         payload.capacityBytes === undefined || payload.capacityBytes === null
           ? null
           : finiteInteger(payload.capacityBytes, 'storageInformation result.capacityBytes'),
+      memoryBytes:
+        payload.memoryBytes === undefined || payload.memoryBytes === null
+          ? null
+          : finiteInteger(payload.memoryBytes, 'storageInformation result.memoryBytes'),
     };
   }
 
@@ -424,6 +432,28 @@ export class PdfChefDocumentsBridge {
       if (partCount > 0 && partCount <= 64) return { action: 'batched', partCount };
     }
     throw new TypeError('openReader result is invalid');
+  }
+
+  async documentScannerAvailable(): Promise<boolean> {
+    const payload = object(await this.native.documentScannerAvailable(), 'documentScannerAvailable result');
+    if (typeof payload.available !== 'boolean') {
+      throw new TypeError('documentScannerAvailable result.available must be boolean');
+    }
+    return payload.available;
+  }
+
+  async scanDocument(): Promise<DocumentScanResult> {
+    const payload = object(await this.native.scanDocument(), 'scanDocument result');
+    if (payload.status === 'cancelled') return { status: 'cancelled' };
+    if (payload.status !== 'completed') throw new TypeError('scanDocument result.status is invalid');
+    const pageCount = finiteInteger(payload.pageCount, 'scanDocument result.pageCount');
+    if (pageCount === 0) throw new TypeError('scanDocument result.pageCount must be positive');
+    return { status: 'completed', document: document(payload.document, 'scanDocument result.document'), pageCount };
+  }
+
+  /** Native screens follow the language chosen in the app. */
+  async setLanguage(language: string): Promise<void> {
+    await this.native.setLanguage({ language: nonEmptyString(language, 'language') });
   }
 
   async signalHaptic(signal: string): Promise<void> {

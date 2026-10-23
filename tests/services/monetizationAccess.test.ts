@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   deliverBlob,
@@ -84,4 +85,11 @@ test('exporting an unchanged source PDF bypasses the job allowance', async () =>
     if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
     else delete (globalThis as { window?: Window }).window;
   }
+});
+
+// Past the free results a scan is only a preview. When the preview could not be read, its kept
+// copy stayed in the store and came back in Recent as a saved file.
+test('a scan past the free results never leaves its kept copy behind', () => {
+  const makePdf = readFileSync(new URL('../../components/Tools/MakePDF.tsx', import.meta.url), 'utf8');
+  assert.match(makePdf, /platform\.reopen\(recordFor\(scan\)\)\s*\.finally\(\(\) => platform\.documentStorage\?\.delete\(scan\.ref\)/);
 });

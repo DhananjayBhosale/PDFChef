@@ -11,6 +11,7 @@ import {
   pdfEditingVisibleRect,
   pdfFocusAnchorScroll,
   pdfParagraphStartScroll,
+  visualViewportClientRect,
   type PdfFocusAnchor,
 } from '../../services/pdfEditingFocus';
 import { normalizeParagraphLineBreaks } from '../../services/pdfParagraphLayout';
@@ -540,11 +541,12 @@ const BlockEditor: React.FC<{
     const position = () => {
       frame = 0;
       const bounds = viewport.getBoundingClientRect();
-      const left = Math.max(bounds.left, visual?.offsetLeft ?? 0) + 8;
-      const right = Math.min(bounds.right, visual ? visual.offsetLeft + visual.width : window.innerWidth) - 8;
-      const top = Math.max(bounds.top, visual?.offsetTop ?? 0) + 8;
-      const bottom = Math.min(bounds.bottom, visual ? visual.offsetTop + visual.height : window.innerHeight,
-        bar?.getBoundingClientRect().top ?? Infinity) - 8;
+      const screen = visualViewportClientRect(visual, { x: window.scrollX, y: window.scrollY },
+        { width: window.innerWidth, height: window.innerHeight });
+      const left = Math.max(bounds.left, screen.left) + 8;
+      const right = Math.min(bounds.right, screen.right) - 8;
+      const top = Math.max(bounds.top, screen.top) + 8;
+      const bottom = Math.min(bounds.bottom, screen.bottom, bar?.getBoundingClientRect().top ?? Infinity) - 8;
       const caret = focusedCaretRect(element) ?? element.getBoundingClientRect();
       hint.style.visibility = 'hidden';
       if (right <= left || bottom <= top || caret.bottom < top || caret.top > bottom
@@ -1047,13 +1049,9 @@ export const useKeyboardSafeFocus = (
       frame = 0;
       if (document.activeElement !== element || scrollContainer.dataset.pdfPinching === 'true') return;
       const container = scrollContainer.getBoundingClientRect();
-      const visual = window.visualViewport;
-      const visible = pdfEditingVisibleRect(container, {
-        left: visual?.offsetLeft ?? 0,
-        top: visual?.offsetTop ?? 0,
-        right: visual ? visual.offsetLeft + visual.width : window.innerWidth,
-        bottom: visual ? visual.offsetTop + visual.height : window.innerHeight,
-      }, header?.getBoundingClientRect() ?? null, bottomBar?.getBoundingClientRect() ?? null);
+      const screen = visualViewportClientRect(window.visualViewport, { x: window.scrollX, y: window.scrollY },
+        { width: window.innerWidth, height: window.innerHeight });
+      const visible = pdfEditingVisibleRect(container, screen, header?.getBoundingClientRect() ?? null, bottomBar?.getBoundingClientRect() ?? null);
       if (!visible) return;
       // The last line on a page still needs room to move above an overlapping inspector.
       scrollContainer.style.paddingBottom = `${basePadding + Math.max(0, container.bottom - visible.bottom)}px`;

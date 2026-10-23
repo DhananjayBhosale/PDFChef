@@ -239,7 +239,10 @@ test('the editing overlay leaves scrolling, pinch zoom and native selection to t
 // under the fixed header, and a new text box stayed behind the Text inspector and toolbar.
 test('what is being typed stays between the fixed header and the bottom bar', () => {
   // The caret is kept below the header as well as above the bar.
-  assert.match(blockLayer, /pdfEditingVisibleRect\(container, \{[\s\S]*?\}, header\?\.getBoundingClientRect\(\) \?\? null, bottomBar\?\.getBoundingClientRect\(\) \?\? null\)/);
+  assert.match(blockLayer, /pdfEditingVisibleRect\(container, screen, header\?\.getBoundingClientRect\(\) \?\? null, bottomBar\?\.getBoundingClientRect\(\) \?\? null\)/);
+  // The visible part of the screen is measured in the same coordinates as the box and caret.
+  assert.match(blockLayer, /const screen = visualViewportClientRect\(window\.visualViewport, \{ x: window\.scrollX, y: window\.scrollY \}/);
+  assert.doesNotMatch(blockLayer, /visual\??\.offset(Top|Left)/);
   // A new text box is followed too, not only a paragraph of the PDF.
   assert.match(editor, /const selectedTextId = selectedElement\?\.type === 'text' \? selectedElement\.id : null;/);
   assert.match(editor, /data-testid="inline-text-editor"\s*data-element-id=\{element\.id\}/);

@@ -35,6 +35,22 @@ export const pdfFocusAnchorScroll = (anchor: PdfFocusAnchor, page: FocusRect, vi
 });
 
 /**
+ * The visual viewport in getBoundingClientRect's coordinates. Its offsetTop counts from the layout
+ * viewport, which iOS keeps still while it scrolls the page to show the caret, so there client
+ * coordinates already start at the visible top. pageTop minus scrollY is right in every engine.
+ */
+export const visualViewportClientRect = (
+  visual: Pick<VisualViewport, 'pageLeft' | 'pageTop' | 'width' | 'height'> | null | undefined,
+  scroll: { x: number; y: number },
+  fallback: { width: number; height: number },
+): FocusRect => {
+  if (!visual) return { left: 0, top: 0, right: fallback.width, bottom: fallback.height };
+  const left = visual.pageLeft - scroll.x;
+  const top = visual.pageTop - scroll.y;
+  return { left, top, right: left + visual.width, bottom: top + visual.height };
+};
+
+/**
  * The part of the PDF box the reader can actually see while typing: inside the visual viewport,
  * below the fixed header and above the fixed bottom bar. Either bar covers the box whenever the
  * document itself has scrolled or the visual viewport has moved, so neither can be assumed away.

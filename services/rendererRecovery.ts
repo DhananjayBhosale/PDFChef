@@ -1,6 +1,7 @@
 /**
- * The fragment the Android shell appends when it reloads the current route after
- * the WebView renderer died. Mirrored in PdfChefWebViewPolicy.java.
+ * The fragment the Android and iOS shells append when they reload the current route
+ * after the web page's renderer died. Mirrored in PdfChefWebViewPolicy.java and
+ * PdfChefBridgeViewController.swift.
  */
 export const RENDERER_RECOVERY_HASH = '#renderer-restarted';
 

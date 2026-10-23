@@ -11,8 +11,10 @@ import componentData from './thirdPartyComponents.json';
 export interface ThirdPartyComponent {
   name: string;
   version: string;
-  /** `js` npm package, `asset` bundled data or embedded library, `android` Gradle library. */
-  kind: 'js' | 'asset' | 'android';
+  /** `js` npm package, `asset` bundled data or embedded library, `android` Gradle library, `ios` Swift package. */
+  kind: 'js' | 'asset' | 'android' | 'ios';
+  /** Set on bundled data that only one platform's app ships. */
+  platform?: 'android' | 'ios';
   /** SPDX expression of the terms the app uses the component under. */
   license: string;
   copyright: string;
@@ -22,10 +24,21 @@ export interface ThirdPartyComponent {
 
 export interface LicenseTexts {
   licenses: Record<string, { name: string; text: string }>;
-  notices: Array<{ component: string; title: string; text: string }>;
+  /** `kind` is set on a NOTICE that only one platform's native build ships. */
+  notices: Array<{ component: string; title: string; text: string; kind?: ThirdPartyComponent['kind'] }>;
 }
 
 export const thirdPartyComponents = componentData as ThirdPartyComponent[];
+
+/** Each app lists its own native libraries and not the other platform's; the website lists everything. */
+export const shownOnPlatform = (platform: string, kind: ThirdPartyComponent['kind'] | undefined): boolean =>
+  !((platform === 'ios' && kind === 'android') || (platform === 'android' && kind === 'ios'));
+
+export const componentsForPlatform = (platform: string): ThirdPartyComponent[] =>
+  thirdPartyComponents.filter((item) => shownOnPlatform(platform, item.platform ?? item.kind));
+
+/** The licence ids named by an SPDX-style expression such as "Apache-2.0 AND BSD-3-Clause". */
+export const licenseIds = (expression: string): string[] => expression.split(/\s+(?:AND|OR|WITH)\s+/);
 
 /** The licence texts are large, so they load as their own chunk when the page asks. */
 export const loadLicenseTexts = (): Promise<LicenseTexts> =>

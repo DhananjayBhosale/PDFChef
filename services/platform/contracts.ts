@@ -83,6 +83,8 @@ export interface StorageInformation {
   retainedBytes: number;
   availableBytes: number | null;
   capacityBytes: number | null;
+  /** The device's total memory, when the platform reports it. */
+  memoryBytes?: number | null;
 }
 
 export interface StorageInformationService {

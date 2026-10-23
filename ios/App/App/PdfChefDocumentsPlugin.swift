@@ -28,6 +28,9 @@ final class PdfChefDocumentsPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "signatureVerificationAvailable", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "presentSignatureReport", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "openReader", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "documentScannerAvailable", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "scanDocument", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setLanguage", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "signalHaptic", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getApplicationMetadata", returnType: CAPPluginReturnPromise)
     ]
@@ -35,6 +38,7 @@ final class PdfChefDocumentsPlugin: CAPPlugin, CAPBridgedPlugin {
     private let workQueue = DispatchQueue(label: "com.dhananjaytech.pdfchef.documents-plugin", qos: .userInitiated)
     private let batchQueue = DispatchQueue(label: "com.dhananjaytech.pdfchef.pdf-batching", qos: .userInitiated)
     private let presentation = PdfChefDocumentPresentation()
+    private let scanner = PdfChefDocumentScanner()
     private static let pickerMimeTypes: Set<String> = [
         "application/pdf",
         "image/jpeg",
@@ -172,6 +176,8 @@ final class PdfChefDocumentsPlugin: CAPPlugin, CAPBridgedPlugin {
             var result: [String: Any] = ["retainedBytes": value.retainedBytes]
             if let available = value.availableBytes { result["availableBytes"] = available }
             if let capacity = value.capacityBytes { result["capacityBytes"] = capacity }
+            // Lets the web layer take smaller photos on phones with little memory.
+            result["memoryBytes"] = Int64(clamping: ProcessInfo.processInfo.physicalMemory)
             call.resolve(result)
         }
     }
@@ -367,6 +373,46 @@ final class PdfChefDocumentsPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
+    @objc func documentScannerAvailable(_ call: CAPPluginCall) {
+        call.resolve(["available": PdfChefDocumentScanner.isAvailable])
+    }
+
+    @objc func scanDocument(_ call: CAPPluginCall) {
+        DispatchQueue.main.async { [self] in
+            guard let presenter = bridge?.viewController,
+                  let store = try? PdfChefDocumentStore.sharedResult.get() else {
+                call.reject("The scanner could not start.", "SCANNER_UNAVAILABLE")
+                return
+            }
+            scanner.scan(from: presenter, into: store) { result in
+                switch result {
+                case .success(.cancelled):
+                    call.resolve(["status": "cancelled"])
+                case .success(.completed(let document, let pageCount)):
+                    call.resolve(["status": "completed", "document": Self.documentObject(document), "pageCount": pageCount])
+                case .failure(let error):
+                    // Create PDF words each of these codes itself.
+                    switch error as? PdfChefDocumentScanError {
+                    case .busy: call.reject("A scan is already running.", "SCANNER_BUSY")
+                    case .unavailable: call.reject("The scanner could not start.", "SCANNER_UNAVAILABLE")
+                    case .interrupted: call.reject("The scan stopped.", "SCANNER_INTERRUPTED")
+                    case .storageFull: call.reject("There is not enough free space.", "SCANNER_STORAGE_FULL")
+                    case .failed, nil: call.reject("The scan could not be kept.", "SCANNER_FAILED")
+                    }
+                }
+            }
+        }
+    }
+
+    @objc func setLanguage(_ call: CAPPluginCall) {
+        guard let language = call.getString("language"), !language.isEmpty, language.count <= 35 else {
+            call.reject("Invalid argument.", "INVALID_ARGUMENT")
+            return
+        }
+        PdfChefLocalization.setLanguage(language)
+        call.resolve()
+    }
+
     private func prepareGeneratedParts(
         for ref: String,
         documentURL: URL,
@@ -489,11 +535,11 @@ final class PdfChefDocumentsPlugin: CAPPlugin, CAPBridgedPlugin {
                             if case .failure = result {
                                 DispatchQueue.main.async {
                                     let alert = UIAlertController(
-                                        title: "Couldn’t share PDF",
-                                        message: "Please try again.",
+                                        title: localized("Couldn’t share PDF"),
+                                        message: localized("Please try again."),
                                         preferredStyle: .alert
                                     )
-                                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                                    alert.addAction(UIAlertAction(title: localized("OK"), style: .default))
                                     presenter.present(alert, animated: !UIAccessibility.isReduceMotionEnabled)
                                 }
                             }
@@ -503,11 +549,11 @@ final class PdfChefDocumentsPlugin: CAPPlugin, CAPBridgedPlugin {
             } catch {
                 DispatchQueue.main.async {
                     let alert = UIAlertController(
-                        title: "Couldn’t share PDF",
-                        message: "Please try again.",
+                        title: localized("Couldn’t share PDF"),
+                        message: localized("Please try again."),
                         preferredStyle: .alert
                     )
-                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    alert.addAction(UIAlertAction(title: localized("OK"), style: .default))
                     presenter.present(alert, animated: !UIAccessibility.isReduceMotionEnabled)
                 }
             }

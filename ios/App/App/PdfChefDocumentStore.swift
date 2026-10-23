@@ -424,6 +424,19 @@ final class PdfChefDocumentStore {
         }
     }
 
+    /// The earliest other kept document with exactly these bytes, so a file opened twice is kept once.
+    func keptCopy(of document: PdfChefStoredDocument) throws -> PdfChefStoredDocument? {
+        try queue.sync {
+            try metadataReferencesUnlocked()
+                .filter { $0 != document.ref }
+                .compactMap { try? self.statUnlocked(ref: $0) }
+                .filter {
+                    $0.transient != true && $0.sizeBytes == document.sizeBytes && $0.contentHash == document.contentHash
+                }
+                .min { ($0.retainedAt, $0.ref) < ($1.retainedAt, $1.ref) }
+        }
+    }
+
     func enqueuePending(_ document: PdfChefStoredDocument) throws {
         try queue.sync {
             guard (try? statUnlocked(ref: document.ref)) == document else {

@@ -1,5 +1,5 @@
 import { LocalizedError } from '../../i18n/errors.ts';
-import { t } from '../../i18n/core.ts';
+import { getLocale, subscribeLocale, t } from '../../i18n/core.ts';
 import type {
   ApplicationMetadata,
   DurableDocumentRef,
@@ -8,6 +8,8 @@ import type {
   StoredDocument,
 } from '../../domain/workspaceModels.ts';
 import type {
+  DocumentScanResult,
+  DocumentScannerService,
   DocumentExportService,
   DocumentImportService,
   DocumentShareService,
@@ -27,6 +29,7 @@ import type {
   WorkspacePlatform,
 } from '../contracts.ts';
 import { installOutputDeliveryHandler } from '../../pdfShared.ts';
+import { setDeviceMemorySource } from '../../imageNormalization.ts';
 import { announceRecordsChanged } from '../../workspace.ts';
 import {
   PdfChefDocumentsBridge,
@@ -86,6 +89,9 @@ export interface IOSDocumentBridge {
   signatureVerificationAvailable?(): Promise<boolean>;
   presentSignatureReport?(ref: DurableDocumentRef, name: string | null): Promise<void>;
   openReader(ref: DurableDocumentRef, displayName: string): Promise<IOSPdfReaderNativeResult>;
+  documentScannerAvailable?(): Promise<boolean>;
+  scanDocument(): Promise<DocumentScanResult>;
+  setLanguage(language: string): Promise<void>;
   signalHaptic(signal: string): Promise<void>;
   getApplicationMetadata(): Promise<ApplicationMetadata>;
 }
@@ -163,6 +169,10 @@ export const createIOSWorkspacePlatform = (
   options: IOSWorkspacePlatformOptions = {},
 ): IOSWorkspacePlatform => {
   const bridge = options.bridge ?? new PdfChefDocumentsBridge();
+  setDeviceMemorySource(async () => (await bridge.storageInformation()).memoryBytes);
+  const sendLanguage = () => { bridge.setLanguage(getLocale()).catch(() => undefined); };
+  sendLanguage();
+  const stopLanguageUpdates = subscribeLocale(sendLanguage);
   const repositories =
     options.settings && options.recent
       ? { settings: options.settings, recent: options.recent }
@@ -349,11 +359,12 @@ export const createIOSWorkspacePlatform = (
   const pendingImportRegistration = pendingImports.start(async imports => {
     for (const imported of imports) {
       const document = imported.document;
-      const entry = freshEntry(
-        document,
-        `import-${document.ref}`,
-        document.retainedAt ?? now(),
-      );
+      // Opening a PDF the app already keeps hands back that document, so its Recent row
+      // moves to the top instead of a second row appearing.
+      const kept = (await recent.list()).find(value => value.documentRef === document.ref);
+      const entry = kept
+        ? { ...kept, createdAt: now() }
+        : freshEntry(document, `import-${document.ref}`, document.retainedAt ?? now());
       await recent.save(entry);
       // The file is now in Recent. Acknowledge it before the reader opens: the reader
       // stays up until the user closes it, and if iOS ends the app meanwhile an
@@ -382,6 +393,16 @@ export const createIOSWorkspacePlatform = (
   const pendingImportReady = pendingImportRegistration
     .then(stop => { stopPendingImports = stop; })
     .catch(error => { pendingImportFailure = { error }; });
+  const documentScanner: DocumentScannerService = { scan: () => bridge.scanDocument() };
+  let scannerAvailable = false;
+  const scannerCapabilityReady = (async () => {
+    try {
+      scannerAvailable = await bridge.documentScannerAvailable?.() ?? false;
+    } catch {
+      // Older native packages have no scanner; Create PDF keeps its camera button.
+      scannerAvailable = false;
+    }
+  })();
   const signatureCapabilityReady = (async () => {
     try {
       signatureVerificationAvailable = await bridge.signatureVerificationAvailable?.() ?? false;
@@ -390,7 +411,9 @@ export const createIOSWorkspacePlatform = (
       signatureVerificationAvailable = false;
     }
   })();
-  const initialized = Promise.all([pendingImportReady, signatureCapabilityReady]).then(async () => {
+  const initialized = Promise.all([pendingImportReady, signatureCapabilityReady, scannerCapabilityReady]).then(async () => {
+    // The app renders after ready, so Create PDF sees the scanner from its first frame.
+    if (scannerAvailable) platform.documentScanner = documentScanner;
     await migrateLegacyWorkspace({
       source: options.legacyWorkspaceSource ?? new IndexedDbLegacyWorkspaceSource(),
       journal: options.legacyWorkspaceJournal ?? new LocalStorageLegacyWorkspaceMigrationJournal(),
@@ -465,6 +488,7 @@ export const createIOSWorkspacePlatform = (
     ready: initialized,
     async dispose(): Promise<void> {
       uninstallOutputDelivery();
+      stopLanguageUpdates();
       try {
         await initialized;
       } catch {

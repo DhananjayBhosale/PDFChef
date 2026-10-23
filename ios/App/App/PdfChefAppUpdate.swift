@@ -80,11 +80,11 @@ final class PdfChefAppUpdate: NSObject, SKStoreProductViewControllerDelegate {
               root.presentedViewController == nil else { return }
         pending = nil
         let alert = UIAlertController(
-            title: "Update available",
-            message: "PDF Chef \(listing.version) is ready in the App Store.",
+            title: localized("Update available"),
+            message: localized("PDF Chef %@ is ready in the App Store.", listing.version),
             preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "Later", style: .cancel))
-        let update = UIAlertAction(title: "Update", style: .default) { [weak self, weak root] _ in
+        alert.addAction(UIAlertAction(title: localized("Later"), style: .cancel))
+        let update = UIAlertAction(title: localized("Update"), style: .default) { [weak self, weak root] _ in
             guard let self, let root else { return }
             self.showStorePage(listing, from: root)
         }

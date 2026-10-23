@@ -8,6 +8,8 @@ import type {
 } from '../../services/domain/workspaceModels.ts';
 import type { ImportedDocument, StorageInformation } from '../../services/platform/contracts.ts';
 import { deliverBlob, downloadBlob, type OutputReadyRecord } from '../../services/pdfShared.ts';
+import { LOW_MEMORY_IMAGE_PIXELS, MAX_IMAGE_PIXELS, photoPixelCap, setDeviceMemorySource } from '../../services/imageNormalization.ts';
+import { getLocale } from '../../services/i18n/core.ts';
 import {
   createIOSWorkspacePlatform,
   type IOSDocumentBridge,
@@ -110,7 +112,10 @@ class FakeBridge implements IOSDocumentBridge {
   }
   async delete(value: DurableDocumentRef) { this.deleted.push(value); this.documents.delete(value); }
   async clear() { this.documents.clear(); }
-  async storageInformation(): Promise<StorageInformation> { return { retainedBytes: 8, availableBytes: 100, capacityBytes: 108 }; }
+  memoryBytes: number | null = null;
+  async storageInformation(): Promise<StorageInformation> {
+    return { retainedBytes: 8, availableBytes: 100, capacityBytes: 108, memoryBytes: this.memoryBytes };
+  }
   async takePendingImports() { return this.pending; }
   async acknowledgePendingImports(_refs: readonly DurableDocumentRef[]) {}
   async startPendingImportDelivery(consume: (imports: readonly ImportedDocument[]) => Promise<void> | void) {
@@ -136,6 +141,15 @@ class FakeBridge implements IOSDocumentBridge {
     this.signaturePresentations.push({ ref: value, name });
   }
   async openReader(): ReturnType<IOSDocumentBridge['openReader']> { return { action: 'closed' }; }
+  scannerAvailable = false;
+  scans = 0;
+  async documentScannerAvailable() { return this.scannerAvailable; }
+  async scanDocument(): ReturnType<IOSDocumentBridge['scanDocument']> {
+    this.scans += 1;
+    return { status: 'completed', document: document('SCAN'), pageCount: 3 };
+  }
+  languages: string[] = [];
+  async setLanguage(language: string) { this.languages.push(language); }
   async signalHaptic() {}
   async getApplicationMetadata(): Promise<ApplicationMetadata> { return { name: 'PDF Chef', version: '1.0', build: '1' }; }
 }
@@ -343,6 +357,56 @@ test('factory eagerly registers pending delivery and ready waits for initial per
   await platform.ready;
 
   assert.equal((await recent.get('import-COLD-INBOX'))?.documentRef, pending.ref);
+});
+
+test('an iPhone with little memory gets the lower photo cap, and unknown memory keeps the full cap', async () => {
+  try {
+    const small = harness();
+    small.bridge.memoryBytes = 3_900_000_000;
+    assert.equal(await photoPixelCap(), LOW_MEMORY_IMAGE_PIXELS);
+    harness();
+    assert.equal(await photoPixelCap(), MAX_IMAGE_PIXELS);
+  } finally {
+    setDeviceMemorySource(null);
+  }
+});
+
+test('opening a PDF the app already keeps moves its Recent row up instead of adding another', async () => {
+  const storage = new MemoryStorage();
+  const recent = new LocalRecentRepository(storage);
+  const kept = document('KEPT', 'kept.pdf');
+  await recent.save({ ...entry('output-KEPT', kept.ref), createdAt: 50 });
+  const bridge = new FakeBridge();
+  bridge.documents.set(kept.ref, kept);
+  bridge.pending = [{ document: kept }];
+
+  const platform = createIOSWorkspacePlatform({ bridge, recent, settings: new LocalSettingsRepository(storage), now: () => 900 });
+  await platform.ready;
+
+  assert.deepEqual((await recent.list()).map(value => [value.id, value.createdAt]), [['output-KEPT', 900]]);
+});
+
+test('Create PDF gets the device scanner only when the iPhone has one', async () => {
+  const without = harness();
+  await without.platform.ready;
+  assert.equal(without.platform.documentScanner, undefined);
+
+  const storage = new MemoryStorage();
+  const bridge = new FakeBridge();
+  bridge.scannerAvailable = true;
+  const platform = createIOSWorkspacePlatform({
+    bridge,
+    recent: new LocalRecentRepository(storage),
+    settings: new LocalSettingsRepository(storage),
+  });
+  await platform.ready;
+  assert.deepEqual(await platform.documentScanner?.scan(), { status: 'completed', document: document('SCAN'), pageCount: 3 });
+  assert.equal(bridge.scans, 1);
+});
+
+test('native screens are told the app language when the platform starts', () => {
+  const { bridge } = harness();
+  assert.deepEqual(bridge.languages, [getLocale()]);
 });
 
 test('aggregate exposes native services and crash-safe pending delivery seam', async () => {

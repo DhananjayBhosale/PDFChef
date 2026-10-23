@@ -2,8 +2,12 @@ import { LegalTranslationNotice } from '../UI/LegalTranslationNotice';
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React from 'react';
+import { Capacitor } from '@capacitor/core';
 import { Link } from 'react-router-dom';
 import { Info, Shield } from 'lucide-react';
+
+// Android's optional support is not offered in the iOS app, so the iOS app does not describe it.
+const isIOSApp = Capacitor.getPlatform() === 'ios';
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => { useI18n(); return (
   <section className="space-y-3">
@@ -79,7 +83,7 @@ export const PrivacyPolicy: React.FC = () => {
             </ul>
             <p>{t("privacy-policy.these.services.are.governed.by.google.s.976d0b")}</p>
             <p>{t("privacy-policy.the.ios.app.uses.apple.app.store.3f45a7")}</p>
-            <p>{t("privacy-policy.the.android.app.uses.google.play.billing.5633c3")}</p>
+            {!isIOSApp && <p>{t("privacy-policy.the.android.app.uses.google.play.billing.5633c3")}</p>}
           </Section>
 
           <Section title={t("privacy-policy.6.analytics.ads.and.tracking.f2440c")}>

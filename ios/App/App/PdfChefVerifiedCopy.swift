@@ -14,19 +14,19 @@ enum PdfChefVerifiedCopyError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unreadable:
-            return "This PDF could not be read to make a copy."
+            return localized("This PDF could not be read to make a copy.")
         case .noSignatureBox:
-            return "This signature has no visible signature box to mark."
+            return localized("This signature has no visible signature box to mark.")
         case .unsupportedSignatureBox:
-            return "This signature box can’t be marked safely."
+            return localized("This signature box can’t be marked safely.")
         case .rotatedPage:
-            return "PDFs with rotated pages can’t be copied with a check mark yet."
+            return localized("PDFs with rotated pages can’t be copied with a check mark yet.")
         case .passwordUnsupported:
-            return "This PDF’s password can’t be kept on a shared copy. You can still print it."
+            return localized("This PDF’s password can’t be kept on a shared copy. You can still print it.")
         case .tooComplex:
-            return "The signature box is too complex to redraw safely."
+            return localized("The signature box is too complex to redraw safely.")
         case .writeFailed:
-            return "The verified copy could not be saved."
+            return localized("The verified copy could not be saved.")
         }
     }
 }

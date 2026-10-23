@@ -8,9 +8,9 @@ import { licenseIds, renderThirdPartyNotices } from '../../scripts/generate-thir
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 
-interface Component { name: string; version: string; kind: 'js' | 'asset' | 'android'; license: string; copyright: string; url: string }
+interface Component { name: string; version: string; kind: 'js' | 'asset' | 'android' | 'ios'; platform?: 'android' | 'ios'; license: string; copyright: string; url: string }
 const components: Component[] = JSON.parse(read('services/legal/thirdPartyComponents.json'));
-const texts: { licenses: Record<string, { name: string; text: string }>; notices: Array<{ component: string; title: string; text: string }> } =
+const texts: { licenses: Record<string, { name: string; text: string }>; notices: Array<{ component: string; title: string; text: string; kind?: string }> } =
   JSON.parse(read('services/legal/licenseTexts.json'));
 
 const packageJson = JSON.parse(read('package.json'));
@@ -50,6 +50,44 @@ test('every direct Android dependency in app/build.gradle is in the notices at t
   for (const [name, version] of direct) {
     assert.ok(android.has(`${name}@${version}`), `${name}@${version} is missing from services/legal/thirdPartyComponents.json`);
   }
+});
+
+test('every Swift package the iOS app pins in Package.resolved is in the notices at the same version', () => {
+  const resolved: { pins: Array<{ identity: string; location: string; state: { version: string } }> } =
+    JSON.parse(read('ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved'));
+  const ios = components.filter((item) => item.kind === 'ios');
+  assert.ok(resolved.pins.length >= 2, 'Package.resolved lists too few packages');
+  for (const pin of resolved.pins) {
+    const project = pin.location.replace(/\.git$/, '').toLowerCase();
+    const entry = ios.find((item) => item.url.toLowerCase() === project);
+    assert.ok(entry, `${pin.identity} is missing from services/legal/thirdPartyComponents.json`);
+    assert.equal(entry.version, pin.state.version, `${pin.identity}: version`);
+  }
+  assert.equal(ios.length, resolved.pins.length, 'an iOS entry that Package.resolved no longer pins');
+});
+
+test('each app hides the other platform\'s native libraries on the licences page', () => {
+  const page = read('components/Pages/OpenSourceLicenses.tsx');
+  assert.match(page, /componentsForPlatform\(platform\)/);
+  assert.match(page, /shownOnPlatform\(platform, notice\.kind\)/);
+  assert.match(read('services/legal/thirdPartyNotices.ts'), /platform === 'ios' && kind === 'android'/);
+  assert.match(read('services/legal/thirdPartyNotices.ts'), /platform === 'android' && kind === 'ios'/);
+  assert.match(read('services/legal/thirdPartyNotices.ts'), /shownOnPlatform\(platform, item\.platform \?\? item\.kind\)/);
+  assert.deepEqual(
+    components.filter((item) => item.platform).map((item) => `${item.name}: ${item.platform}`),
+    [
+      'Adobe Core 14 AFM font metrics: android',
+      'Adobe Glyph List and Zapf Dingbats Glyph List: android',
+      'Liberation Sans (PDFBox font): android',
+      'Unicode data files (Scripts.txt, BidiMirroring.txt): android',
+    ],
+    'data that ships only inside pdfbox-android is marked so the iOS app hides it',
+  );
+  assert.deepEqual(
+    Object.fromEntries(texts.notices.map((notice) => [notice.component, notice.kind])),
+    { echarts: undefined, 'pdfbox-android (Apache PDFBox)': 'android', 'org.apache.cordova:framework': 'android' },
+    'a NOTICE that only the Android build ships is marked so the iOS app hides it',
+  );
 });
 
 test('every entry names its version, licence, copyright and project, and no entry is listed twice', () => {

@@ -31,7 +31,7 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
         ("PDF to Image", "/pdf-to-jpg"),
         ("PDF to Word", "/pdf-to-word"),
         ("Extract Text", "/ocr"),
-        ("Metadata", "/metadata"),
+        ("Document Info", "/metadata"),
         ("Repair PDF", "/repair"),
         ("Compare Summary", "/compare")
     ]
@@ -114,20 +114,20 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
         view.backgroundColor = .secondarySystemBackground
         navigationItem.largeTitleDisplayMode = .never
         navigationItem.leftBarButtonItem = UIBarButtonItem(
-            title: "Close",
+            title: localized("Close"),
             style: .plain,
             target: self,
             action: #selector(close)
         )
-        let tools = UIBarButtonItem(title: "Tools", style: .done, target: self, action: #selector(showTools))
-        tools.accessibilityLabel = "PDF Tools"
+        let tools = UIBarButtonItem(title: localized("Tools"), style: .done, target: self, action: #selector(showTools))
+        tools.accessibilityLabel = localized("PDF Tools")
         let share = UIBarButtonItem(
             image: UIImage(systemName: "square.and.arrow.up"),
             style: .plain,
             target: self,
             action: #selector(share)
         )
-        share.accessibilityLabel = "Share PDF"
+        share.accessibilityLabel = localized("Share PDF")
         navigationItem.rightBarButtonItems = [tools, share]
 
         configureReader()
@@ -173,19 +173,19 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
 
     private func configurePageBar() {
         previousPageButton.configuration = .plain()
-        previousPageButton.configuration?.image = UIImage(systemName: "chevron.left")
-        previousPageButton.configuration?.title = "Previous"
+        previousPageButton.configuration?.image = UIImage(systemName: "chevron.backward")
+        previousPageButton.configuration?.title = localized("Previous")
         previousPageButton.addTarget(self, action: #selector(previousPage), for: .touchUpInside)
-        previousPageButton.accessibilityLabel = "Previous page"
+        previousPageButton.accessibilityLabel = localized("Previous page")
         previousPageButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
         previousPageButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
 
         nextPageButton.configuration = .plain()
-        nextPageButton.configuration?.image = UIImage(systemName: "chevron.right")
+        nextPageButton.configuration?.image = UIImage(systemName: "chevron.forward")
         nextPageButton.configuration?.imagePlacement = .trailing
-        nextPageButton.configuration?.title = "Next"
+        nextPageButton.configuration?.title = localized("Next")
         nextPageButton.addTarget(self, action: #selector(nextPage), for: .touchUpInside)
-        nextPageButton.accessibilityLabel = "Next page"
+        nextPageButton.accessibilityLabel = localized("Next page")
         nextPageButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
         nextPageButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
 
@@ -222,12 +222,12 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
         statusDetail.textAlignment = .center
         statusDetail.numberOfLines = 0
         retryButton.configuration = .filled()
-        retryButton.configuration?.title = "Retry"
+        retryButton.configuration?.title = localized("Retry")
         retryButton.addTarget(self, action: #selector(retry), for: .touchUpInside)
         retryButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
 
         cancelBatchButton.configuration = .plain()
-        cancelBatchButton.configuration?.title = "Cancel"
+        cancelBatchButton.configuration?.title = localized("Cancel")
         cancelBatchButton.addTarget(self, action: #selector(cancelBatch), for: .touchUpInside)
         cancelBatchButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
         cancelBatchButton.isHidden = true
@@ -250,7 +250,7 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
     private func configureSearch() {
         searchController.obscuresBackgroundDuringPresentation = false
         searchController.searchResultsUpdater = self
-        searchController.searchBar.placeholder = "Search PDF"
+        searchController.searchBar.placeholder = localized("Search PDF")
         searchController.searchBar.autocapitalizationType = .none
         searchController.searchBar.autocorrectionType = .no
         navigationItem.searchController = searchController
@@ -263,7 +263,7 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
     private func loadDocument() {
         loadGeneration += 1
         let generation = loadGeneration
-        showLoading(title: "Opening PDF", detail: "Large files may take a moment.")
+        showLoading(title: localized("Opening PDF"), detail: localized("Large files may take a moment."))
         stopSearch()
         pdfView.document = nil
         document = nil
@@ -307,16 +307,16 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
     }
 
     private func requestPassword(for document: PDFDocument, message: String?) {
-        let alert = UIAlertController(title: "Password required", message: message, preferredStyle: .alert)
+        let alert = UIAlertController(title: localized("Password required"), message: message, preferredStyle: .alert)
         alert.addTextField { field in
-            field.placeholder = "PDF password"
+            field.placeholder = localized("PDF password")
             field.isSecureTextEntry = true
             field.textContentType = nil
             field.autocorrectionType = .no
             field.autocapitalizationType = .none
         }
-        alert.addAction(UIAlertAction(title: "Close", style: .cancel) { [weak self] _ in self?.finish(.closed) })
-        alert.addAction(UIAlertAction(title: "Open", style: .default) { [weak self, weak alert] _ in
+        alert.addAction(UIAlertAction(title: localized("Close"), style: .cancel) { [weak self] _ in self?.finish(.closed) })
+        alert.addAction(UIAlertAction(title: localized("Open"), style: .default) { [weak self, weak alert] _ in
             guard let self else { return }
             let exactPassword = alert?.textFields?.first?.text ?? ""
             alert?.textFields?.first?.text = nil
@@ -328,7 +328,7 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
     private func unlock(_ document: PDFDocument, withPassword password: String) {
         loadGeneration += 1
         let generation = loadGeneration
-        showLoading(title: "Opening PDF", detail: nil)
+        showLoading(title: localized("Opening PDF"), detail: nil)
         DispatchQueue.global(qos: .userInitiated).async { [weak self, weak document] in
             let didUnlock = document?.unlock(withPassword: password) ?? false
             DispatchQueue.main.async { [weak self, weak document] in
@@ -337,7 +337,7 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
                     self.display(document)
                 } else {
                     self.hideLoading()
-                    self.requestPassword(for: document, message: "That password did not open this PDF.")
+                    self.requestPassword(for: document, message: localized("That password did not open this PDF."))
                 }
             }
         }
@@ -369,8 +369,8 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
     private func showLoadError() {
         statusActivity.stopAnimating()
         pdfView.isHidden = true
-        statusTitle.text = "Couldn’t open PDF"
-        statusDetail.text = "The file may be damaged or use an unsupported PDF feature."
+        statusTitle.text = localized("Couldn’t open PDF")
+        statusDetail.text = localized("The file may be damaged or use an unsupported PDF feature.")
         statusStack.isHidden = false
         statusDetail.isHidden = false
         retryButton.isHidden = false
@@ -424,8 +424,8 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
                 self.pdfView.go(to: first)
             }
             self.searchController.searchBar.accessibilityValue = matchCount == 0
-                ? "No matches"
-                : "\(matchCount) matches"
+                ? localized("No matches")
+                : localized("%lld matches", matchCount)
         }
     }
 
@@ -476,8 +476,8 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
         }
         let index = document.index(for: page)
         let current = max(0, index) + 1
-        pageLabel.text = "\(current) of \(document.pageCount)"
-        pageLabel.accessibilityLabel = "Page \(current) of \(document.pageCount)"
+        pageLabel.text = localized("%lld of %lld", current, document.pageCount)
+        pageLabel.accessibilityLabel = localized("Page %lld of %lld", current, document.pageCount)
         previousPageButton.isEnabled = pdfView.canGoToPreviousPage
         nextPageButton.isEnabled = pdfView.canGoToNextPage
     }
@@ -503,15 +503,15 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
 
     @objc private func showTools() {
         guard isIdleForBarAction else { return }
-        let sheet = UIAlertController(title: "PDF Tools", message: nil, preferredStyle: .actionSheet)
+        let sheet = UIAlertController(title: localized("PDF Tools"), message: nil, preferredStyle: .actionSheet)
         if canVerifySignatures {
-            sheet.addAction(UIAlertAction(title: "Verify PDF Signatures", style: .default) { [weak self] _ in
+            sheet.addAction(UIAlertAction(title: localized("Verify PDF Signatures"), style: .default) { [weak self] _ in
                 guard let self else { return }
                 self.verifySignatures(self)
             })
         }
         for tool in Self.tools {
-            sheet.addAction(UIAlertAction(title: tool.title, style: .default) { [weak self] _ in
+            sheet.addAction(UIAlertAction(title: localized(tool.title), style: .default) { [weak self] _ in
                 guard let self else { return }
                 if self.documentSizeBytes > Self.maximumToolHandoffBytes {
                     self.showLargeDocumentOptions()
@@ -520,7 +520,7 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
                 }
             })
         }
-        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        sheet.addAction(UIAlertAction(title: localized("Cancel"), style: .cancel))
         sheet.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItems?.first
         present(sheet, animated: !UIAccessibility.isReduceMotionEnabled)
     }
@@ -528,22 +528,22 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
     private func showLargeDocumentOptions() {
         if document?.isEncrypted == true || document?.isLocked == true {
             let alert = UIAlertController(
-                title: "Unlocked copy needed",
-                message: "Save an unlocked copy before preparing this large PDF for tools.",
+                title: localized("Unlocked copy needed"),
+                message: localized("Save an unlocked copy before preparing this large PDF for tools."),
                 preferredStyle: .alert
             )
-            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            alert.addAction(UIAlertAction(title: localized("OK"), style: .default))
             present(alert, animated: !UIAccessibility.isReduceMotionEnabled)
             return
         }
 
         let alert = UIAlertController(
-            title: "Prepare for tools?",
-            message: "PDF Chef will create smaller PDF parts and keep the original unchanged. Each part is a separate file, so forms, signatures, metadata, and page numbering may not carry across parts.",
+            title: localized("Prepare for tools?"),
+            message: localized("PDF Chef will create smaller PDF parts and keep the original unchanged. Each part is a separate file, so forms, signatures, metadata, and page numbering may not carry across parts."),
             preferredStyle: .alert
         )
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Create Smaller Parts", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: localized("Cancel"), style: .cancel))
+        alert.addAction(UIAlertAction(title: localized("Create Smaller Parts"), style: .default) { [weak self] _ in
             self?.startLargeDocumentPreparation()
         })
         present(alert, animated: !UIAccessibility.isReduceMotionEnabled)
@@ -588,13 +588,13 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
         switch progress.stage {
         case .preparing:
             furthestPreparedPage = max(furthestPreparedPage, progress.completed)
-            statusTitle.text = "Creating smaller PDFs"
+            statusTitle.text = localized("Creating smaller PDFs")
             statusDetail.text = progress.total > 0
-                ? "Preparing page \(min(furthestPreparedPage, progress.total)) of \(progress.total)"
-                : "Preparing pages…"
+                ? localized("Preparing page %lld of %lld", min(furthestPreparedPage, progress.total), progress.total)
+                : localized("Preparing pages…")
         case .saving:
-            statusTitle.text = "Saving smaller PDFs"
-            statusDetail.text = "Saved \(progress.completed) of \(progress.total)"
+            statusTitle.text = localized("Saving smaller PDFs")
+            statusDetail.text = localized("Saved %lld of %lld", progress.completed, progress.total)
         }
     }
 
@@ -609,11 +609,11 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
         switch result {
         case .success(let partCount):
             let alert = UIAlertController(
-                title: "Parts ready",
-                message: "Created \(partCount) smaller PDFs. Find them in Recent and open any part with Tools.",
+                title: localized("Parts ready"),
+                message: localized("Created %lld smaller PDFs. Find them in Recent and open any part with Tools.", partCount),
                 preferredStyle: .alert
             )
-            alert.addAction(UIAlertAction(title: "Done", style: .default) { [weak self] _ in
+            alert.addAction(UIAlertAction(title: localized("Done"), style: .default) { [weak self] _ in
                 self?.finish(.batched(partCount))
             })
             present(alert, animated: !UIAccessibility.isReduceMotionEnabled)
@@ -624,11 +624,11 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
                 return
             }
             let alert = UIAlertController(
-                title: "Couldn’t create smaller PDFs",
+                title: localized("Couldn’t create smaller PDFs"),
                 message: error.localizedDescription,
                 preferredStyle: .alert
             )
-            alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
+            alert.addAction(UIAlertAction(title: localized("OK"), style: .default) { [weak self] _ in
                 self?.loadDocument()
             })
             present(alert, animated: !UIAccessibility.isReduceMotionEnabled)
@@ -646,7 +646,7 @@ final class PdfChefReaderViewController: UIViewController, UISearchResultsUpdati
     @objc private func cancelBatch() {
         batchCancellation?.cancel()
         cancelBatchButton.isEnabled = false
-        statusDetail.text = "Cancelling…"
+        statusDetail.text = localized("Cancelling…")
     }
 
     private func endBackgroundTask() {

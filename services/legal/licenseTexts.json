@@ -78,12 +78,14 @@
   {
    "component": "pdfbox-android (Apache PDFBox)",
    "title": "NOTICE: pdfbox-android (Apache PDFBox)",
-   "text": "Apache PDFBox\nCopyright 2014 The Apache Software Foundation\n\nThis product includes software developed at\nThe Apache Software Foundation (http://www.apache.org/).\n\nBased on source code originally developed in the PDFBox and\nFontBox projects.\n\nCopyright (c) 2002-2007, www.pdfbox.org\n\nBased on source code originally developed in the PaDaF project.\nCopyright (c) 2010 Atos Worldline SAS\n\nIncludes the Adobe Glyph List\nCopyright 1997, 1998, 2002, 2007, 2010 Adobe Systems Incorporated.\n\nIncludes the Zapf Dingbats Glyph List\nCopyright 2002, 2010 Adobe Systems Incorporated.\n\nIncludes OSXAdapter\nCopyright (C) 2003-2007 Apple, Inc., All Rights Reserved"
+   "text": "Apache PDFBox\nCopyright 2014 The Apache Software Foundation\n\nThis product includes software developed at\nThe Apache Software Foundation (http://www.apache.org/).\n\nBased on source code originally developed in the PDFBox and\nFontBox projects.\n\nCopyright (c) 2002-2007, www.pdfbox.org\n\nBased on source code originally developed in the PaDaF project.\nCopyright (c) 2010 Atos Worldline SAS\n\nIncludes the Adobe Glyph List\nCopyright 1997, 1998, 2002, 2007, 2010 Adobe Systems Incorporated.\n\nIncludes the Zapf Dingbats Glyph List\nCopyright 2002, 2010 Adobe Systems Incorporated.\n\nIncludes OSXAdapter\nCopyright (C) 2003-2007 Apple, Inc., All Rights Reserved",
+   "kind": "android"
   },
   {
    "component": "org.apache.cordova:framework",
    "title": "NOTICE: org.apache.cordova:framework",
-   "text": "Apache Cordova\nCopyright 2015-2020 The Apache Software Foundation\n\nThis product includes software developed at\nThe Apache Software Foundation (http://www.apache.org/)."
+   "text": "Apache Cordova\nCopyright 2015-2020 The Apache Software Foundation\n\nThis product includes software developed at\nThe Apache Software Foundation (http://www.apache.org/).",
+   "kind": "android"
   }
  ]
 }

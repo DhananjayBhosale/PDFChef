@@ -37,6 +37,7 @@ import {
   type RecentRecord,
 } from '../../hooks/useWorkspaceRuntime';
 import { useOpenedPdf } from '../../hooks/useOpenedPdf';
+import { useMonetization } from '../../hooks/useMonetization';
 import { useConfirmDiscard } from '../../hooks/useConfirmDiscard';
 import { historyIndex } from '../Layout/navigationHistory';
 import { keepsMakePdfDraftOnLeave, makePdfDraft, releaseMakePdfDraft } from './makePdfDraft';
@@ -134,6 +135,7 @@ export const MakePDF: React.FC = () => {
   const haptic = useHaptics();
   const platform = useWorkspacePlatform();
   const { setOpenedPdfFile } = useOpenedPdf();
+  const { completeJob } = useMonetization();
 
   // The port, never a native client. Absent on every other platform, so this
   // whole section is missing rather than disabled: a dead primary action is
@@ -182,9 +184,31 @@ export const MakePDF: React.FC = () => {
       // page returns exactly as it was, with nothing announced and nothing
       // saved or downloaded.
       if (result.status === 'cancelled') return;
+      let scan = result.document;
+      // On iOS a scan is one of the week's free results. Past them it becomes a preview like
+      // any other result: its kept copy is dropped so only Pro can save or share it.
+      const grant = await completeJob(`scan-${scan.ref}`).catch(() => 'preview-only' as const);
+      if (grant === 'preview-only') {
+        // The kept copy goes even when the preview cannot be read, or Recent would list it as saved.
+        const preview = await platform.reopen(recordFor(scan))
+          .finally(() => platform.documentStorage?.delete(scan.ref).catch(() => undefined));
+        const locked: OutputReadyRecord = {
+          id: `scan-${scan.ref}`,
+          filename: `${freshPdfName()}.pdf`,
+          mimeType: 'application/pdf',
+          size: preview.size,
+          toolPath: '/make-pdf',
+          createdAt: Date.now(),
+          blob: preview,
+          historyRetained: false,
+          accessLocked: true,
+        };
+        announceOutput(locked);
+        haptic('commit');
+        return;
+      }
       // The device scanner calls every scan "Scanned document.pdf"; give it the
       // same dated name a photo PDF gets. If that fails the scan keeps its name.
-      let scan = result.document;
       if (platform.rename && scan.name === 'Scanned document.pdf') {
         const dated = `${freshPdfName()}.pdf`;
         try {

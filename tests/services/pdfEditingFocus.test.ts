@@ -6,6 +6,7 @@ import {
   pdfEditingVisibleRect,
   pdfFocusAnchorScroll,
   pdfParagraphStartScroll,
+  visualViewportClientRect,
 } from '../../services/pdfEditingFocus.ts';
 
 test('touch auto-zoom keeps a selected page point at the same visible position', () => {
@@ -80,4 +81,23 @@ test('after focus zoom the start of the paragraph comes back into view', () => {
   // A start already on screen, or a caret already past the right edge, is left alone.
   assert.equal(pdfParagraphStartScroll({ left: 20, top: 0, right: 600, bottom: 0 }, { left: 170, top: 0, right: 171, bottom: 0 }, visible), 0);
   assert.equal(pdfParagraphStartScroll({ left: -60, top: 0, right: 600, bottom: 0 }, { left: 400, top: 0, right: 401, bottom: 0 }, visible), 0);
+});
+
+// On iOS the keyboard scrolled the page 275 px to show the caret. The layout viewport stayed put,
+// so visualViewport.offsetTop read 275 while the visible top was already client y 0, and the
+// editor found no visible room and stopped following the caret.
+test('the visible screen is measured in the coordinates the PDF box and caret use', () => {
+  const fallback = { width: 402, height: 874 };
+  const ios = visualViewportClientRect({ pageLeft: 0, pageTop: 275, width: 402, height: 505 }, { x: 0, y: 275 }, fallback);
+  assert.deepEqual(ios, { left: 0, top: 0, right: 402, bottom: 505 });
+  const container = { left: 8, top: -94, right: 394, bottom: 220 };
+  const header = { left: 0, top: 0, right: 402, bottom: 123 };
+  const bar = { left: 0, top: 228, right: 402, bottom: 505 };
+  assert.deepEqual(pdfEditingVisibleRect(container, ios, header, bar), { left: 8, top: 123, right: 394, bottom: 220 });
+  // Android moves the layout viewport with the page, so the offset inside it is the same number.
+  assert.deepEqual(
+    visualViewportClientRect({ pageLeft: 0, pageTop: 340, width: 360, height: 470 }, { x: 0, y: 300 }, fallback),
+    { left: 0, top: 40, right: 360, bottom: 510 },
+  );
+  assert.deepEqual(visualViewportClientRect(null, { x: 0, y: 120 }, fallback), { left: 0, top: 0, right: 402, bottom: 874 });
 });

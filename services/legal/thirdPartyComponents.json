@@ -31,7 +31,7 @@
   "license": "MIT",
   "copyright": "Copyright 2020-present Ionic",
   "url": "https://github.com/ionic-team/capacitor-plugins",
-  "note": "Includes Android native code."
+  "note": "Includes Android and iOS native code."
  },
  {
   "name": "@capacitor/core",
@@ -57,7 +57,7 @@
   "license": "MIT",
   "copyright": "Copyright 2020-present Ionic",
   "url": "https://github.com/ionic-team/capacitor-plugins",
-  "note": "Includes Android native code."
+  "note": "Includes Android and iOS native code."
  },
  {
   "name": "@embedpdf/pdfium",
@@ -146,6 +146,7 @@
   "name": "Adobe Core 14 AFM font metrics",
   "version": "bundled in pdfbox-android",
   "kind": "asset",
+  "platform": "android",
   "license": "LicenseRef-Adobe-Core14-AFM",
   "copyright": "Copyright (c) 1985, 1987, 1989, 1990, 1997 Adobe Systems Incorporated. All Rights Reserved.",
   "url": "https://pdfbox.apache.org/"
@@ -154,6 +155,7 @@
   "name": "Adobe Glyph List and Zapf Dingbats Glyph List",
   "version": "bundled in pdfbox-android",
   "kind": "asset",
+  "platform": "android",
   "license": "BSD-3-Clause",
   "copyright": "Copyright 1997, 1998, 2002, 2007, 2010 Adobe Systems Incorporated.",
   "url": "https://github.com/adobe-type-tools/agl-aglfn"
@@ -737,6 +739,15 @@
   "url": "https://github.com/canvg/canvg"
  },
  {
+  "name": "capacitor-swift-pm",
+  "version": "8.5.3",
+  "kind": "ios",
+  "license": "MIT AND Apache-2.0",
+  "copyright": "Copyright (c) 2022-present Drifty Co.; Cordova portions Copyright The Apache Software Foundation",
+  "url": "https://github.com/ionic-team/capacitor-swift-pm",
+  "note": "The Capacitor and Cordova frameworks of the iOS app. The Cordova framework is based on Apache Cordova and is used under Apache-2.0."
+ },
+ {
   "name": "com.google.android.datatransport:transport-api",
   "version": "3.0.0",
   "kind": "android",
@@ -1123,6 +1134,7 @@
   "name": "Liberation Sans (PDFBox font)",
   "version": "2.1.5",
   "kind": "asset",
+  "platform": "android",
   "license": "OFL-1.1",
   "copyright": "Digitized data copyright (c) 2010 Google Corporation; Copyright (c) 2012 Red Hat, Inc.",
   "url": "https://github.com/liberationfonts/liberation-fonts",
@@ -1235,6 +1247,15 @@
   "license": "BSD-2-Clause",
   "copyright": "Copyright (c) 2002-2014 Universite catholique de Louvain (UCL), Belgium; (c) 2002-2014 Professor Benoit Macq; (c) 2003-2014 Antonin Descampe; (c) 2003-2009 Francois-Olivier Devaux; (c) 2005 Herve Drolon, FreeImage Team; (c) 2002-2003 Yannick Verschueren; (c) 2001-2003 David Janssens; (c) 2011-2012 Centre National d'Etudes Spatiales (CNES), France; (c) 2012 CS Systemes d'Information, France; PDF.js wrapper (c) 2024 Mozilla Foundation",
   "url": "https://www.openjpeg.org/"
+ },
+ {
+  "name": "OpenSSL",
+  "version": "3.6.3000",
+  "kind": "ios",
+  "license": "Apache-2.0",
+  "copyright": "Copyright (c) 1998-2025 The OpenSSL Project Authors; Copyright (c) 1995-1998 Eric A. Young, Tim J. Hudson",
+  "url": "https://github.com/krzyzanowskim/OpenSSL-Package",
+  "note": "OpenSSL 3.6.3 from the OpenSSL-Package Swift package. The iOS app uses it to check digital signatures."
  },
  {
   "name": "org.apache.cordova:framework",
@@ -1637,6 +1658,7 @@
   "name": "Unicode data files (Scripts.txt, BidiMirroring.txt)",
   "version": "bundled in pdfbox-android",
   "kind": "asset",
+  "platform": "android",
   "license": "Unicode-DFS-2016",
   "copyright": "Copyright (c) 1991-2017 Unicode, Inc. All rights reserved.",
   "url": "https://www.unicode.org/ucd/"

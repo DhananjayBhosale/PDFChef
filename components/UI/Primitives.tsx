@@ -336,10 +336,12 @@ export const Sheet: React.FC<{
   if (!open) return null;
   if (typeof document === 'undefined') return null;
 
+  // iOS keeps the layout viewport under the keyboard, so the sheet rises by the part it covers
+  // and a field in it stays in sight. Where the window resizes instead, the inset is zero.
   return createPortal(
     <div
       className="chef-safe-x fixed inset-0 z-[100] flex items-end justify-center sm:items-center"
-      style={{ background: 'var(--surface-scrim)' }}
+      style={{ background: 'var(--surface-scrim)', paddingBottom: 'var(--chef-keyboard-inset, 0px)' }}
       onMouseDown={(event) => {
         if (dismissible && event.target === event.currentTarget) onClose();
       }}
@@ -352,9 +354,9 @@ export const Sheet: React.FC<{
         aria-describedby={description ? descriptionId : undefined}
         className={cx(
           'chef-enter-sheet chef-safe-bottom chef-scroller w-full max-w-lg overflow-y-auto',
-          'max-h-[calc(100dvh-env(safe-area-inset-top))] overscroll-contain',
+          'max-h-[calc(100dvh-env(safe-area-inset-top)-var(--chef-keyboard-inset,0px))] overscroll-contain',
           'rounded-t-[var(--radius-sheet)] border border-[var(--border-strong)] bg-[var(--surface-raised)] p-4 shadow-[var(--elevation-sheet)] sm:p-5',
-          'sm:max-h-[calc(100dvh-2rem)] sm:rounded-[var(--radius-sheet)]',
+          'sm:max-h-[calc(100dvh-2rem-var(--chef-keyboard-inset,0px))] sm:rounded-[var(--radius-sheet)]',
         )}
       >
         <div className="flex items-start justify-between gap-3">
