@@ -13,8 +13,9 @@ export const formatBytes = (bytes: ByteCount): string => {
   if (bytes === null) return t('format.unknown');
   const power = bytes < 1024 ? 0 : bytes < 1024 ** 2 ? 1 : bytes < 1024 ** 3 ? 2 : 3;
   const digits = power === 0 ? 0 : power === 3 ? 2 : 1;
+  // The short byte unit has no plural in English ("0 byte"); the long one does.
   return formatNumber(bytes / 1024 ** power, {
-    style: 'unit', unit: ['byte', 'kilobyte', 'megabyte', 'gigabyte'][power], unitDisplay: 'short',
+    style: 'unit', unit: ['byte', 'kilobyte', 'megabyte', 'gigabyte'][power], unitDisplay: power === 0 ? 'long' : 'short',
     minimumFractionDigits: digits, maximumFractionDigits: digits,
   });
 };
