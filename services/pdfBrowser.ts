@@ -2,8 +2,10 @@ import { LocalizedError, classifyPdfError, hasPdfHeader } from './i18n/errors.ts
 import { t } from './i18n/core.ts';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import pdfWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
-import { PDFDocument, PDFName, PDFNumber, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFNumber, PDFRawStream, PDFRef, decodePDFRawStream } from 'pdf-lib';
 import { canvasToBlob, readFileAsArrayBuffer } from './pdfShared';
+import { isSRGBProfile } from './iccProfile';
+import { jpegExifOrientation } from './jpegOrientation';
 import {
   getAdaptiveConfig,
   projectCompressedSize,
@@ -1031,6 +1033,38 @@ export const generatePreviewPair = async (
   };
 };
 
+const srgbProfiles = new WeakMap<PDFRawStream, boolean>();
+
+/**
+ * Gray or RGB, including RGB tagged with an embedded sRGB profile, the form most phones and
+ * PDF writers use. The canvas works in sRGB, so any other profile (Display P3, Adobe RGB,
+ * gray) would shift its colours; those, CMYK, indexed and Lab are left alone.
+ */
+const imageChannels = (dictionary: PDFDict): 1 | 3 | null => {
+  const colorSpace = dictionary.lookup(PDFName.of('ColorSpace'));
+  if (colorSpace instanceof PDFName) {
+    const value = colorSpace.toString();
+    return value === '/DeviceGray' ? 1 : value === '/DeviceRGB' ? 3 : null;
+  }
+  if (!(colorSpace instanceof PDFArray) || colorSpace.size() !== 2
+    || colorSpace.lookup(0)?.toString() !== '/ICCBased') return null;
+  const profile = colorSpace.lookup(1);
+  if (!(profile instanceof PDFRawStream)) return null;
+  // Read N first: CMYK profiles can be megabytes and are never used here.
+  const components = profile.dict.lookup(PDFName.of('N'));
+  if (!(components instanceof PDFNumber) || components.asNumber() !== 3) return null;
+  let srgb = srgbProfiles.get(profile);
+  if (srgb === undefined) {
+    try {
+      srgb = isSRGBProfile(decodePDFRawStream(profile).decode());
+    } catch {
+      srgb = false;
+    }
+    srgbProfiles.set(profile, srgb);
+  }
+  return srgb ? 3 : null;
+};
+
 /** Re-encode ordinary opaque image objects without touching text, forms, or drawings. */
 const recompressSelectableImages = async (
   pdfDoc: PDFDocument,
@@ -1038,21 +1072,46 @@ const recompressSelectableImages = async (
   onProgress: (progress: number) => void,
 ) => {
   const name = (value: string) => PDFName.of(value);
-  const images = pdfDoc.context.enumerateIndirectObjects().filter(([, object]) => {
-    if (!(object instanceof PDFRawStream)) return false;
+  // From Medium up, no picture is kept larger than its page needs at the chosen DPI; without
+  // this cap Medium and High only re-quantised a 300 DPI scan. Low still shrinks every picture
+  // by its own scale, and like Medium keeps none above 144 DPI for its page.
+  const longestPagePoints = pdfDoc.getPages().reduce((longest, page) => {
+    try {
+      const { width, height } = page.getSize();
+      // UserUnit makes one page unit larger than 1/72 inch on very large-format pages.
+      const unit = page.node.lookup(name('UserUnit'));
+      const scale = unit instanceof PDFNumber && unit.asNumber() > 0 ? unit.asNumber() : 1;
+      const longestSide = Math.max(Math.abs(width), Math.abs(height)) * scale;
+      return Number.isFinite(longestSide) ? Math.max(longest, longestSide) : longest;
+    } catch {
+      // A page without a readable MediaBox adds no size; it never stops compression.
+      return longest;
+    }
+  }, 0);
+  const longestUsefulPixels = (longestPagePoints / 72) * Math.max(config.projectedDPI, 144);
+  // Soft and stencil masks are images too, but must stay gray; leave them as they are.
+  const masks = new Set<PDFRef>();
+  for (const [, object] of pdfDoc.context.enumerateIndirectObjects()) {
+    if (!(object instanceof PDFRawStream)) continue;
+    for (const key of ['SMask', 'Mask']) {
+      const target = object.dict.get(name(key));
+      if (target instanceof PDFRef) masks.add(target);
+    }
+  }
+  const images = pdfDoc.context.enumerateIndirectObjects().filter(([ref, object]) => {
+    if (!(object instanceof PDFRawStream) || masks.has(ref)) return false;
     const dictionary = object.dict;
     const width = dictionary.lookupMaybe(name('Width'), PDFNumber)?.asNumber() ?? 0;
     const height = dictionary.lookupMaybe(name('Height'), PDFNumber)?.asNumber() ?? 0;
-    const colorSpace = dictionary.lookupMaybe(name('ColorSpace'), PDFName)?.toString();
     const filter = dictionary.get(name('Filter'))?.toString();
     return dictionary.get(name('Subtype'))?.toString() === '/Image'
       && (filter === '/DCTDecode' || filter === '/FlateDecode')
-      && (colorSpace === '/DeviceRGB' || colorSpace === '/DeviceGray')
       && dictionary.lookupMaybe(name('BitsPerComponent'), PDFNumber)?.asNumber() === 8
       && !dictionary.has(name('SMask')) && !dictionary.has(name('Mask'))
       && !dictionary.has(name('Decode')) && !dictionary.has(name('DecodeParms'))
-      && width >= 128 && height >= 128 && width * height <= 24_000_000;
-  }) as Array<[import('pdf-lib').PDFRef, PDFRawStream]>;
+      && width >= 128 && height >= 128 && width * height <= 24_000_000
+      && imageChannels(dictionary) !== null;
+  }) as Array<[PDFRef, PDFRawStream]>;
 
   for (let index = 0; index < images.length; index += 1) {
     const [ref, original] = images[index];
@@ -1062,15 +1121,19 @@ const recompressSelectableImages = async (
     try {
       const width = original.dict.lookup(name('Width'), PDFNumber).asNumber();
       const height = original.dict.lookup(name('Height'), PDFNumber).asNumber();
+      const channels = imageChannels(original.dict) ?? 3;
       let drawable: CanvasImageSource;
       if (original.dict.get(name('Filter'))?.toString() === '/DCTDecode') {
-        objectUrl = URL.createObjectURL(new Blob([original.getContents()], { type: 'image/jpeg' }));
+        const contents = original.getContents();
+        // The browser would turn it upright; the PDF shows the stored pixels, so keep those.
+        if (jpegExifOrientation(contents) !== 1) continue;
+        objectUrl = URL.createObjectURL(new Blob([contents], { type: 'image/jpeg' }));
         const image = new Image();
         image.src = objectUrl;
         await image.decode();
+        if (image.naturalWidth !== width || image.naturalHeight !== height) continue;
         drawable = image;
       } else {
-        const channels = original.dict.get(name('ColorSpace'))?.toString() === '/DeviceGray' ? 1 : 3;
         const pixels = decodePDFRawStream(original).decode();
         if (pixels.length !== width * height * channels) continue;
         sourceCanvas = document.createElement('canvas');
@@ -1090,13 +1153,17 @@ const recompressSelectableImages = async (
         sourceContext.putImageData(rgba, 0, 0);
         drawable = sourceCanvas;
       }
-      const nextWidth = Math.max(1, Math.round(width * config.scale));
-      const nextHeight = Math.max(1, Math.round(height * config.scale));
+      const pageCap = longestUsefulPixels > 0 ? longestUsefulPixels / Math.max(width, height) : 1;
+      const scale = Math.min(1, config.scale, pageCap);
+      const nextWidth = Math.max(1, Math.round(width * scale));
+      const nextHeight = Math.max(1, Math.round(height * scale));
       canvas = document.createElement('canvas');
       canvas.width = nextWidth;
       canvas.height = nextHeight;
       const context = canvas.getContext('2d');
       if (!context) continue;
+      // The default smoothing breaks thin strokes when a scan shrinks by more than half.
+      context.imageSmoothingQuality = 'high';
       context.drawImage(drawable, 0, 0, nextWidth, nextHeight);
       const encoded = await canvasToBlob(canvas, 'image/jpeg', config.quality);
       if (encoded.size >= original.getContentsSize()) continue;
@@ -1105,7 +1172,8 @@ const recompressSelectableImages = async (
       const dictionary = original.dict.clone();
       dictionary.set(name('Width'), PDFNumber.of(nextWidth));
       dictionary.set(name('Height'), PDFNumber.of(nextHeight));
-      dictionary.set(name('ColorSpace'), name('DeviceRGB'));
+      // A gray picture comes back as an RGB JPEG; an sRGB profile still describes the new pixels.
+      if (channels === 1) dictionary.set(name('ColorSpace'), name('DeviceRGB'));
       dictionary.set(name('Filter'), name('DCTDecode'));
       dictionary.set(name('Length'), PDFNumber.of(bytes.length));
       pdfDoc.context.assign(ref, PDFRawStream.of(dictionary, bytes));

@@ -123,13 +123,90 @@ try {
     .find(object => object instanceof PDFRawStream && object.dict.get(PDFName.of('Subtype'))?.toString() === '/Image');
   assert.equal(pngImage.dict.get(PDFName.of('Filter'))?.toString(), '/DCTDecode');
 
+  // A photo tagged with an sRGB profile and more pixels than a Letter page shows at 144 DPI:
+  // Medium must re-encode it and cap it at 11 in x 144. The same photo tagged Display P3 must
+  // be left as it is, since a DeviceRGB copy would shift its colours.
+  const iccProfile = primaries => {
+    const bytes = new Uint8Array(132 + 6 * 12 + 3 * 20 + 16);
+    const view = new DataView(bytes.buffer);
+    const write = (at, text) => [...text].forEach((c, i) => { bytes[at + i] = c.charCodeAt(0); });
+    write(16, 'RGB ');
+    view.setUint32(128, 6);
+    const curveAt = 132 + 6 * 12 + 3 * 20;
+    ['rXYZ', 'gXYZ', 'bXYZ', 'rTRC', 'gTRC', 'bTRC'].forEach((tag, index) => {
+      write(132 + index * 12, tag);
+      view.setUint32(136 + index * 12, index < 3 ? 132 + 6 * 12 + index * 20 : curveAt);
+    });
+    primaries.forEach((xyz, index) => {
+      write(132 + 6 * 12 + index * 20, 'XYZ ');
+      xyz.forEach((value, axis) => view.setInt32(132 + 6 * 12 + index * 20 + 8 + axis * 4, Math.round(value * 65536)));
+    });
+    write(curveAt, 'curv');
+    view.setUint32(curveAt + 8, 1);
+    view.setUint16(curveAt + 12, Math.round(2.2 * 256));
+    return bytes;
+  };
+  const SRGB = [[0.4361, 0.2225, 0.0139], [0.3851, 0.7169, 0.0971], [0.1431, 0.0606, 0.7141]];
+  const DISPLAY_P3 = [[0.5151, 0.2412, -0.0011], [0.292, 0.6922, 0.0419], [0.1571, 0.0666, 0.7841]];
+  const largeJpeg = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 3000;
+    canvas.height = 2000;
+    const context = canvas.getContext('2d');
+    const gradient = context.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, '#b03a2e');
+    gradient.addColorStop(1, '#1f618d');
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    for (let index = 0; index < 4000; index += 1) {
+      context.fillStyle = `hsl(${(index * 37) % 360} 60% 50%)`;
+      context.fillRect((index * 7919) % canvas.width, (index * 104729) % canvas.height, 24, 24);
+    }
+    return canvas.toDataURL('image/jpeg', 0.95).split(',')[1];
+  });
+  const makeIccSource = async primaries => {
+    const source = await PDFDocument.create();
+    const first = source.addPage([612, 792]);
+    const image = await source.embedJpg(Buffer.from(largeJpeg, 'base64'));
+    first.drawImage(image, { x: 0, y: 0, width: 612, height: 408 });
+    first.drawText('Selectable text survives', { x: 40, y: 700, size: 18 });
+    const field = source.getForm().createTextField('Name');
+    field.setText('Ada');
+    field.addToPage(first, { x: 40, y: 600, width: 160, height: 26 });
+    await image.embed();
+    const profile = source.context.register(source.context.flateStream(iccProfile(primaries), { N: 3 }));
+    source.context.lookup(image.ref).dict.set(PDFName.of('ColorSpace'), source.context.obj([PDFName.of('ICCBased'), profile]));
+    return Buffer.from(await source.save({ useObjectStreams: false }));
+  };
+  const compressMedium = async (fileName, buffer) => {
+    await page.locator('input[type=file]').setInputFiles({ name: fileName, mimeType: 'application/pdf', buffer });
+    await selectable.check();
+    await page.getByRole('button', { name: 'Medium', exact: true }).click();
+    await compress.click();
+    // With nothing to gain the result says so instead of offering Save; that means unchanged.
+    const save = page.getByRole('button', { name: 'Save', exact: true });
+    await save.or(page.getByText('Already as small as it gets')).first().waitFor();
+    if (!(await save.isVisible())) return null;
+    const downloadPromise = page.waitForEvent('download');
+    await save.click();
+    const chunks = [];
+    for await (const chunk of await (await downloadPromise).createReadStream()) chunks.push(chunk);
+    return Buffer.concat(chunks);
+  };
+  const iccSource = await makeIccSource(SRGB);
+  const iccOutput = await compressMedium('selectable-with-srgb-photo.pdf', iccSource);
+  assert.ok(iccOutput && iccOutput.length < iccSource.length / 2, 'Medium must shrink an sRGB-tagged oversized photo');
+  assert.deepEqual(await pdfImageSize(iccOutput), [1584, 1056]);
+  const p3Output = await compressMedium('selectable-with-p3-photo.pdf', await makeIccSource(DISPLAY_P3));
+  if (p3Output) assert.deepEqual(await pdfImageSize(p3Output), [3000, 2000], 'A Display P3 photo must keep its pixels and profile');
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('input[type=file]').setInputFiles({
     name: 'mobile.pdf', mimeType: 'application/pdf', buffer: sourceBytes,
   });
   await selectable.check();
   assert.equal(await quality.isVisible(), true, 'Mobile app layout must keep quality available');
-  console.log(JSON.stringify({ status: 'PASS', outputs: outputs.map(({ preset, bytes, dimensions }) => ({ preset, bytes, dimensions })), pngBytes: pngOutput.length }, null, 2));
+  console.log(JSON.stringify({ status: 'PASS', outputs: outputs.map(({ preset, bytes, dimensions }) => ({ preset, bytes, dimensions })), pngBytes: pngOutput.length, icc: { from: iccSource.length, to: iccOutput.length } }, null, 2));
 } finally {
   await browser.close();
 }
