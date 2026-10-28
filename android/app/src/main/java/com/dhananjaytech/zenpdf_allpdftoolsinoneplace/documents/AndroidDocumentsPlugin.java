@@ -7,6 +7,7 @@ import android.net.Uri;
 import android.util.Base64;
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.PdfChefApplication;
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.reader.PdfReaderLaunchContract;
+import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.reviews.PlayInAppReviewPrompt;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -380,6 +381,7 @@ public final class AndroidDocumentsPlugin extends Plugin {
                 output.put("savedName", result.savedName());
             }
             call.resolve(output);
+            offerPlayReview();
         } catch (DocumentLifecycleCoordinator.Failure failure) {
             if ("DOCUMENT_CANCELLED".equals(failure.code())) {
                 call.resolve(deliveryStatus("cancelled"));
@@ -388,6 +390,18 @@ public final class AndroidDocumentsPlugin extends Plugin {
             }
         } catch (Exception ignored) {
             unavailable(call);
+        }
+    }
+
+    /** A finished save is the moment a regular may be shown Play's rating card. */
+    private void offerPlayReview() {
+        try {
+            Activity activity = getActivity();
+            boolean inFront = PlayInAppReviewPrompt.inFront(activity);
+            if (!PlayInAppReviewPrompt.recordSave(getContext(), inFront)) return;
+            activity.runOnUiThread(() -> PlayInAppReviewPrompt.ask(activity));
+        } catch (RuntimeException ignored) {
+            // The save is already reported; the rating card is never worth failing it.
         }
     }
 

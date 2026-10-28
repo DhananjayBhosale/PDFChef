@@ -844,11 +844,20 @@
  },
  {
   "name": "com.google.android.play:core-common",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "kind": "android",
   "license": "LicenseRef-Android-SDK-Terms",
   "copyright": "Copyright Google LLC",
   "url": "https://developer.android.com/guide/playcore",
+  "note": "Proprietary Google library; not open source. Used under Google's terms linked in the licence section."
+ },
+ {
+  "name": "com.google.android.play:review",
+  "version": "2.0.2",
+  "kind": "android",
+  "license": "LicenseRef-Android-SDK-Terms",
+  "copyright": "Copyright Google LLC",
+  "url": "https://developer.android.com/guide/playcore/in-app-review",
   "note": "Proprietary Google library; not open source. Used under Google's terms linked in the licence section."
  },
  {
