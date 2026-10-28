@@ -679,6 +679,7 @@ export default {
   },
   "image-to-pdf.building.pdf.7b0776": "PDF oluşturuluyor...",
   "image-to-pdf.preparing.pdf.cbcaaa": "PDF hazırlanıyor...",
+  "image-to-pdf.adding.images.8a4d34": "Görseller ekleniyor…",
   "image-to-pdf.pdf.is.ready.34a5a8": "PDF hazır.",
   "image-to-pdf.image.to.pdf.966eba": "Görselden PDF'e",
   "image-to-pdf.choose.images.for.your.pdf.58f369": "PDF'iniz için görseller seçin",
@@ -767,6 +768,7 @@ export default {
   "make-pdf.basic.camera.237a91": "Temel kamera",
   "make-pdf.camera.03494b": "Kamera",
   "make-pdf.gallery.352cfc": "Galeri",
+  "make-pdf.adding.photos.137e59": "Fotoğraflar ekleniyor…",
   "make-pdf.clear.all.29a390": "Tümünü temizle",
   "make-pdf.export.page.pdf.2e36cb": {
     "one": "{count} sayfalık PDF'i dışa aktar",

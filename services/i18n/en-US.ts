@@ -677,6 +677,7 @@ export default {
   },
   "image-to-pdf.building.pdf.7b0776": "Building PDF...",
   "image-to-pdf.preparing.pdf.cbcaaa": "Preparing PDF...",
+  "image-to-pdf.adding.images.8a4d34": "Adding images…",
   "image-to-pdf.pdf.is.ready.34a5a8": "PDF is ready.",
   "image-to-pdf.image.to.pdf.966eba": "Image to PDF",
   "image-to-pdf.choose.images.for.your.pdf.58f369": "Choose images for your PDF",
@@ -765,6 +766,7 @@ export default {
   "make-pdf.basic.camera.237a91": "Basic camera",
   "make-pdf.camera.03494b": "Camera",
   "make-pdf.gallery.352cfc": "Gallery",
+  "make-pdf.adding.photos.137e59": "Adding photos…",
   "make-pdf.clear.all.29a390": "Clear all",
   "make-pdf.export.page.pdf.2e36cb": {
     "one": "Export {count}-page PDF",

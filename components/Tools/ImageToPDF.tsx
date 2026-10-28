@@ -270,6 +270,10 @@ export const ImageToPDF: React.FC = () => {
   const [savedPages, setSavedPages] = useState<PageData[] | null>(null);
   const discardSheet = useConfirmDiscard(pages.length > 0 && pages !== savedPages);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
+  // Decoding a handful of camera photos takes seconds on a phone; say so instead of looking stuck.
+  // A count, because the empty screen and a page's own picker can each add images at once.
+  const [imagesBeingAdded, setImagesBeingAdded] = useState(0);
+  const addingImages = imagesBeingAdded > 0;
   const { zoom, zoomIn, zoomOut, resetZoom } = useZoom(1.0, 0.5, 1.5, 0.25);
   const canvasViewportRef = useRef<HTMLDivElement>(null);
   const [canvasViewportWidth, setCanvasViewportWidth] = useState(0);
@@ -438,7 +442,14 @@ export const ImageToPDF: React.FC = () => {
     }
     
     // Create a new page for each image by default (standard flow)
-    const { elements, skipped } = await createImageElements(acceptedImages, 0.8);
+    setImagesBeingAdded(count => count + 1);
+    let prepared: Awaited<ReturnType<typeof createImageElements>>;
+    try {
+      prepared = await createImageElements(acceptedImages, 0.8);
+    } finally {
+      setImagesBeingAdded(count => count - 1);
+    }
+    const { elements, skipped } = prepared;
     setPages(prev => [...prev, ...elements.map((element) => ({ id: uuidv4(), elements: [element] }))]);
     const limitNotice = acceptedImages.length < images.length
       ? t("image-to-pdf.added.images.the.image.limit.has.been.83b23e", { count: elements.length, v1: MAX_IMAGE_TO_PDF_FILES })
@@ -544,6 +555,13 @@ export const ImageToPDF: React.FC = () => {
       <ToolShell centered>
         <ToolHeader title={t("image-to-pdf.image.to.pdf.966eba")} />
         <FileUpload onFilesSelected={handleFilesSelected} accept="image/*" multiple label={t("image-to-pdf.choose.images.for.your.pdf.58f369")} />
+        <div role="status" aria-live="polite">
+          {addingImages && (
+            <StatusLine tone="info" icon={<Loader2 className="animate-spin" size={16} />}>
+              {t("image-to-pdf.adding.images.8a4d34")}
+            </StatusLine>
+          )}
+        </div>
         {status.error && (
           <StatusLine tone="danger" icon={<AlertTriangle aria-hidden size={16} />}>
             {status.error}
@@ -577,10 +595,10 @@ export const ImageToPDF: React.FC = () => {
          </div>
          {pages.length > 0 && (
          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-3">
-            <button type="button" onClick={() => { setPages([]); setStatus({ isProcessing: false, progress: 0, message: '' }); }} className="chef-target chef-pressable flex-1 rounded-[var(--radius-control)] px-3 text-sm font-bold text-[var(--status-danger-text)] transition-colors hover:bg-[var(--status-danger-quiet)] sm:flex-none">{t("image-to-pdf.clear.all.29a390")}</button>
+            <button type="button" onClick={() => { setPages([]); setStatus({ isProcessing: false, progress: 0, message: '' }); }} disabled={addingImages} className="chef-target chef-pressable flex-1 rounded-[var(--radius-control)] px-3 text-sm font-bold text-[var(--status-danger-text)] transition-colors hover:bg-[var(--status-danger-quiet)] disabled:opacity-55 sm:flex-none">{t("image-to-pdf.clear.all.29a390")}</button>
             <button 
-               onClick={handleConvert} 
-               disabled={status.isProcessing || pages.length === 0}
+               onClick={handleConvert}
+               disabled={status.isProcessing || pages.length === 0 || addingImages}
                className="chef-target chef-pressable flex flex-1 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 font-bold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-55 sm:flex-none sm:px-6"
             >
                {status.isProcessing ? <Loader2 className="animate-spin" size={18}/> : <ArrowDown size={18}/>} 
@@ -598,11 +616,12 @@ export const ImageToPDF: React.FC = () => {
                      <h3 className="type-caption mb-1.5 text-[var(--text-secondary)]">{t("image-to-pdf.document.actions.97fa07")}</h3>
                      <div className="grid grid-cols-2 gap-2">
                         <label className="chef-target chef-pressable flex w-full cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] text-sm font-bold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--focus-ring)]">
-                           <FileImage aria-hidden size={18}/>{t("image-to-pdf.add.pages.6a7668")}<input type="file" multiple accept="image/*" aria-label={t("image-to-pdf.add.new.pages.from.images.b8c579")} className="sr-only" onChange={e => e.target.files && handleFilesSelected(Array.from(e.target.files))} />
+                           {addingImages ? <Loader2 aria-hidden className="animate-spin" size={18}/> : <FileImage aria-hidden size={18}/>}<span>{addingImages ? t("image-to-pdf.adding.images.8a4d34") : t("image-to-pdf.add.pages.6a7668")}</span><input type="file" multiple accept="image/*" aria-disabled={addingImages || undefined} aria-label={t("image-to-pdf.add.new.pages.from.images.b8c579")} className="sr-only" onClick={e => { if (addingImages) e.preventDefault(); }} onChange={e => e.target.files && handleFilesSelected(Array.from(e.target.files))} />
                         </label>
                         <button type="button" onClick={addEmptyPage} className="chef-target chef-pressable flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] text-sm font-bold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]">
                            <Plus aria-hidden size={18}/>{t("image-to-pdf.blank.page.81bf3a")}</button>
                      </div>
+                     <span role="status" aria-live="polite" className="sr-only">{addingImages ? t("image-to-pdf.adding.images.8a4d34") : ''}</span>
                   </section>
 
                   <section>
@@ -667,7 +686,14 @@ export const ImageToPDF: React.FC = () => {
                                     onChange={async e => {
                                        if (e.target.files) {
                                          const files = Array.from(e.target.files) as File[];
-                                          const { elements: newElements, skipped } = await createImageElements(files, 0.4, { x: 0.1, y: 0.1 });
+                                          setImagesBeingAdded(count => count + 1);
+                                          let prepared: Awaited<ReturnType<typeof createImageElements>>;
+                                          try {
+                                            prepared = await createImageElements(files, 0.4, { x: 0.1, y: 0.1 });
+                                          } finally {
+                                            setImagesBeingAdded(count => count - 1);
+                                          }
+                                          const { elements: newElements, skipped } = prepared;
                                           setPages(prev => prev.map(p => p.id === page.id ? { ...p, elements: [...p.elements, ...newElements] } : p));
                                           if (skipped.length) setStatus({ isProcessing: false, progress: 0, message: '', error: skippedImagesMessage(skipped) });
                                        }

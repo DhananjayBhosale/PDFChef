@@ -122,6 +122,10 @@ export const MakePDF: React.FC = () => {
   const discardSheet = useConfirmDiscard(images.length > 0 && images !== exportedImages);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
+  // Decoding camera photos takes seconds on a phone; say so instead of looking stuck. A count,
+  // because the scanner notice's camera button can add photos while a batch is still decoding.
+  const [photosBeingAdded, setPhotosBeingAdded] = useState(0);
+  const addingPhotos = photosBeingAdded > 0;
   const [confirmClear, setConfirmClear] = useState(false);
   const freshPdfName = () => datedFileStem(t("make-pdf.scanned.pdf.370cd5"), new Date(), getLocale());
   // Null until the person types, so the suggested name follows today's date and language.
@@ -353,6 +357,8 @@ export const MakePDF: React.FC = () => {
         : new File([file], file.name, { type: resolvedType, lastModified: file.lastModified })];
     });
 
+    const counted = supported.length > 0;
+    if (counted) setPhotosBeingAdded(count => count + 1);
     const checked = await mapWithConcurrency(supported, IMAGE_PREPARE_CONCURRENCY, async (file) => {
       try {
         // Use the same orientation-normalized pixels for the export, and a small copy of them for
@@ -363,7 +369,7 @@ export const MakePDF: React.FC = () => {
         skipped.push({ name: file.name, problem: imageProblemOf(error) });
         return null;
       }
-    });
+    }).finally(() => { if (counted) setPhotosBeingAdded(count => count - 1); });
 
     const valid = checked.filter((item): item is { file: File; previewUrl: string } => item !== null);
     setSelectionNotice(skipped.length > 0 ? skippedImagesMessage(skipped) : null);
@@ -539,7 +545,9 @@ export const MakePDF: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
           <button
             type="button"
-            onClick={() => cameraInputRef.current?.click()}
+            // Camera and Gallery are not disabled while adding: the one just used still has focus.
+            onClick={() => { if (!addingPhotos) cameraInputRef.current?.click(); }}
+            aria-disabled={addingPhotos || undefined}
             disabled={status.isProcessing || scanning}
             className={scanner
               // One filled action per screen. With the device scanner present
@@ -553,18 +561,20 @@ export const MakePDF: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={() => galleryInputRef.current?.click()}
+            onClick={() => { if (!addingPhotos) galleryInputRef.current?.click(); }}
+            aria-disabled={addingPhotos || undefined}
             disabled={status.isProcessing || scanning}
             className="chef-target flex items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-4 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)] disabled:opacity-55"
           >
-            <FileImage aria-hidden size={18} />
-            <span>{t("make-pdf.gallery.352cfc")}</span>
+            {addingPhotos ? <Loader2 aria-hidden className="animate-spin" size={18} /> : <FileImage aria-hidden size={18} />}
+            <span>{addingPhotos ? t("make-pdf.adding.photos.137e59") : t("make-pdf.gallery.352cfc")}</span>
           </button>
+          <span role="status" aria-live="polite" className="sr-only">{addingPhotos ? t("make-pdf.adding.photos.137e59") : ''}</span>
           {images.length > 0 && (
           <div className="flex items-center justify-between gap-3 text-sm text-[var(--text-secondary)] sm:ml-auto">
             <span>{t("make-pdf.message.dc7f250a5f", { v2: formatBytes(totalSize), count: images.length })}</span>
             {images.length > 0 && (
-              <button type="button" onClick={() => setConfirmClear(true)} disabled={status.isProcessing} className="chef-target rounded-[var(--radius-control)] px-2 font-semibold text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)] disabled:opacity-55">{t("make-pdf.clear.all.29a390")}</button>
+              <button type="button" onClick={() => setConfirmClear(true)} disabled={status.isProcessing || addingPhotos}className="chef-target rounded-[var(--radius-control)] px-2 font-semibold text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)] disabled:opacity-55">{t("make-pdf.clear.all.29a390")}</button>
             )}
           </div>
           )}
@@ -594,7 +604,7 @@ export const MakePDF: React.FC = () => {
           <button
             type="button"
             onClick={() => void handleBuildPdf()}
-            disabled={status.isProcessing}
+            disabled={status.isProcessing || addingPhotos}
             className="chef-target chef-pressable flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 text-sm font-bold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-55 sm:w-auto sm:min-w-64"
           >
             {status.isProcessing ? <Loader2 aria-hidden className="animate-spin" size={18} /> : <ScanLine aria-hidden size={18} />}
