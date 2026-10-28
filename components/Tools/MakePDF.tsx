@@ -574,7 +574,7 @@ export const MakePDF: React.FC = () => {
           <div className="flex items-center justify-between gap-3 text-sm text-[var(--text-secondary)] sm:ml-auto">
             <span>{t("make-pdf.message.dc7f250a5f", { v2: formatBytes(totalSize), count: images.length })}</span>
             {images.length > 0 && (
-              <button type="button" onClick={() => setConfirmClear(true)} disabled={status.isProcessing || addingPhotos}className="chef-target rounded-[var(--radius-control)] px-2 font-semibold text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)] disabled:opacity-55">{t("make-pdf.clear.all.29a390")}</button>
+              <button type="button" onClick={() => setConfirmClear(true)} disabled={status.isProcessing || addingPhotos} className="chef-target rounded-[var(--radius-control)] px-2 font-semibold text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)] disabled:opacity-55">{t("make-pdf.clear.all.29a390")}</button>
             )}
           </div>
           )}
