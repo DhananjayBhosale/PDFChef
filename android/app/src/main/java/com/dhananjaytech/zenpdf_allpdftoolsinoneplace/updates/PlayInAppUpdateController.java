@@ -2,8 +2,10 @@ package com.dhananjaytech.zenpdf_allpdftoolsinoneplace.updates;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.IntentSenderRequest;
+import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.AppLanguage;
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.R;
 import com.google.android.play.core.appupdate.AppUpdateManager;
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory;
@@ -89,11 +91,13 @@ public final class PlayInAppUpdateController implements InstallStateUpdatedListe
     private void offerRestart() {
         if (closed || activity.isFinishing() || activity.isDestroyed()
                 || (restartDialog != null && restartDialog.isShowing())) return;
+        // The app's language, which can differ from the phone's; see AppLanguage.
+        Context text = AppLanguage.wrap(activity);
         restartDialog = new AlertDialog.Builder(activity)
-                .setTitle(R.string.update_ready_title)
-                .setMessage(R.string.update_ready_message)
-                .setNegativeButton(R.string.update_later, null)
-                .setPositiveButton(R.string.update_restart, (dialog, which) -> manager.completeUpdate())
+                .setTitle(text.getString(R.string.update_ready_title))
+                .setMessage(text.getString(R.string.update_ready_message))
+                .setNegativeButton(text.getString(R.string.update_later), null)
+                .setPositiveButton(text.getString(R.string.update_restart), (dialog, which) -> manager.completeUpdate())
                 .create();
         restartDialog.show();
     }

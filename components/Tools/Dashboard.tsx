@@ -2,7 +2,7 @@ import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, Search, ShieldCheck, X } from 'lucide-react';
+import { Check, ChevronRight, Search, X } from 'lucide-react';
 import { categoryOrder, tools } from './toolCatalog';
 import type { ToolCardData, ToolCategory } from './toolCatalog';
 import { matchesToolSearchQuery, toolSearchScore } from '../../services/toolSearch';
@@ -274,8 +274,8 @@ export const Dashboard: React.FC = () => {
             width={50}
             height={50}
             style={{
-              width: 'clamp(32px, calc(50px / var(--text-scale, 1)), 50px)',
-              height: 'clamp(32px, calc(50px / var(--text-scale, 1)), 50px)',
+              width: 'clamp(32px, calc(50px / (var(--text-scale, 1) * var(--system-text-scale, 1))), 50px)',
+              height: 'clamp(32px, calc(50px / (var(--text-scale, 1) * var(--system-text-scale, 1))), 50px)',
             }}
             className="shrink-0 object-contain md:hidden"
           />
@@ -295,21 +295,23 @@ export const Dashboard: React.FC = () => {
               As a line it belongs to the title above it, the field below it
               becomes the one control in the header, and at 200% text it wraps
               from the glyph instead of centring four lines against it. */}
-          <div role="note" className="flex items-start gap-2">
-            {/* Sized in rem, unlike the tool bubbles: nothing keys off this
-                chip's edge, so it can stay in proportion to the sentence it
-                marks instead of shrinking to a dot at 200% text. */}
-            <span
-              aria-hidden
-              className="mt-[0.0625rem] grid h-[1.375rem] w-[1.375rem] shrink-0 place-items-center rounded-[0.4375rem] bg-[var(--status-success-quiet)] text-[var(--status-success-text)]"
-            >
-              <ShieldCheck size={14} className="h-[0.875rem] w-[0.875rem]" />
-            </span>
-            <p className="chef-wrap-words min-w-0 text-[0.8125rem] leading-[1.4]">
-              <span className="font-semibold text-[var(--status-success-text)]">{t("dashboard.processed.on.this.device.6f6da5")}</span>{' '}
-              <span className="font-medium text-[var(--text-secondary)]">{t("dashboard.nothing.is.uploaded.a8596d")}</span>
-            </p>
-          </div>
+          {/* Three short, ticked promises rather than a sentence: they read at a
+              glance and stay one line in every app language at phone width. The
+              ticks are sized in rem, unlike the tool bubbles, so they keep in
+              proportion to the words at 200% text and wrap with them. */}
+          <ul role="list" className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            {(["dashboard.private.c63eb6", "dashboard.safe.4f9f0d", "dashboard.no.uploads.6d155c"] as const).map(key => (
+              <li key={key} className="flex items-center gap-1.5 text-[0.8125rem] font-semibold leading-[1.4] text-[var(--status-success-text)]">
+                <span
+                  aria-hidden
+                  className="grid h-[1.125rem] w-[1.125rem] shrink-0 place-items-center rounded-full bg-[var(--status-success-quiet)]"
+                >
+                  <Check size={12} strokeWidth={3} className="h-[0.75rem] w-[0.75rem]" />
+                </span>
+                {t(key)}
+              </li>
+            ))}
+          </ul>
           {monetizationAvailable && (
             <p className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-0 text-xs leading-5 text-[var(--text-secondary)]">
               {/* The App Store can take seconds to answer at launch. Until it does, the count is

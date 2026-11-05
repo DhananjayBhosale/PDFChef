@@ -226,9 +226,10 @@ text.
 - One switch shape in the product: 51x31 with a 25px knob, reaching the floor
   through `chef-hit`. A tool that draws its own larger toggle is wrong even when
   it works.
-- The phone tab bar is 60px before the platform safe-area inset, with 24px icons
-  and 13px labels, and it grows with the readable-text size rather than clipping
-  its labels. `--size-tab-bar-readable` is that measured height. The bottom
+- The phone tab bar is a glass island 60px tall, inset 12px from each side and
+  floating 10px above the bottom edge (or 10px down into a home-indicator inset),
+  with 24px icons and 13px labels; the current tab sits on a tinted chip. It
+  grows with the readable-text size rather than clipping its labels. `--size-tab-bar-readable` is that measured height. The bottom
   content inset and every surface that floats above the bar — progress strip,
   result strip, and any tool's own export action that has not yet moved into
   flow — derive their offset from it and from nothing else. Reading the flat
@@ -452,7 +453,8 @@ density these replace.
 
 Translucent chrome on the tab bar and tool nav bar only, both with content
 scrolling beneath. Solid everywhere else. Both go solid under
-`prefers-reduced-transparency` and `prefers-contrast: more`. Scroll edges fade in
+`prefers-reduced-transparency` and `prefers-contrast: more`, and the tab bar's
+island also at the large readable-text sizes. Scroll edges fade in
 only where chrome actually overlaps content.
 
 ## Motion

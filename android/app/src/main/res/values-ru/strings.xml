@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_ready_title">Обновление готово</string>
+    <string name="update_ready_message">Перезапустите PDF Chef, чтобы завершить обновление.</string>
+    <string name="update_later">Позже</string>
+    <string name="update_restart">Перезапустить</string>
+</resources>

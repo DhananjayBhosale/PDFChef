@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_ready_title">Mise à jour prête</string>
+    <string name="update_ready_message">Redémarrez PDF Chef pour terminer la mise à jour.</string>
+    <string name="update_later">Plus tard</string>
+    <string name="update_restart">Redémarrer</string>
+</resources>

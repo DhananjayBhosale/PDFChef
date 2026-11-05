@@ -37,9 +37,9 @@ body,
 }
 
 html {
-  /* 16px base times the readable-text-size preference. Everything sized in rem
-     follows, which is how Dynamic Type is honoured on the web. */
-  font-size: calc(100% * var(--text-scale, 1));
+  /* 16px base times the readable-text-size preference and, in the iOS app, the
+     phone's text size (--system-text-scale). Everything sized in rem follows. */
+  font-size: calc(100% * var(--text-scale, 1) * var(--system-text-scale, 1));
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
@@ -209,7 +209,8 @@ h4,
    appearance attribute rather than a rem media query: media-query rem resolves
    against the initial root size and never sees the scaled one. */
 html[data-text-scale='large'] .chef-chrome,
-html[data-text-scale='larger'] .chef-chrome {
+html[data-text-scale='larger'] .chef-chrome,
+html[data-system-text-scale='large'] .chef-chrome {
   background: var(--surface-raised);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
@@ -311,6 +312,42 @@ html[data-text-scale='larger'] .chef-chrome {
 /* Hidden while the keyboard is up, so it never covers the field being typed in. */
 :root[data-chef-keyboard] .chef-tab-bar {
   display: none;
+}
+
+/* Edit PDF: the add-content row gives its height to the paragraph being typed in, and the bar
+   sitting on the keyboard drops the home-indicator inset the keyboard already covers. */
+:root[data-chef-keyboard] .chef-hide-while-typing {
+  display: none;
+}
+
+:root[data-chef-keyboard] .chef-safe-bottom.chef-keyboard-flush {
+  padding-bottom: var(--chef-safe-bottom-base, 0px);
+}
+
+/* While typing, the paragraph's dock is one flat row lying on the keyboard: no rule under it,
+   and the bar gives up its padding, since each control already reaches the touch height. */
+:root[data-chef-keyboard] .chef-paragraph-dock {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom-width: 0;
+}
+
+:root[data-chef-keyboard] .chef-safe-bottom.chef-keyboard-flush.chef-paragraph-bar {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* Said to a screen reader but not shown while typing. */
+:root[data-chef-keyboard] .chef-sr-while-typing {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 .chef-tab-inset {
@@ -446,6 +483,15 @@ select {
 .chef-target {
   min-height: var(--size-touch-target);
   min-width: var(--size-touch-target);
+}
+
+/* Chinese and Japanese may break between any two characters, which can split a word in a short
+   button label. Such a button keeps its label whole, and a wrapping row moves it to a line of its own. */
+.chef-keep-cjk-words:is(:lang(ja), :lang(zh)) {
+  min-width: fit-content;
+}
+.chef-keep-cjk-words:is(:lang(ja), :lang(zh)) .chef-wrap-words {
+  word-break: keep-all;
 }
 
 /* Vertical-only version of the same idea, for controls that sit shoulder to
@@ -658,7 +704,8 @@ select {
    asked for larger text, hiding the rest of a sentence stops being tidy and
    starts being a loss, so the clamp is released and the row grows instead. */
 html[data-text-scale='large'] .chef-clamp-2,
-html[data-text-scale='larger'] .chef-clamp-2 {
+html[data-text-scale='larger'] .chef-clamp-2,
+html[data-system-text-scale='large'] .chef-clamp-2 {
   display: block;
   -webkit-line-clamp: unset;
   overflow: visible;
@@ -816,6 +863,11 @@ html[data-text-scale='larger'] .chef-clamp-2 {
 
 .chef-slider.is-compact {
   height: 32px;
+}
+
+/* Right-to-left layouts mirror the slider; ChefSlider flips pointer and arrow-key input to match. */
+[dir='rtl'] .chef-slider {
+  transform: scaleX(-1);
 }
 
 .chef-slider-value input::-webkit-outer-spin-button,
@@ -1002,8 +1054,17 @@ html[data-text-scale='larger'] .chef-clamp-2 {
    the matched range lands exactly on the words the reader can see. Registered through the
    browser's highlight registry, which leaves the paragraph's own child nodes alone — they belong
    to the browser while someone is typing into them. */
+/* Fixed ink steps (ink-200, ink-400, ink-700), not theme colours: the page stays white in both
+   themes. */
 ::highlight(pdfchef-find) {
-  background-color: color-mix(in srgb, var(--accent-rest) 30%, transparent);
+  background-color: rgb(255 200 195 / 0.7);
+}
+
+/* The match Next and Previous landed on. Stronger, and underlined, but still see-through: the
+   word itself is drawn by the page underneath. */
+::highlight(pdfchef-find-current) {
+  background-color: rgb(255 77 82 / 0.45);
+  text-decoration: underline 3px #b01e22;
 }
 
 /* An editable paragraph is invisible by design: the page underneath is what the reader sees.

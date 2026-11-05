@@ -7,8 +7,8 @@ import { readFileSync } from 'node:fs';
 import { normalizeSearchText } from '../../services/toolSearch.ts';
 
 test('supported locale tags and store mappings are unique and complete', () => {
-  assert.equal(locales.length, 24);
-  assert.equal(new Set(locales.map(row => row[0])).size, 24);
+  assert.equal(locales.length, 25);
+  assert.equal(new Set(locales.map(row => row[0])).size, 25);
   assert.equal(locales.find(row => row[0] === 'es-419')?.[2], 'es-MX');
 });
 test('system locale negotiation preserves regions, Chinese scripts and Latin American Spanish', () => {
@@ -18,13 +18,26 @@ test('system locale negotiation preserves regions, Chinese scripts and Latin Ame
   assert.equal(resolveLocale(['pt-PT']), 'pt-PT');
   assert.equal(resolveLocale(['fr-CA-u-nu-latn']), 'fr-CA');
   assert.equal(resolveLocale(['pt-PT-u-nu-latn']), 'pt-PT');
+  // Portuguese outside Brazil follows pt-PT, as Android's native screens do.
+  assert.equal(resolveLocale(['pt-AO']), 'pt-PT');
+  assert.equal(resolveLocale(['pt-MZ']), 'pt-PT');
+  assert.equal(resolveLocale(['pt']), 'pt-BR');
+  assert.equal(resolveLocale(['pt-BR']), 'pt-BR');
   assert.equal(resolveLocale(['en-GB-u-hc-h23']), 'en-GB');
   assert.equal(resolveLocale(['zh-TW']), 'zh-Hant');
   assert.equal(resolveLocale(['zh-HK']), 'zh-Hant');
   assert.equal(resolveLocale(['zh-CN']), 'zh-Hans');
   assert.equal(resolveLocale(['es-MX']), 'es-419');
   assert.equal(resolveLocale(['invalid_tag', 'ja']), 'ja-JP');
+  assert.equal(resolveLocale(['ru']), 'ru-RU');
+  assert.equal(resolveLocale(['ru-KZ']), 'ru-RU');
   assert.equal(resolveLocale(['uk-UA', 'zz-ZZ']), 'en-US');
+});
+test('Russian plurals select one, few and many forms by Intl', async () => {
+  const message = (await loadCatalog('ru-RU'))['recent-page.delete.cfd948'];
+  for (const [count, text] of [[1, 'Удалить 1 файл?'], [3, 'Удалить 3 файла?'], [5, 'Удалить 5 файлов?'], [21, 'Удалить 21 файл?']] as const) {
+    assert.equal(formatMessage(message, { count }, 'ru-RU'), text);
+  }
 });
 test('only Arabic changes interface direction', () => {
   for (const [locale] of locales) assert.equal(direction(locale), locale === 'ar-SA' ? 'rtl' : 'ltr');

@@ -2,6 +2,7 @@ import { t } from '../services/i18n/core.ts';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style as StatusBarStyle } from '@capacitor/status-bar';
+import { followDynamicType } from '../services/platform/capacitor/iosDynamicType.ts';
 import {
   androidThemeModeFor,
   createAndroidThemePersistence,
@@ -449,6 +450,9 @@ export const AppearanceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   useEffect(() => {
     document.documentElement.dataset.textScale = textScale;
   }, [textScale]);
+
+  // In the iPhone app the phone's text size scales the app's text as well.
+  useEffect(() => (Capacitor.getPlatform() === 'ios' ? followDynamicType() : undefined), []);
 
   const setTheme = useCallback(
     (next: ThemePreference) => {

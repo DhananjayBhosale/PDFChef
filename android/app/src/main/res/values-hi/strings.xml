@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_ready_title">अपडेट तैयार है</string>
+    <string name="update_ready_message">अपडेट पूरा करने के लिए PDF Chef को रीस्टार्ट करें।</string>
+    <string name="update_later">बाद में</string>
+    <string name="update_restart">रीस्टार्ट करें</string>
+</resources>

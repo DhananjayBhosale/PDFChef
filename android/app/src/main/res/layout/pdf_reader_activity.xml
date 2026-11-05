@@ -166,7 +166,10 @@
             android:textColor="@color/pdf_reader_text_secondary"
             android:textSize="15sp" />
 
-        <Button
+        <!-- AppCompatButton, not Button: under the Material 3 theme a plain
+             Button inflates as a MaterialButton, which drops this background
+             and paints Material's default purple instead. -->
+        <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/pdf_reader_retry"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -179,7 +182,7 @@
             android:textSize="15sp"
             android:textStyle="bold" />
 
-        <Button
+        <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/pdf_reader_close"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

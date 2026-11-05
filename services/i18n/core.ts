@@ -27,6 +27,14 @@ export const getLocale = () => locale;
 export const getLocalePreference = () => preference;
 export const getLocaleRevision = () => revision;
 export const subscribeLocale = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
+/** Tells native screens what to follow: "system" while Settings follows the phone, else the
+ * chosen language. Waits for the saved choice to load, so a start never sends a stale default. */
+export function subscribeNativeLanguage(send: (language: LocalePreference) => void): () => void {
+  let sent: LocalePreference | undefined;
+  const update = () => { if (revision > 0 && preference !== sent) { sent = preference; send(preference); } };
+  update();
+  return subscribeLocale(update);
+}
 
 function report(message: string) {
   if (import.meta.env?.DEV && !missing.has(message)) { missing.add(message); console.warn(`[i18n] ${message}`); }

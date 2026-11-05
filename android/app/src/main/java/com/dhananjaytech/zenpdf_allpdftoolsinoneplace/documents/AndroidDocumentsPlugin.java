@@ -814,11 +814,16 @@ public final class AndroidDocumentsPlugin extends Plugin {
         return integer;
     }
 
-    /** A separate event prevents ordinary tool pickers from navigating away. */
-    public void announceIncomingPdf(String ref) {
-        if (!PendingImportRecord.isValidRef(ref)) return;
+    /**
+     * A PDF opened from another app whose reader asked for a tool. A separate event prevents
+     * ordinary tool pickers from navigating away; only an allow-listed tool route crosses.
+     */
+    public void announceIncomingPdf(String ref, String toolPath) {
+        if (!PendingImportRecord.isValidRef(ref)
+                || !PdfReaderLaunchContract.toolPaths().contains(toolPath)) return;
         JSObject event = new JSObject();
         event.put("ref", ref);
+        event.put("toolPath", toolPath);
         notifyListeners("incomingPdfReady", event, true);
     }
 

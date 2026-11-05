@@ -45,8 +45,21 @@ const COLUMN_MIN_ROWS = 2;
 /** Font-size ratio between neighbours on a line that marks them as different page elements. */
 const SIZE_CHANGE_SPLIT = 1.6;
 
+/**
+ * Characters that mark a list item: bullets, dashes, arrows, ticks, boxes, and any private-use
+ * glyph, which is how Symbol and Wingdings bullets (U+F0B7, U+F0A7…) reach the text layer.
+ */
+const MARKER_CHARACTERS = '•●○◦■□▪▫◆◇❖‣⁃∙·►▸▶➢➤→✓✔☐☑★*\u2013\u2014\u2212\\-\ue000-\uf8ff';
+const NUMBER_MARKER = '\\d{1,3}[.)]|\\(?[a-z]{1,2}[.)]|[ivxIVX]{1,4}[.)]';
 /** A line that is nothing but a list marker: the bullet column of a properly set list. */
-const BULLET_ONLY_PATTERN = /^\s*(?:[•▪◦‣·*\u2013\u2014-]|\d{1,3}[.)]|\(?[a-z]{1,2}[.)]|[ivxIVX]{1,4}[.)])\s*$/;
+const BULLET_ONLY_PATTERN = new RegExp(`^\\s*(?:[${MARKER_CHARACTERS}]|${NUMBER_MARKER})\\s*$`);
+/** A marker standing alone at the start of a line, before the item's text. */
+const LEADING_MARKER_PATTERN = new RegExp(`^(?:[${MARKER_CHARACTERS}]|${NUMBER_MARKER})$`);
+/**
+ * How far past its marker an item's text has to start, in ems, for the marker to be its own
+ * column. Wider than a word space, so prose that happens to start with a dash stays whole.
+ */
+const MARKER_GAP = 0.4;
 /** How far left of its text a marker may sit and still belong to it, as a multiple of font size. */
 const MARKER_REACH = 6;
 
@@ -56,7 +69,7 @@ const READABLE_TEXT = /[^\u0000-\u001f\u007f\ufffd]/;
 /** Rough advance for a run whose own width the file did not report. */
 const estimatedAdvance = (text: string, fontSize: number) => text.length * fontSize * 0.5;
 
-const BULLET_PATTERN = /^\s*(?:\d{1,3}[.)]|\(?[a-z]{1,2}[.)]|[ivxIVX]{1,4}[.)]|[•▪◦‣·*–—-])\s/;
+const BULLET_PATTERN = new RegExp(`^\\s*(?:${NUMBER_MARKER}|[${MARKER_CHARACTERS}])\\s`);
 
 export interface PdfTextRun {
   text: string;
@@ -84,6 +97,8 @@ export interface PdfTextLine {
   text: string;
   /** True when a bullet or number sits in its own column to the left of this line. */
   startsListItem?: boolean;
+  /** Where the marker of a list item that starts on this line sits. */
+  markerU0?: number;
 }
 
 export type PdfTextAlign = 'left' | 'center' | 'right' | 'justify';
@@ -497,6 +512,33 @@ const splitLinesAtColumns = (lines: PdfTextLine[]): PdfTextLine[] => {
 };
 
 /**
+ * Give a list item's marker a line of its own.
+ *
+ * Google Docs draws a bullet in its own font and starts the item's text almost an em later, with
+ * only a hairline space between them. Left together, every item of a list read as one paragraph
+ * that contained its bullets, and any edit that moved a line then had to redraw a bullet no
+ * standard font can draw. Split off, the marker is left alone and each item is its own paragraph.
+ */
+const splitLeadingMarkers = (lines: PdfTextLine[]): PdfTextLine[] => lines.flatMap((line) => {
+  const first = line.runs.findIndex((run) => run.text.trim() !== '');
+  if (first < 0 || !LEADING_MARKER_PATTERN.test(line.runs[first].text.trim())) return [line];
+  const rest = line.runs.findIndex((run, index) => index > first && run.text.trim() !== '');
+  if (rest < 0) return [line];
+  const marker = line.runs[first];
+  const fontSize = line.runs[rest].fontSize || line.fontSize;
+  if (line.runs[rest].u0 - marker.u1 < MARKER_GAP * fontSize) return [line];
+  const toLine = (runs: PdfTextRun[]): PdfTextLine => ({
+    v: line.v,
+    u0: runs[0].u0,
+    u1: Math.max(...runs.map((run) => run.u1)),
+    fontSize: line.fontSize,
+    runs,
+    text: runs.map((run) => run.text).join(''),
+  });
+  return [toLine([marker]), toLine(line.runs.slice(rest))];
+});
+
+/**
  * Mark the lines that begin a list item.
  *
  * A properly set list puts its bullets in their own column, so the marker is a separate run and the
@@ -508,15 +550,21 @@ const markListItems = (lines: PdfTextLine[]) => {
   const markers = lines.filter((line) => BULLET_ONLY_PATTERN.test(line.text));
   if (markers.length === 0) return lines;
 
-  return lines.map((line) => {
+  // A marker that belongs to an item is not a paragraph of its own: nothing to edit, nothing to
+  // find, and never redrawn, so the item's own text is all an edit touches.
+  const used = new Set<PdfTextLine>();
+  const marked = lines.map((line) => {
     if (BULLET_ONLY_PATTERN.test(line.text)) return line;
     const marker = markers.find((candidate) => (
       Math.abs(candidate.v - line.v) <= 0.42 * Math.max(candidate.fontSize, line.fontSize)
       && candidate.u1 <= line.u0 + 1
       && line.u0 - candidate.u1 <= MARKER_REACH * line.fontSize
     ));
-    return marker ? { ...line, startsListItem: true } : line;
+    if (!marker) return line;
+    used.add(marker);
+    return { ...line, startsListItem: true, markerU0: marker.u0 };
   });
+  return marked.filter((line) => !used.has(line));
 };
 
 const linesShareParagraph = (
@@ -540,10 +588,8 @@ const linesShareParagraph = (
 
   // A list item that wraps is indented past its own marker. A line that starts back at the marker's
   // own margin is the next thing on the page, not the rest of the bullet.
-  if (
-    (BULLET_PATTERN.test(previous.text) || previous.startsListItem)
-    && next.u0 < previous.u0 + maxFontSize * 0.5
-  ) return false;
+  const markerU0 = previous.markerU0 ?? (BULLET_PATTERN.test(previous.text) ? previous.u0 : null);
+  if (markerU0 !== null && next.u0 < markerU0 + maxFontSize * 0.5) return false;
 
   const tolerance = PARA_X_TOLERANCE * maxFontSize;
   const leftAligned = Math.abs(next.u0 - previous.u0) <= tolerance;
@@ -729,7 +775,7 @@ export const buildTextBlocks = (
     const angle = group.items.reduce((total, item) => total + item.angle, 0) / group.items.length;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
-    const lines = markListItems(splitLinesAtColumns(assembleLines(group.items, cos, sin)));
+    const lines = markListItems(splitLeadingMarkers(splitLinesAtColumns(assembleLines(group.items, cos, sin))));
     if (lines.length === 0) return;
 
     lines.sort((first, second) => first.v - second.v || first.u0 - second.u0);
@@ -753,6 +799,18 @@ export const buildTextBlocks = (
         }
         const previous = current[current.length - 1];
         if (shortRowBoundaries.has(line) || !linesShareParagraph(previous, line, currentLeading)) {
+          // A block's first gap sets its pitch, so a heading set a little apart would keep the
+          // first line of the paragraph under it and cut that line off from the rest. When a
+          // two-line block breaks on pitch alone and the new gap is the tighter one, the first
+          // gap was the boundary.
+          if (current.length === 2 && !shortRowBoundaries.has(line)
+            && line.v - previous.v < currentLeading && linesShareParagraph(previous, line, 0)) {
+            current = [current[0]];
+            flush();
+            current = [previous, line];
+            currentLeading = line.v - previous.v;
+            return;
+          }
           flush();
           current = [line];
           return;

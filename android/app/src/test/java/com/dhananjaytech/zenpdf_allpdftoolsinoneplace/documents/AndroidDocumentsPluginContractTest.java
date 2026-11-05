@@ -238,11 +238,32 @@ public final class AndroidDocumentsPluginContractTest {
         assertTrue(plugin.contains("notifyListeners(\"incomingPdfRejected\", event, true)"));
 
         String activity = source("src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/"
-                + "MainActivity.java");
+                + "IncomingPdfActivity.java");
         assertTrue(activity.contains("catch (DocumentLifecycleCoordinator.Failure failure)"));
         assertTrue(activity.contains("IncomingPdfIntake.rejectionReason(failure.code())"));
         assertTrue(activity.contains("documents.announceIncomingPdfRejected(reason)"));
-        assertFalse(activity.contains("} catch (Exception failure) {\n                    return;"));
+    }
+
+    // Choosing PDF Chef in "Open with" showed the Tools screen before the PDF, and opening the
+    // same PDF again while the old reader was still in the background did nothing: MainActivity
+    // closed that reader, the page hid the app, and Android then blocked the new reader.
+    @Test public void openWithShowsTheReaderStraightAwayInTheSendingAppsTask() throws Exception {
+        String manifest = source("src/main/AndroidManifest.xml");
+        int main = manifest.indexOf("android:name=\".MainActivity\"");
+        int incoming = manifest.indexOf("android:name=\".IncomingPdfActivity\"");
+        assertTrue(main > 0 && incoming > 0);
+        String mainActivity = manifest.substring(main, manifest.indexOf("</activity>", main));
+        String incomingActivity = manifest.substring(incoming, manifest.indexOf("</activity>", incoming));
+        assertFalse(mainActivity.contains("android.intent.action.VIEW"));
+        assertFalse(mainActivity.contains("android.intent.action.SEND"));
+        assertTrue(incomingActivity.contains("android.intent.action.VIEW"));
+        assertTrue(incomingActivity.contains("android.intent.action.SEND"));
+        assertTrue(incomingActivity.contains("android:taskAffinity=\"\""));
+        assertFalse(incomingActivity.contains("android:launchMode"));
+
+        String plugin = source("src/main/java/com/dhananjaytech/zenpdf_allpdftoolsinoneplace/"
+                + "documents/AndroidDocumentsPlugin.java");
+        assertTrue(plugin.contains("!PdfReaderLaunchContract.toolPaths().contains(toolPath)"));
     }
 
     @Test public void pendingBatchIdentityIsVersionedOrderBoundAndOpaque() {

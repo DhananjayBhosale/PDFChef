@@ -9,8 +9,16 @@ final class PdfChefLocalizationTests: XCTestCase {
     }
 
     override func tearDown() {
-        PdfChefLocalization.setLanguage(savedLanguage ?? "en")
-        if savedLanguage == nil { UserDefaults.standard.removeObject(forKey: "PdfChefLanguage") }
+        PdfChefLocalization.setLanguage(savedLanguage ?? "system")
+    }
+
+    func testSystemClearsTheChosenLanguageSoNativeScreensFollowThePhone() {
+        PdfChefLocalization.setLanguage("de-DE")
+        PdfChefLocalization.setLanguage("system")
+
+        XCTAssertNil(UserDefaults.standard.string(forKey: "PdfChefLanguage"))
+        XCTAssertEqual(PdfChefLocalization.layoutDirection, .unspecified)
+        XCTAssertEqual(localized("Close"), Bundle.main.localizedString(forKey: "Close", value: "Close", table: nil))
     }
 
     func testAppLocalesPickTheirOwnTranslationOrTheirLanguage() {

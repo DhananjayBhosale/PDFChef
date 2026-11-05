@@ -1,5 +1,5 @@
 import { LocalizedError } from '../../i18n/errors.ts';
-import { getLocale, subscribeLocale, t } from '../../i18n/core.ts';
+import { subscribeNativeLanguage, t } from '../../i18n/core.ts';
 import type {
   ApplicationMetadata,
   DurableDocumentRef,
@@ -170,9 +170,7 @@ export const createIOSWorkspacePlatform = (
 ): IOSWorkspacePlatform => {
   const bridge = options.bridge ?? new PdfChefDocumentsBridge();
   setDeviceMemorySource(async () => (await bridge.storageInformation()).memoryBytes);
-  const sendLanguage = () => { bridge.setLanguage(getLocale()).catch(() => undefined); };
-  sendLanguage();
-  const stopLanguageUpdates = subscribeLocale(sendLanguage);
+  const stopLanguageUpdates = subscribeNativeLanguage(language => { bridge.setLanguage(language).catch(() => undefined); });
   const repositories =
     options.settings && options.recent
       ? { settings: options.settings, recent: options.recent }

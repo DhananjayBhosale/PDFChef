@@ -190,5 +190,13 @@
     "google": "da-DK",
     "direction": "ltr",
     "fallback": "en-US"
+  },
+  {
+    "app": "ru-RU",
+    "name": "Русский",
+    "apple": "ru",
+    "google": "ru-RU",
+    "direction": "ltr",
+    "fallback": "en-US"
   }
 ]

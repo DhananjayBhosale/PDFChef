@@ -14,39 +14,17 @@ const platform = (): WorkspacePlatform => ({
   reopen: async () => new File(['%PDF'], 'Incoming.pdf', { type: 'application/pdf' }),
 });
 
-test('incoming owned PDF opens native reader and closing it does not navigate a tool', async () => {
-  const native = platform();
-  let opened = false;
-  native.pdfReader = { isEligible: () => true, open: async value => { assert.equal(value, document); opened = true; return { action: 'closed' }; } };
-  await openIncomingAndroidPdf(native, ref, () => assert.fail('Unexpected navigation'));
-  assert.equal(opened, true);
-});
-
-test('incoming reader tools receive the original PDF and failed reader falls back to web', async () => {
-  const native = platform();
-  native.pdfReader = { isEligible: () => true, open: async () => ({ action: 'tool', toolPath: '/edit' }) };
+// The native reader shows a PDF from another app by itself; the page only hears about it when
+// the person picks a tool there, and that tool gets the same copy.
+test('a tool chosen in the reader opens with the handed-over PDF', async () => {
   const paths: string[] = [];
-  const receive = (file: File, path: string) => { assert.equal(file.name, 'Incoming.pdf'); paths.push(path); };
-  await openIncomingAndroidPdf(native, ref, receive);
-  native.pdfReader.open = async () => { throw new Error('Reader unavailable'); };
-  await openIncomingAndroidPdf(native, ref, receive);
-  assert.deepEqual(paths, ['/edit', '/view']);
+  await openIncomingAndroidPdf(platform(), ref, '/edit', (file, path) => {
+    assert.equal(file.name, 'Incoming.pdf');
+    paths.push(path);
+  });
+  assert.deepEqual(paths, ['/edit']);
 });
 
 test('missing external refs never read a different recent file', async () => {
-  await assert.rejects(openIncomingAndroidPdf(platform(), 'd1_' + 'B'.repeat(22), () => assert.fail('Unexpected navigation')));
-});
-
-test('closing the reader on a handed-over PDF reports the close, and nothing else does', async () => {
-  const closes: number[] = [];
-  const closed = () => closes.push(1);
-  const native = platform();
-  native.pdfReader = { isEligible: () => true, open: async () => ({ action: 'closed' }) };
-  await openIncomingAndroidPdf(native, ref, () => assert.fail('Unexpected navigation'), closed);
-  assert.equal(closes.length, 1);
-  native.pdfReader = { isEligible: () => true, open: async () => ({ action: 'tool', toolPath: '/edit' }) };
-  await openIncomingAndroidPdf(native, ref, () => undefined, closed);
-  native.pdfReader = { isEligible: () => true, open: async () => { throw new Error('Reader unavailable'); } };
-  await openIncomingAndroidPdf(native, ref, () => undefined, closed);
-  assert.equal(closes.length, 1);
+  await assert.rejects(openIncomingAndroidPdf(platform(), 'd1_' + 'B'.repeat(22), '/edit', () => assert.fail('Unexpected navigation')));
 });

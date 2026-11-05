@@ -1,5 +1,5 @@
 {
-  "status": "VERIFIED - shared localization and required exact-current model review complete; no deployment/native integration performed",
+  "status": "VERIFIED - shared localization and required exact-current model review complete; integrated into Android and iOS native resources; no deployment performed; 2026-11-04 three-model review (GPT-6.1 Sol, two Claude Sonnet 5.5 reviewers, Claude Opus 5.5 final decisions) covered the whole ru-RU catalog and all native strings",
   "appKeyCount": 2003,
   "locales": [
     {
@@ -865,6 +865,15 @@
           "required": 2170
         }
       }
+    },
+    {
+      "locale": "ru-RU",
+      "requiredKeys": 2086,
+      "draftKeys": 2086,
+      "draftMissingKeys": 0,
+      "runtimeMissingKeys": 0,
+      "reviewComplete": true,
+      "status": "Complete runtime catalog; Claude Sonnet translation; 2026-11-04 three-model review of the whole catalog with Claude Opus final decisions"
     }
   ],
   "verification": {
@@ -920,7 +929,8 @@
   "reviewBlockers": {
     "sonnet": "Resolved through preserved Claude Sonnet 5 High receipts or both user-authorized independent GPT-6 Astra and GPT-5.6 Luna Extra High exact-value reviews. Zero current gaps.",
     "gemini": "Resolved: Gemini 3.8 Flash via AGY reviewed every current pair; zero gaps, no substitute or quota purchase.",
-    "humanReview": "No native-speaker review claimed. Legal translations still require professional legal review; English is authoritative."
+    "humanReview": "No native-speaker review claimed. Legal translations still require professional legal review; English is authoritative.",
+    "ruRU": "ru-RU (added 2026-11-04) has not had the Sonnet/Astra/Luna/Gemini exact-value review used for the other locales. No native-speaker or legal review."
   },
   "updatedAt": "2026-09-19T04:10:48.783177+00:00"
 }

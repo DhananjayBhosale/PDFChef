@@ -18,6 +18,7 @@
     pl: ['Zaktualizuj Android System WebView', 'PDF Chef wymaga nowszej wersji Android System WebView. Zaktualizuj ją w Google Play, a potem ponownie otwórz PDF Chef.', 'Otwórz Google Play'],
     'pt-BR': ['Atualize o Android System WebView', 'O PDF Chef precisa de uma versão mais recente do Android System WebView. Atualize-o no Google Play e abra o PDF Chef de novo.', 'Abrir o Google Play'],
     'pt-PT': ['Atualize o Android System WebView', 'O PDF Chef precisa de uma versão mais recente do Android System WebView. Atualize-o no Google Play e volte a abrir o PDF Chef.', 'Abrir o Google Play'],
+    ru: ['Обновите Android System WebView', 'Для PDF Chef нужна более новая версия Android System WebView. Обновите её в Google Play, затем снова откройте PDF Chef.', 'Открыть Google Play'],
     sv: ['Uppdatera Android System WebView', 'PDF Chef behöver en nyare version av Android System WebView. Uppdatera den på Google Play och öppna sedan PDF Chef igen.', 'Öppna Google Play'],
     tr: ['Android System WebView’i güncelleyin', 'PDF Chef, Android System WebView’in daha yeni bir sürümüne ihtiyaç duyuyor. Google Play’den güncelleyin, ardından PDF Chef’i yeniden açın.', 'Google Play’i açın'],
     'zh-Hans': ['更新 Android System WebView', 'PDF Chef 需要较新版本的 Android System WebView。请在 Google Play 中更新，然后重新打开 PDF Chef。', '打开 Google Play'],

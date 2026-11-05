@@ -194,12 +194,16 @@
      where they are; only the pressable region reaches this. */
   --size-touch-target: 48px;
   --size-tab-bar: 60px;
-  /* The tab bar's own parts: a 24px icon plus its label and padding in rem, so
-     the measured height grows with the readable-text size. At default text the
-     60px token still wins. Every surface that floats above the bar, and the
+  /* The tab bar's own parts: 8px of glass, 8px of tab padding and the 24px icon,
+     plus the gap and label in rem, so the measured height grows with the
+     readable-text size. At default text the 60px token still wins. The bar
+     floats 10px above the edge, or 10px down into a home-indicator inset, and
+     this height takes that in. Every surface that floats above the bar, and the
      content inset beneath it, derive from this one value, so a large text size
      can never leave a floating control parked behind the chrome. */
-  --size-tab-bar-readable: max(var(--size-tab-bar), calc(24px + 1.8125rem));
+  --size-tab-bar-readable: calc(
+    max(var(--size-tab-bar), calc(40px + 1.0625rem)) + max(10px - env(safe-area-inset-bottom, 0px), -10px)
+  );
   --size-nav-bar: 44px;
   --size-reading-measure: 68ch;
 

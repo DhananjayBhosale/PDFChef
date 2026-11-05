@@ -13,6 +13,7 @@ import android.print.PrintDocumentInfo;
 
 import androidx.annotation.Nullable;
 
+import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.AppLanguage;
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.R;
 
 import java.io.FilterOutputStream;
@@ -37,7 +38,7 @@ final class PdfVerifiedCopyPrintAdapter extends PrintDocumentAdapter {
 
     PdfVerifiedCopyPrintAdapter(Context context, PdfVerifiedCopy.Result copy, @Nullable char[] password,
             Date checkedAt, String displayName) {
-        this.context = context.getApplicationContext();
+        this.context = AppLanguage.wrap(context.getApplicationContext());
         this.checkedAt = checkedAt;
         this.copy = copy;
         this.displayName = displayName;

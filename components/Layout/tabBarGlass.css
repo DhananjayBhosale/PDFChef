@@ -1,0 +1,109 @@
+/* --- Glass island tab bar -------------------------------------------------------
+   The phone tab bar floats inset from the screen's edges as a rounded glass panel,
+   and the current tab sits on a raised, faintly tinted chip.
+
+   Text contrast is held without trusting the backdrop: every label clears 4.5:1
+   even with pure black (light) or pure white (dark) directly behind the bar. That
+   is why light inactive labels use the body step.
+
+   This file loads before `index.css` (App is imported ahead of it), so a rule here
+   that has to beat an `index.css` rule out-specifies it instead of relying on
+   order: `.chef-tab-bar.chef-chrome` rather than `.chef-tab-bar`.
+
+   The glass goes solid exactly where the rest of the chrome does: reduced
+   transparency, more contrast, a large readable-text size, or no backdrop-filter.
+
+   Fills are plain rgba per theme rather than `color-mix`, for the reason given
+   beside TOOL_TINT in Dashboard.tsx. Each states the accent mix it stands for. */
+
+:root {
+  --chef-glass-tint: rgba(255, 252, 250, 0.74);
+  --chef-glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0) 62%);
+  --chef-glass-filter: saturate(180%) blur(24px);
+  --chef-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --chef-glass-rim: rgba(38, 31, 30, 0.12);
+  --chef-glass-float-shadow: 0 12px 32px -14px rgba(38, 31, 30, 0.22), 0 2px 8px rgba(38, 31, 30, 0.05);
+  /* Behind the floating bar: content fades into the canvas below and beside it. */
+  --chef-float-fade: linear-gradient(to top, rgba(255, 248, 244, 0.9), rgba(255, 248, 244, 0));
+  /* Accent 8% over white 78%. */
+  --chef-tab-chip: rgba(251, 233, 232, 0.8);
+  --chef-tab-rest: var(--text-body);
+}
+
+html.dark {
+  --chef-glass-tint: rgba(39, 31, 30, 0.84);
+  --chef-glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 62%);
+  --chef-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --chef-glass-rim: rgba(255, 255, 255, 0.1);
+  --chef-glass-float-shadow: 0 14px 36px -12px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
+  --chef-float-fade: linear-gradient(to top, rgba(23, 16, 15, 0.9), rgba(23, 16, 15, 0));
+  /* Accent 14% over the glass. */
+  --chef-tab-chip: rgba(255, 77, 82, 0.14);
+  /* Dark keeps the secondary step so the current tab stays the brightest. */
+  --chef-tab-rest: var(--text-secondary);
+}
+
+/* The bar lifts off the edge: 10px above it where the platform has no inset, and
+   down into the home-indicator inset where it has one, the way the system floating
+   bars sit. The nav stays a full-width strip at the foot, so taps beside and below
+   the glass land on the bar rather than on half-faded rows, and content fades out
+   under it. `--size-tab-bar-readable` absorbs the float, so the content inset and
+   everything that floats above the bar still clear it exactly. */
+.chef-tab-bar.chef-chrome {
+  padding-bottom: max(10px, calc(env(safe-area-inset-bottom, 0px) - 10px));
+  background: var(--chef-float-fade);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* 60px outside, as before: 4px of glass around 52px tabs. A full pill, with the current tab
+   on a pill of its own, as SpendSense's bar is on both platforms. */
+.chef-tab-dock {
+  position: relative;
+  width: calc(100% - 24px);
+  padding: 4px;
+  border-radius: 9999px;
+  background: var(--surface-raised);
+  box-shadow: 0 0 0 1px var(--chef-glass-rim), var(--chef-glass-edge), var(--chef-glass-float-shadow);
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .chef-tab-dock {
+    background: var(--chef-glass-sheen), var(--chef-glass-tint);
+    -webkit-backdrop-filter: var(--chef-glass-filter);
+    backdrop-filter: var(--chef-glass-filter);
+  }
+}
+
+.chef-tab[aria-current] {
+  background: var(--chef-tab-chip);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 0.5px rgba(38, 31, 30, 0.1), 0 2px 8px -2px rgba(38, 31, 30, 0.16);
+}
+
+html.dark .chef-tab[aria-current] {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 0 0 0.5px rgba(255, 255, 255, 0.06), 0 2px 8px -2px rgba(0, 0, 0, 0.4);
+}
+
+/* --- Solid fallbacks ------------------------------------------------------- */
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .chef-tab-dock {
+    background: var(--surface-raised);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+html[data-text-scale='large'] .chef-tab-dock,
+html[data-text-scale='larger'] .chef-tab-dock,
+html[data-system-text-scale='large'] .chef-tab-dock {
+  background: var(--surface-raised);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+@media (prefers-contrast: more) {
+  .chef-tab-dock {
+    box-shadow: 0 0 0 1px var(--border-strong);
+  }
+}

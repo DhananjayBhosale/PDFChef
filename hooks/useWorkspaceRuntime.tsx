@@ -362,12 +362,17 @@ export const useRecentRecords = () => {
 
   useEffect(() => {
     const onRecordsChanged = () => { void refresh(); };
+    // A PDF opened from another app goes straight to Android's reader without this page, so
+    // Recent catches up when the app is shown again.
+    const onShown = () => { if (document.visibilityState === 'visible') void refresh(); };
     window.addEventListener(OUTPUT_EVENT, onRecordsChanged);
     window.addEventListener(RECORDS_CHANGED_EVENT, onRecordsChanged);
+    document.addEventListener('visibilitychange', onShown);
     void refresh();
     return () => {
       window.removeEventListener(OUTPUT_EVENT, onRecordsChanged);
       window.removeEventListener(RECORDS_CHANGED_EVENT, onRecordsChanged);
+      document.removeEventListener('visibilitychange', onShown);
       latestRead.current += 1;
     };
   }, [refresh]);

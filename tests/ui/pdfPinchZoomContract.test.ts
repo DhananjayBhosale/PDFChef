@@ -15,6 +15,10 @@ test('shared PDF gesture hook handles trackpad, touchscreen, and Safari pinch ev
   assert.match(hook, /gesturechange/);
   assert.match(hook, /passive: false/);
   assert.match(hook, /suppressPostPinchClick/);
+  // The anchor offset waits for the zoomed page to render; set any earlier it is clamped to the
+  // old page width and the point under the pointer slides away.
+  assert.match(hook, /useLayoutEffect\(\(\) => \{\n    applyPendingScroll\(\);\n  \}, \[applyPendingScroll, zoom\]\)/);
+  assert.match(hook, /pendingScrollRef\.current = \{ left: nextScrollLeft, top: nextScrollTop \}/);
 });
 
 test('reader, signer, and editor use the same pinch zoom viewport contract', () => {

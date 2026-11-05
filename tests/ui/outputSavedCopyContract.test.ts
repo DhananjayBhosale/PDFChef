@@ -10,9 +10,7 @@ const source = (path: string) => readFileSync(new URL(`../../${path}`, import.me
 test('the result sheet renames the saved copy, reports where it went and guards unsaved work', () => {
   const output = source('components/UI/OutputCenter.tsx');
   assert.match(output, /platform\.renameSaved\(saved\.exportRef, requested\)/);
-  assert.match(output, /platform\.renameSaved\(saved\.exportRef, saved\.savedName\)/);
   assert.match(output, /setName\(next\.savedCopy\?\.savedName/);
-  assert.match(output, /output-center\.saved\.to\.as\.cf91b2/);
   assert.doesNotMatch(output, /`Saved \$\{/);
   assert.match(output, /if \(unsaved\) discardPrompt\.ask\(dismiss\)/);
   assert.match(output, /const keep = Boolean\(recordRef\.current\?\.deliveryIssue\) \|\| unsavedRef\.current/);
@@ -47,4 +45,20 @@ test('the Recent Undo stays in view and survives a tab switch', () => {
   assert.match(recent, /let standingUndo: PendingUndo \| null = null;/);
   assert.match(recent, /useEffect\(\(\) => \{ standingUndo = pendingUndo; \}, \[pendingUndo\]\);/);
   assert.match(recent, /className=\{undoOffered \? 'sticky /);
+});
+
+// One filled button: Save until a copy is on the device, then Share. Download disappears once a
+// copy exists, and the location is stated once, in the sheet description.
+test('the result sheet has one primary action and states the location once', () => {
+  const output = source('components/UI/OutputCenter.tsx');
+  assert.equal(output.match(/tone=\{primary === /g)?.length, 2);
+  assert.equal(output.match(/tone="primary"/g)?.length, 2); // Save here, and the rename footer
+  assert.match(output, /const savedOnDevice = Boolean\(saved\) \|\| exported;/);
+  assert.match(output, /primary: 'save' \| 'share' \| 'open' \| null = !savedOnDevice \? 'save'/);
+  assert.equal(output.match(/output-center\.download\.9ce5b1/g)?.length, 1); // only inside the 'save' primary
+  assert.match(output, /primary === 'save' \? \(/);
+  assert.match(output, /grid grid-cols-2 gap-2/);
+  assert.match(output, /output-center\.use\.in\.another\.tool\.a1c3e7/);
+  assert.doesNotMatch(output, /setNotice|StatusLine tone="success"/);
+  assert.match(output, /\$\{safeName\} · \$\{formatBytes\(record\.size \?\? null\)\}\$\{savedIn\}/);
 });

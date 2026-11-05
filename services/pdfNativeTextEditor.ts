@@ -216,6 +216,35 @@ const readEffectiveCropBox = (engine: PdfiumEngine, page: number): PdfSpaceRect 
   }
 };
 
+/**
+ * The box around a text object's visible characters, without blanks; null if it has none.
+ *
+ * Read with a text page of its own, closed again at once: objects are removed while a page is
+ * walked, and a text page kept open across that would still point at them.
+ */
+const readObjectInkBounds = (engine: PdfiumEngine, page: number, object: number): PdfSpaceRect | null => {
+  const textPage = engine.FPDFText_LoadPage(page);
+  if (!textPage) return null;
+  const pointers = [malloc(engine, 8), malloc(engine, 8), malloc(engine, 8), malloc(engine, 8)];
+  try {
+    let ink: PdfSpaceRect | null = null;
+    for (let index = 0; index < engine.FPDFText_CountChars(textPage); index += 1) {
+      if (engine.FPDFText_GetTextObject(textPage, index) !== object) continue;
+      const unicode = engine.FPDFText_GetUnicode(textPage, index);
+      if (unicode <= 0 || unicode > 0x10ffff || !String.fromCodePoint(unicode).trim()) continue;
+      if (!engine.FPDFText_GetCharBox(textPage, index, pointers[0], pointers[1], pointers[2], pointers[3])) continue;
+      const [left, right, bottom, top] = pointers.map((pointer) => readFloat64(engine, pointer));
+      ink = ink
+        ? [Math.min(ink[0], left), Math.min(ink[1], bottom), Math.max(ink[2], right), Math.max(ink[3], top)]
+        : [left, bottom, right, top];
+    }
+    return ink;
+  } finally {
+    pointers.forEach((pointer) => free(engine, pointer));
+    engine.FPDFText_ClosePage(textPage);
+  }
+};
+
 const readTextObjectFontSize = (engine: PdfiumEngine, object: number) => {
   const sizePointer = malloc(engine, 4);
   try {
@@ -366,6 +395,7 @@ const collectTextObjects = (
         ],
         characters: [],
         fontId: engine.FPDFTextObj_GetFont(object),
+        fillColor: readObjectFillColor(engine, object),
         baseline: matrix && matrix[0] > 0 && matrix[3] > 0
           && Math.abs(matrix[1]) < 0.0001 && Math.abs(matrix[2]) < 0.0001
           ? [matrix[4], matrix[5]] : undefined,
@@ -949,12 +979,17 @@ const collectUntouchedCharacters = (
  * Objects that straddle the edge are deliberately left alone. A line that runs on past the
  * paragraph is not this paragraph's to delete, and leaving it is visibly better than cutting away
  * text the reader never touched.
+ *
+ * `inks` lists, per clearance, the exact fill colours of the text taken out of it, so the redraw
+ * can use the document's own colours rather than ones read back off the screen.
  */
 export const clearNativePdfTextInAreas = async (
   input: Uint8Array,
   clearances: NativePdfTextClearance[],
-): Promise<{ bytes: Uint8Array; uncleared: number }> => {
-  if (clearances.length === 0) return { bytes: input, uncleared: 0 };
+): Promise<{ bytes: Uint8Array; uncleared: number; inks: string[][] }> => {
+  const inks = clearances.map(() => new Set<string>());
+  const result = (bytes: Uint8Array, uncleared: number) => ({ bytes, uncleared, inks: inks.map((set) => [...set]) });
+  if (clearances.length === 0) return result(input, 0);
 
   return serializePdfiumOperation(async () => {
     const engine = await loadEngine();
@@ -1069,9 +1104,22 @@ export const clearNativePdfTextInAreas = async (
               readFloat32(engine, topPointer),
             ]);
             if (!matchedExactObjects.has(object) && !areas.some((area) => overlaps(bounds, area))) continue;
-            if (!areas.some((area) => containedWithin(bounds, area))) {
+            let area = areas.find((candidate) => containedWithin(bounds, candidate));
+            if (!area && isPage) {
+              // An object's box includes the advance of a space at its end, which has no ink and
+              // which PDF.js leaves off the run, so a line can seem to run past its paragraph by one
+              // blank. What decides is where the object's visible characters are.
+              const ink = readObjectInkBounds(engine, page, object);
+              if (ink) area = areas.find((candidate) => containedWithin(ink, candidate));
+            }
+            if (!area) {
               uncleared += 1;
               continue;
+            }
+            const fill = readObjectFillColor(engine, object);
+            if (fill) {
+              inks[clearances.findIndex((clearance) => clearance.pdfRect === area)]
+                ?.add(`#${fill.slice(0, 3).map((value) => value.toString(16).padStart(2, '0')).join('')}`);
             }
             // A page owns its objects and hands them back to be destroyed; a form destroys its own.
             if (isPage) {
@@ -1120,7 +1168,7 @@ export const clearNativePdfTextInAreas = async (
           }
         });
       }
-      return { bytes, uncleared };
+      return result(bytes, uncleared);
     });
   });
 };

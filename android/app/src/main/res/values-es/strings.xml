@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_ready_title">Actualización lista</string>
+    <string name="update_ready_message">Reinicia PDF Chef para terminar la actualización.</string>
+    <string name="update_later">Más tarde</string>
+    <string name="update_restart">Reiniciar</string>
+</resources>

@@ -19,7 +19,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF Chef nutzt die Kamera nur, wenn du Seiten für ein PDF scannen oder fotografieren möchtest."
+            "value" : "PDF Chef nutzt die Kamera nur, wenn Sie Seiten für ein PDF scannen oder fotografieren möchten."
           }
         },
         "en" : {
@@ -85,7 +85,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF Chef gebruikt de camera alleen als je ervoor kiest pagina’s te scannen of te fotograferen voor een pdf."
+            "value" : "PDF Chef gebruikt de camera alleen als je ervoor kiest pagina’s te scannen of te fotograferen voor een PDF."
           }
         },
         "pl" : {
@@ -106,6 +106,12 @@
             "value" : "O PDF Chef usa a câmara apenas quando opta por digitalizar ou fotografar páginas para um PDF."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF Chef использует камеру, только когда вы сами решаете отсканировать или сфотографировать страницы для PDF."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -121,13 +127,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只有当你选择为 PDF 扫描或拍摄页面时，PDF Chef 才会使用相机。"
+            "value" : "只有当您选择为 PDF 扫描或拍摄页面时，PDF Chef 才会使用相机。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只有當你選擇為 PDF 掃描或拍攝頁面時，PDF Chef 才會使用相機。"
+            "value" : "只有當您選擇為 PDF 掃描或拍攝頁面時，PDF Chef 才會使用相機。"
           }
         }
       }

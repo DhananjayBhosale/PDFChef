@@ -7,9 +7,17 @@ import { ConfirmSheet } from '../components/UI/Primitives';
  * Asks before throwing away unsaved work, in the app's own sheet. On iOS, `window.confirm`
  * is drawn by Capacitor with fixed English "Cancel" and "Ok" buttons; this one says "Discard".
  */
-export const useDiscardPrompt = (options: { readonly title?: string } = {}): { ask: (discard: () => void, keep?: () => void) => void; sheet: React.ReactNode } => {
+export const useDiscardPrompt = (options: {
+  readonly title?: string;
+  /**
+   * Offers Save as the main way out. Resolves true when everything was saved: only then does the
+   * prompt go on to leave. Otherwise the sheet closes and the work and the save's message stay.
+   */
+  readonly save?: () => Promise<boolean>;
+} = {}): { ask: (discard: () => void, keep?: () => void) => void; sheet: React.ReactNode } => {
   const [pending, setPending] = useState<{ discard: () => void; keep?: () => void } | null>(null);
   const ask = useCallback((discard: () => void, keep?: () => void) => setPending({ discard, keep }), []);
+  const save = options.save;
   const sheet = (
     <ConfirmSheet
       open={pending !== null}
@@ -24,6 +32,13 @@ export const useDiscardPrompt = (options: { readonly title?: string } = {}): { a
         setPending(null);
         pending?.keep?.();
       }}
+      keepLabel={save ? t('edit-pdf.save.1509f5') : undefined}
+      onKeep={save ? async () => {
+        const saved = await save();
+        setPending(null);
+        if (saved) pending?.discard();
+        else pending?.keep?.();
+      } : undefined}
     />
   );
   return { ask, sheet };

@@ -7,6 +7,9 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="colorAccent">@color/pdf_reader_accent</item>
+        <item name="colorPrimary">@color/pdf_reader_accent</item>
+        <item name="colorOnPrimary">@color/pdf_reader_on_accent</item>
+        <item name="colorBackgroundFloating">@color/pdf_reader_raised</item>
         <item name="android:windowBackground">@color/pdf_reader_surface</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>

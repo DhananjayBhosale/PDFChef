@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_ready_title">Update bereit</string>
+    <string name="update_ready_message">Starten Sie PDF Chef neu, um das Update abzuschließen.</string>
+    <string name="update_later">Später</string>
+    <string name="update_restart">Neu starten</string>
+</resources>

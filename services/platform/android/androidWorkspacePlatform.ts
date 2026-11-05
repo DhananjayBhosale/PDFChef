@@ -47,6 +47,7 @@ import {
   AndroidStorageStatsClient,
   isAndroidStorageStatsAvailable,
 } from './androidStorageStats.ts';
+import { syncAndroidLanguage } from './androidLanguage.ts';
 import { setDeviceMemorySource } from '../../imageNormalization.ts';
 import { assertOutputSize, installOutputDeliveryHandler } from '../../pdfShared.ts';
 import type {
@@ -358,6 +359,7 @@ export const createAndroidWorkspacePlatform = (
   // into a whole-session empty Recent list: construct the fixed registered
   // proxies and let a genuine native failure reach the existing error state.
   if (!documentsOverride && Capacitor.getPlatform() !== 'android') return platformWithDeviceFacts;
+  if (!documentsOverride) syncAndroidLanguage();
 
   const documents = documentsOverride ?? new AndroidDocumentsClient();
   const legacy = legacyOverride === undefined

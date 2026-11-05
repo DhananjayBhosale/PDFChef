@@ -588,6 +588,14 @@ final class PdfChefDocumentsPlugin: CAPPlugin, CAPBridgedPlugin {
         return try copied.get()
     }
 
+    /// A finished save to Files is the moment a regular may be shown the App Store's rating prompt.
+    /// The prompt waits for the Files sheet to finish closing, and the save is reported either way.
+    @MainActor
+    private func offerReview(from presenter: UIViewController) {
+        guard PdfChefReviewPrompt.recordSave(inFront: PdfChefReviewPrompt.isInFront(presenter)) else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { PdfChefReviewPrompt.ask(from: presenter) }
+    }
+
     private func presentDocument(_ call: CAPPluginCall, share: Bool) {
         workQueue.async {
             do {
@@ -601,6 +609,9 @@ final class PdfChefDocumentsPlugin: CAPPlugin, CAPBridgedPlugin {
                         return
                     }
                     let completion: (Result<Bool, Error>) -> Void = { result in
+                        if !share, case .success(true) = result {
+                            DispatchQueue.main.async { self.offerReview(from: presenter) }
+                        }
                         self.workQueue.async {
                             do {
                                 try store.removePresentationCopy(at: copyURL)

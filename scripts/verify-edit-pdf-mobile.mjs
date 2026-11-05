@@ -127,6 +127,15 @@ const upload = async () => {
   await page.getByRole('button', { name: 'Close editor' }).waitFor();
 };
 
+// A new result opens its actions sheet. Back (Escape) closes only the sheet; the editor stays.
+const closeResultSheet = async () => {
+  const resultActions = page.getByRole('dialog').filter({ hasText: 'Result ready' });
+  await resultActions.waitFor();
+  await page.keyboard.press('Escape');
+  await resultActions.waitFor({ state: 'hidden' });
+  await canvas().waitFor({ state: 'visible' });
+};
+
 const place = async type => {
   await page.getByRole('button', { name: type === 'text' ? 'Text' : 'Shape', exact: true }).click();
   const bounds = await canvas().boundingBox();
@@ -171,37 +180,43 @@ try {
   });
   await page.touchscreen.tap(focusBefore.x, focusBefore.y);
   await page.waitForFunction(previous => Number(document.querySelector('[data-testid="pdf-zoom-viewport"]').dataset.pdfZoom) > previous, focusBefore.zoom);
-  await page.waitForTimeout(200);
+  // A phone types into the dock's field; the tap's letter becomes the field's caret.
+  const field = page.getByTestId('pdf-paragraph-field');
+  await field.waitFor();
+  await page.waitForFunction(() => document.activeElement?.dataset?.testid === 'pdf-paragraph-field');
+  await page.waitForTimeout(300);
   const focusAfter = await ordinaryParagraph.evaluate((element, anchor) => {
     const block = element.getBoundingClientRect();
     const pdf = element.closest('[data-pdf-page]').getBoundingClientRect();
-    const selection = window.getSelection();
-    const caret = document.createRange();
-    caret.setStart(selection.focusNode, selection.focusOffset);
-    caret.collapse(true);
     return {
-      x: pdf.left + anchor.pageX * pdf.width,
       y: pdf.top + anchor.pageY * pdf.height,
       blockTop: (block.top - pdf.top) / pdf.height,
       windowScrollY: window.scrollY,
-      editable: element.isContentEditable,
       userSelect: getComputedStyle(element).userSelect,
-      caret: caret.getBoundingClientRect().toJSON(),
+      block: block.toJSON(),
       viewport: element.closest('[data-testid="pdf-zoom-viewport"]').getBoundingClientRect().toJSON(),
+      pageFocused: document.activeElement === element,
     };
   }, focusBefore);
-  assert.ok(Math.abs(focusAfter.x - focusBefore.x) < 2, `focus zoom moved the selected page point horizontally: ${JSON.stringify({ focusBefore, focusAfter })}`);
+  // The page fits the paragraph's whole width and centres it, so the tapped point no longer
+  // stays put sideways. It stays put vertically.
+  assert.ok(focusAfter.block.left >= focusAfter.viewport.left - 1 && focusAfter.block.right <= focusAfter.viewport.right + 1,
+    `the paragraph is not fully within the PDF viewport horizontally: ${JSON.stringify(focusAfter)}`);
   assert.ok(Math.abs(focusAfter.y - focusBefore.y) < 2, `focus zoom moved the selected page point vertically: ${JSON.stringify({ focusBefore, focusAfter })}`);
   assert.ok(Math.abs(focusAfter.blockTop - focusBefore.blockTop) < 0.0001, 'focus zoom altered PDF-relative block position');
   assert.equal(focusAfter.windowScrollY, focusBefore.windowScrollY, 'focus zoom scrolled the application page');
-  assert.equal(focusAfter.editable, true);
+  assert.equal(focusAfter.pageFocused, false, 'the page paragraph kept focus while the dock field types');
+  assert.equal(await field.getAttribute('data-field-for') !== null, true);
   assert.equal(focusAfter.userSelect, 'text', 'touch selection is unavailable');
+  const fieldState = await field.evaluate(element => ({ value: element.value, caret: element.selectionStart, end: element.selectionEnd }));
+  assert.equal(fieldState.value, 'This is QA content for tool verification.', 'the field does not show the paragraph text');
+  assert.equal(fieldState.caret, fieldState.end);
+  assert.ok(fieldState.caret > 0 && fieldState.caret < fieldState.value.length, `the caret is not at the tapped letter: ${fieldState.caret}`);
   // The bottom bar has to stay on screen when the keyboard is up, which is the one moment it
   // matters. A phone raises the keyboard by shrinking the WebView, so shrinking the viewport
   // reproduces it exactly — and catches the real cause, which is never the bar's own CSS: any
   // ancestor left holding a transform becomes the containing block for `position: fixed`, and the
   // bar silently re-anchors to that ancestor's taller box instead of the viewport.
-  await page.waitForFunction(() => document.activeElement?.dataset?.testid === 'pdf-text-block');
   await page.setViewportSize({ width: 390, height: 530 });
   await page.waitForTimeout(400);
   const keyboardChrome = await page.evaluate(() => {
@@ -225,47 +240,48 @@ try {
     keyboardChrome.bottom !== null && keyboardChrome.bottom <= keyboardChrome.innerHeight + 1,
     `editor bottom bar ends at ${keyboardChrome.bottom} with only ${keyboardChrome.innerHeight} visible`,
   );
-  const keyboardCaret = await ordinaryParagraph.evaluate(element => {
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.setStart(selection.focusNode, selection.focusOffset);
-    range.collapse(true);
-    const caret = range.getBoundingClientRect();
+  // The field sits in the dock above the keyboard, and the paragraph being typed stays in view.
+  const keyboardView = await ordinaryParagraph.evaluate(element => {
     const viewport = element.closest('[data-testid="pdf-zoom-viewport"]').getBoundingClientRect();
     const inspector = document.querySelector('[data-testid="pdf-paragraph-inspector"]').closest('.chef-chrome').getBoundingClientRect();
+    const field = document.querySelector('[data-testid="pdf-paragraph-field"]').getBoundingClientRect();
     const block = element.getBoundingClientRect();
     const pdf = element.closest('[data-pdf-page]').getBoundingClientRect();
-    return { top: caret.top, bottom: caret.bottom, visibleTop: viewport.top, visibleBottom: Math.min(viewport.bottom, inspector.top, window.innerHeight), blockTop: (block.top - pdf.top) / pdf.height };
+    return {
+      blockTop: block.top, blockBottom: block.bottom, fieldBottom: field.bottom,
+      visibleTop: viewport.top, visibleBottom: Math.min(viewport.bottom, inspector.top, window.innerHeight),
+      relTop: (block.top - pdf.top) / pdf.height, innerHeight: window.innerHeight,
+    };
   });
-  assert.ok(keyboardCaret.top >= keyboardCaret.visibleTop - 1, 'keyboard avoidance scrolled the caret above the PDF viewport');
-  assert.ok(keyboardCaret.bottom <= keyboardCaret.visibleBottom + 1, 'keyboard or inspector obscures the caret');
-  assert.ok(Math.abs(keyboardCaret.blockTop - focusBefore.blockTop) < 0.0001, 'keyboard resize altered PDF-relative block position');
-  await ordinaryParagraph.press('ControlOrMeta+A');
-  assert.equal(await page.evaluate(() => window.getSelection()?.toString()), 'This is QA content for tool verification.', 'native selection no longer selects existing text');
+  assert.ok(keyboardView.blockTop >= keyboardView.visibleTop - 1, 'keyboard avoidance scrolled the paragraph above the PDF viewport');
+  assert.ok(keyboardView.blockBottom <= keyboardView.visibleBottom + 1, 'keyboard or inspector obscures the paragraph');
+  assert.ok(keyboardView.fieldBottom <= keyboardView.innerHeight + 1, 'the dock field is below the visible area');
+  assert.ok(Math.abs(keyboardView.relTop - focusBefore.blockTop) < 0.0001, 'keyboard resize altered PDF-relative block position');
+  await field.press('ControlOrMeta+A');
+  assert.equal(await field.evaluate(element => element.value.slice(element.selectionStart, element.selectionEnd)), 'This is QA content for tool verification.', 'native selection no longer selects existing text');
   await page.keyboard.insertText('This is QA content for tool verification!');
+  await page.getByTestId('pdf-block-preview').first().waitFor();
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   assert.equal(await ordinaryParagraph.innerText(), 'This is QA content for tool verification!', 'Done discarded the inline change');
   assert.equal(await ordinaryParagraph.evaluate(element => document.activeElement === element), false, 'Done did not dismiss editing');
-  await page.getByRole('button', { name: 'Undo added element change' }).click();
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
   assert.equal(await ordinaryParagraph.innerText(), 'This is QA content for tool verification.', 'Undo did not restore the original paragraph');
-  await ordinaryParagraph.click();
-  await ordinaryParagraph.press('ControlOrMeta+A');
+  await ordinaryParagraph.tap();
+  await page.waitForFunction(() => document.activeElement?.dataset?.testid === 'pdf-paragraph-field');
+  await field.press('ControlOrMeta+A');
   await page.keyboard.insertText('This is QA content for tool verification. More.');
-  const overflowHint = page.getByTestId('pdf-block-overflow');
-  await overflowHint.waitFor();
-  const hintGeometry = await overflowHint.evaluate(hint => {
-    const selection = getSelection();
-    const range = document.createRange();
-    range.setStart(selection.focusNode, selection.focusOffset);
-    range.collapse(true);
-    return { hint: hint.getBoundingClientRect().toJSON(), caret: range.getBoundingClientRect().toJSON(), width: innerWidth, height: innerHeight };
-  });
-  assert.ok(hintGeometry.hint.left >= 0 && hintGeometry.hint.right <= hintGeometry.width,
-    'the mobile overflow hint is clipped horizontally');
-  assert.ok(hintGeometry.hint.top >= 0 && hintGeometry.hint.bottom <= hintGeometry.height,
-    'the keyboard obscures the mobile overflow hint');
-  assert.ok(hintGeometry.hint.top >= hintGeometry.caret.bottom || hintGeometry.hint.bottom <= hintGeometry.caret.top,
-    'the overflow hint obscures the caret');
+  // Redrawn text wraps within its width, so a longer line no longer raises the "Longer than the
+  // original line" caution; the details behind the info button open without taking the caret
+  // out of the dock field.
+  await page.getByTestId('pdf-block-preview').first().waitFor();
+  assert.equal(await field.inputValue(), 'This is QA content for tool verification. More.');
+  assert.doesNotMatch(await page.getByTestId('pdf-paragraph-status').innerText(), /Longer than the original line/,
+    'wrapped text still claims to be longer than the original line');
+  await page.getByRole('button', { name: 'About this change' }).click();
+  await page.getByTestId('pdf-paragraph-provenance').filter({ hasText: /Long lines wrap to fit its width/ }).waitFor();
+  assert.equal(await field.evaluate(element => document.activeElement === element), true,
+    'opening the change details took the caret out of the field');
+  assert.equal(await page.getByTestId('pdf-block-overflow').count(), 0, 'a floating overflow hint still covers the page');
   await page.getByRole('button', { name: 'Revert this paragraph' }).click();
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
@@ -294,8 +310,8 @@ try {
   assert.equal(await paragraphs.first().evaluate(element => element.tabIndex), 0);
 
   await place('text');
-  const undo = page.getByRole('button', { name: 'Undo added element change' });
-  const redo = page.getByRole('button', { name: 'Redo added element change' });
+  const undo = page.getByRole('button', { name: 'Undo', exact: true });
+  const redo = page.getByRole('button', { name: 'Redo', exact: true });
   const inlineTextEditor = page.getByRole('textbox', { name: 'Edit text on page 1' });
   await inlineTextEditor.waitFor();
   assert.equal(
@@ -303,6 +319,8 @@ try {
     true,
     'selecting placed text did not focus its inline editor',
   );
+  // A new text box starts empty (placeholder "Text") and zooms to 16 px text on focus.
+  assert.equal(await inlineTextEditor.inputValue(), '', 'a new text box should start empty');
   await inlineTextEditor.pressSequentially('Dhananajay');
   assert.equal(await inlineTextEditor.inputValue(), 'Dhananajay');
   await page.screenshot({ path: inlineTextScreenshotPath, fullPage: true });
@@ -312,13 +330,21 @@ try {
     false,
     'Escape did not leave inline editing',
   );
+  // One Undo reverts the typing session. The box is then empty, and an empty box that is not
+  // selected is removed; while selected it stays, empty.
   await undo.click();
   const canvasText = page.locator('[role="group"][aria-label^="text on page "]').last();
-  assert.equal((await canvasText.textContent())?.trim(), 'Text', 'one Undo did not revert the inline typing session');
+  const textBoxes = page.locator('[role="group"][aria-label^="text on page "]');
+  await page.waitForFunction(() => ![...document.querySelectorAll('[role="group"][aria-label^="text on page "]')]
+    .some((box) => box.textContent?.includes('Dhananajay')));
+  assert.ok(await textBoxes.count() === 0 || (await canvasText.textContent())?.trim() === '',
+    'one Undo did not revert the inline typing session');
   await redo.click();
   await canvasText.click();
   assert.equal(await inlineTextEditor.inputValue(), 'Dhananajay', 'Redo did not restore inline text');
 
+  // The add row waits while a text box is selected; Done brings it back.
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
   await place('shape');
   await page.screenshot({ path: screenshotPath, fullPage: true });
 
@@ -360,23 +386,24 @@ try {
     widthStart,
   );
 
-  let closePrompt = '';
-  page.once('dialog', async dialog => {
-    closePrompt = dialog.message();
-    await dialog.dismiss();
-  });
+  // Leaving asks in the app's own sheet; keeping the edits leaves the editor open.
   await page.getByRole('button', { name: 'Close editor' }).click();
-  assert.match(closePrompt, /Discard your unsaved edits/);
+  await page.getByText(/Save your edits/).waitFor();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await canvas().waitFor({ state: 'visible' });
 
   await page.locator('#main').getByRole('button', { name: 'Save', exact: true }).click();
-  await page.getByText('Edited PDF ready. Review it before sharing.').waitFor({ timeout: 60_000 });
+  // A complete save shows no banner of its own: the result sheet says it.
+  await page.getByRole('dialog').filter({ hasText: 'Result ready' }).waitFor({ timeout: 60_000 });
+  await closeResultSheet();
   await page.getByRole('button', { name: 'Close editor' }).click();
   await page.getByText('Choose a PDF to edit').waitFor();
 
   await page.locator('input[type=file][accept=".pdf"]').setInputFiles(fixture);
   await canvas().waitFor({ state: 'visible', timeout: 60_000 });
   await place('text');
+  // An empty new text box is dropped when let go, so give it text to save.
+  await page.getByRole('textbox', { name: 'Edit text on page 1' }).fill('Saved text');
   await page.evaluate(() => {
     localStorage.setItem('pdfchef.workspace.settings.v1', JSON.stringify({
       autoDownload: false,
@@ -389,17 +416,42 @@ try {
     Object.defineProperty(window, 'indexedDB', { configurable: true, value: undefined });
   });
   await page.locator('#main').getByRole('button', { name: 'Save', exact: true }).click();
-  await page.getByText('Unable to save the edited PDF. Your edits are still here so you can try again.').waitFor();
-  let failurePrompt = '';
-  page.once('dialog', async dialog => {
-    failurePrompt = dialog.message();
-    await dialog.dismiss();
+  // Keeping the file in Recent failed, but the file was made: the editor and the result agree.
+  // A complete save shows no banner of its own: the result sheet says it.
+  await page.getByRole('dialog').filter({ hasText: 'Result ready' }).waitFor({ timeout: 60_000 });
+  await page.locator('aside[role="status"]').getByText(/available until dismissed/).waitFor();
+  assert.equal(await page.getByText(/Unable to save the edited PDF|Saving did not complete/).count(), 0,
+    'a failed history write was reported as a failed save');
+  await closeResultSheet();
+
+  // A save that really fails keeps the edits unsaved.
+  await place('text');
+  // An empty new text box is dropped when let go, so give it text to save.
+  await page.getByRole('textbox', { name: 'Edit text on page 1' }).fill('Saved text');
+  await page.evaluate(() => {
+    localStorage.setItem('pdfchef.workspace.settings.v1', JSON.stringify({
+      autoDownload: true,
+      keepLocalHistory: false,
+      confirmLargeJobs: false,
+      largeFileWarningMb: 80,
+      onboardingComplete: true,
+      interfaceFont: 'inter',
+    }));
+    delete window.showSaveFilePicker;
+    HTMLAnchorElement.prototype.click = () => { throw new Error('Download blocked'); };
   });
+  await page.locator('#main').getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByText('Unable to save the edited PDF. Your edits are still here so you can try again.').waitFor();
+  // The exact bytes stay on the result sheet so Save can be retried from there.
+  await closeResultSheet();
+  // Leaving asks in the app's own sheet; keeping the edits leaves the editor open.
   await page.getByRole('button', { name: 'Close editor' }).click();
-  assert.match(failurePrompt, /Discard your unsaved edits/);
+  await page.getByText(/Save your edits/).waitFor();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await canvas().waitFor({ state: 'visible' });
 
-  const unexpectedErrors = consoleErrors.filter(message => !message.includes('Local history is unavailable'));
+  const unexpectedErrors = consoleErrors.filter(message =>
+    !message.includes('Local history is unavailable') && !message.includes('Download blocked'));
   assert.deepEqual(unexpectedErrors, []);
   console.log(JSON.stringify({
     status: 'PASS',
@@ -408,9 +460,9 @@ try {
     checked: [
       'touchscreen pinch-in and pinch-out inside the PDF viewport',
       'one-finger vertical scrolling stays inside the zoomed PDF box',
-      'touch focus zoom preserves the selected PDF point and native text selection',
-      'keyboard and inspector leave the caret visible without changing PDF-relative position',
-      'overflow guidance stays readable above the keyboard without covering the caret',
+      'touch focus zoom fits the whole paragraph in the viewport, keeps its vertical point, and puts the caret in the dock field',
+      'keyboard and inspector leave the paragraph and dock field visible without changing PDF-relative position',
+      'wrapped text raises no "longer than the original line" caution',
       'Done retains existing-text changes and Undo restores them',
       'visible Next and Previous page controls render different PDF pages',
       'reconstructed paragraphs go inert while an insert is armed',
@@ -420,6 +472,7 @@ try {
       'keyboard move and resize undo',
       'dirty Close cancellation',
       'successful save clears dirty baseline',
+      'failed history write still delivers without a failed-save message',
       'failed delivery preserves dirty baseline',
       'no horizontal overflow',
     ],

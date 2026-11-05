@@ -53,7 +53,7 @@ Use a clear two-column flow on desktop: operation/settings first, ordered file q
 
 ### Output card and history
 
-The output card is an `aria-live` success surface with filename editing, Save as the primary action, optional Share, and History. It states “saved locally in this browser” rather than implying server storage. History lists filename, originating tool, size, and local timestamp with individual delete, clear-all, loading, error, and empty states. Deletion copy distinguishes browser-local outputs from files already saved to the device.
+The output card is an `aria-live` success surface with filename editing, one primary action, quieter outlined actions in two columns, and History. Save is the primary action until the file is saved to the device; after that Share is, and Save is removed. The location is stated once, in the description. It states “saved locally in this browser” rather than implying server storage. History lists filename, originating tool, size, and local timestamp with individual delete, clear-all, loading, error, and empty states. Deletion copy distinguishes browser-local outputs from files already saved to the device.
 
 ### Settings and onboarding
 

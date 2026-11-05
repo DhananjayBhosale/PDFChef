@@ -9,6 +9,7 @@ import type { ToolCardData } from '../Tools/toolCatalog';
 import { ToolIdentity } from '../Tools/ToolIdentity';
 import { cx } from '../UI/Primitives';
 import { useHaptics } from '../../hooks/useWorkspaceRuntime';
+import './tabBarGlass.css';
 
 /**
  * Three destinations, named for what is in them. "Tools" rather than "Home",
@@ -170,9 +171,10 @@ const TabBar: React.FC = () => {
   return (
     <nav
       aria-label={t("app-shell.primary.efe10c")}
-      className="chef-chrome chef-tab-bar chef-safe-bottom chef-safe-x fixed inset-x-0 bottom-0 z-40 border-t md:hidden"
+      className="chef-chrome chef-tab-bar chef-safe-bottom chef-safe-x fixed inset-x-0 bottom-0 z-40 md:hidden"
     >
-      <ul className="mx-auto flex max-w-xl">
+      {/* A glass island inset from the edges; see tabBarGlass.css. */}
+      <ul className="chef-tab-dock mx-auto flex max-w-xl">
         {TABS.map(({ to, label, icon: Icon, match }) => {
           const active = match(location.pathname);
           return (
@@ -185,11 +187,11 @@ const TabBar: React.FC = () => {
                 aria-current={active ? 'page' : undefined}
                 onPointerDown={() => haptic('selection')}
                 className={cx(
-                  'chef-pressable flex min-h-[var(--size-tab-bar)] flex-col items-center justify-center gap-1 py-1.5',
-                  active ? 'font-bold text-[var(--accent-on-quiet)]' : 'text-[var(--text-secondary)]',
+                  'chef-tab chef-pressable flex min-h-[calc(var(--size-tab-bar)-8px)] flex-col items-center justify-center gap-1 rounded-full py-1',
+                  active ? 'font-bold text-[var(--accent-on-quiet)]' : 'text-[var(--chef-tab-rest)]',
                 )}
               >
-                <span className={cx('grid rounded-[var(--radius-pill)] px-3 py-0.5', active && 'bg-[var(--accent-quiet)]')}>
+                <span className="grid px-3">
                   <Icon aria-hidden size={24} strokeWidth={active ? 2.5 : 1.9} />
                 </span>
                 <span className="text-[0.8125rem] font-semibold leading-none tracking-[0.005em]">{label}</span>

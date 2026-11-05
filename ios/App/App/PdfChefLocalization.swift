@@ -1,7 +1,8 @@
 import UIKit
 
 /// Native screens speak the language chosen in the app, which the web layer sends when it
-/// starts and whenever it changes. Until then they use the last language sent, or the system's.
+/// starts and whenever it changes. Until then they use the last language sent. "system" means
+/// the app follows the phone, so native screens use the system's choice.
 /// Text comes from Localizable.xcstrings, keyed by its English wording, which is the fallback.
 enum PdfChefLocalization {
     private static let languageKey = "PdfChefLanguage"
@@ -29,8 +30,13 @@ enum PdfChefLocalization {
     }
 
     static func setLanguage(_ language: String) {
-        UserDefaults.standard.set(language, forKey: languageKey)
-        let selection = Selection(language)
+        let chosen = language == "system" ? nil : language
+        if let chosen {
+            UserDefaults.standard.set(chosen, forKey: languageKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: languageKey)
+        }
+        let selection = Selection(chosen)
         lock.withLock { current = selection }
     }
 

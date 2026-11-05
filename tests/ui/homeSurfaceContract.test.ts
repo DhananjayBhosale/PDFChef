@@ -121,7 +121,7 @@ test('the result line is visible as well as announced once a query exists', () =
 test('the two-line subtitle clamp is released once the reader asks for larger text', () => {
   assert.match(
     appCss,
-    /html\[data-text-scale='large'\] \.chef-clamp-2,\s*html\[data-text-scale='larger'\] \.chef-clamp-2 \{[\s\S]*?-webkit-line-clamp: unset;/,
+    /html\[data-text-scale='large'\] \.chef-clamp-2,\s*html\[data-text-scale='larger'\] \.chef-clamp-2,\s*html\[data-system-text-scale='large'\] \.chef-clamp-2 \{[\s\S]*?-webkit-line-clamp: unset;/,
   );
 });
 
@@ -193,18 +193,18 @@ test('category selection is a raised chip on a sunken track, not a flat accent f
   assert.doesNotMatch(strip, /tabular text-\[0\.6875rem\]/);
 });
 
-test('the privacy claim is a line under the title, not a third lozenge', () => {
+test('the privacy claim is three ticked words under the title, not a third lozenge', () => {
   // It had been a bordered, shadowed 46px card directly above a bordered 38px
   // field and a bordered 46px strip: three near-identical shapes and no
-  // hierarchy. `items-start` is what keeps the glyph beside the first line
-  // rather than centred against four wrapped ones at 200% text.
-  const note = dashboard.slice(dashboard.indexOf('role="note"'), dashboard.indexOf('{monetizationAvailable && ('));
-  assert.match(note, /role="note" className="flex items-start gap-2"/);
+  // hierarchy. Short ticked labels wrap as whole items at 200% text.
+  const note = dashboard.slice(dashboard.indexOf('<ul role="list"'), dashboard.indexOf('{monetizationAvailable && ('));
+  assert.match(note, /<ul role="list" className="flex flex-wrap/);
   assert.doesNotMatch(note, /border|shadow-|surface-raised/);
-  assert.equal(english["dashboard.processed.on.this.device.6f6da5"], 'Processed on this device.');
-  assert.equal(english["dashboard.nothing.is.uploaded.a8596d"], 'Nothing is uploaded.');
-  assert.match(note, /t\("dashboard\.processed\.on\.this\.device\.6f6da5"\)/);
-  assert.match(note, /t\("dashboard\.nothing\.is\.uploaded\.a8596d"\)/);
+  assert.equal(english["dashboard.private.c63eb6"], 'Private');
+  assert.equal(english["dashboard.safe.4f9f0d"], 'Safe');
+  assert.equal(english["dashboard.no.uploads.6d155c"], 'No uploads');
+  assert.match(note, /"dashboard\.private\.c63eb6", "dashboard\.safe\.4f9f0d", "dashboard\.no\.uploads\.6d155c"/);
+  assert.match(note, /<Check\b/);
   // The trailing padlock was a second glyph making the same claim, and it was
   // the thing left floating mid-air once the sentence wrapped.
   assert.doesNotMatch(dashboard, /\bLock\b/);
@@ -225,7 +225,8 @@ test('the page padding sits outside the measure, so every edge lines up with the
 test('the brand mark yields room to the product name as the reader text grows', () => {
   // Android's 50dp mark is fixed artwork beside a name that scales; at 200% it
   // was taking a third of a 320px line away from the name itself.
-  assert.match(dashboard, /clamp\(32px, calc\(50px \/ var\(--text-scale, 1\)\), 50px\)/);
+  // The in-app Text size and, on iPhone, the phone's text size both count.
+  assert.match(dashboard, /clamp\(32px, calc\(50px \/ \(var\(--text-scale, 1\) \* var\(--system-text-scale, 1\)\)\), 50px\)/);
   // The chevron column is thirty-four glyphs deep. Android draws it at 0.72.
   assert.match(dashboard, /ChevronRight aria-hidden size=\{22\} className="rtl:rotate-180 shrink-0 text-\[var\(--text-tertiary\)\] opacity-70"/);
 });

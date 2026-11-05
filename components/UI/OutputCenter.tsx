@@ -47,7 +47,6 @@ export const OutputCenter: React.FC = () => {
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const recordRef = useRef<OutputReadyRecord | null>(null);
   recordRef.current = record;
@@ -91,7 +90,6 @@ export const OutputCenter: React.FC = () => {
     setExported(false);
     setSaved(null);
     setShared(false);
-    setNotice('');
     setRenameOpen(false);
     setError('');
   }, [abandonPendingSave]);
@@ -113,7 +111,6 @@ export const OutputCenter: React.FC = () => {
       ));
       setMoreOpen(true);
       setRenameOpen(false);
-      setNotice('');
       setError(next.deliveryIssue === 'cancelled'
         ? t("output-center.save.cancelled.your.result.is.still.available.79e0fc")
         : next.deliveryIssue === 'failed'
@@ -196,22 +193,7 @@ export const OutputCenter: React.FC = () => {
   const result = record.blob ? { blob: record.blob, name: safeName, mimeType } : null;
   const accessLocked = Boolean(record.accessLocked && !access?.unlocked);
 
-  const savedMessage = (savedName: string) => folder
-    ? t("output-center.saved.to.as.cf91b2", { v0: folder, v1: savedName })
-    : t("output-center.saved.4a9b73", { v0: savedName });
-
   const downloadResult = async () => {
-    // A copy already in Downloads is reported, not copied again: repeated taps used to leave
-    // "Name.pdf", "Name (1).pdf" and "Name (2).pdf" side by side.
-    if (saved?.exportRef && platform.renameSaved) {
-      try {
-        const savedName = await platform.renameSaved(saved.exportRef, saved.savedName);
-        if (recordRef.current?.id === record.id) setNotice(savedMessage(savedName));
-        return true;
-      } catch {
-        // Deleted from Downloads, or saved more than a day ago: save a new copy.
-      }
-    }
     let copy: SavedCopy | void = undefined;
     const download = async () => {
       copy = await (recent ? platform.save(recent, safeName) : platform.saveFresh(result!));
@@ -231,7 +213,6 @@ export const OutputCenter: React.FC = () => {
       setSaved(kept);
       setName(kept.savedName);
     }
-    setNotice(savedMessage(kept ? kept.savedName : safeName));
     return true;
   };
 
@@ -261,6 +242,50 @@ export const OutputCenter: React.FC = () => {
     else dismiss();
     navigate('/view', { state: { openTools: openTools && !accessLocked, openedPdfId: opened.id } });
   };
+
+  // One filled button. Save until a copy is on the device, then Share (Open PDF if the
+  // platform cannot share). Once saved, Download would only make a second copy.
+  const savedOnDevice = Boolean(saved) || exported;
+  const canShare = Boolean(recent ? platform.share : platform.shareFresh);
+  const primary: 'save' | 'share' | 'open' | null = !savedOnDevice ? 'save'
+    : canShare ? 'share' : isPdf ? 'open' : null;
+  const savedIn = savedOnDevice && folder ? t("output-center.in.6ca2da", { v0: folder }) : '';
+
+  const shareButton = canShare && (
+    <Button
+      block
+      tone={primary === 'share' ? 'primary' : 'secondary'}
+      icon={<Share2 aria-hidden size={16} />}
+      onClick={() => void act(async () => {
+        const share = () => recent ? platform.share!(recent, safeName) : platform.shareFresh!(result!);
+        if (!accessLocked) {
+          await share();
+        } else {
+          const accessResult = await runWithExportAccess(share, { operationId: record.id });
+          if (accessResult.status === 'blocked') return false;
+        }
+        if (recordRef.current?.id === record.id) setShared(true);
+        return true;
+      }, t("output-center.sharing.did.not.complete.bf9347"))}
+    >{t("output-center.share.29887a")}</Button>
+  );
+  const openButton = isPdf && (
+    <Button
+      block
+      tone={primary === 'open' ? 'primary' : 'secondary'}
+      icon={<ExternalLink aria-hidden size={16} />}
+      onClick={() => void act(() => openPdf(false), t("output-center.that.file.could.not.be.saved.4d740f"))}
+    >{t("output-center.open.pdf.5b1034")}</Button>
+  );
+  const primaryAction = primary === 'save' ? (
+    <Button
+      block
+      tone="primary"
+      busy={busy}
+      icon={<Download aria-hidden size={16} />}
+      onClick={() => void act(downloadResult, t("output-center.that.file.could.not.be.saved.4d740f"))}
+    >{t("output-center.download.9ce5b1")}</Button>
+  ) : primary === 'share' ? shareButton : primary === 'open' ? openButton : null;
 
   return (
     <>
@@ -319,88 +344,59 @@ export const OutputCenter: React.FC = () => {
         open={moreOpen}
         onClose={closeMore}
         title={exported && isPdf ? t("output-center.pdf.exported.67ba14") : t("output-center.result.ready.572c0b")}
-        description={`${safeName} · ${formatBytes(record.size ?? null)}`}
+        description={`${safeName} · ${formatBytes(record.size ?? null)}${savedIn}`}
       >
         <div className="space-y-2">
-          <Button
-            block
-            icon={<Pencil aria-hidden size={16} />}
-            onClick={() => {
-              setRenameValue(originalExtension
-                ? safeName.slice(0, -originalExtension.length)
-                : safeName);
-              setError('');
-              setMoreOpen(false);
-              setRenameOpen(true);
-            }}
-          >{t("output-center.rename.3064d7")}</Button>
-          {/* Keeping is offered only while the result is not in Recent. A greyed "Saved" here
-              read as "saved to the phone" when the file was only inside the app. */}
-          {platform.keepFresh && !retained && !recent && (
+          {primaryAction}
+          <div className="grid grid-cols-2 gap-2">
+            {primary !== 'share' && shareButton}
+            {primary !== 'open' && openButton}
             <Button
               block
-              busy={busy}
-              icon={<CheckCircle2 aria-hidden size={16} />}
-              onClick={() => void act(keepResult, t("output-center.that.file.could.not.be.saved.4d740f"))}
-            >{t("output-center.keep.in.recent.36bf88")}</Button>
-          )}
-          <Button
-            block
-            disabled={recent ? !platform.share : !platform.shareFresh}
-            icon={<Share2 aria-hidden size={16} />}
-            onClick={() => void act(async () => {
-              const share = () => recent ? platform.share!(recent, safeName) : platform.shareFresh!(result!);
-              if (!(recent ? platform.share : platform.shareFresh)) return false;
-              if (!accessLocked) {
-                await share();
-              } else {
-                const accessResult = await runWithExportAccess(share, { operationId: record.id });
-                if (accessResult.status === 'blocked') return false;
-              }
-              if (recordRef.current?.id === record.id) setShared(true);
-              return true;
-            }, t("output-center.sharing.did.not.complete.bf9347"))}
-          >{t("output-center.share.29887a")}</Button>
-          <Button
-            block
-            icon={<Download aria-hidden size={16} />}
-            onClick={() => {
-              setNotice('');
-              void act(downloadResult, t("output-center.that.file.could.not.be.saved.4d740f"));
-            }}
-          >{t("output-center.download.9ce5b1")}</Button>
-          {notice && <StatusLine tone="success">{notice}</StatusLine>}
-          <Button
-            block
-            icon={<Wrench aria-hidden size={16} />}
-            onClick={() => {
-              if (isPdf) {
-                void act(() => openPdf(true), t("output-center.that.file.could.not.be.saved.4d740f"));
-                return;
-              }
-              if (unsaved) setMoreOpen(false);
-              else dismiss();
-              returnToTools(navigate);
-            }}
-          >{t("app-shell.tools.ea93d6")}</Button>
-          <div className="border-t border-[var(--border-hairline)] pt-2" />
-          {isPdf && (
-            <Button
-              block
-              icon={<ExternalLink aria-hidden size={16} />}
-              onClick={() => void act(() => openPdf(false), t("output-center.that.file.could.not.be.saved.4d740f"))}
-            >{t("output-center.open.pdf.5b1034")}</Button>
-          )}
-          {!accessLocked && retained && (
-            <Button
-              block
-              icon={<Clock aria-hidden size={16} />}
+              icon={<Pencil aria-hidden size={16} />}
               onClick={() => {
-                dismiss();
-                navigate('/recent');
+                setRenameValue(originalExtension
+                  ? safeName.slice(0, -originalExtension.length)
+                  : safeName);
+                setError('');
+                setMoreOpen(false);
+                setRenameOpen(true);
               }}
-            >{t("output-center.show.in.recent.dad6bc")}</Button>
-          )}
+            >{t("output-center.rename.3064d7")}</Button>
+            <Button
+              block
+              icon={<Wrench aria-hidden size={16} />}
+              onClick={() => {
+                if (isPdf) {
+                  void act(() => openPdf(true), t("output-center.that.file.could.not.be.saved.4d740f"));
+                  return;
+                }
+                if (unsaved) setMoreOpen(false);
+                else dismiss();
+                returnToTools(navigate);
+              }}
+            >{t("output-center.use.in.another.tool.a1c3e7")}</Button>
+            {/* Keeping is offered only while the result is not in Recent. A greyed "Saved" here
+                read as "saved to the phone" when the file was only inside the app. */}
+            {platform.keepFresh && !retained && !recent && (
+              <Button
+                block
+                busy={busy}
+                icon={<CheckCircle2 aria-hidden size={16} />}
+                onClick={() => void act(keepResult, t("output-center.that.file.could.not.be.saved.4d740f"))}
+              >{t("output-center.keep.in.recent.36bf88")}</Button>
+            )}
+            {!accessLocked && retained && (
+              <Button
+                block
+                icon={<Clock aria-hidden size={16} />}
+                onClick={() => {
+                  dismiss();
+                  navigate('/recent');
+                }}
+              >{t("output-center.show.in.recent.dad6bc")}</Button>
+            )}
+          </div>
         </div>
       </Sheet>
 
@@ -448,12 +444,7 @@ export const OutputCenter: React.FC = () => {
                 // The tool that made this result may still show its name (Create PDF's scan card).
                 if (recent) announceOutputRenamed(record.id, nextName);
                 if (recordRef.current?.id !== record.id) return;
-                if (renamedCopy) {
-                  setSaved(current => current && { ...current, savedName: nextName });
-                  setNotice(savedMessage(nextName));
-                } else {
-                  setNotice('');
-                }
+                if (renamedCopy) setSaved(current => current && { ...current, savedName: nextName });
                 setName(nextName);
                 setRenameOpen(false);
                 setMoreOpen(true);

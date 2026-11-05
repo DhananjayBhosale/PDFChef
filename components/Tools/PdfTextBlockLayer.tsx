@@ -1,8 +1,15 @@
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { blockStyledSegments, planBlockEdit, preserveStyledTextEdit, styledTextEqual, type StyledSegment } from '../../services/pdfBlockEditPlanning';
+import {
+  blockStyledSegments,
+  planBlockEdit,
+  preserveStyledTextEdit,
+  segmentInks,
+  splitByInk,
+  styledTextEqual,
+  type StyledSegment,
+} from '../../services/pdfBlockEditPlanning';
 export type { StyledSegment } from '../../services/pdfBlockEditPlanning';
 import type { PdfTextAlign, PdfTextBlock, PdfTextLine } from '../../services/pdfTextBlocks';
 import {
@@ -15,6 +22,8 @@ import {
   type PdfFocusAnchor,
 } from '../../services/pdfEditingFocus';
 import { normalizeParagraphLineBreaks } from '../../services/pdfParagraphLayout';
+import { glyphInkColors, sampleGlyphInks } from '../../services/pdfGlyphInks';
+import { highlightPatches, measureTextHighlight, type TextHighlight } from '../../services/pdfTextHighlight';
 import {
   fitTextMetrics,
   measureTextWidth,
@@ -44,14 +53,28 @@ export interface BlockEditState {
   fontSize?: number;
   /** The edited text split by the faces it is drawn with, so a redraw keeps them. */
   segments?: StyledSegment[][];
+  /** Indexes in `text` of the breaks that only mark the PDF's wrapping (see `softLineBreaks`). */
+  softBreaks?: number[];
   /** Text-free render of the block's area, used to hide the original text once it changes. */
   patch?: string;
   patchColor?: string;
   patchFlat?: boolean;
   /** False while the paragraph's page has never been rendered, so its colours are assumed. */
   sampledColors?: boolean;
+  /** The reader chose `color` for the whole paragraph, even if it matches the page's own. */
+  recolored?: boolean;
   reflowing: boolean;
 }
+
+/**
+ * Whether an edit asks for a look of its own beyond its words. The colour sampled off the page is
+ * recorded on every edit, so it counts only when the reader picked it or it differs.
+ */
+export const hasParagraphRestyle = (edit: BlockEditState | undefined, ink: string | undefined) => Boolean(edit) && (
+  Boolean(edit!.fontOverride?.klass) || edit!.fontOverride?.bold != null || edit!.fontOverride?.italic != null
+  || edit!.fontSize !== undefined || edit!.recolored === true
+  || (edit!.color !== undefined && edit!.color !== ink)
+);
 
 /** A settled layout from the same plan used by Save. Editing keeps its explicit newlines. */
 export interface BlockTextPreview {
@@ -62,6 +85,8 @@ export interface BlockTextPreview {
   pieces: Array<{
     text: string; x: number; y: number; width: number; lineIndex: number;
     fontSize: number; font: ResolvedFont;
+    /** The piece split by colour, where it mixes colours or differs from the paragraph's. */
+    spans?: Array<{ text: string; color?: string }>;
   }>;
 }
 
@@ -94,6 +119,8 @@ interface Props {
   fonts: Map<string, PdfFontDescriptor>;
   edits: Record<string, BlockEditState>;
   previews?: Record<string, BlockTextPreview>;
+  /** Colours read from the rendered page, so an edited paragraph keeps each word's colour. */
+  colors?: Record<string, { glyphs?: string[][] }>;
   activeBlockId: string | null;
   displayScale: number;
   /** False while a shape or text-box insert is armed, so page taps are not stolen. */
@@ -158,14 +185,15 @@ export const useResolvedBlocks = (
         : font);
     }));
 
-    const runFits = block.lines.map((line: PdfTextLine) => line.runs.map((run) => fitTextMetrics(
-      run.text,
-      run.u1 - run.u0,
-      fontsByKey.get(run.fontKey) ?? font,
-      run.fontSize,
-    )));
+    // A paragraph given a new face is redrawn in it, so it no longer has to fill the original
+    // run widths. Squeezing bold text into the regular face's width runs the words together.
+    const restyled = Boolean(edit?.fontOverride?.klass)
+      || edit?.fontOverride?.bold != null || edit?.fontOverride?.italic != null;
+    const runFits = block.lines.map((line: PdfTextLine) => line.runs.map((run) => (restyled
+      ? { wordSpacing: 0, letterSpacing: 0 }
+      : fitTextMetrics(run.text, run.u1 - run.u0, fontsByKey.get(run.fontKey) ?? font, run.fontSize))));
 
-    const reproducesItsWidth = block.lines.every((line: PdfTextLine, lineIndex) => (
+    const reproducesItsWidth = restyled || block.lines.every((line: PdfTextLine, lineIndex) => (
       line.runs.every((run, runIndex) => {
         const target = run.u1 - run.u0;
         if (!(target > 0) || !run.text.trim()) return true;
@@ -220,6 +248,12 @@ const readBlockText = (element: HTMLElement, allowNonBreakingSpace: boolean) => 
   return allowNonBreakingSpace ? text : text.replace(/\u00a0/g, ' ');
 };
 
+/** Colours stay hidden with the rest of the text until the paragraph is changed. */
+const paintInk = (span: HTMLElement, color: string) => {
+  span.dataset.color = color;
+  span.style.color = `var(--pdf-hidden-ink, ${color})`;
+};
+
 /**
  * Write a paragraph's runs into the editable, one span per run.
  *
@@ -238,13 +272,32 @@ const writeBlockContent = (
   fallback: ResolvedFont,
   fits: Array<Array<{ wordSpacing: number; letterSpacing: number }>> | null,
   baseFontSize: number,
+  inks?: Array<Array<string | undefined> | undefined>,
 ) => {
   const fragment = document.createDocumentFragment();
   lines.forEach((line, lineIndex) => {
     if (lineIndex > 0) fragment.append(document.createTextNode('\n'));
+    let offset = 0;
     line.runs.forEach((run, runIndex) => {
       const span = document.createElement('span');
-      span.textContent = run.text;
+      // A run can mix colours. Each colour gets its own inner span, so the run span keeps the
+      // face and position while a red word inside it stays red and what is typed there with it.
+      const parts = splitByInk(run.text, inks?.[lineIndex]?.slice(offset, offset + run.text.length));
+      offset += run.text.length;
+      if (parts.length === 1 && parts[0].color) {
+        paintInk(span, parts[0].color);
+        span.textContent = run.text;
+      } else if (parts.some((part) => part.color)) {
+        span.append(...parts.map((part) => {
+          if (!part.color) return document.createTextNode(part.text);
+          const inner = document.createElement('span');
+          paintInk(inner, part.color);
+          inner.textContent = part.text;
+          return inner;
+        }));
+      } else {
+        span.textContent = run.text;
+      }
       span.dataset.font = run.fontKey;
       span.dataset.fontSize = String(run.fontSize);
       if (fits) {
@@ -281,7 +334,7 @@ export const readStyledSegments = (
   fallbackFontSize?: number,
 ): StyledSegment[][] => {
   const lines: StyledSegment[][] = [[]];
-  const append = (raw: string, fontKey: string, fontSize?: number) => {
+  const append = (raw: string, fontKey: string, fontSize?: number, color?: string) => {
     const normalized = normalizeParagraphLineBreaks(raw);
     const text = allowNonBreakingSpace ? normalized : normalized.replace(/\u00a0/g, ' ');
     if (!text) return;
@@ -290,14 +343,14 @@ export const readStyledSegments = (
       if (!part) return;
       const current = lines[lines.length - 1];
       const last = current[current.length - 1];
-      if (last && last.fontKey === fontKey && last.fontSize === fontSize) last.text += part;
-      else current.push({ text: part, fontKey, fontSize });
+      if (last && last.fontKey === fontKey && last.fontSize === fontSize && last.color === color) last.text += part;
+      else current.push(color ? { text: part, fontKey, fontSize, color } : { text: part, fontKey, fontSize });
     });
   };
 
-  const walk = (node: Node, inheritedKey: string, inheritedSize?: number) => {
+  const walk = (node: Node, inheritedKey: string, inheritedSize?: number, inheritedColor?: string) => {
     if (node.nodeType === Node.TEXT_NODE) {
-      append(node.textContent ?? '', inheritedKey, inheritedSize);
+      append(node.textContent ?? '', inheritedKey, inheritedSize, inheritedColor);
       return;
     }
     if (!(node instanceof HTMLElement)) return;
@@ -307,7 +360,8 @@ export const readStyledSegments = (
     }
     const key = node.dataset.font || inheritedKey;
     const size = Number(node.dataset.fontSize);
-    node.childNodes.forEach((child) => walk(child, key, size > 0 ? size : inheritedSize));
+    const color = node.dataset.color || inheritedColor;
+    node.childNodes.forEach((child) => walk(child, key, size > 0 ? size : inheritedSize, color));
   };
 
   element.childNodes.forEach((child) => walk(child, fallbackKey, fallbackFontSize));
@@ -332,22 +386,28 @@ const BlockEditor: React.FC<{
   resolved: ResolvedBlock & { stackOrder: number };
   edit: BlockEditState | undefined;
   preview?: BlockTextPreview;
+  inks?: string[][];
+  highlight?: TextHighlight;
   isActive: boolean;
   displayScale: number;
   enabled: boolean;
   onActivate: (blockId: string | null) => void;
   onChange: (blockId: string, text: string, segments: StyledSegment[][]) => void;
   onBeginChange: (blockId: string) => void;
-}> = ({ resolved, edit, preview, isActive, displayScale, enabled, onActivate, onChange, onBeginChange }) => {
+}> = ({ resolved, edit, preview, inks, highlight, isActive, displayScale, enabled, onActivate, onChange, onBeginChange }) => {
   useI18n();
   const { block, font, fontsByKey, runFits, overlayAlign, hitPadding, stackOrder } = resolved;
   const editableRef = useRef<HTMLDivElement>(null);
   const outlineRef = useRef<HTMLDivElement>(null);
-  const overflowRef = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState(false);
   const [composing, setComposing] = useState(false);
   const committedText = useRef(edit?.text ?? block.text);
-  const committedStyles = useRef(edit?.segments ?? blockStyledSegments(block));
+  const committedStyles = useRef(edit?.segments ?? blockStyledSegments(block, inks));
+  // The segments and colours the editable last showed. Anything else arriving — undo, replace, a
+  // colour picked in the inspector, or the page's colours being read — is written in afresh.
+  const shownSegments = useRef(edit?.segments);
+  const shownInks = useRef(inks);
+  const hasEdit = Boolean(edit);
   const inputRange = useRef<{ start: number; end: number } | null>(null);
   const styleRepairNeeded = useRef(false);
   const typingSession = useRef(false);
@@ -357,7 +417,6 @@ const BlockEditor: React.FC<{
   const text = edit?.text ?? block.text;
   const currentPreview = preview?.text === text ? preview : undefined;
   const showPreview = !focused && Boolean(currentPreview);
-  const extendsPastWidth = currentPreview?.pieces.some(piece => piece.x + piece.width > currentPreview.width + 0.5);
   const hasOutgrownItsBox = isDirty && (text.split('\n').length > block.lines.length
     || (currentPreview?.height ?? 0) > block.height + 1);
   const fontSizePx = (edit?.fontSize ?? block.fontSize) * displayScale;
@@ -413,7 +472,8 @@ const BlockEditor: React.FC<{
   useLayoutEffect(() => {
     const element = editableRef.current;
     if (!element) return;
-    const externalChange = !written.current || committedText.current !== text;
+    const externalChange = !written.current || committedText.current !== text
+      || shownSegments.current !== edit?.segments || (!hasEdit && shownInks.current !== inks);
     if (!externalChange) {
       if (composing || text.split('\n').length !== block.lines.length) return;
       if (!styleRepairNeeded.current && !hasDamagedStyleSpans(element)) return;
@@ -452,19 +512,25 @@ const BlockEditor: React.FC<{
           text: segments.map((segment) => segment.text).join(''),
         }));
     writeBlockContent(element, lines, current.fontsByKey, current.font,
-      direct ? current.runFits : null, block.fontSize);
+      direct ? current.runFits : null, block.fontSize,
+      (edit?.segments ?? blockStyledSegments(block, inks)).map(segmentInks));
     committedStyles.current = readStyledSegments(element, block.fontKey, block.text.includes('\u00a0'), block.fontSize);
+    shownSegments.current = edit?.segments;
+    shownInks.current = inks;
     styleRepairNeeded.current = false;
-    if (anchor !== null && focus !== null && selection) {
+    // Only while the paragraph has focus: a selection placed inside it takes focus back, and on
+    // a phone the keyboard with it, after a swatch tap that had deliberately left it closed.
+    if (anchor !== null && focus !== null && selection && document.activeElement === element) {
       const a = blockRange(element, Math.min(anchor, text.length), Math.min(anchor, text.length));
       const f = blockRange(element, Math.min(focus, text.length), Math.min(focus, text.length));
       if (a && f) selection.setBaseAndExtent(a.startContainer, a.startOffset, f.startContainer, f.startOffset);
     }
     if (!externalChange) {
       // The discarded wrapper may have been the only record of an edited bold/italic run.
+      shownSegments.current = committedStyles.current;
       onChange(block.id, text, committedStyles.current);
     }
-  }, [block, text, edit?.segments, composing, onChange]);
+  }, [block, text, edit?.segments, hasEdit, inks, composing, onChange]);
 
   // PDF rows need not have a uniform pitch (a wrapped table cell is a common example).
   // Move the existing inline runs onto their real baselines without replacing text nodes or
@@ -527,60 +593,6 @@ const BlockEditor: React.FC<{
       : Number.parseFloat(style.height) / iosZoomGuard - hitPadding * displayScale * 2}px`;
   }, [isActive, text, showPreview, currentPreview, block.height, displayScale, iosZoomGuard, keepsOriginalRows, hitPadding]);
 
-  // Keep guidance outside the scaled/clipped PDF canvas. Position only the hint; never move
-  // the editing surface or selection to make a message fit.
-  useLayoutEffect(() => {
-    const element = editableRef.current;
-    const hint = overflowRef.current;
-    const viewport = element?.closest<HTMLElement>('[data-testid="pdf-zoom-viewport"]');
-    if (!element || !hint || !viewport) return;
-    const page = element.closest<HTMLElement>('[data-pdf-page]');
-    const bar = document.querySelector('[data-testid="pdf-paragraph-inspector"]')?.closest('.chef-chrome');
-    const visual = window.visualViewport;
-    let frame = 0;
-    const position = () => {
-      frame = 0;
-      const bounds = viewport.getBoundingClientRect();
-      const screen = visualViewportClientRect(visual, { x: window.scrollX, y: window.scrollY },
-        { width: window.innerWidth, height: window.innerHeight });
-      const left = Math.max(bounds.left, screen.left) + 8;
-      const right = Math.min(bounds.right, screen.right) - 8;
-      const top = Math.max(bounds.top, screen.top) + 8;
-      const bottom = Math.min(bounds.bottom, screen.bottom, bar?.getBoundingClientRect().top ?? Infinity) - 8;
-      const caret = focusedCaretRect(element) ?? element.getBoundingClientRect();
-      hint.style.visibility = 'hidden';
-      if (right <= left || bottom <= top || caret.bottom < top || caret.top > bottom
-        || caret.right < left || caret.left > right) return;
-      hint.style.width = `${Math.min(320, right - left)}px`;
-      const size = hint.getBoundingClientRect();
-      const y = caret.bottom + 8 + size.height <= bottom ? caret.bottom + 8 : caret.top - size.height - 8;
-      if (y < top) return;
-      hint.style.left = `${Math.max(left, Math.min(caret.left, right - size.width))}px`;
-      hint.style.top = `${y}px`;
-      hint.style.visibility = 'visible';
-    };
-    const schedule = () => { if (!frame) frame = window.requestAnimationFrame(position); };
-    position();
-    const observer = new ResizeObserver(schedule);
-    observer.observe(viewport);
-    if (page) observer.observe(page);
-    if (bar) observer.observe(bar);
-    window.addEventListener('scroll', schedule, true);
-    window.addEventListener('resize', schedule);
-    visual?.addEventListener('resize', schedule);
-    visual?.addEventListener('scroll', schedule);
-    document.addEventListener('selectionchange', schedule);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      observer.disconnect();
-      window.removeEventListener('scroll', schedule, true);
-      window.removeEventListener('resize', schedule);
-      visual?.removeEventListener('resize', schedule);
-      visual?.removeEventListener('scroll', schedule);
-      document.removeEventListener('selectionchange', schedule);
-    };
-  }, [focused, extendsPastWidth, text]);
-
   const handleInput = useCallback(() => {
     const element = editableRef.current;
     if (!element) return;
@@ -599,6 +611,7 @@ const BlockEditor: React.FC<{
     styleRepairNeeded.current = !styledTextEqual(domSegments, segments, block.fontSize);
     committedText.current = next;
     committedStyles.current = segments;
+    shownSegments.current = segments;
     onChange(block.id, next, segments);
   }, [block, onBeginChange, onChange]);
 
@@ -648,6 +661,21 @@ const BlockEditor: React.FC<{
               width={Math.max(0, run.u1 - run.u0)} height={run.fontSize * 1.08}
               fill={edit?.patchColor ?? '#ffffff'} />
           )))}
+        </svg>
+      )}
+      {/* While typing, the highlight a longer paragraph grows into, under the words. It follows the
+          settled layout once that has caught up and still keeps the typed lines; after Done the
+          preview draws it with its words. */}
+      {focused && highlight && currentPreview
+        && new Set(currentPreview.pieces.map((piece) => piece.lineIndex)).size <= text.split('\n').length && (
+        <svg aria-hidden="true" className="pointer-events-none absolute" overflow="visible"
+          width={currentPreview.width * displayScale} height={currentPreview.height * displayScale}
+          viewBox={`0 0 ${currentPreview.width} ${currentPreview.height}`}
+          style={{ left: 0, top: hitPadding * displayScale }}>
+          {highlightPatches(highlight, currentPreview.pieces).map((box, index) => (
+            <rect key={index} data-testid="pdf-block-highlight" x={box.left} y={box.top}
+              width={box.right - box.left} height={box.bottom - box.top} fill={highlight.color} />
+          ))}
         </svg>
       )}
       <div
@@ -721,8 +749,10 @@ const BlockEditor: React.FC<{
           lineHeight: `${unit(lineHeightPx)}px`,
           textAlign: overlayAlign,
           direction: block.direction,
-          // Untouched paragraphs stay invisible so the canvas below is what the user reads.
+          // Untouched paragraphs stay invisible so the canvas below is what the user reads, and
+          // so do the words that carry their own colour.
           color: isDirty && !showPreview ? inkColor : 'transparent',
+          ['--pdf-hidden-ink' as string]: isDirty && !showPreview ? undefined : 'transparent',
           caretColor: inkColor,
           // Only the explicit line model may introduce a line. The focused native surface stays
           // intact; after blur the settled export layout supplies the rendered preview.
@@ -745,17 +775,16 @@ const BlockEditor: React.FC<{
           style={{ left: 0, top: hitPadding * displayScale, borderRadius: 2,
             boxShadow: '0 0 0 2px var(--accent-rest, #2563eb)' }} />
       )}
-      {focused && extendsPastWidth && createPortal(
-        <div ref={overflowRef} role="status" data-testid="pdf-block-overflow" className="fixed rounded bg-amber-50 px-2 py-1 text-sm text-amber-950"
-          style={{ zIndex: PARAGRAPH_ACTIVE_LAYER, visibility: 'hidden', pointerEvents: 'none' }}>{t("pdf-text-block-layer.text.extends.beyond.its.original.space.press.a351d0")}</div>,
-        document.body,
-      )}
       {showPreview && currentPreview && (
         <svg aria-hidden="true" data-testid="pdf-block-preview" data-preview-block-id={block.id}
           className="pointer-events-none absolute" overflow="visible"
           width={currentPreview.width * displayScale} height={currentPreview.height * displayScale}
           viewBox={`0 0 ${currentPreview.width} ${currentPreview.height}`}
           style={{ left: 0, top: hitPadding * displayScale }}>
+          {highlight && highlightPatches(highlight, currentPreview.pieces).map((box, index) => (
+            <rect key={`highlight-${index}`} data-testid="pdf-block-highlight" x={box.left} y={box.top}
+              width={box.right - box.left} height={box.bottom - box.top} fill={highlight.color} />
+          ))}
           {currentPreview.pieces.map((piece, index) => (
             <text key={index} data-preview-line={piece.lineIndex}
               direction={block.direction}
@@ -763,7 +792,9 @@ const BlockEditor: React.FC<{
               lengthAdjust="spacingAndGlyphs" xmlSpace="preserve" fill={inkColor}
               fontFamily={piece.font.cssFamily} fontSize={piece.fontSize}
               fontWeight={piece.font.cssWeight} fontStyle={piece.font.cssStyle}>
-              {piece.text}
+              {piece.spans
+                ? piece.spans.map((span, spanIndex) => <tspan key={spanIndex} fill={span.color}>{span.text}</tspan>)
+                : piece.text}
             </text>
           ))}
         </svg>
@@ -777,6 +808,7 @@ export const PdfTextBlockLayer: React.FC<Props> = ({
   fonts,
   edits,
   previews,
+  colors,
   activeBlockId,
   displayScale,
   enabled,
@@ -808,6 +840,8 @@ export const PdfTextBlockLayer: React.FC<Props> = ({
           resolved={{ ...resolved, stackOrder }}
           edit={edits[resolved.block.id]}
           preview={previews?.[resolved.block.id]}
+          inks={colors?.[resolved.block.id]?.glyphs}
+          highlight={colors?.[resolved.block.id]?.highlight}
           isActive={activeBlockId === resolved.block.id}
           displayScale={displayScale}
           enabled={enabled}
@@ -828,7 +862,20 @@ export interface BlockColors {
   paper: string;
   /** True when everything that is not ink is the same colour, so a plain fill reproduces it. */
   flat: boolean;
+  /** The colour of each character of each line, only when the paragraph mixes colours. */
+  glyphs?: string[][];
+  /** The highlight the whole paragraph sits on, when it does. */
+  highlight?: TextHighlight;
 }
+
+let glyphMeasure: CanvasRenderingContext2D | null | undefined;
+const glyphWidth = (character: string) => {
+  if (glyphMeasure === undefined) {
+    glyphMeasure = document.createElement('canvas').getContext('2d');
+    if (glyphMeasure) glyphMeasure.font = '100px Helvetica, Arial, sans-serif';
+  }
+  return glyphMeasure?.measureText(character).width ?? 50;
+};
 
 /**
  * Read each paragraph's ink and paper colour straight off the rendered page.
@@ -942,13 +989,22 @@ export const samplePageBlockColors = (
       }
     }
 
+    // PDF.js joins runs that share a font whatever their colour, so a red word inside a black
+    // sentence is only visible here. Rotated text keeps the paragraph's single colour.
+    const inks = Math.abs(block.angle) <= 0.02
+      ? sampleGlyphInks(data, pageWidth, canvas.height, block, canvasScale, [paperR, paperG, paperB], glyphWidth)
+      : null;
+    const glyphs = inks ? glyphInkColors(inks, [paperR, paperG, paperB]) : null;
+    const highlight = inks ? measureTextHighlight(data, pageWidth, canvas.height, block, canvasScale, inks) : null;
     colors[block.id] = {
-      ink: inkCount > 0
+      ink: glyphs?.dominant ?? (inkCount > 0
         ? toHex(Math.round(inkR / inkCount), Math.round(inkG / inkCount), Math.round(inkB / inkCount))
-        : '#000000',
+        : '#000000'),
       paper,
       // Glyph edges alone stay well under a tenth of a text block's area.
       flat: total > 0 && betweenCount / total < 0.1,
+      ...(glyphs?.lines ? { glyphs: glyphs.lines } : {}),
+      ...(highlight ? { highlight } : {}),
     };
   });
 
@@ -962,8 +1018,15 @@ export const samplePageBlockColors = (
  * too and the toolbar the reader just used disappears off the top. Only the viewport that holds the
  * page should move.
  */
-export const scrollBlockIntoViewport = (container: HTMLElement, element: HTMLElement) => {
-  const view = container.getBoundingClientRect();
+export const scrollBlockIntoViewport = (
+  container: HTMLElement,
+  element: Pick<Element, 'getBoundingClientRect'>,
+  /** Where a bar drawn over the bottom of the viewport starts. */
+  coveredFrom?: number,
+) => {
+  const box = container.getBoundingClientRect();
+  const view = { top: box.top, left: box.left, right: box.right,
+    bottom: coveredFrom && coveredFrom > box.top + 48 ? Math.min(box.bottom, coveredFrom) : box.bottom };
   const target = element.getBoundingClientRect();
   const margin = 24;
 
@@ -987,8 +1050,10 @@ export const scrollBlockIntoViewport = (container: HTMLElement, element: HTMLEle
 };
 
 const focusedCaretRect = (element: HTMLElement): DOMRect | null => {
-  // A text box's caret lives inside its form control, out of reach of the document selection.
-  if (element instanceof HTMLTextAreaElement) return element.getBoundingClientRect();
+  // A text box's or form field's caret lives inside its control, out of reach of the document selection.
+  if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement || element instanceof HTMLSelectElement) {
+    return element.getBoundingClientRect();
+  }
   const selection = window.getSelection();
   const range = document.createRange();
   if (selection?.focusNode && element.contains(selection.focusNode)) {
@@ -1016,6 +1081,8 @@ export const useKeyboardSafeFocus = (
   bottomBar: HTMLElement | null,
   header: HTMLElement | null,
   selectedTextId: string | null,
+  /** A phone zooms a focused form field to the screen's width; it is then shown whole. */
+  wholeFields = false,
 ) => {
   const preserved = useRef<{ element: HTMLElement; page: HTMLElement; anchor: PdfFocusAnchor } | null>(null);
   const scheduleRef = useRef<((restoreAnchor: boolean) => void) | null>(null);
@@ -1034,12 +1101,29 @@ export const useKeyboardSafeFocus = (
     scheduleRef.current?.(true);
   }, []);
 
+  // A form field takes focus without the editor choosing it. It is followed the same way.
+  const [focusedField, setFocusedField] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!scrollContainer) return undefined;
+    const focused = (event: FocusEvent) => {
+      const target = event.target as HTMLElement;
+      setFocusedField(target.matches('[data-field-name]:is(textarea, select, input:not([type="checkbox"], [type="radio"]))') ? target : null);
+    };
+    const blurred = () => setFocusedField(null);
+    scrollContainer.addEventListener('focusin', focused);
+    scrollContainer.addEventListener('focusout', blurred);
+    return () => {
+      scrollContainer.removeEventListener('focusin', focused);
+      scrollContainer.removeEventListener('focusout', blurred);
+    };
+  }, [scrollContainer]);
+
   useLayoutEffect(() => {
     const selector = activeBlockId
       ? `[data-block-id="${CSS.escape(activeBlockId)}"]`
       : selectedTextId ? `[data-element-id="${CSS.escape(selectedTextId)}"]` : null;
-    if (!selector || !scrollContainer) return undefined;
-    const element = scrollContainer.querySelector<HTMLElement>(selector);
+    if (!scrollContainer) return undefined;
+    const element = selector ? scrollContainer.querySelector<HTMLElement>(selector) : focusedField;
     if (!element) return undefined;
     const originalPadding = scrollContainer.style.paddingBottom;
     const basePadding = Number.parseFloat(window.getComputedStyle(scrollContainer).paddingBottom) || 0;
@@ -1047,7 +1131,11 @@ export const useKeyboardSafeFocus = (
     let restorePending = false;
     const keepVisible = () => {
       frame = 0;
-      if (document.activeElement !== element || scrollContainer.dataset.pdfPinching === 'true') return;
+      // On a phone the paragraph is typed into a field in the dock. The page then keeps the whole
+      // paragraph in view rather than a caret it does not hold.
+      const active = document.activeElement as HTMLElement | null;
+      const docked = Boolean(element.dataset.blockId) && active?.dataset.fieldFor === element.dataset.blockId;
+      if ((active !== element && !docked) || scrollContainer.dataset.pdfPinching === 'true') return;
       const container = scrollContainer.getBoundingClientRect();
       const screen = visualViewportClientRect(window.visualViewport, { x: window.scrollX, y: window.scrollY },
         { width: window.innerWidth, height: window.innerHeight });
@@ -1067,6 +1155,20 @@ export const useKeyboardSafeFocus = (
         }
       }
       restorePending = false;
+      if (docked || (wholeFields && !selector)) {
+        // The whole width centred, or its line starts when it is wider; as much height as fits,
+        // from its first line.
+        const paragraph = element.getBoundingClientRect();
+        const width = visible.right - visible.left;
+        scrollContainer.scrollLeft += paragraph.right - paragraph.left <= width
+          ? (paragraph.left + paragraph.right - visible.left - visible.right) / 2
+          : paragraph.left - visible.left - 12;
+        const margin = Math.min(24, Math.max(0, (visible.bottom - visible.top) / 4));
+        scrollContainer.scrollTop += paragraph.top < visible.top + margin
+          ? paragraph.top - visible.top - margin
+          : Math.max(0, Math.min(paragraph.bottom - visible.bottom + margin, paragraph.top - visible.top - margin));
+        return;
+      }
       const caret = focusedCaretRect(element);
       if (!caret) return;
       const delta = pdfCaretScroll(caret, visible);
@@ -1109,7 +1211,7 @@ export const useKeyboardSafeFocus = (
       scrollContainer.removeEventListener('touchmove', releaseAnchor);
       scrollContainer.removeEventListener('wheel', releaseAnchor);
     };
-  }, [activeBlockId, bottomBar, header, scrollContainer, selectedTextId, zoom]);
+  }, [activeBlockId, bottomBar, focusedField, header, scrollContainer, selectedTextId, wholeFields, zoom]);
   return captureFocusAnchor;
 };
 
@@ -1137,21 +1239,8 @@ export const blockRange = (element: HTMLElement, from: number, to: number): Rang
   return range;
 };
 
-/**
- * Put the platform's own selection on a range inside a paragraph, so a found match arrives
- * already selected and can be typed straight over.
- */
-export const selectRangeInBlock = (element: HTMLElement, from: number, to: number) => {
-  const range = blockRange(element, from, to);
-  const selection = window.getSelection();
-  if (!range || !selection) return false;
-  element.focus({ preventScroll: true });
-  selection.removeAllRanges();
-  selection.addRange(range);
-  return true;
-};
-
 const FIND_HIGHLIGHT = 'pdfchef-find';
+const FIND_CURRENT_HIGHLIGHT = 'pdfchef-find-current';
 
 /**
  * Mark every match on the page at once.
@@ -1161,19 +1250,21 @@ const FIND_HIGHLIGHT = 'pdfchef-find';
  * rather than by wrapping the matches in elements, because the browser owns those child nodes
  * while the user types and rewriting them would take the caret with it.
  */
-export const paintFindHighlights = (ranges: Range[]) => {
+export const paintFindHighlights = (ranges: Range[], current?: Range | null) => {
   const registry = (CSS as unknown as { highlights?: Map<string, unknown> }).highlights;
   const HighlightConstructor = (window as unknown as { Highlight?: new (...ranges: Range[]) => unknown }).Highlight;
   if (!registry || !HighlightConstructor) return false;
-  if (ranges.length === 0) {
-    registry.delete(FIND_HIGHLIGHT);
-    return true;
-  }
-  registry.set(FIND_HIGHLIGHT, new HighlightConstructor(...ranges));
+  if (ranges.length === 0) registry.delete(FIND_HIGHLIGHT);
+  else registry.set(FIND_HIGHLIGHT, new HighlightConstructor(...ranges));
+  // The match Next and Previous land on is marked apart from the rest, because stepping no longer
+  // moves the caret there: the find field keeps it, so the keyboard keeps typing the search.
+  if (current) registry.set(FIND_CURRENT_HIGHLIGHT, new HighlightConstructor(current));
+  else registry.delete(FIND_CURRENT_HIGHLIGHT);
   return true;
 };
 
 export const clearFindHighlights = () => {
   const registry = (CSS as unknown as { highlights?: Map<string, unknown> }).highlights;
   registry?.delete(FIND_HIGHLIGHT);
+  registry?.delete(FIND_CURRENT_HIGHLIGHT);
 };

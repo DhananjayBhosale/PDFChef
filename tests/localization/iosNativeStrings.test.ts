@@ -8,7 +8,7 @@ const app = resolve(dirname(fileURLToPath(import.meta.url)), '../../ios/App/App'
 const read = (name: string) => readFileSync(resolve(app, name), 'utf8');
 
 /** The app's languages besides English, as the native `.lproj` folders name them. */
-const languages = ['ar', 'da', 'de', 'es-419', 'es', 'fr-CA', 'fr', 'hi', 'id', 'it', 'ja', 'ko', 'nl', 'pl', 'pt-BR', 'pt-PT', 'sv', 'tr', 'zh-Hans', 'zh-Hant'];
+const languages = ['ar', 'da', 'de', 'es-419', 'es', 'fr-CA', 'fr', 'hi', 'id', 'it', 'ja', 'ko', 'nl', 'pl', 'pt-BR', 'pt-PT', 'ru', 'sv', 'tr', 'zh-Hans', 'zh-Hant'];
 
 type Unit = { stringUnit: { state: string; value: string } };
 type Localization = Unit | { variations: { plural: Record<string, Unit> } };
@@ -36,7 +36,7 @@ const nativeTexts = () => {
 const value = (localization: Localization) => 'stringUnit' in localization ? localization.stringUnit.value : localization.variations.plural.other.stringUnit.value;
 const placeholders = (text: string) => (text.match(/%(\d+\$)?(lld|@)/g) ?? []).map((spec) => spec.replace(/\d+\$/, '')).sort();
 
-test('every native iOS text is in the string catalog in English and all 20 app languages', () => {
+test('every native iOS text is in the string catalog in English and all 21 app languages', () => {
   const texts = nativeTexts();
   assert.ok(texts.size > 150, `only ${texts.size} native texts were found`);
   assert.equal(catalog.sourceLanguage, 'en');

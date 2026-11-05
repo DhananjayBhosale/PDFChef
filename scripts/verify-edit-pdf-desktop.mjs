@@ -133,8 +133,8 @@ try {
   await page.getByRole('button', { name: 'Done' }).click();
   await page.screenshot({ path: replacementScreenshotPath, fullPage: true });
 
-  const undo = page.getByRole('button', { name: 'Undo added element change' });
-  const redo = page.getByRole('button', { name: 'Redo added element change' });
+  const undo = page.getByRole('button', { name: 'Undo', exact: true });
+  const redo = page.getByRole('button', { name: 'Redo', exact: true });
 
   await page.getByRole('button', { name: 'Text', exact: true }).click();
   await page.getByTestId('pdf-placement-target').waitFor();

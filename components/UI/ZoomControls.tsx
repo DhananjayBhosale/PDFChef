@@ -12,6 +12,10 @@ interface ZoomControlsProps {
   onReset: () => void;
   min?: number;
   max?: number;
+  /** The percentage is itself the reset button, which saves a control on a phone row. */
+  compact?: boolean;
+  /** Leave focus where it is, so zooming while typing keeps the caret and the keyboard. */
+  keepFocus?: boolean;
   className?: string;
 }
 
@@ -30,9 +34,11 @@ const controlClass =
   + 'text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-sunken)] disabled:opacity-55';
 
 export const ZoomControls: React.FC<ZoomControlsProps> = ({
-  zoom, onZoomIn, onZoomOut, onReset, min = 0.5, max = 2.0, className = ''
+  zoom, onZoomIn, onZoomOut, onReset, min = 0.5, max = 2.0, compact = false, keepFocus = false, className = ''
 }) => {
   useI18n();
+  const holdFocus = keepFocus ? (event: React.PointerEvent) => event.preventDefault() : undefined;
+  const percent = formatPercent(Math.round(zoom * 100));
   return (
     <div
       className={`inline-flex w-fit max-w-full items-center rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-0.5 ${className}`}
@@ -40,6 +46,7 @@ export const ZoomControls: React.FC<ZoomControlsProps> = ({
       <button
         type="button"
         onClick={onZoomOut}
+        onPointerDown={holdFocus}
         disabled={zoom <= min}
         className={controlClass}
         aria-label={t("zoom-controls.zoom.out.bc7b63")}
@@ -47,13 +54,26 @@ export const ZoomControls: React.FC<ZoomControlsProps> = ({
         <Minus aria-hidden size={18} />
       </button>
 
-      <span className="tabular w-11 text-center text-xs font-semibold text-[var(--text-primary)] select-none">
-        {formatPercent(Math.round(zoom * 100))}
-      </span>
+      {compact ? (
+        // The visible percentage starts the button's name, so a voice command that reads it works.
+        <button
+          type="button"
+          onClick={onReset}
+          onPointerDown={holdFocus}
+          className="chef-pressable chef-hit-y tabular h-9 min-w-11 shrink-0 rounded-[var(--radius-control)] px-1 text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-sunken)]"
+        >
+          {percent}<span className="sr-only">{`, ${t("zoom-controls.reset.zoom.to.100.39cdc8")}`}</span>
+        </button>
+      ) : (
+        <span className="tabular w-11 text-center text-xs font-semibold text-[var(--text-primary)] select-none">
+          {percent}
+        </span>
+      )}
 
       <button
         type="button"
         onClick={onZoomIn}
+        onPointerDown={holdFocus}
         disabled={zoom >= max}
         className={controlClass}
         aria-label={t("zoom-controls.zoom.in.0e47f0")}
@@ -61,17 +81,21 @@ export const ZoomControls: React.FC<ZoomControlsProps> = ({
         <Plus aria-hidden size={18} />
       </button>
 
-      <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-[var(--border-hairline)]" />
+      {!compact && (
+        <>
+          <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-[var(--border-hairline)]" />
 
-      <button
-        type="button"
-        onClick={onReset}
-        disabled={zoom === 1}
-        className={controlClass}
-        aria-label={t("zoom-controls.reset.zoom.to.100.39cdc8")}
-      >
-        <RotateCcw aria-hidden size={16} />
-      </button>
+          <button
+            type="button"
+            onClick={onReset}
+            disabled={zoom === 1}
+            className={controlClass}
+            aria-label={t("zoom-controls.reset.zoom.to.100.39cdc8")}
+          >
+            <RotateCcw aria-hidden size={16} />
+          </button>
+        </>
+      )}
     </div>
   );
 };

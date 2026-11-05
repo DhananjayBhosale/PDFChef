@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_ready_title">Uppdateringen är klar</string>
+    <string name="update_ready_message">Starta om PDF Chef för att slutföra uppdateringen.</string>
+    <string name="update_later">Senare</string>
+    <string name="update_restart">Starta om</string>
+</resources>

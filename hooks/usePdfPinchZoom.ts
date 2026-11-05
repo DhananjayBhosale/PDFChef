@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   clampPdfZoom,
   pdfZoomFromPinch,
@@ -42,11 +42,30 @@ export const usePdfPinchZoom = ({ zoom, setZoom, min = 0.5, max = 2 }: PdfPinchZ
   const pinchStartRef = useRef({ distance: 0, zoom });
   const gestureStartZoomRef = useRef(zoom);
   const frameRef = useRef<number | null>(null);
+  const pendingScrollRef = useRef<{ left: number; top: number } | null>(null);
   const suppressClicksUntilRef = useRef(0);
 
   useEffect(() => {
     zoomRef.current = zoom;
   }, [zoom]);
+
+  // The page grows in the render that follows setZoom. Scrolling before then is clamped to the
+  // old, smaller page, which slid the point under the pointer away (to the left edge at 4x). So
+  // the offset waits for the larger page: right after that render commits, or on a later frame
+  // when the zoom reaches the page through a child that renders afterwards.
+  const applyPendingScroll = useCallback(() => {
+    const pending = pendingScrollRef.current;
+    if (!viewport || !pending) return true;
+    viewport.scrollLeft = pending.left;
+    viewport.scrollTop = pending.top;
+    const reached = Math.abs(viewport.scrollLeft - pending.left) <= 1 && Math.abs(viewport.scrollTop - pending.top) <= 1;
+    if (reached) pendingScrollRef.current = null;
+    return reached;
+  }, [viewport]);
+
+  useLayoutEffect(() => {
+    applyPendingScroll();
+  }, [applyPendingScroll, zoom]);
 
   const applyZoom = useCallback((requestedZoom: number, clientX: number, clientY: number) => {
     if (!viewport) return;
@@ -61,15 +80,22 @@ export const usePdfPinchZoom = ({ zoom, setZoom, min = 0.5, max = 2 }: PdfPinchZ
     const nextScrollTop = pdfZoomScrollOffset(viewport.scrollTop, pointerY, previousZoom, nextZoom);
 
     zoomRef.current = nextZoom;
+    pendingScrollRef.current = { left: nextScrollLeft, top: nextScrollTop };
     setZoom(nextZoom);
 
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
-    frameRef.current = requestAnimationFrame(() => {
-      viewport.scrollLeft = nextScrollLeft;
-      viewport.scrollTop = nextScrollTop;
+    // A few frames at most: an offset the page can never reach (a pointer at its far edge) stops here.
+    let framesLeft = 8;
+    const settle = () => {
       frameRef.current = null;
-    });
-  }, [max, min, setZoom, viewport]);
+      if (applyPendingScroll() || --framesLeft <= 0) {
+        pendingScrollRef.current = null;
+        return;
+      }
+      frameRef.current = requestAnimationFrame(settle);
+    };
+    frameRef.current = requestAnimationFrame(settle);
+  }, [applyPendingScroll, max, min, setZoom, viewport]);
 
   useEffect(() => {
     if (!viewport) return undefined;

@@ -3,6 +3,7 @@ package com.dhananjaytech.zenpdf_allpdftoolsinoneplace.reader;
 import android.annotation.SuppressLint;
 import android.app.Dialog;
 import android.content.ClipData;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.print.PrintManager;
@@ -49,6 +50,7 @@ import androidx.pdf.viewer.fragment.PdfViewerFragment;
 
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.BuildConfig;
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.PdfChefApplication;
+import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.AppLanguage;
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.R;
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.documents.DocumentLifecycleCoordinator;
 
@@ -202,6 +204,12 @@ public final class PdfReaderActivity extends AppCompatActivity {
     private int errorRight;
     private int errorBottom;
     private int messageBottom;
+
+    /** The reader speaks the app's language, which can differ from the phone's; see AppLanguage. */
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(AppLanguage.wrap(base));
+    }
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {

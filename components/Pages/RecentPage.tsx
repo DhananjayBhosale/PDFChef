@@ -1086,19 +1086,21 @@ export const RecentPage: React.FC = () => {
         {/* The second clear action only exists where the platform can actually
             separate the record from the file it points at. Both sit in one
             compact row: they are the footer of a list, and stacked at full width
-            they read as the subject of the screen instead. */}
+            they read as the subject of the screen instead. Chinese and Japanese
+            labels keep their words whole, so a label too long for half the row
+            moves its button onto a row of its own. */}
         {state.status === 'ready' && records.length > 0 && !selectionMode && (
           <div className="mt-4 flex flex-row flex-wrap gap-2 pb-6">
             <Button
               tone="destructive"
-              className="flex-1 px-3"
+              className="chef-keep-cjk-words flex-1 px-3"
               icon={<Trash2 aria-hidden size={16} />}
               onClick={() => setConfirmClear('records')}
             >{t("recent-page.clear.all.29a390")}</Button>
             {platform.capabilities.separateClearActions && (
               <Button
                 tone="destructive"
-                className="flex-1 px-3"
+                className="chef-keep-cjk-words flex-1 px-3"
                 icon={<Trash2 aria-hidden size={16} />}
                 onClick={() => setConfirmClear('documents')}
               >{t("recent-page.delete.files.only.911496")}</Button>

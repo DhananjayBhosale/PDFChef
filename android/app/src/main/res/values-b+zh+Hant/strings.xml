@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_ready_title">更新已就緒</string>
+    <string name="update_ready_message">重新啟動 PDF Chef 以完成更新。</string>
+    <string name="update_later">稍後</string>
+    <string name="update_restart">重新啟動</string>
+</resources>

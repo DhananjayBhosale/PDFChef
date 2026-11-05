@@ -554,12 +554,9 @@ try {
     await page.keyboard.insertText(' fdagadga');
     await waitForPlan(page);
     assertSameGeometry(original, await paragraphGeometry(paragraph), 'extended amount while typing');
-    const warning = page.getByTestId('pdf-block-overflow');
-    await warning.waitFor();
-    const warningBox = await warning.boundingBox();
-    const viewportBox = await page.getByTestId('pdf-zoom-viewport').boundingBox();
-    assert.ok(warningBox.x >= viewportBox.x && warningBox.x + warningBox.width <= viewportBox.x + viewportBox.width,
-      `the overflow hint is clipped at the right edge: ${JSON.stringify({ warningBox, viewportBox })}`);
+    // Redrawn text wraps within its width, so the amount no longer claims to run past its space.
+    assert.doesNotMatch(await page.getByTestId('pdf-paragraph-status').innerText(), /Longer than the original line/,
+      'a wrapped amount still says it is longer than the original line');
     const nextOutput = await installOutputCapture(page);
     await page.getByRole('button', { name: 'Done', exact: true }).click();
     const preview = page.getByTestId('pdf-block-preview');
@@ -568,21 +565,27 @@ try {
       text: node.textContent, line: Number(node.dataset.previewLine),
       baseline: Number(node.getAttribute('y')), x: Number(node.getAttribute('x')),
     })));
-    assert.equal(new Set(pieces.map(piece => piece.line)).size, 1, 'Done wrapped the extended amount without Enter');
-    assert.equal(pieces.map(piece => piece.text).join(''), '2099 Dr fdagadga');
+    const lineNumbers = [...new Set(pieces.map(piece => piece.line))].sort((left, right) => left - right);
+    const previewLines = lineNumbers.map(line => pieces.filter(piece => piece.line === line).map(piece => piece.text).join(''));
+    assert.ok(lineNumbers.length > 1, 'the amount at the right edge did not wrap within its width');
+    // Wrapping drops the space at the break and never cuts a word.
+    assert.equal(previewLines.map(line => line.trim()).join(' '), '2099 Dr fdagadga', 'the wrapped lines do not join to the typed words');
     const previewTop = await preview.evaluate(svg => {
       const page = svg.closest('[role="group"][aria-label^="Page "]').getBoundingClientRect();
       return (svg.getBoundingClientRect().top - page.top) / (page.height / 842);
     });
-    assert.ok(Math.abs(previewTop + pieces[0].baseline - 142) < 0.25, 'Done moved the original amount baseline');
+    const firstLine = pieces.filter(piece => piece.line === lineNumbers[0]);
+    assert.ok(Math.abs(previewTop + firstLine[0].baseline - 142) < 0.25, 'Done moved the original amount baseline');
     const saved = await saveAndRead(page, nextOutput);
     const amount = saved.items.find(item => item.str.includes('2099'));
-    assert.equal(amount?.str, '2099 Dr fdagadga', 'Save split the amount onto another line');
+    assert.ok(amount, 'the amount is missing from the saved PDF');
+    const savedLines = exportedLines(saved.items);
+    assert.deepEqual(savedLines, previewLines.map(normalizedLine), 'the saved lines differ from the redrawn preview');
     assert.ok(Math.abs(amount.transform[5] - 700) < 0.25, 'Save moved the original amount baseline');
     assert.ok(Math.abs(amount.transform[4] - 480) < 0.25, 'Save moved the original amount horizontally');
     assert.deepEqual(consoleErrors, []);
     await context.close();
-    console.log('PASS extended amount stays on its original line and baseline after Done and Save');
+    console.log('PASS an amount at the right edge wraps within its width, keeping its first baseline, after Done and Save');
   }
 
   // A statement column has alternating wrapped-line and row gaps, with rules through its box.
@@ -904,10 +907,10 @@ try {
     await page.keyboard.insertText(' Additional details.');
     const provenance = await waitForPlan(page);
     assert.match(provenance, /will be redrawn/i, `expected a redraw, got: ${provenance}`);
-    assert.match(provenance, /will not wrap automatically/i, 'the editor must explain that it preserves explicit lines');
+    assert.match(provenance, /Long lines wrap to fit its width/i, 'the editor must explain that redrawn lines wrap');
     assertSameGeometry(before, await paragraphGeometry(paragraph), 'focused overflow');
-    assert.match(await page.getByTestId('pdf-block-overflow').innerText(), /Press Enter for a new line/i,
-      'horizontal overflow must leave the line-break decision with the user');
+    assert.doesNotMatch(await page.getByTestId('pdf-paragraph-status').innerText(), /Longer than the original line/,
+      'wrapped left-to-right text must not claim to be longer than the original line');
     await paragraph.evaluate(element => element.blur());
     const preview = page.locator(`[data-testid="pdf-block-preview"][data-preview-block-id="${blockId}"]`);
     await preview.waitFor();
@@ -919,9 +922,16 @@ try {
       });
       return [...lines.entries()].sort(([left], [right]) => left - right).map(([, text]) => text);
     });
-    assert.equal(previewLines.length, before.rows.length, 'Done must not introduce soft lines');
-    assertSameGeometry(before, await paragraphGeometry(paragraph), 'finished overflow');
-    console.log('PASS longer text keeps its explicit rows after Done, with horizontal overflow stated');
+    // The redrawn text wraps within its width: the lines keep every typed letter, and wrapping can
+    // only add lines to the original rows.
+    assert.ok(previewLines.length >= before.rows.length, 'the redrawn paragraph lost lines');
+    assert.equal(previewLines.join('').replace(/\s+/g, ''), `${before.text.replace(/\s+/g, '')}Additionaldetails.`,
+      'the wrapped preview lines do not join to the typed words');
+    // Wrapping may make the block taller, but it never moves or loses its first row.
+    const finished = await paragraphGeometry(paragraph);
+    assert.ok(Math.abs(finished.top - before.top) <= 0.25, 'finished overflow: the PDF-relative block top moved');
+    assert.ok(Math.abs(finished.rows[0].top - before.rows[0].top) <= 0.25, 'finished overflow: the first line moved');
+    console.log('PASS longer text wraps within its width after Done, with no longer-than-original caution');
 
     const reflowed = await saveAndRead(page, nextOutput);
     assert.match(reflowed.text, /Additional details\./, 'the appended text is missing from the saved PDF');
@@ -1002,15 +1012,21 @@ try {
 
     await page.getByRole('button', { name: 'Next match' }).click();
     await page.waitForTimeout(500);
-    assert.equal(await page.evaluate(() => getSelection()?.toString()), 'body line 2',
-      'stepping to a match must leave it selected and ready to type over');
-    console.log('PASS find reaches every page and selects the match it lands on');
+    // The first match is shown as soon as the query finds it, so the first step lands on the second.
+    // Shown, not entered: typing must keep going into the find field, never into the PDF.
+    assert.equal(await page.getByTestId('pdf-find-count').innerText(), '2 of 12', 'the first step must move to the second match');
+    assert.equal(await page.evaluate(() => [...(CSS.highlights.get('pdfchef-find-current') ?? [])].map(String).join('|')), 'body line 2',
+      'the match stepped to must carry the current-match highlight');
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Find in this PDF',
+      'stepping to a match must leave the caret in the find field');
+    console.log('PASS find reaches every page and shows the match it lands on');
 
     await page.getByRole('button', { name: 'Replace', exact: true }).click();
     await page.getByLabel('Replace with').fill('BODY LINE TWO');
     await page.getByRole('button', { name: 'All' }).click();
     await page.waitForTimeout(800);
-    assert.match(await page.locator('[role="status"]').first().innerText(), /Replaced 12 matches/);
+    // The paragraph inspector's status line is a live region too, so look for the find bar's own.
+    await page.locator('[role="status"]').filter({ hasText: /Replaced 12 matches/ }).waitFor({ timeout: 5_000 });
 
     const replaced = await saveAndRead(page, nextOutput, 12);
     assert.equal(replaced.text.filter(text => /BODY LINE TWO/.test(text)).length, 12);
@@ -1058,13 +1074,23 @@ try {
     await page.getByTestId('pdf-paragraph-inspector').waitFor({ timeout: 10_000 });
     await page.waitForTimeout(500);
 
-    const after = await page.evaluate(() => {
+    const { after, fits } = await page.evaluate(() => {
       const element = document.querySelectorAll('[data-testid="pdf-text-block"]')[1];
       const scale = element.getBoundingClientRect().height / element.offsetHeight;
-      return Number.parseFloat(getComputedStyle(element).fontSize) * scale;
+      const viewport = document.querySelector('[data-testid="pdf-zoom-viewport"]').getBoundingClientRect();
+      const rect = element.getBoundingClientRect();
+      return {
+        after: Number.parseFloat(getComputedStyle(element).fontSize) * scale,
+        fits: rect.width <= viewport.width,
+      };
     });
-    assert.ok(after >= 15.5, `focusing a paragraph must raise it to a usable size, got ${after.toFixed(1)}px`);
-    console.log(`PASS focusing a paragraph raises it from ${before.toFixed(1)}px to ${after.toFixed(1)}px`);
+    // The paragraph is magnified to fit the screen's width: never below 10 px text, never past
+    // 16 px, so a whole line stays in view while typing (decided on a phone, where 16 px cut
+    // every line in half).
+    assert.ok(after > before && after >= 9.9 && after <= 16.5,
+      `focusing a paragraph must raise it to a usable size, got ${after.toFixed(1)}px from ${before.toFixed(1)}px`);
+    assert.ok(fits || after <= 10.1, 'the magnified paragraph must fit the screen width unless that would go below 10 px');
+    console.log(`PASS focusing a paragraph raises it from ${before.toFixed(1)}px to ${after.toFixed(1)}px and fits the width`);
 
     // A fixed bar resolves against the layout viewport, which grows when the browser rescales the
     // page around the focused paragraph. Both controls have to stay on screen regardless.

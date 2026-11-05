@@ -16,7 +16,7 @@ const between = (source: string, start: string, end: string) => {
 
 test('Edit PDF cannot save, or spend a free job, before anything has changed', () => {
   const source = read('components/Tools/EditPDF.tsx');
-  const saves = source.match(/onClick=\{handleSave\}[^>]*>/g) ?? [];
+  const saves = source.match(/onClick=\{saveFromButton\}[^>]*>/g) ?? [];
   assert.ok(saves.length >= 2);
   for (const button of saves) assert.match(button, /disabled=\{status\.isProcessing \|\| !hasUnsavedEdits\}/);
 });

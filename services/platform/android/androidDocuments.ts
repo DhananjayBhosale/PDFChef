@@ -374,11 +374,15 @@ export class AndroidDocumentsClient {
     return async () => handle.remove();
   }
 
-  async addIncomingPdfListener(listener: (ref: string) => void): Promise<() => Promise<void>> {
+  /** A PDF opened from another app whose native reader asked for a tool. */
+  async addIncomingPdfListener(
+    listener: (ref: string, toolPath: AndroidReaderToolPath) => void,
+  ): Promise<() => Promise<void>> {
     const handle = await this.native.addListener('incomingPdfReady', raw => {
       try {
-        const event = exactObject(raw, ['ref']);
-        if (typeof event.ref === 'string' && OWNED_REF.test(event.ref)) listener(event.ref);
+        const event = exactObject(raw, ['ref', 'toolPath']);
+        if (typeof event.ref === 'string' && OWNED_REF.test(event.ref)
+            && READER_TOOL_PATHS.has(event.toolPath)) listener(event.ref, event.toolPath);
       } catch {
         // External activity hints never expose a path, URL or unvalidated route.
       }

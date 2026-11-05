@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_ready_title">Aggiornamento pronto</string>
+    <string name="update_ready_message">Riavvia PDF Chef per completare l\'aggiornamento.</string>
+    <string name="update_later">Più tardi</string>
+    <string name="update_restart">Riavvia</string>
+</resources>

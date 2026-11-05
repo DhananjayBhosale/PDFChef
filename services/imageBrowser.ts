@@ -113,6 +113,12 @@ const normalizeImageAsset = async (file: File, options: ImageNormalizationOption
 export const normalizeImageFile = async (file: File, options?: ImageNormalizationOptions): Promise<File> =>
   (await normalizeImageAsset(file, options)).file;
 
+/** The normalized file with its pixel size, for callers that place the picture at its own shape. */
+export const normalizeImageFileWithSize = async (file: File, options?: ImageNormalizationOptions) => {
+  const { file: normalized, width, height } = await normalizeImageAsset(file, options);
+  return { file: normalized, width, height };
+};
+
 export const preparePdfImageAsset = async (
   file: File,
   options?: Pick<ImageNormalizationOptions, 'previewMaxPixels'>,

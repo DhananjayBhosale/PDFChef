@@ -37,6 +37,7 @@ import {
 } from './pdfEditorGeometry';
 import type { PdfSpaceRect } from './pdfNativeTextPlanning';
 import { layoutParagraphLines, paragraphStandardFontKey } from './pdfParagraphLayout';
+import { highlightPatches, type TextHighlight } from './pdfTextHighlight';
 import { embeddedPdfFont, type EmbeddedPdfFontId } from './pdfEmbeddedFonts';
 import {
   DevanagariPdfWriter,
@@ -1048,18 +1049,43 @@ export interface ParagraphReflowEdit {
   backgroundColor: string;
   /** True when the area is a single colour, so a vector fill reproduces it exactly. */
   backgroundFlat: boolean;
+  /** The highlight the paragraph sits on, which a longer redraw carries on under its new words. */
+  highlight?: TextHighlight;
   /**
    * The explicit paragraph rows, one entry per line, each a list of stretches with the face they are
    * drawn in. A paragraph that opens with a bold lead-in stays that way through the redraw.
    */
-  lines: Array<Array<{ text: string; face: ParagraphFace; fontSize?: number }>>;
+  lines: Array<Array<{ text: string; face: ParagraphFace; fontSize?: number; color?: string }>>;
   /** Original PDF origins, relative to the paragraph box, shared with the editing preview. */
   lineOrigins?: Array<{ x?: number; y: number }>;
   fontSize: number;
   lineHeight: number;
   align: 'left' | 'center' | 'right' | 'justify';
+  /** The paragraph's colour, for every stretch that does not state its own. */
   color: string;
+  /**
+   * True when the colours were read off the rendered page rather than picked by the reader, so the
+   * exact colours of the text this redraw removes may stand in for them.
+   */
+  colorsSampled?: boolean;
 }
+
+/** The removed text's own colour nearest a colour read off the screen, when one is that close. */
+const exactInk = (sampled: string, exact: string[] | undefined) => {
+  const [r, g, b] = [1, 3, 5].map((index) => Number.parseInt(sampled.slice(index, index + 2), 16));
+  let best = sampled;
+  let bestDistance = 64;
+  exact?.forEach((candidate) => {
+    const distance = Math.abs(Number.parseInt(candidate.slice(1, 3), 16) - r)
+      + Math.abs(Number.parseInt(candidate.slice(3, 5), 16) - g)
+      + Math.abs(Number.parseInt(candidate.slice(5, 7), 16) - b);
+    if (distance < bestDistance) {
+      best = candidate;
+      bestDistance = distance;
+    }
+  });
+  return best;
+};
 
 /**
  * One typeface a redrawn paragraph needs.
@@ -1121,9 +1147,11 @@ export const savePDFWithAnnotations = async (
   // an italic overhang. Measured against the whole paragraph those overshoots are interior, so the
   // objects that belong to it are recognised while a line running on past the paragraph still is
   // not.
+  const clearedEdits: ParagraphReflowEdit[] = [];
   const clearances = reflowParagraphEdits.flatMap((edit) => {
     const rects = edit.runDeletions.map((run) => run.sourcePdfRect);
     if (rects.length === 0) return [];
+    clearedEdits.push(edit);
     // A run's rectangle is measured from its baseline upwards, so every descender in the paragraph
     // hangs below it. Without room for them a line ending in "g" or "y" reads as reaching outside
     // the paragraph and is left in the file. One third of a line is the usual depth of a descender
@@ -1141,6 +1169,7 @@ export const savePDFWithAnnotations = async (
       sourceTexts: edit.script === 'devanagari' ? edit.runDeletions.map((run) => run.sourceText) : undefined,
     }];
   });
+  const removedInks = new Map<ParagraphReflowEdit, string[]>();
   if (nativeEdits.length > 0 || clearances.length > 0) {
     const {
       applyNativePdfTextEdits,
@@ -1154,6 +1183,7 @@ export const savePDFWithAnnotations = async (
     if (clearances.length > 0) {
       const cleared = await clearNativePdfTextInAreas(sourceBytes, clearances);
       sourceBytes = cleared.bytes;
+      cleared.inks.forEach((inks, index) => removedInks.set(clearedEdits[index], inks));
       if (cleared.uncleared > 0) {
         // Text that reaches outside the repainted area is left where it is, so say so rather than
         // letting the save claim the paragraph's originals are gone.
@@ -1314,7 +1344,10 @@ export const savePDFWithAnnotations = async (
         });
       }
 
-      const color = hexToRgb(edit.color);
+      // Colours read off the screen are close to the document's but not exact; the text just
+      // removed from this paragraph carries the exact ones.
+      const inkOf = (sampled: string) => hexToRgb(edit.colorsSampled ? exactInk(sampled, removedInks.get(edit)) : sampled);
+      const color = inkOf(edit.color);
       const positioned = layoutParagraphLines(edit.lines, {
         width,
         fontSize: edit.fontSize,
@@ -1326,6 +1359,14 @@ export const savePDFWithAnnotations = async (
           : undefined,
         normalizeText: edit.script === 'devanagari' ? (text) => text.replace(/\t/g, '    ') : undefined,
       });
+      if (edit.highlight) {
+        for (const box of highlightPatches(edit.highlight, positioned)) {
+          page.drawRectangle({
+            ...visualRectangleToPdf(geometry, visualX + box.left, visualY + box.top, box.right - box.left, box.bottom - box.top),
+            color: hexToRgb(edit.highlight.color),
+          });
+        }
+      }
       if (edit.script === 'devanagari' && devanagariWriter) {
         for (let lineIndex = 0; lineIndex < edit.lines.length; lineIndex += 1) {
           const pieces = positioned.filter((piece) => piece.lineIndex === lineIndex).map((piece) => {
@@ -1334,6 +1375,7 @@ export const savePDFWithAnnotations = async (
               text: piece.text, fontId: piece.face.family as DevanagariFontId,
               italic: piece.face.italic,
               x: point.x, y: point.y, width: piece.width, fontSize: piece.fontSize,
+              color: piece.color ? inkOf(piece.color) : undefined,
             };
           });
           await devanagariWriter.drawLine(page, pieces, edit.fontSize, color, geometry.rotation);
@@ -1368,7 +1410,7 @@ export const savePDFWithAnnotations = async (
           y: point.y,
           size: piece.fontSize,
           font,
-          color,
+          color: piece.color ? inkOf(piece.color) : color,
           rotate: degrees(geometry.rotation),
         });
       }

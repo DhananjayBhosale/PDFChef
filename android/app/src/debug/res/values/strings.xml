@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The debug build sits next to the Play app, so "Open with" lists must tell them apart. -->
+<resources>
+    <string name="app_name" translatable="false">PDF Chef Debug</string>
+    <string name="title_activity_main" translatable="false">PDF Chef Debug</string>
+</resources>

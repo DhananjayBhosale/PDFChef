@@ -94,3 +94,64 @@ test('short rows are detected within their own column', () => {
   const otherColumn = blocks.find(block => block.left === 300);
   assert.equal(otherColumn?.lines.length, 4);
 });
+
+// Found on a phone with a Google Docs export: every bullet item merged into one paragraph that
+// contained its "●" bullets, and any edit that moved a line was then refused.
+test('a Google Docs bullet list gives each item its own paragraph, without its bullet', () => {
+  const items: PositionedTextSource[] = [];
+  const item = (index: number, lines: string[], y: number) => {
+    items.push(run(items.length, '●', 90, y, 7.2, 12, 'bullet'));
+    items.push(run(items.length, ' ', 97.2, y, 0.9, 12, 'body'));
+    lines.forEach((text, line) => items.push(run(items.length, text, 108, y + line * 14, 300, 12, 'body')));
+  };
+  items.push(run(0, 'The list below has three items.', 72, 72, 200, 12, 'body'));
+  item(0, ['First item'], 100);
+  item(1, ['Second item that wraps onto', 'a second line'], 114);
+  item(2, ['Third item'], 142);
+  items.push(run(items.length, 'A paragraph after the list.', 72, 170, 180, 12, 'body'));
+
+  const blocks = buildTextBlocks(items, 0);
+  assert.deepEqual(blocks.map((block) => block.text), [
+    'The list below has three items.',
+    'First item',
+    'Second item that wraps onto\na second line',
+    'Third item',
+    'A paragraph after the list.',
+  ]);
+});
+
+test('a symbol-font bullet and a numbered marker are split off the same way', () => {
+  const blocks = buildTextBlocks([
+    run(0, '', 90, 100, 5, 11, 'symbol'),
+    run(1, 'Private-use bullet item', 108, 100, 140, 11, 'body'),
+    run(2, '2.', 90, 114, 9, 11, 'body'),
+    run(3, 'Numbered item', 108, 114, 90, 11, 'body'),
+  ], 0);
+  assert.deepEqual(blocks.map((block) => block.text), ['Private-use bullet item', 'Numbered item']);
+});
+
+test('a dash followed by only a word space keeps its place in the text', () => {
+  const blocks = buildTextBlocks([
+    run(0, 'A sentence that runs on and then', 72, 100, 200, 12, 'body'),
+    run(1, '\u2013', 72, 114, 6, 12, 'body'),
+    run(2, 'carries on after a dash.', 81, 114, 150, 12, 'body'),
+  ], 0);
+  assert.ok(blocks.some((block) => block.text.includes('\u2013')), blocks.map((block) => block.text).join(' | '));
+});
+
+// Found on a phone: a heading set a little apart took the first line of the paragraph under it,
+// and the rest became a paragraph of its own. A highlighted run crossing that false edge then
+// could not be removed, so the edited paragraph could not be saved.
+test('a heading set apart from its paragraph does not take the paragraph\'s first line', () => {
+  const blocks = buildTextBlocks([
+    run(0, 'Nothing Headphone (1):', 72, 100, 110, 10, 'bold'),
+    run(1, 'The full review and news embargo will be in effect until', 72, 116.25, 300),
+    run(2, '18.30 BST / 19.30 CEST / 13.30 EDT / 23.00 IST, or when the', 72, 126.25, 300),
+    run(3, '(whichever comes first), or at an alternative date or time', 72, 136.25, 300),
+    run(4, 'time.', 72, 146.25, 24),
+  ], 0);
+
+  assert.deepEqual(blocks.map(block => block.lines.length), [1, 4]);
+  assert.equal(blocks[0].text, 'Nothing Headphone (1):');
+  assert.match(blocks[1].text, /^The full review.*\n18\.30 BST/);
+});

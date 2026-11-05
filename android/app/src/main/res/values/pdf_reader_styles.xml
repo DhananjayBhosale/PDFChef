@@ -5,12 +5,18 @@
          over a surface that already matches the product. The Material 3 parent
          is what the bundled AndroidX PDF resources resolve against: they read
          colorOnSurface, the surface containers and the Material text
-         appearances, none of which the AppCompat parent defines. Every PDF Chef
-         value below still overrides it, so the reader looks unchanged. -->
+         appearances, none of which the AppCompat parent defines. colorPrimary
+         and colorOnPrimary replace Material's default purple with the PDF Chef
+         accent, which dialog buttons and the saving spinner read. Dialogs sit
+         on the raised neutral so that accent text keeps 4.5:1 contrast in
+         both modes. -->
     <style name="PdfReaderTheme" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="colorAccent">@color/pdf_reader_accent</item>
+        <item name="colorPrimary">@color/pdf_reader_accent</item>
+        <item name="colorOnPrimary">@color/pdf_reader_on_accent</item>
+        <item name="colorBackgroundFloating">@color/pdf_reader_raised</item>
         <item name="android:windowBackground">@color/pdf_reader_surface</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>

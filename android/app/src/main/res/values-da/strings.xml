@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_ready_title">Opdatering klar</string>
+    <string name="update_ready_message">Genstart PDF Chef for at fuldføre opdateringen.</string>
+    <string name="update_later">Senere</string>
+    <string name="update_restart">Genstart</string>
+</resources>

@@ -162,6 +162,8 @@ export interface ShapedLinePiece {
   y: number;
   width: number;
   fontSize?: number;
+  /** This piece's own colour, where the line mixes colours. */
+  color?: Color;
 }
 
 /**
@@ -225,7 +227,7 @@ export class DevanagariPdfWriter {
       const size = piece.fontSize ?? fontSize;
       const state = await this.font(piece.fontId);
       const key = this.pageKey(page, piece.fontId, state.font);
-      page.pushOperators(setFontAndSize(key, size));
+      page.pushOperators(setFontAndSize(key, size), setFillingColor(piece.color ?? color));
       const slant = piece.italic && !piece.fontId.startsWith('Embedded') ? 0.2 : 0;
       let advance = 0;
       const shaped = state.face.layout(piece.text);

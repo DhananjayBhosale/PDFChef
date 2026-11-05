@@ -22,9 +22,10 @@ import {
   type ParagraphSaveEdit,
 } from '../../services/pdfDocument';
 import { getPageTextBlocks, resolvePageFonts, type PageTextBlocks } from '../../services/pdfBlockExtraction';
+import { findRefusingItems } from '../../services/findRefusingItems';
 import { serializeEditorState } from '../../services/pdfEditorSnapshot';
 import { getPdfRenderScale } from '../../services/pdfPageGeometry';
-import { layoutParagraphLines, paragraphLineOrigins } from '../../services/pdfParagraphLayout';
+import { layoutParagraphLines, measureParagraphText, paragraphLineOrigins } from '../../services/pdfParagraphLayout';
 import {
   documentEmbeddedFontsReady,
   embeddedPdfFont,
@@ -47,10 +48,16 @@ import {
 import type { PdfTextBlock } from '../../services/pdfTextBlocks';
 import {
   blockStyledSegments,
+  carrySoftBreaks,
+  flowStyledLines,
+  styledTextEqual,
   findInStyledLines,
   planBlockEdit,
   replaceInStyledLines,
+  segmentInks,
+  splitByInk,
   styledLineText,
+  withoutInks,
   type BlockEditPlan,
   type StyledMatch,
   type StyledSegment,
@@ -69,9 +76,9 @@ import {
   samplePageBlockColors,
   blockRange,
   clearFindHighlights,
+  hasParagraphRestyle,
   paintFindHighlights,
   scrollBlockIntoViewport,
-  selectRangeInBlock,
   useKeyboardSafeFocus,
   type BlockColors,
   type BlockEditState,
@@ -79,9 +86,11 @@ import {
 } from './PdfTextBlockLayer';
 import { PdfFindReplace } from './PdfFindReplace';
 import { PdfParagraphInspector } from './PdfParagraphInspector';
+import { PdfParagraphField } from './PdfParagraphField';
+import { PdfElementDock } from './PdfElementDock';
 import { deliverBlob } from '../../services/pdfShared';
-import { normalizeImageFile } from '../../services/imageBrowser';
-import { ChevronLeft, ChevronRight, ImagePlus, Redo2, Save, Search, Shapes, Trash2, Type, Undo2, X } from 'lucide-react';
+import { normalizeImageFileWithSize } from '../../services/imageBrowser';
+import { ArrowRight, ChevronLeft, ChevronRight, Circle, ImagePlus, Minus, Move, Redo2, Save, Search, Shapes, Square, Trash2, Type, Undo2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Badge, StatusLine } from '../UI/Primitives';
 import { v4 as uuidv4 } from 'uuid';
@@ -94,7 +103,7 @@ import { usePdfPinchZoom } from '../../hooks/usePdfPinchZoom';
 import { useImmersiveWorkspace } from '../Layout/AppShell';
 import { PDF_TEXT_OVERFLOW_MESSAGE } from '../../services/pdfTextEditSafety';
 import { layoutTextBox, PdfTextBoxError, TEXT_BOX_PADDING_X, TEXT_BOX_PADDING_Y } from '../../services/pdfTextBoxLayout';
-import { pdfPageFromScrollBoundary } from '../../services/pdfZoomGesture';
+import { pdfPageFromScrollBoundary, pdfPageFromSwipe } from '../../services/pdfZoomGesture';
 import { releaseNativePdfTextDocument } from '../../services/pdfNativeTextEditor';
 import { dismissOutputBanner } from '../../services/workspace';
 import { toolOutputName } from '../UI/format';
@@ -115,6 +124,7 @@ const editorCssFontFamily = (fontFamily: string | undefined) => (
 interface EditorSnapshot {
   elements: EditorElement[];
   blockEdits: Record<string, BlockEditState>;
+  formValues: Record<string, PdfFormFieldValue>;
 }
 
 /** Touch input needs bigger targets and cannot rely on hover to reveal anything. */
@@ -136,6 +146,8 @@ const useCoarsePointer = () => {
 
 /** Below this, mobile browsers zoom the whole page the moment an editable element takes focus. */
 const MINIMUM_EDITING_FONT_PX = 16;
+/** Tapping a paragraph never leaves its text smaller than this on screen. */
+const LEGIBLE_EDITING_FONT_PX = 10;
 /** Comfortable target for a finger, in CSS pixels. Both platforms' guidance lands here. */
 const TOUCH_TARGET_PX = 44;
 /**
@@ -147,16 +159,16 @@ const TOUCH_TARGET_PX = 44;
  * that a checkbox a few pixels across otherwise swallows, without reaching into the text beside it.
  */
 const FIELD_TOUCH_TARGET_PX = 24;
+/** iPhone, iPad, or the iOS app, where the dock field is not used yet (see `dockEditing`). */
+const APPLE_TOUCH = Capacitor.getPlatform() === 'ios' || (typeof navigator !== 'undefined'
+  && (/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)));
 const EDITOR_MAX_ZOOM = 4;
 /** PDF permission flag for "modify contents", as PDF.js reports it. */
 const PDF_PERMISSION_MODIFY_CONTENTS = 8;
-/**
- * How many paragraphs are worth retrying one at a time when a batch rewrite fails.
- *
- * Each attempt writes the whole document, so this trades a bounded delay for keeping every
- * paragraph that can still be rewritten in the document's own typeface.
- */
-const MAX_REWRITE_ISOLATION_ATTEMPTS = 12;
+/** The PDF engine's own refusals, which a save can work around paragraph by paragraph. */
+const isDirectEditFailure = (error: unknown): error is Error => (
+  error instanceof Error && error.message.startsWith('Direct text edit failed:')
+);
 /** How long after the last keystroke the paragraph's save plan is worked out. */
 const PLAN_SETTLE_MS = 180;
 
@@ -277,6 +289,7 @@ const PDFPage: React.FC<{
   const [availableWidth, setAvailableWidth] = useState(600);
   const [textBlocks, setTextBlocks] = useState<PdfTextBlock[]>([]);
   const [blockFonts, setBlockFonts] = useState<PageTextBlocks['fonts']>(() => new Map());
+  const [blockColors, setBlockColors] = useState<Record<string, BlockColors>>({});
   // Base dimensions at scale 1.0 (PDF Points)
   const [dims, setDims] = useState({ w: 600, h: 850 });
   const [pageUserUnit, setPageUserUnit] = useState(1);
@@ -342,7 +355,9 @@ const PDFPage: React.FC<{
           setBlockFonts(pageText.fonts);
           // Sampled from the page that was just drawn, so the caret and any repaint match the
           // document's real ink and paper rather than an assumed black on white.
-          onBlocksReady(pageIndex, pageText, samplePageBlockColors(canvas, pageText.blocks, renderScale));
+          const colors = samplePageBlockColors(canvas, pageText.blocks, renderScale);
+          setBlockColors(colors);
+          onBlocksReady(pageIndex, pageText, colors);
           // PDF.js keeps everything it parsed for this page until asked not to; the editor holds
           // the blocks it needs, so the rest can go.
           try {
@@ -426,6 +441,7 @@ const PDFPage: React.FC<{
           fonts={blockFonts}
           edits={blockEdits}
           previews={blockPreviews}
+          colors={blockColors}
           activeBlockId={activeBlockId}
           displayScale={1}
           enabled={!insertMode}
@@ -748,6 +764,9 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
   const inlineTextEditorRef = useRef<HTMLTextAreaElement>(null);
   const inlineTextChanged = useRef(false);
   const wasSelected = useRef(false);
+  /** Set while a finger is down on the box: a press may become a drag, which must not open the keyboard. */
+  const pressing = useRef(false);
+  const tapEdits = useRef(true);
   const width = element.width || (element.type === 'text' ? 0.24 : 0.22);
   const height = element.height || (element.type === 'text' ? 0.07 : 0.14);
   const cssFontFamily = editorCssFontFamily(element.fontFamily);
@@ -760,7 +779,9 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
 
   useEffect(() => {
     if (element.type !== 'text') return;
-    if (isSelected && !wasSelected.current) {
+    // A box that was just added, or chosen from the keyboard, is ready to type over. One chosen by
+    // a finger waits for the finger to lift: a drag only moves it, and a tap edits it.
+    if (isSelected && !wasSelected.current && !pressing.current) {
       const inlineTextEditor = inlineTextEditorRef.current;
       if (inlineTextEditor) {
         inlineTextEditor.focus({ preventScroll: true });
@@ -771,8 +792,11 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
     wasSelected.current = isSelected;
   }, [element.type, isSelected]);
 
-  const handleStart = (event: React.PointerEvent<HTMLDivElement>) => {
+  const handleStart = (event: React.PointerEvent<HTMLElement>) => {
     event.stopPropagation();
+    pressing.current = true;
+    // The move handle only moves the box; a tap on it must not open the keyboard.
+    tapEdits.current = !(event.target as Element).closest('[data-move-handle]');
     onSelect();
     gestureChanged.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -782,6 +806,7 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
 
   const handleResizeStart = (event: React.PointerEvent<HTMLButtonElement>) => {
     event.stopPropagation();
+    pressing.current = true;
     onSelect();
     gestureChanged.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -829,8 +854,15 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
       : event.key === 'ArrowDown'
         ? height + step
         : height;
-    const clampedWidth = clamp(nextWidth, 0.04, 1 - element.x);
-    const clampedHeight = clamp(nextHeight, 0.025, 1 - element.y);
+    let clampedWidth = clamp(nextWidth, 0.04, 1 - element.x);
+    let clampedHeight = clamp(nextHeight, 0.025, 1 - element.y);
+    if (element.type === 'image') {
+      // One arrow changes one side; the other follows it.
+      const scale = clamp(clampedWidth !== width ? clampedWidth / width : clampedHeight / height,
+        Math.max(0.04 / width, 0.025 / height), Math.min((1 - element.x) / width, (1 - element.y) / height));
+      clampedWidth = width * scale;
+      clampedHeight = height * scale;
+    }
     if (clampedWidth === width && clampedHeight === height) return;
     if (!event.repeat) onBeginChange();
     onUpdate(element.id, {
@@ -858,8 +890,15 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
           y: nextY,
         });
       } else {
-        const nextWidth = clamp(origin.current.width + dx, 0.04, 1 - origin.current.x);
-        const nextHeight = clamp(origin.current.height + dy, 0.025, 1 - origin.current.y);
+        const start = origin.current;
+        // A picture keeps its shape: the box was sized to it, and a stretched box only letterboxes it.
+        const scale = element.type === 'image' ? clamp(
+          Math.max((start.width + dx) / start.width, (start.height + dy) / start.height),
+          Math.max(0.04 / start.width, 0.025 / start.height),
+          Math.min((1 - start.x) / start.width, (1 - start.y) / start.height),
+        ) : 0;
+        const nextWidth = scale ? start.width * scale : clamp(start.width + dx, 0.04, 1 - start.x);
+        const nextHeight = scale ? start.height * scale : clamp(start.height + dy, 0.025, 1 - start.y);
         if (nextWidth === width && nextHeight === height) return;
         if (!gestureChanged.current) {
           onBeginChange();
@@ -873,8 +912,16 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
     };
 
     const handleEnd = () => {
+      const tapped = editMode === 'drag' && !gestureChanged.current && tapEdits.current;
+      pressing.current = false;
       gestureChanged.current = false;
       setEditMode(null);
+      // A tap on a text box edits it, with the caret at the end of what is already there.
+      const inlineTextEditor = inlineTextEditorRef.current;
+      if (tapped && inlineTextEditor && document.activeElement !== inlineTextEditor) {
+        inlineTextEditor.focus({ preventScroll: true });
+        inlineTextEditor.setSelectionRange(inlineTextEditor.value.length, inlineTextEditor.value.length);
+      }
     };
     if (editMode) {
        window.addEventListener('pointermove', handleMove);
@@ -980,6 +1027,21 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
            ? <img src={element.content} alt={t("edit-pdf.added.pdf.graphic.f492bb")} className="h-full w-full object-contain pointer-events-none" />
            : shapePreview
       )}
+      {isSelected && element.type === 'text' && (
+        <span
+          data-move-handle
+          role="img"
+          aria-label={t("edit-pdf.move.text.box")}
+          className="absolute flex h-11 w-11 cursor-move touch-none items-center justify-center"
+          // Fully outside the box's top-left corner, at the same size on screen at any zoom: the
+          // first letters of the text sit right inside that corner.
+          style={{ left: -44 / displayScale, top: -44 / displayScale, transform: `scale(${1 / displayScale})`, transformOrigin: 'top left' }}
+        >
+          <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-paper-25 bg-ink-600 text-paper-25 shadow">
+            <Move className="h-4 w-4" aria-hidden="true" />
+          </span>
+        </span>
+      )}
       {isSelected && (
         <button
           type="button"
@@ -1010,6 +1072,8 @@ export const EditPDF: React.FC = () => {
   }, []);
   const [formFields, setFormFields] = useState<PdfFormFieldDefinition[]>([]);
   const [formValues, setFormValues] = useState<Record<string, PdfFormFieldValue>>({});
+  const formValuesRef = useRef(formValues);
+  formValuesRef.current = formValues;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blockEdits, setBlockEdits] = useState<Record<string, BlockEditState>>({});
   const blockEditsRef = useRef<Record<string, BlockEditState>>({});
@@ -1025,6 +1089,8 @@ export const EditPDF: React.FC = () => {
   const [findOpen, setFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState('');
   const [findReplacement, setFindReplacement] = useState('');
+  // What Replace all just did, said inside Find, where the reader is looking while the keyboard is up.
+  const [findReport, setFindReport] = useState('');
   const [findCaseSensitive, setFindCaseSensitive] = useState(false);
   const [findShowReplace, setFindShowReplace] = useState(false);
   const [findIndex, setFindIndex] = useState(0);
@@ -1073,14 +1139,18 @@ export const EditPDF: React.FC = () => {
     setPdfZoomViewport(viewport);
   }, [setPdfZoomViewport]);
   const selectedElement = elements.find((element) => element.id === selectedId) ?? null;
-  const fillableFieldCount = useMemo(
-    () => new Set(formFields.map((field) => field.fieldName)).size,
-    [formFields],
-  );
   const pageCount = pdfDoc?.numPages || 0;
   const compactViewport = useCompactEditorViewport();
   const coarsePointer = useCoarsePointer();
 
+  const isNativeAndroidEditor = Boolean(file) && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+  const isCompactViewportEditor = Boolean(file) && compactViewport;
+  const isImmersiveEditor = isNativeAndroidEditor || isCompactViewportEditor;
+  // On a phone a paragraph is typed into a wrapped field above the keyboard. No zoom shows both
+  // whole lines and readable text there: 11 pt body text on A4 needs 165% to reach 10 px.
+  // Not yet on iPhone and iPad: the caret moves to the field a frame after the tap, and iOS may not
+  // raise the keyboard for focus given outside the tap itself. Untested there, so it waits.
+  const dockEditing = isImmersiveEditor && coarsePointer && !APPLE_TOUCH;
   const selectedTextId = selectedElement?.type === 'text' ? selectedElement.id : null;
   const captureFocusAnchor = useKeyboardSafeFocus(
     pdfZoomViewportRef.current,
@@ -1089,43 +1159,197 @@ export const EditPDF: React.FC = () => {
     immersiveBottomBarRef.current,
     immersiveHeaderRef.current,
     selectedTextId,
+    dockEditing,
   );
+  // A redrawn paragraph wraps differently from the page paragraph under it, so a tap on it is read
+  // off the drawing: how many letters come before the tap, and whether it landed just after one.
+  const previewTapRef = useRef<{ blockId: string; letters: number; afterLetter: boolean } | null>(null);
+  const readPreviewTap = useCallback((event: React.PointerEvent<HTMLElement>, blockId: string) => {
+    previewTapRef.current = null;
+    const drawing = event.currentTarget.querySelector<SVGSVGElement>(`svg[data-preview-block-id="${CSS.escape(blockId)}"]`);
+    const rows = drawing ? [...drawing.querySelectorAll<SVGTextElement>('text')] : [];
+    const matrix = drawing?.getScreenCTM();
+    if (!drawing || !matrix || rows.length === 0 || getComputedStyle(drawing).direction === 'rtl') return;
+    const near = (row: SVGTextElement) => {
+      const box = row.getBoundingClientRect();
+      const dy = Math.max(box.top - event.clientY, event.clientY - box.bottom, 0);
+      const dx = Math.max(box.left - event.clientX, event.clientX - box.right, 0);
+      return dy * 1000 + dx;
+    };
+    const row = rows.reduce((best, candidate) => (near(candidate) < near(best) ? candidate : best));
+    const x = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse()).x;
+    const content = row.textContent ?? '';
+    let index = 0;
+    while (index < row.getNumberOfChars()) {
+      if (x < (row.getStartPositionOfChar(index).x + row.getEndPositionOfChar(index).x) / 2) break;
+      index += 1;
+    }
+    const letters = (value: string) => value.replace(/\s/g, '').length;
+    previewTapRef.current = {
+      blockId,
+      letters: rows.slice(0, rows.indexOf(row)).reduce((sum, earlier) => sum + letters(earlier.textContent ?? ''), 0)
+        + letters(content.slice(0, index)),
+      afterLetter: index > 0 && !/\s/.test(content[index - 1]),
+    };
+  }, []);
   const handlePdfPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse') return;
     const element = (event.target as HTMLElement).closest<HTMLElement>('[data-block-id]');
     if (element) captureFocusAnchor(element, { x: event.clientX, y: event.clientY });
-  }, [captureFocusAnchor]);
+    if (dockEditing) {
+      if (element?.dataset.blockId) readPreviewTap(event, element.dataset.blockId);
+      else previewTapRef.current = null;
+    }
+  }, [captureFocusAnchor, dockEditing, readPreviewTap]);
 
   /**
-   * Bring a paragraph up to a size that can actually be edited by thumb before handing it the
-   * caret. Mobile browsers zoom the entire page when focus lands on text under about 16px, which
-   * throws away the scroll position and the user's place in the document; raising the editor's own
-   * zoom instead keeps the page where it is and makes the text legible while typing.
+   * Bring a paragraph up to a size that can be edited by thumb before handing it the caret.
+   *
+   * Zooming 12 pt text to 16 px on a phone (250%) cut every line in half, so the reader lost the
+   * start and end of each sentence. The zoom now fits the paragraph's width, but never leaves its
+   * text below 10 px and never goes past the 16 px zoom; on a Letter page that is about 156%. It
+   * never zooms out, and Done or Back puts back the zoom the reader had, unless they changed it.
    */
+  const autoZoomRef = useRef<{ from: number; to: number } | null>(null);
+  /** Zoom a paragraph to the rule above. Returns whether the zoom changes. */
+  const autoZoomTo = useCallback((element: HTMLElement, fitOnly = dockEditing) => {
+    const viewport = pdfZoomViewportRef.current;
+    if (!viewport) return false;
+    // The page is drawn inside a CSS transform, so the computed font size is the unscaled one.
+    // What the browser and the reader actually see is that size times the transform's scale.
+    const rect = element.getBoundingClientRect();
+    const layoutHeight = element.offsetHeight;
+    const scale = layoutHeight > 0 ? rect.height / layoutHeight : 1;
+    const renderedFontSize = Number.parseFloat(window.getComputedStyle(element).fontSize) * scale;
+    if (!Number.isFinite(renderedFontSize) || renderedFontSize <= 0 || rect.width <= 0) return false;
+    const fitsWidth = zoom * (viewport.clientWidth - 2 * 12) / rect.width;
+    const legible = zoom * LEGIBLE_EDITING_FONT_PX / renderedFontSize;
+    const ceiling = zoom * MINIMUM_EDITING_FONT_PX / renderedFontSize;
+    // With the dock field the page only has to show the whole paragraph: the field is where it is read.
+    const target = Math.min(EDITOR_MAX_ZOOM, ceiling, fitOnly ? fitsWidth : Math.max(fitsWidth, legible));
+    // A zoom this editor chose may come down again for a wider paragraph, never below the reader's own.
+    const from = autoZoomRef.current?.from ?? zoom;
+    const next = Math.max(dockEditing && autoZoomRef.current ? from : zoom, target);
+    if (Math.abs(next - zoom) <= 0.01) return false;
+    autoZoomRef.current = { from, to: next };
+    setExactZoom(next);
+    return true;
+  }, [dockEditing, setExactZoom, zoom]);
+  // Found on a phone: a form's text field, and an added text box, took the keyboard at about 9 px
+  // text. Both zoom up to 16 px text but never past the screen's width, and the zoom is put back
+  // once the caret leaves every field, so the keyboard's next-field key keeps it.
+  useEffect(() => {
+    const viewport = pdfZoomViewportRef.current;
+    if (!viewport || !dockEditing) return undefined;
+    const isField = (node: EventTarget | null): node is HTMLElement => node instanceof HTMLElement
+      && node.matches('[data-field-name]:is(textarea, input:not([type="checkbox"], [type="radio"])), [data-testid="inline-text-editor"]');
+    let timer = 0;
+    const focused = (event: FocusEvent) => {
+      if (!isField(event.target)) return;
+      window.clearTimeout(timer);
+      autoZoomTo(event.target, true);
+    };
+    const left = (event: FocusEvent) => {
+      if (!isField(event.target) || isField(event.relatedTarget)) return;
+      timer = window.setTimeout(() => {
+        // A paragraph taken up meanwhile owns the zoom now.
+        if (isField(document.activeElement) || !autoZoomRef.current
+          || document.activeElement?.closest('[data-block-id], [data-field-for]')) return;
+        const { from } = autoZoomRef.current;
+        autoZoomRef.current = null;
+        setExactZoom(from);
+      }, 250);
+    };
+    viewport.addEventListener('focusin', focused);
+    viewport.addEventListener('focusout', left);
+    return () => {
+      window.clearTimeout(timer);
+      viewport.removeEventListener('focusin', focused);
+      viewport.removeEventListener('focusout', left);
+    };
+  }, [autoZoomTo, dockEditing, pdfDoc, setExactZoom]);
   const handleActivateBlock = useCallback((blockId: string | null) => {
     setActiveBlockId(blockId);
     if (blockId) setSelectedId(null);
     if (!blockId || !coarsePointer) return;
     const element = document.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(blockId)}"]`);
-    if (!element) return;
+    if (!element || !pdfZoomViewportRef.current) return;
     captureFocusAnchor(element);
-    // The page is drawn inside a CSS transform, so the computed font size is the unscaled one.
-    // What the browser and the reader actually see is that size times the transform's scale.
-    const layoutHeight = element.offsetHeight;
-    const scale = layoutHeight > 0 ? element.getBoundingClientRect().height / layoutHeight : 1;
-    const renderedFontSize = Number.parseFloat(window.getComputedStyle(element).fontSize) * scale;
-    if (!Number.isFinite(renderedFontSize) || renderedFontSize <= 0) return;
-    if (renderedFontSize >= MINIMUM_EDITING_FONT_PX) return;
-    setExactZoom(Math.min(EDITOR_MAX_ZOOM, zoom * (MINIMUM_EDITING_FONT_PX / renderedFontSize)));
-  }, [captureFocusAnchor, coarsePointer, setExactZoom, zoom]);
-  const isNativeAndroidEditor = Boolean(file) && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
-  const isCompactViewportEditor = Boolean(file) && compactViewport;
-  const isImmersiveEditor = isNativeAndroidEditor || isCompactViewportEditor;
+    autoZoomTo(element);
+  }, [autoZoomTo, captureFocusAnchor, coarsePointer]);
+
+  /**
+   * A tap on a paragraph on the page hands the caret to the dock field, at the letter tapped. The
+   * browser places the caret in the page paragraph first; it is read on the next frame.
+   */
+  const [fieldFocus, setFieldFocus] = useState<{ blockId: string; offset: number; nonce: number } | null>(null);
+  const handlePageActivate = useCallback((blockId: string | null) => {
+    // The last tap's request would otherwise focus the field again before this tap is read.
+    setFieldFocus(null);
+    handleActivateBlock(blockId);
+    if (!blockId || !dockEditing) return;
+    window.requestAnimationFrame(() => {
+      const element = document.activeElement as HTMLElement | null;
+      const tap = previewTapRef.current;
+      previewTapRef.current = null;
+      if (element?.dataset.blockId !== blockId) return;
+      const selection = window.getSelection();
+      let offset = Number.MAX_SAFE_INTEGER;
+      if (tap?.blockId === blockId) {
+        // Only spaces and line ends differ between the drawing and the text, so count letters.
+        const text = blockEditsRef.current[blockId]?.text ?? element.textContent ?? '';
+        let seen = 0;
+        offset = text.length;
+        for (let index = 0; index < text.length; index += 1) {
+          if (/\s/.test(text[index])) continue;
+          if (seen === tap.letters && !tap.afterLetter) { offset = index; break; }
+          seen += 1;
+          if (seen === tap.letters && tap.afterLetter) { offset = index + 1; break; }
+        }
+      } else if (selection?.focusNode && element.contains(selection.focusNode)) {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        range.setEnd(selection.focusNode, selection.focusOffset);
+        offset = range.toString().length;
+      }
+      setFieldFocus({ blockId, offset, nonce: Date.now() });
+    });
+  }, [dockEditing, handleActivateBlock]);
+  // A pinch or a zoom button makes the zoom the reader's own, so it is no longer put back.
+  useEffect(() => {
+    if (autoZoomRef.current && Math.abs(autoZoomRef.current.to - zoom) > 0.01) autoZoomRef.current = null;
+  }, [zoom]);
+  useEffect(() => {
+    if (activeBlockId || !autoZoomRef.current) return;
+    const { from } = autoZoomRef.current;
+    autoZoomRef.current = null;
+    setExactZoom(from);
+  }, [activeBlockId, setExactZoom]);
   const currentSnapshot = useMemo(
     () => serializeEditorState(elements, formValues, blockEdits),
     [blockEdits, elements, formValues],
   );
   const hasUnsavedEdits = Boolean(file) && currentSnapshot !== savedSnapshot;
+  // A finished save's message describes that file. The next change makes it out of date.
+  const savedMessageAt = useRef<string | null>(null);
+  useEffect(() => {
+    const finished = !status.isProcessing && status.progress === 100 && !status.error && Boolean(status.message);
+    if (!finished) {
+      savedMessageAt.current = null;
+    } else if (savedMessageAt.current === null) {
+      savedMessageAt.current = currentSnapshot;
+    } else if (savedMessageAt.current !== currentSnapshot) {
+      savedMessageAt.current = null;
+      setStatus({ isProcessing: false, progress: 0, message: '' });
+      // The exported file's strip goes with it: it sits over the editing controls.
+      dismissOutputBanner();
+    }
+  }, [currentSnapshot, status]);
+  // Found on a phone: after a save, opening Find left the strip over Find's own row. Going back to
+  // work on the page, before any change, is reason enough for it to go.
+  useEffect(() => {
+    if (findOpen || activeBlockId || selectedId) dismissOutputBanner();
+  }, [activeBlockId, findOpen, selectedId]);
   const navigationBlocker = useBlocker(hasUnsavedEdits);
 
   useImmersiveWorkspace(isImmersiveEditor);
@@ -1160,6 +1384,7 @@ export const EditPDF: React.FC = () => {
     if (pageCount <= 0) return;
     setTargetPageIndex(Math.max(0, Math.min(pageCount - 1, nextPageIndex)));
     setSelectedId(null);
+    setActiveBlockId(null);
     setInsertMode(null);
   }, [pageCount]);
 
@@ -1169,20 +1394,9 @@ export const EditPDF: React.FC = () => {
     let changingPage = false;
     let releaseTimer: number | undefined;
 
-    const handlePageBoundaryWheel = (event: WheelEvent) => {
-      if (event.ctrlKey || changingPage) return;
-      const nextPage = pdfPageFromScrollBoundary({
-        currentPage: targetPageIndex,
-        pageCount,
-        zoom,
-        deltaX: event.deltaX,
-        deltaY: event.deltaY,
-        atStart: viewport.scrollTop <= 2,
-        atEnd: viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 2,
-      });
-      if (nextPage === targetPageIndex) return;
-
-      event.preventDefault();
+    const atStart = () => viewport.scrollTop <= 2;
+    const atEnd = () => viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 2;
+    const turnTo = (nextPage: number) => {
       changingPage = true;
       const movingForward = nextPage > targetPageIndex;
       goToPage(nextPage);
@@ -1198,12 +1412,63 @@ export const EditPDF: React.FC = () => {
       });
     };
 
+    const handlePageBoundaryWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || changingPage) return;
+      const nextPage = pdfPageFromScrollBoundary({
+        currentPage: targetPageIndex,
+        pageCount,
+        zoom,
+        deltaX: event.deltaX,
+        deltaY: event.deltaY,
+        atStart: atStart(),
+        atEnd: atEnd(),
+      });
+      if (nextPage === targetPageIndex) return;
+      event.preventDefault();
+      turnTo(nextPage);
+    };
+
+    // One finger only, and not while something on the page is being edited or moved.
+    let swipe: { x: number; y: number; atStart: boolean; atEnd: boolean } | null = null;
+    const handleTouchStart = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      const target = event.target as HTMLElement;
+      swipe = event.touches.length === 1 && touch && !activeBlockId && !selectedId && !insertMode
+        && !target.closest('input, textarea, select, [data-testid="editor-element"]')
+        ? { x: touch.clientX, y: touch.clientY, atStart: atStart(), atEnd: atEnd() }
+        : null;
+    };
+    const cancelSwipe = (event: TouchEvent) => { if (event.touches.length > 1) swipe = null; };
+    const handleTouchEnd = (event: TouchEvent) => {
+      const touch = event.changedTouches[0];
+      const started = swipe;
+      swipe = null;
+      if (!started || !touch || changingPage || viewport.dataset.pdfPinching === 'true') return;
+      const nextPage = pdfPageFromSwipe({
+        currentPage: targetPageIndex,
+        pageCount,
+        deltaX: touch.clientX - started.x,
+        deltaY: touch.clientY - started.y,
+        startedAtStart: started.atStart,
+        startedAtEnd: started.atEnd,
+      });
+      if (nextPage !== targetPageIndex) turnTo(nextPage);
+    };
+
     viewport.addEventListener('wheel', handlePageBoundaryWheel, { passive: false });
+    viewport.addEventListener('touchstart', handleTouchStart, { passive: true });
+    viewport.addEventListener('touchmove', cancelSwipe, { passive: true });
+    viewport.addEventListener('touchend', handleTouchEnd, { passive: true });
+    viewport.addEventListener('touchcancel', cancelSwipe, { passive: true });
     return () => {
       viewport.removeEventListener('wheel', handlePageBoundaryWheel);
+      viewport.removeEventListener('touchstart', handleTouchStart);
+      viewport.removeEventListener('touchmove', cancelSwipe);
+      viewport.removeEventListener('touchend', handleTouchEnd);
+      viewport.removeEventListener('touchcancel', cancelSwipe);
       if (releaseTimer !== undefined) window.clearTimeout(releaseTimer);
     };
-  }, [goToPage, isImmersiveEditor, pageCount, targetPageIndex, zoom]);
+  }, [activeBlockId, goToPage, insertMode, isImmersiveEditor, pageCount, selectedId, targetPageIndex, zoom]);
 
   const handleFilesSelected = async (files: File[]) => {
     if (files.length === 0) return;
@@ -1231,6 +1496,9 @@ export const EditPDF: React.FC = () => {
     setFormFields([]);
     setFormValues({});
     setTargetPageIndex(0);
+    // Each document opens fitted to the screen, not at the zoom the last one was left at.
+    resetZoom();
+    pdfZoomViewportRef.current?.scrollTo({ top: 0, left: 0 });
     setInsertMode(null);
     undoStack.current = [];
     redoStack.current = [];
@@ -1318,14 +1586,18 @@ export const EditPDF: React.FC = () => {
   const captureSnapshot = (): EditorSnapshot => ({
     elements: elementsRef.current.map((element) => ({ ...element })),
     blockEdits: { ...blockEditsRef.current },
+    formValues: formValuesRef.current,
   });
 
   const restoreSnapshot = (snapshot: EditorSnapshot) => {
     replaceElements(snapshot.elements);
     replaceBlockEdits(snapshot.blockEdits);
+    formValuesRef.current = snapshot.formValues;
+    setFormValues(snapshot.formValues);
   };
 
   const rememberSnapshot = () => {
+    typingBlockRef.current = null;
     undoStack.current = [...undoStack.current.slice(-79), captureSnapshot()];
     redoStack.current = [];
     setHistoryVersion((value) => value + 1);
@@ -1334,6 +1606,7 @@ export const EditPDF: React.FC = () => {
   const commitElements = (updater: (current: EditorElement[]) => EditorElement[]) => {
     const next = updater(elementsRef.current);
     if (next === elementsRef.current) return;
+    typingBlockRef.current = null;
     undoStack.current = [...undoStack.current.slice(-79), captureSnapshot()];
     redoStack.current = [];
     replaceElements(next);
@@ -1345,9 +1618,16 @@ export const EditPDF: React.FC = () => {
     if (!previous) return;
     redoStack.current = [...redoStack.current, captureSnapshot()];
     undoStack.current = undoStack.current.slice(0, -1);
+    typingBlockRef.current = null;
     restoreSnapshot(previous);
     setSelectedId(null);
     setHistoryVersion((value) => value + 1);
+  };
+
+  /** Undo and Redo leave the caret and the keyboard where they are, like the zoom buttons. */
+  const holdEditingFocus = (event: React.PointerEvent) => {
+    // With the keyboard closed the button may take focus: keeping it in the text would reopen the keyboard.
+    if (event.pointerType === 'mouse' || document.documentElement.hasAttribute('data-chef-keyboard')) event.preventDefault();
   };
 
   const redo = () => {
@@ -1355,24 +1635,70 @@ export const EditPDF: React.FC = () => {
     if (!next) return;
     undoStack.current = [...undoStack.current, captureSnapshot()];
     redoStack.current = redoStack.current.slice(0, -1);
+    typingBlockRef.current = null;
     restoreSnapshot(next);
     setSelectedId(null);
     setHistoryVersion((value) => value + 1);
   };
 
-  const addText = (x = 0.1, y = 0.1) => {
+  /** The middle of the part of the page on screen, so something added appears where the reader is looking. */
+  const visiblePageCentre = () => {
+    const viewport = pdfZoomViewportRef.current;
+    const page = viewport?.querySelector<HTMLElement>(`[data-pdf-page="${targetPageIndex}"]`);
+    if (!viewport || !page) return null;
+    const view = viewport.getBoundingClientRect();
+    const bounds = page.getBoundingClientRect();
+    const left = Math.max(view.left, bounds.left);
+    const right = Math.min(view.right, bounds.right);
+    const top = Math.max(view.top, bounds.top);
+    const bottom = Math.min(view.bottom, bounds.bottom);
+    if (right <= left || bottom <= top || bounds.width <= 0 || bounds.height <= 0) return null;
+    return { x: ((left + right) / 2 - bounds.left) / bounds.width, y: ((top + bottom) / 2 - bounds.top) / bounds.height };
+  };
+
+  // A new text box starts empty, so nothing is saved that the reader did not type. An empty one
+  // that is not selected is taken away, whether it was let go empty or Undo emptied it.
+  useEffect(() => {
+    const empty = elements.filter((element) => element.type === 'text' && element.id !== selectedId && !element.content.trim());
+    if (empty.length > 0) replaceElements(elements.filter((element) => !empty.includes(element)));
+  }, [elements, replaceElements, selectedId]);
+
+  // Found on a phone: a new shape could land under its own panel, which opens with it. Once the
+  // panel is up, the new item is scrolled clear of it.
+  const revealElementRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedId || selectedId !== revealElementRef.current) return undefined;
+    revealElementRef.current = null;
+    let frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(() => {
+        const viewport = pdfZoomViewportRef.current;
+        const node = viewport?.querySelector(`[data-element-id="${CSS.escape(selectedId)}"]`);
+        if (viewport && node) scrollBlockIntoViewport(viewport, node, immersiveBottomBarRef.current?.getBoundingClientRect().top);
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [selectedId]);
+
+  const addText = (x?: number, y?: number) => {
+    const centre = x === undefined || y === undefined ? visiblePageCentre() : null;
+    x ??= centre ? centre.x - 0.14 : 0.1;
+    y ??= centre ? centre.y - 0.035 : 0.1;
     const newEl: EditorElement = {
       id: uuidv4(), type: 'text', pageIndex: targetPageIndex,
       x: Math.min(0.72, Math.max(0, x)),
       y: Math.min(0.93, Math.max(0, y)),
-      width: 0.28, height: 0.07, content: 'Text', fontSize: 16, color: '#000000', fontFamily: 'Helvetica'
+      width: 0.28, height: 0.07, content: '', fontSize: 16, color: '#000000', fontFamily: 'Helvetica'
     };
     commitElements((current) => [...current, newEl]);
     setSelectedId(newEl.id);
+    revealElementRef.current = newEl.id;
     setInsertMode(null);
   };
 
-  const addShape = (x = 0.12, y = 0.14) => {
+  const addShape = (x?: number, y?: number) => {
+    const centre = x === undefined || y === undefined ? visiblePageCentre() : null;
+    x ??= centre ? centre.x - 0.12 : 0.12;
+    y ??= centre ? centre.y - 0.08 : 0.14;
     const newEl: EditorElement = {
       id: uuidv4(),
       type: shapeKind,
@@ -1382,12 +1708,14 @@ export const EditPDF: React.FC = () => {
       width: 0.24,
       height: shapeKind === 'line' || shapeKind === 'arrow' ? 0.12 : 0.16,
       content: '',
-      color: '#2563eb',
+      // The dock's blue swatch, so a new shape shows which colour it has.
+      color: '#1565c0',
       fillColor: 'transparent',
       strokeWidth: 2,
     };
     commitElements((current) => [...current, newEl]);
     setSelectedId(newEl.id);
+    revealElementRef.current = newEl.id;
     setInsertMode(null);
   };
 
@@ -1403,7 +1731,9 @@ export const EditPDF: React.FC = () => {
       return;
     }
     if (insertMode === 'shape') {
-      addShape(x - 0.04, y - 0.04);
+      // Centred on the finger, so the whole shape lands where it was put rather than mostly to
+      // the right of it and off a zoomed-in screen.
+      addShape(x - 0.12, y - (shapeKind === 'line' || shapeKind === 'arrow' ? 0.06 : 0.08));
       return;
     }
     setSelectedId(null);
@@ -1484,25 +1814,51 @@ export const EditPDF: React.FC = () => {
     }
   }, [pdfDoc, replaceBlockEdits]);
 
-  const handleBeginBlockChange = useCallback((_blockId: string) => {
+  /**
+   * One visit to a paragraph is one Undo step. The editable can lose track of its typing session
+   * mid-word — its content is rebuilt whenever the edit changes from outside, such as when typing
+   * returns it to the original — and each restart used to push another snapshot, so one Undo
+   * landed on a state the reader never saw. Any other change, or leaving the paragraph, starts a
+   * new step.
+   */
+  const typingBlockRef = useRef<string | null>(null);
+  const handleBeginBlockChange = useCallback((blockId: string) => {
+    if (typingBlockRef.current === blockId) return;
     rememberSnapshot();
+    typingBlockRef.current = blockId;
   }, []);
+  useEffect(() => { typingBlockRef.current = null; }, [activeBlockId]);
 
-  const handleBlockChange = useCallback((blockId: string, text: string, segments: StyledSegment[][]) => {
+  const handleBlockChange = useCallback((
+    blockId: string, text: string, segments: StyledSegment[][], softBreaks?: number[],
+  ) => {
     const block = blockIndexRef.current.get(blockId);
     if (!block) return;
     const existing = blockEditsRef.current[blockId];
     const colors = blockColorsRef.current[blockId];
-    const isNew = !existing;
+    // Typing a paragraph back to what the document says is no change at all, so it stops counting
+    // as one: Save, Revert and the status all go back to how they were before the first keystroke.
+    if (text === block.text && !hasParagraphRestyle(existing, colors?.ink)
+      && styledTextEqual(segments, blockStyledSegments(block, colors?.glyphs), block.fontSize)) {
+      if (existing) {
+        const withoutIt = { ...blockEditsRef.current };
+        delete withoutIt[blockId];
+        replaceBlockEdits(withoutIt);
+      }
+      return;
+    }
     const next: BlockEditState = {
+      // Whatever was already chosen for the paragraph, such as a colour picked for all of it,
+      // outlives the next keystroke.
+      ...existing,
       blockId,
       pageIndex: block.pageIndex,
       text,
       segments,
-      fontOverride: existing?.fontOverride,
+      // A break typed in stays a break when the paragraph is redrawn; the PDF's own wrapping
+      // may flow again.
+      softBreaks: softBreaks ?? carrySoftBreaks(existing?.softBreaks, block, existing?.text ?? block.text, text),
       color: existing?.color ?? colors?.ink,
-      fontSize: existing?.fontSize,
-      patch: existing?.patch,
       patchColor: existing?.patchColor ?? colors?.paper ?? '#ffffff',
       patchFlat: existing?.patchFlat ?? colors?.flat ?? false,
       sampledColors: existing?.sampledColors ?? Boolean(colors),
@@ -1514,7 +1870,7 @@ export const EditPDF: React.FC = () => {
 
   /** The paragraph's text as styled segments: what it was edited to, or what the PDF drew. */
   const blockSegments = useCallback((block: PdfTextBlock, edit: BlockEditState | undefined) => (
-    edit?.segments ?? blockStyledSegments(block)
+    edit?.segments ?? blockStyledSegments(block, blockColorsRef.current[block.id]?.glyphs)
   ), []);
 
   /**
@@ -1567,19 +1923,44 @@ export const EditPDF: React.FC = () => {
     setFindIndex((current) => (findMatches.length === 0 ? 0 : Math.min(current, findMatches.length - 1)));
   }, [findMatches.length]);
 
+  /** Choosing an added item or a form field ends the paragraph edit, so two panels never stack. */
+  const selectElement = useCallback((id: string | null) => {
+    setSelectedId(id);
+    setActiveBlockId(null);
+  }, []);
+
   const revealMatch = useCallback((index: number) => {
     const match = findMatches[index];
     if (!match) return;
-    if (match.pageIndex !== targetPageIndex) setTargetPageIndex(match.pageIndex);
+    if (match.pageIndex !== targetPageIndex) goToPage(match.pageIndex);
     // The page may still be rendering, so try again on the next frames rather than once.
     let attempts = 0;
+    let zoomed = false;
     const place = () => {
       const element = document.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(match.blockId)}"]`);
       const length = match.match.end - match.match.start;
-      if (element && selectRangeInBlock(element, match.offset, match.offset + length)) {
-        setActiveBlockId(match.blockId);
+      const range = element ? blockRange(element, match.offset, match.offset + length) : null;
+      // Shown, not entered: the caret and the keyboard stay in the find field, so Enter and Next
+      // keep searching instead of typing into the document. Tapping the match edits it.
+      if (range) {
+        // On a phone a match at fit zoom is about 6 px text: its paragraph is brought up to the
+        // screen's width first, as when it is edited, and put back when Find closes.
+        if (!zoomed && element && dockEditing) {
+          zoomed = true;
+          if (autoZoomTo(element)) {
+            window.requestAnimationFrame(() => window.requestAnimationFrame(place));
+            return;
+          }
+        }
         const viewport = pdfZoomViewportRef.current;
-        if (viewport) scrollBlockIntoViewport(viewport, element);
+        if (!viewport) return;
+        // The whole width of the match's paragraph, when it fits, so its lines read to the end.
+        if (dockEditing && element) {
+          const view = viewport.getBoundingClientRect();
+          const paragraph = element.getBoundingClientRect();
+          if (paragraph.width <= view.width) viewport.scrollLeft += (paragraph.left + paragraph.right - view.left - view.right) / 2;
+        }
+        scrollBlockIntoViewport(viewport, range, immersiveBottomBarRef.current?.getBoundingClientRect().top);
         return;
       }
       if (attempts < 40) {
@@ -1588,7 +1969,7 @@ export const EditPDF: React.FC = () => {
       }
     };
     window.requestAnimationFrame(place);
-  }, [findMatches, targetPageIndex]);
+  }, [autoZoomTo, dockEditing, findMatches, goToPage, targetPageIndex]);
 
   // Every match on the page the reader is looking at, painted at once. Rebuilt whenever the
   // matches, the page or the paragraphs themselves change, because the ranges point at live nodes.
@@ -1603,18 +1984,36 @@ export const EditPDF: React.FC = () => {
         const element = document.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(match.blockId)}"]`);
         if (!element) return [];
         const range = blockRange(element, match.offset, match.offset + (match.match.end - match.match.start));
-        return range ? [range] : [];
+        return range ? [{ range, current: match === findMatches[findIndex] }] : [];
       });
-      paintFindHighlights(ranges);
+      paintFindHighlights(ranges.map((entry) => entry.range), ranges.find((entry) => entry.current)?.range);
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [blockEdits, blocksVersion, findMatches, findOpen, findQuery, targetPageIndex]);
+  }, [blockEdits, blocksVersion, findIndex, findMatches, findOpen, findQuery, targetPageIndex]);
 
   useEffect(() => clearFindHighlights, []);
 
+  /** Which match was last brought into view. A new search has shown none, so Enter shows the first. */
+  const shownMatchRef = useRef<number | null>(null);
+  // Matches show as the query is typed, so Enter then goes on to the second.
+  useEffect(() => {
+    if (!findOpen || !findQuery || findMatches.length === 0 || shownMatchRef.current !== null) return;
+    shownMatchRef.current = 0;
+    revealMatch(0);
+  }, [findMatches, findOpen, findQuery, revealMatch]);
+  // Opening Replace makes the bar taller, which used to hide the match it is about to replace.
+  useEffect(() => {
+    if (!findShowReplace || shownMatchRef.current === null) return undefined;
+    const timer = window.setTimeout(() => revealMatch(shownMatchRef.current ?? 0), 350);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [findShowReplace]);
   const stepMatch = useCallback((delta: number) => {
     if (findMatches.length === 0) return;
-    const next = (findIndex + delta + findMatches.length) % findMatches.length;
+    const next = shownMatchRef.current === null
+      ? Math.min(findIndex, findMatches.length - 1)
+      : (findIndex + delta + findMatches.length) % findMatches.length;
+    shownMatchRef.current = next;
     setFindIndex(next);
     revealMatch(next);
   }, [findIndex, findMatches.length, revealMatch]);
@@ -1643,6 +2042,8 @@ export const EditPDF: React.FC = () => {
         text: lines.map(styledLineText).join('\n'),
         segments: lines,
       };
+      next[block.id].softBreaks = carrySoftBreaks(existing?.softBreaks, block,
+        existing?.text ?? block.text, next[block.id].text);
     });
     replaceBlockEdits(next);
   }, [replaceBlockEdits, requestBlockPatch]);
@@ -1681,12 +2082,25 @@ export const EditPDF: React.FC = () => {
     });
     if (updates.length === 0) return;
     commitBlockSegments(updates);
-    setStatus({
-      isProcessing: false,
-      progress: 0,
-      message: updates.length === 1 ? t('editor.replaced.singleParagraph', { count: total }) : t('editor.replaced.multipleParagraphs', { count: total, paragraphCount: updates.length }),
-    });
-  }, [blockSegments, commitBlockSegments, findCaseSensitive, findMatches, findQuery, findReplacement]);
+    const report = updates.length === 1 ? t('editor.replaced.singleParagraph', { count: total }) : t('editor.replaced.multipleParagraphs', { count: total, paragraphCount: updates.length });
+    setFindReport(report);
+    // Find reads pages without their fonts, and a paragraph whose font has not been read passes
+    // the check for characters it cannot draw. Reading them now shows a paragraph that cannot
+    // change before Save rather than after it.
+    const generation = documentGeneration.current;
+    void (async () => {
+      let upgraded = false;
+      for (const pageIndex of new Set(updates.map(({ block }) => block.pageIndex))) {
+        const pageText = pageTextRef.current.get(pageIndex);
+        if (!pdfDoc || !pageText || ![...pageText.fonts.values()].some((font) => font.resolution === 'pending')) continue;
+        if (await resolvePageFonts(pdfDoc, pageIndex, pageText.fonts)) upgraded = true;
+        if (generation !== documentGeneration.current) return;
+      }
+      if (!upgraded) return;
+      resetFontResolutionCaches();
+      setBlocksVersion((value) => value + 1);
+    })();
+  }, [blockSegments, commitBlockSegments, findCaseSensitive, findMatches, findQuery, findReplacement, pdfDoc]);
 
   const revertBlock = useCallback((blockId: string) => {
     if (!blockEditsRef.current[blockId]) return;
@@ -1700,20 +2114,36 @@ export const EditPDF: React.FC = () => {
     const block = blockIndexRef.current.get(blockId);
     const existing = blockEditsRef.current[blockId];
     if (!block) return;
-    rememberSnapshot();
+    // A colour picker reports every step of a drag. One pass through it is one Undo step.
+    const colourOnly = Object.keys(updates).length === 1 && updates.color !== undefined;
+    if (!colourOnly || typingBlockRef.current !== `colour:${blockId}`) rememberSnapshot();
+    if (colourOnly) typingBlockRef.current = `colour:${blockId}`;
     const colors = blockColorsRef.current[blockId];
+    const original = blockStyledSegments(block, colors?.glyphs);
     const base: BlockEditState = existing ?? {
       blockId,
       pageIndex: block.pageIndex,
       text: block.text,
-      segments: blockStyledSegments(block),
+      segments: original,
       color: colors?.ink,
       patchColor: colors?.paper ?? '#ffffff',
       patchFlat: colors?.flat ?? false,
       sampledColors: Boolean(colors),
       reflowing: false,
     };
-    replaceBlockEdits({ ...blockEditsRef.current, [blockId]: { ...base, ...updates } });
+    // A colour picked for the paragraph applies to all of it, including words that had their own.
+    // Picking a one-colour paragraph's own ink again is no change at all.
+    const oneInk = new Set(original.flat().map((segment) => segment.color).filter(Boolean)).size <= 1;
+    const recolor: Partial<BlockEditState> = updates.color === undefined ? {}
+      : updates.color === colors?.ink && oneInk ? { recolored: false }
+      : { recolored: true, segments: base.segments && withoutInks(base.segments) };
+    const merged: BlockEditState = { ...base, ...updates, ...recolor };
+    // Stepping the size back to where it started leaves it unset, as if it was never touched.
+    if (merged.fontSize !== undefined && Math.abs(merged.fontSize - block.fontSize) < 0.05) merged.fontSize = undefined;
+    const next = { ...blockEditsRef.current, [blockId]: merged };
+    if (merged.text === block.text && !hasParagraphRestyle(merged, colors?.ink)
+      && styledTextEqual(merged.segments ?? original, original, block.fontSize)) delete next[blockId];
+    replaceBlockEdits(next);
   }, [replaceBlockEdits, requestBlockPatch]);
 
   const addImage = async (selectedFile: File | undefined) => {
@@ -1728,7 +2158,7 @@ export const EditPDF: React.FC = () => {
     try {
       // Decode and re-encode first. Besides normalising EXIF orientation, this prevents unusual
       // but valid compressed PNG streams from tying up pdf-lib's pure-JavaScript decoder.
-      const normalizedFile = await normalizeImageFile(selectedFile);
+      const { file: normalizedFile, width: pixelWidth, height: pixelHeight } = await normalizeImageFileWithSize(selectedFile);
       const content = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
@@ -1737,12 +2167,26 @@ export const EditPDF: React.FC = () => {
       });
       if (generation !== documentGeneration.current) return;
       if (!content) throw new Error(t("edit-pdf.this.picture.could.not.be.read.try.65070d"));
+      const centre = visiblePageCentre() ?? { x: 0.24, y: 0.2 };
+      // The box takes the picture's own shape, so its outline and corner handle sit on the picture.
+      const page = pdfZoomViewportRef.current
+        ?.querySelector<HTMLElement>(`[data-pdf-page="${targetPageIndex}"]`)?.getBoundingClientRect();
+      const pageAspect = page && page.height > 0 ? page.width / page.height : 1 / Math.SQRT2;
+      const pictureAspect = pixelWidth > 0 && pixelHeight > 0 ? pixelWidth / pixelHeight : 1.4;
+      let width = 0.28;
+      let height = width * pageAspect / pictureAspect;
+      if (height > 0.3) {
+        height = 0.3;
+        width = height * pictureAspect / pageAspect;
+      }
       const newEl: EditorElement = {
         id: uuidv4(), type: 'image', pageIndex: targetPageIndex,
-        x: 0.1, y: 0.1, width: 0.28, height: 0.2, content,
+        x: Math.min(1 - width, Math.max(0, centre.x - width / 2)), y: Math.min(1 - height, Math.max(0, centre.y - height / 2)),
+        width, height, content,
       };
       commitElements((current) => [...current, newEl]);
       setSelectedId(newEl.id);
+      revealElementRef.current = newEl.id;
       setInsertMode(null);
       setStatus({ isProcessing: false, progress: 0, message: '' });
     } catch (error) {
@@ -1765,10 +2209,30 @@ export const EditPDF: React.FC = () => {
     commitElements((current) => current.filter((element) => element.id !== id));
     setSelectedId(null);
   };
-  const updateFormValue = (fieldName: string, value: PdfFormFieldValue) =>
-    setFormValues((prev) => ({ ...prev, [fieldName]: value }));
+  const updateFormValue = (fieldName: string, value: PdfFormFieldValue) => {
+    // Typing into one field is one Undo step, like typing into a paragraph. A tick or a choice is
+    // a step of its own.
+    const typing = formFields.some((field) => field.fieldName === fieldName && (field.kind === 'text' || field.kind === 'textarea'));
+    const session = `field:${fieldName}`;
+    if (!typing || typingBlockRef.current !== session) {
+      rememberSnapshot();
+      if (typing) typingBlockRef.current = session;
+    }
+    formValuesRef.current = { ...formValuesRef.current, [fieldName]: value };
+    setFormValues(formValuesRef.current);
+  };
 
-  const { ask: askToDiscard, sheet: discardSheet } = useDiscardPrompt();
+  // Save on the way out leaves only when nothing stayed behind: a paragraph the save had to skip,
+  // or a locked file that only gave a preview, keeps the editor open with the save's message.
+  const savedEverything = useRef(false);
+  // How the last save went: a complete one is announced by the result sheet alone on a phone, and a
+  // save that had to leave paragraphs out reads as a caution rather than a success.
+  const [saveKind, setSaveKind] = useState<'complete' | 'partial' | 'other'>('other');
+  const { ask: askToDiscard, sheet: discardSheet } = useDiscardPrompt({
+    // Save is the sheet's main button, so the question is about saving.
+    title: t('edit-pdf.save.your.edits'),
+    save: async () => Boolean(await saveRef.current()) && savedEverything.current,
+  });
 
   const discardAndClose = useCallback(() => {
     if (file?.file) {
@@ -1791,12 +2255,15 @@ export const EditPDF: React.FC = () => {
     setSavedSnapshot(serializeEditorState([], {}));
     setSelectedId(null);
     setTargetPageIndex(0);
+    // Each document opens fitted to the screen, not at the zoom the last one was left at.
+    resetZoom();
+    pdfZoomViewportRef.current?.scrollTo({ top: 0, left: 0 });
     setInsertMode(null);
     undoStack.current = [];
     redoStack.current = [];
     setHistoryVersion((value) => value + 1);
     setStatus({ isProcessing: false, progress: 0, message: '' });
-  }, [file, replaceBlockEdits, replaceElements]);
+  }, [file, replaceBlockEdits, replaceElements, resetZoom]);
 
   const closeEditor = useCallback(() => {
     if (hasUnsavedEdits) askToDiscard(discardAndClose);
@@ -1808,7 +2275,7 @@ export const EditPDF: React.FC = () => {
   // Capture phase, because the editable stops the event from reaching the document.
   const historyKeysRef = useRef({ undo: () => {}, redo: () => {} });
   historyKeysRef.current = { undo, redo };
-  const saveRef = useRef<() => Promise<void> | void>(() => {});
+  const saveRef = useRef<() => Promise<boolean | void> | boolean | void>(() => {});
 
   useEffect(() => {
     if (!file) return undefined;
@@ -1818,8 +2285,10 @@ export const EditPDF: React.FC = () => {
       const redoing = key === 'y' || (key === 'z' && event.shiftKey);
       if (key !== 'z' && !redoing) return;
       const target = event.target as HTMLElement | null;
-      // Text fields of our own — find, replace, the inspector — keep their own undo.
-      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+      // Text fields of our own — find, replace, the inspector — keep their own undo. The phone's
+      // paragraph field is the paragraph itself, so it shares the editor's history.
+      if ((target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)
+        && !target.dataset.fieldFor) return;
       event.preventDefault();
       if (redoing) historyKeysRef.current.redo();
       else historyKeysRef.current.undo();
@@ -1865,15 +2334,25 @@ export const EditPDF: React.FC = () => {
 
   useEffect(() => {
     if (!isImmersiveEditor && !insertMode) return undefined;
+    // Android Back arrives here as Escape. It steps out of whatever the reader is in — find, a
+    // placement, a paragraph, a selected box — before it ever offers to close the document.
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      // An open sheet, such as the result's actions after a save, takes Back for itself. Its own
+      // listener may run after this one, so the editor must not close underneath it.
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       event.preventDefault();
-      if (insertMode) setInsertMode(null);
+      if (findOpen) { setFindOpen(false); setFindQuery(''); }
+      else if (insertMode) setInsertMode(null);
+      else if (activeBlockId) {
+        (document.activeElement as HTMLElement | null)?.blur();
+        setActiveBlockId(null);
+      } else if (selectedId) setSelectedId(null);
       else closeEditor();
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [closeEditor, insertMode, isImmersiveEditor]);
+  }, [activeBlockId, closeEditor, findOpen, insertMode, isImmersiveEditor, selectedId]);
 
   /**
    * Work out, for each edited paragraph, whether the PDF's own text objects can express the change
@@ -1946,6 +2425,7 @@ export const EditPDF: React.FC = () => {
         || edit.fontOverride?.bold != null
         || edit.fontOverride?.italic != null
         || (edit.fontSize !== undefined && edit.fontSize !== block.fontSize)
+        || edit.recolored === true
         || (edit.color !== undefined && edit.color !== blockColorsRef.current[edit.blockId]?.ink);
       const rotated = Math.abs(block.angle) > 0.02;
       const devanagari = hasDevanagari(block.text) || hasDevanagari(edit.text);
@@ -1970,6 +2450,7 @@ export const EditPDF: React.FC = () => {
           : { mode: 'reflow', reason: t("edit-pdf.the.paragraph.s.typeface.size.or.colour.35605c") }
         : planBlockEdit(block, edit.text, {
           segments: edit.segments,
+          inks: blockColorsRef.current[block.id]?.glyphs,
           measure: (text: string, fontSize: number, fontKey: string) =>
             measureTextWidth(text, runFont(fontKey).resolved, fontSize),
           maxU: Math.min(pageText?.pageWidth ?? Infinity, block.left + block.measure),
@@ -2066,8 +2547,47 @@ export const EditPDF: React.FC = () => {
           font: resolved, descriptor, reflow: null,
         };
       }
-      const lineOrigins = paragraphLineOrigins(block, lines.length, fontSize);
-      const height = lines.length === block.lines.length && fontSize === block.fontSize
+      // A line that outgrows the paragraph wraps inside its width, as it would in any editor, and
+      // the breaks its author made stay. A one-line paragraph may first grow to the page's right
+      // margin or the next text on its row. Right-to-left and Devanagari text keep explicit rows.
+      const measureSegment = (text: string, segment: StyledSegment) => {
+        const size = (segment.fontSize ?? block.fontSize) * fontSize / block.fontSize;
+        try {
+          return measureParagraphText(text, toFace(segment.fontKey, segment.text), size);
+        } catch {
+          return text.length * size * 0.5;
+        }
+      };
+      const wrapWidth = (() => {
+        if (block.lines.length > 1) return block.measure;
+        const pageWidth = pageText?.pageWidth ?? block.left + block.measure;
+        // The right margin mirrors the page's left one, but never more than an inch: on a page whose
+        // only text sits on the right, the mirror would leave no room at all.
+        const leftMargin = Math.min(72, block.left, ...pageBlocks.map((candidate) => candidate.left));
+        // A word is never cut while it still fits before the page's edge, unless text beside it
+        // on the same row is in the way.
+        let edge = pageWidth - block.left - block.fontSize;
+        let room = pageWidth - leftMargin - block.left;
+        pageBlocks.forEach((candidate) => {
+          const sameRows = candidate.top < block.top + block.height && candidate.top + candidate.height > block.top;
+          if (candidate.id !== block.id && sameRows && candidate.left >= block.left + block.width - 1) {
+            room = Math.min(room, candidate.left - block.left - block.fontSize * 0.5);
+            edge = Math.min(edge, room);
+          }
+        });
+        const widestWord = Math.max(0, ...lines.flat().flatMap((segment) => segment.text.split(/\s+/)
+          .filter(Boolean).map((word) => measureSegment(word, segment))));
+        return Math.max(block.measure, room, Math.min(widestWord, edge));
+      })();
+      // Rows spaced unevenly, such as a table column, are not one flowing paragraph: wrapping would
+      // put every row on one pitch and move rows nobody edited.
+      const pitches = block.lines.slice(1).map((line, index) => Math.abs(line.v - block.lines[index].v));
+      const evenRows = pitches.length === 0 || Math.max(...pitches) <= Math.min(...pitches) * 1.15;
+      const flowed = devanagari || block.direction === 'rtl' || !evenRows ? lines
+        : flowStyledLines(lines, measureSegment, wrapWidth,
+          lines.map(styledLineText).join('\n') === edit.text ? edit.softBreaks : undefined);
+      const lineOrigins = paragraphLineOrigins(block, flowed.length, fontSize);
+      const height = flowed.length === block.lines.length && fontSize === block.fontSize
         ? block.height
         : Math.max(block.height, (lineOrigins.at(-1)?.y ?? 0) + fontSize * 0.3);
       // Redrawing does not push the rest of the page down, so a paragraph that outgrows its own
@@ -2086,7 +2606,7 @@ export const EditPDF: React.FC = () => {
         plan: resolvedPlan,
         font: devanagari ? resolved : font,
         descriptor,
-        reflow: { resolved, faceFor, toFace, fontSize, lineHeight, lines, lineOrigins, height, overrun: Math.max(0, height - available), devanagari },
+        reflow: { resolved, faceFor, toFace, fontSize, lineHeight, lines: flowed, lineOrigins, height, overrun: Math.max(0, height - available), devanagari },
       };
     }).filter((entry): entry is NonNullable<typeof entry> => entry !== null)
       .filter((entry) => entry.plan.mode !== 'unchanged');
@@ -2144,6 +2664,7 @@ export const EditPDF: React.FC = () => {
         const lines = reflow.lines.map((line) => line.map((segment) => ({
           text: segment.text, face: reflow.toFace(segment.fontKey, segment.text),
           fontSize: (segment.fontSize ?? block.fontSize) * reflow.fontSize / block.fontSize,
+          color: segment.color,
         })));
         previews[block.id] = {
           text: edit.text, reflow: true, width, height: reflow.height,
@@ -2159,7 +2680,7 @@ export const EditPDF: React.FC = () => {
             // browser was given it; otherwise the nearest standard family stands in.
             const embedded = piece.face.embeddedFontId ? embeddedPdfFont(piece.face.embeddedFontId) : undefined;
             const ownFamily = embedded?.browserFace ? embedded.cssFamily : null;
-            return { ...piece, font: {
+            return { ...piece, spans: piece.color ? [{ text: piece.text, color: piece.color }] : undefined, font: {
               ...FALLBACK_RESOLVED_FONT,
               cssFamily: ownFamily ? `"${ownFamily}", sans-serif`
                 : reflow.devanagari ? devanagariCssFamily(piece.face.family as DevanagariFontId)
@@ -2176,17 +2697,25 @@ export const EditPDF: React.FC = () => {
         const fonts = pageTextRef.current.get(block.pageIndex)?.fonts;
         previews[block.id] = {
           text: edit.text, reflow: false, width, height: block.height,
-          pieces: block.lines.flatMap((line, lineIndex) => line.runs.map((run) => {
-            const descriptor = fonts?.get(run.fontKey);
-            const font = descriptor ? resolveFont(descriptor, run.text) : FALLBACK_RESOLVED_FONT;
-            const text = replacements.get(run.itemIndex) ?? run.text;
-            return {
-              text, x: run.u0 - u0, y: line.v - block.lines[0].v + block.ascent,
-              width: Math.max(0, run.u1 - run.u0 + measureTextWidth(text, font, run.fontSize)
-                - measureTextWidth(run.text, font, run.fontSize)),
-              font, fontSize: run.fontSize, lineIndex,
-            };
-          })),
+          pieces: block.lines.flatMap((line, lineIndex) => {
+            // The edited line's characters line up with its runs' replacements, so each run takes
+            // its own stretch of the line's colours.
+            const inks = edit.segments?.[lineIndex] && segmentInks(edit.segments[lineIndex]);
+            let offset = 0;
+            return line.runs.map((run) => {
+              const descriptor = fonts?.get(run.fontKey);
+              const font = descriptor ? resolveFont(descriptor, run.text) : FALLBACK_RESOLVED_FONT;
+              const text = replacements.get(run.itemIndex) ?? run.text;
+              const spans = inks ? splitByInk(text, inks.slice(offset, offset + text.length)) : undefined;
+              offset += text.length;
+              return {
+                text, x: run.u0 - u0, y: line.v - block.lines[0].v + block.ascent,
+                width: Math.max(0, run.u1 - run.u0 + measureTextWidth(text, font, run.fontSize)
+                  - measureTextWidth(run.text, font, run.fontSize)),
+                font, fontSize: run.fontSize, lineIndex, spans,
+              };
+            });
+          }),
         };
       }
     });
@@ -2250,10 +2779,9 @@ export const EditPDF: React.FC = () => {
   }, [blockedParagraphs, replaceBlockEdits]);
 
   const buildParagraphSaveEdits = useCallback((
-    { forceReflow = false, deleteOriginalRuns = true, plans = paragraphPlans }: {
+    { forceReflow = false, plans = paragraphPlans }: {
       /** True for every paragraph, or the ids of the ones that must be redrawn rather than rewritten. */
       forceReflow?: boolean | ReadonlySet<string>;
-      deleteOriginalRuns?: boolean;
       plans?: typeof paragraphPlans;
     } = {},
   ): ParagraphSaveEdit[] => (
@@ -2313,6 +2841,7 @@ export const EditPDF: React.FC = () => {
       const lines = segments.map((line) => line.map((segment) => ({
         text: segment.text, face: toFace(segment.fontKey, segment.text),
         fontSize: (segment.fontSize ?? block.fontSize) * fontSize / block.fontSize,
+        color: segment.color,
       })));
 
       return [{
@@ -2327,24 +2856,24 @@ export const EditPDF: React.FC = () => {
         height: block.height / pageHeight,
         // Every source run in the paragraph is removed before the redraw, so the file never keeps
         // words that are no longer on the page.
-        runDeletions: deleteOriginalRuns
-          ? block.lines.flatMap((line) => line.runs.flatMap((run) => (
-            // A run that draws only spacing leaves no ink to remove, and matching a whitespace-only
-            // text object against the PDF engine is unreliable enough to fail the whole deletion.
-            run.sourcePdfRect && run.sourceText?.trim()
-              ? [{ sourceText: run.sourceText, sourcePdfRect: run.sourcePdfRect }]
-              : []
-          )))
-          : [],
+        runDeletions: block.lines.flatMap((line) => line.runs.flatMap((run) => (
+          // A run that draws only spacing leaves no ink to remove, and matching a whitespace-only
+          // text object against the PDF engine is unreliable enough to fail the whole deletion.
+          run.sourcePdfRect && run.sourceText?.trim()
+            ? [{ sourceText: run.sourceText, sourcePdfRect: run.sourcePdfRect }]
+            : []
+        ))),
         backgroundImage: edit.patch ?? blockEditsRef.current[edit.blockId]?.patch,
         backgroundColor: edit.patchColor ?? '#ffffff',
-        backgroundFlat: deleteOriginalRuns && (edit.patchFlat ?? false),
+        backgroundFlat: edit.patchFlat ?? false,
+        highlight: blockColorsRef.current[edit.blockId]?.highlight,
         lines,
         lineOrigins: reflow?.lineOrigins ?? paragraphLineOrigins(block, lines.length, fontSize),
         fontSize,
         lineHeight,
         align: block.align,
         color: edit.color ?? '#000000',
+        colorsSampled: edit.recolored !== true && edit.sampledColors !== false,
       }];
     })
   ), [paragraphPlans]);
@@ -2359,8 +2888,6 @@ export const EditPDF: React.FC = () => {
     setStatus({ isProcessing: true, progress: 20, message: t("edit-pdf.saving.pdf.edits.locally.3dbf9d") });
     try {
       let bytes: Uint8Array;
-      /** Set when even the redraw could not remove the originals, so the old words remain. */
-      let redrawReason = '';
       /** Set when the in-place rewrite was planned but did not hold, and paragraphs were redrawn. */
       let fallbackReason = '';
       // Planned from the live edits rather than the settled ones: a save can arrive inside the
@@ -2423,10 +2950,7 @@ export const EditPDF: React.FC = () => {
         // text says, and ligatures and custom encodings sometimes make them disagree. That only
         // surfaces here, so rather than losing the edit, redraw the affected paragraphs over the
         // original words instead of through them — and say that is what happened.
-        if (!(directEditError instanceof Error) || !directEditError.message.startsWith('Direct text edit failed:')) {
-          throw directEditError;
-        }
-        if (savablePlans.length === 0) throw directEditError;
+        if (!isDirectEditFailure(directEditError) || savablePlans.length === 0) throw directEditError;
         // The paragraph inspector said these would be rewritten in place. They were not, and a
         // redraw is a visibly different thing to have done to someone's document, so the reason
         // is kept and reported rather than letting the save look like the promised one.
@@ -2434,36 +2958,36 @@ export const EditPDF: React.FC = () => {
         // eslint-disable-next-line no-console
         console.warn('Paragraph redrawn instead of edited in place:', fallbackReason);
 
-        /**
-         * Which paragraphs actually refused.
-         *
-         * The save offers every rewrite to the PDF engine at once, so one paragraph it will not
-         * take fails the whole call — and redrawing all of them on that account costs the others
-         * their own typeface for a fault that was never theirs. Each is offered again on its own,
-         * and only the ones that still refuse are redrawn. The retries are bounded because each is
-         * a full pass over the document, and a reader who has edited more paragraphs than that is
-         * better served by one redraw than by a minute of attempts.
-         */
-        const directPlans = savablePlans.filter((entry) => entry.plan.mode === 'direct');
-        const stubborn = new Set<string>();
-        if (directPlans.length > 1 && directPlans.length <= MAX_REWRITE_ISOLATION_ATTEMPTS) {
-          setStatus({ isProcessing: true, progress: 45, message: t("edit-pdf.working.out.which.paragraphs.can.still.be.b63bec") });
-          for (const entry of directPlans) {
-            if (generation !== documentGeneration.current) return;
-            try {
-              // Annotations and form values are left out: this asks only whether the rewrite holds.
-              await savePDFWithAnnotations(file.file, [], {}, buildParagraphSaveEdits({ plans: [entry] }));
-            } catch {
-              stubborn.add(entry.edit.blockId);
-            }
+        /** Asks whether a group of paragraphs saves on its own. Annotations and form values are left out. */
+        const savesAlone = (forceReflow: ReadonlySet<string>) => async (group: typeof savablePlans) => {
+          if (generation !== documentGeneration.current) return true;
+          try {
+            await savePDFWithAnnotations(file.file, [], {}, buildParagraphSaveEdits({ forceReflow, plans: group }));
+            return true;
+          } catch (error) {
+            if (!isDirectEditFailure(error)) throw error;
+            return false;
           }
-        } else {
-          directPlans.forEach((entry) => stubborn.add(entry.edit.blockId));
-        }
+        };
+        /** Leaves paragraphs unsaved, never drawn over their old words, where a search would still find them. */
+        const keepUnsaved = (entries: typeof savablePlans, reason: string) => entries.forEach((entry) => {
+          if (!redrawable.delete(entry)) return;
+          blockedPlans.push({ ...entry, plan: { mode: 'blocked', reason } });
+        });
+
+        // The save offers every paragraph to the PDF engine at once, so one it will not take fails
+        // the whole call. Halving the set finds the ones that refuse, and only those change course:
+        // a rewrite in place is redrawn instead, and a redraw whose old words cannot be removed
+        // stays unsaved.
+        setStatus({ isProcessing: true, progress: 45, message: t("edit-pdf.working.out.which.paragraphs.can.still.be.b63bec") });
+        const refused = await findRefusingItems<(typeof savablePlans)[number]>(savablePlans, savesAlone(new Set()));
+        if (generation !== documentGeneration.current) return;
+        const stubborn = new Set(refused.filter((entry) => entry.plan.mode === 'direct').map((entry) => entry.edit.blockId));
+        keepUnsaved(refused.filter((entry) => entry.plan.mode !== 'direct'), fallbackReason);
 
         // Check the faces that will actually redraw each stretch, including original fonts.
         const willRedraw = savablePlans.filter(
-          (entry) => entry.plan.mode !== 'direct' || stubborn.has(entry.edit.blockId),
+          (entry) => redrawable.has(entry) && (entry.plan.mode !== 'direct' || stubborn.has(entry.edit.blockId)),
         );
         willRedraw.forEach((entry) => {
           const keepsFace = !entry.edit.fontOverride?.klass
@@ -2477,52 +3001,31 @@ export const EditPDF: React.FC = () => {
           }));
           const rotated = Math.abs(entry.block.angle) > 0.02;
           if (characters.length === 0 && !rotated) return;
-          redrawable.delete(entry);
-          blockedPlans.push({
-            ...entry,
-            plan: {
-              mode: 'blocked',
-              reason: rotated
-                ? t("edit-pdf.rotated.or.skewed.text.cannot.be.redrawn.14e7bb")
-                : t("edit-pdf.it.contains.which.only.this.pdf.s.a5b6c7", { v0: describeCharacters(characters) }),
-            },
-          });
+          keepUnsaved([entry], rotated
+            ? t("edit-pdf.rotated.or.skewed.text.cannot.be.redrawn.14e7bb")
+            : t("edit-pdf.it.contains.which.only.this.pdf.s.a5b6c7", { v0: describeCharacters(characters) }));
         });
         if (redrawable.size === 0) {
           throw refusal(describeBlockedParagraphs(blockedPlans));
         }
         setStatus({ isProcessing: true, progress: 60, message: t("edit-pdf.redrawing.the.edited.paragraphs.instead.6f9592") });
+        const saveRedrawn = () => savePDFWithAnnotations(
+          file.file,
+          savingElements,
+          savingFormValues,
+          buildParagraphSaveEdits({ forceReflow: stubborn, plans: [...redrawable] }),
+        );
         try {
-          // Removing the originals first is what keeps the file honest, and it usually still works
-          // even when rewriting them in place did not. Paragraphs whose rewrite held on its own
-          // keep it: only the ones that refused are redrawn.
-          bytes = await savePDFWithAnnotations(
-            file.file,
-            savingElements,
-            savingFormValues,
-            buildParagraphSaveEdits({ forceReflow: stubborn, plans: [...redrawable] }),
-          );
-        } catch (deletionError) {
-          if (!(deletionError instanceof Error) || !deletionError.message.startsWith('Direct text edit failed:')) {
-            throw deletionError;
+          bytes = await saveRedrawn();
+        } catch (redrawError) {
+          if (!isDirectEditFailure(redrawError)) throw redrawError;
+          const stillRefused = await findRefusingItems<(typeof savablePlans)[number]>([...redrawable], savesAlone(stubborn));
+          if (generation !== documentGeneration.current) return;
+          keepUnsaved(stillRefused, redrawError.message.replace(/^Direct text edit failed:\s*/, ''));
+          if (redrawable.size === 0) {
+            throw refusal(describeBlockedParagraphs(blockedPlans));
           }
-          // Repainting cannot erase searchable Hindi text. Keep the edit unsaved if its original
-          // PDF objects cannot be removed, instead of exporting both old and new wording.
-          if ([...redrawable].some((entry) => entry.reflow?.devanagari)) throw deletionError;
-          redrawReason = deletionError.message.replace(/^Direct text edit failed:\s*/, '');
-          // eslint-disable-next-line no-console
-          console.warn('Original text could not be removed before redrawing:', redrawReason);
-          for (const entry of redrawable) {
-            if (entry.plan.mode !== 'direct' || stubborn.has(entry.edit.blockId)) {
-              await requestBlockPatch(entry.block);
-            }
-          }
-          bytes = await savePDFWithAnnotations(
-            file.file,
-            savingElements,
-            savingFormValues,
-            buildParagraphSaveEdits({ forceReflow: stubborn, deleteOriginalRuns: false, plans: [...redrawable] }),
-          );
+          bytes = await saveRedrawn();
         }
       }
       if (generation !== documentGeneration.current) return;
@@ -2534,7 +3037,9 @@ export const EditPDF: React.FC = () => {
           progress: 100,
           message: t("edit-pdf.edited.pdf.preview.ready.unlock.to.save.3b563b"),
         });
-        return;
+        savedEverything.current = false;
+        setSaveKind('other');
+        return true;
       }
       // Anything that was not written stays dirty, so the leave-guard still protects it and the
       // notice still points at it. Marking the whole document clean would quietly discard it.
@@ -2548,16 +3053,16 @@ export const EditPDF: React.FC = () => {
         isProcessing: false,
         progress: 100,
         message: blockedPlans.length > 0
-          ? t("edit-pdf.edited.pdf.ready.with.of.edited.paragraphs.cab23a", { v0: (plans.length - blockedPlans.length).toLocaleString(getLocale()), v1: plans.length.toLocaleString(getLocale()), v2: describeBlockedParagraphs(blockedPlans), v4: redrawReason ? t("edit-pdf.old.wording.remains.underneath.the.redrawn.paragraphs.80765c") : '', count: blockedPlans.length })
-          : redrawReason
-          // The internal reason is left out of both of these. It names the part of the PDF that
-          // would not cooperate, which tells the reader nothing they can act on; what they need is
-          // what it means for the file in their hands. The reason is logged for support instead.
-          ? t("edit-pdf.edited.pdf.ready.but.your.old.wording.8cfe80")
+          ? t("edit-pdf.edited.pdf.ready.with.of.edited.paragraphs.cab23a", { v0: (plans.length - blockedPlans.length).toLocaleString(getLocale()), v1: plans.length.toLocaleString(getLocale()), v2: describeBlockedParagraphs(blockedPlans), count: blockedPlans.length })
+          // The internal reason is left out. It names the part of the PDF that would not
+          // cooperate, which tells the reader nothing they can act on. It is logged for support.
           : fallbackReason
           ? t("edit-pdf.edited.pdf.ready.the.paragraphs.you.changed.9cebe8")
           : t("edit-pdf.edited.pdf.ready.review.it.before.sharing.0b2900"),
       });
+      savedEverything.current = blockedPlans.length === 0;
+      setSaveKind(blockedPlans.length > 0 ? 'partial' : fallbackReason ? 'other' : 'complete');
+      return true;
     } catch (error) {
       if (generation !== documentGeneration.current) return;
       if (error instanceof PdfTextBoxError) {
@@ -2603,7 +3108,23 @@ export const EditPDF: React.FC = () => {
     ? pageTextRef.current.get(activeBlock.pageIndex)?.fonts.get(activeBlock.fontKey)
     : undefined;
   const activeBlockEdit = activeBlockId ? blockEdits[activeBlockId] : undefined;
-  const findBar = findOpen ? (
+  // On a phone, Find and the paragraph panel are one dock, never stacked: with the keyboard up the
+  // two together left the page a line tall. Opening Find steps out of the paragraph; tapping a
+  // match to edit it hides Find until Done, and Find comes back where it was.
+  const findSharesDock = isImmersiveEditor && Boolean(activeBlockId);
+  const toggleFind = () => {
+    if (findOpen && !findSharesDock) {
+      setFindOpen(false);
+      setFindQuery('');
+      return;
+    }
+    if (findSharesDock) {
+      (document.activeElement as HTMLElement | null)?.blur();
+      setActiveBlockId(null);
+    }
+    setFindOpen(true);
+  };
+  const findBar = findOpen && !findSharesDock ? (
     <PdfFindReplace
       query={findQuery}
       replacement={findReplacement}
@@ -2613,14 +3134,22 @@ export const EditPDF: React.FC = () => {
       scanning={findScanning}
       showReplace={findShowReplace}
       compact={compactViewport}
-      onQueryChange={(value) => { setFindQuery(value); setFindIndex(0); }}
-      onReplacementChange={setFindReplacement}
+      report={findReport}
+      onQueryChange={(value) => { setFindQuery(value); setFindIndex(0); setFindReport(''); shownMatchRef.current = null; }}
+      onReplacementChange={(value) => { setFindReplacement(value); setFindReport(''); }}
       onCaseSensitiveChange={setFindCaseSensitive}
       onShowReplaceChange={setFindShowReplace}
       onStep={stepMatch}
       onReplaceOne={replaceCurrentMatch}
       onReplaceAll={replaceAllMatches}
-      onClose={() => { setFindOpen(false); setFindQuery(''); }}
+      onClose={() => {
+        setFindOpen(false); setFindQuery(''); setFindReport('');
+        if (!activeBlockId && autoZoomRef.current) {
+          const { from } = autoZoomRef.current;
+          autoZoomRef.current = null;
+          setExactZoom(from);
+        }
+      }}
     />
   ) : null;
 
@@ -2641,7 +3170,8 @@ export const EditPDF: React.FC = () => {
 
   // A paragraph that cannot be saved has to be visible from anywhere in the editor, not only while
   // it happens to be the selected one, because Save is what it will otherwise stop.
-  const blockedNotice = blockedParagraphs.length > 0 ? (
+  const blockedNotice = blockedParagraphs.length > 0
+    && !(blockedParagraphs.length === 1 && blockedParagraphs[0].block.id === activeBlockId) ? (
     <div role="status" className={compactViewport ? 'mx-auto mb-2 max-w-md' : 'mb-2'}>
       <StatusLine tone="caution">
         <span className="block">{t("edit-pdf.message.a37626224a", { v0: describeBlockedParagraphs(blockedParagraphs) })}</span>
@@ -2665,8 +3195,18 @@ export const EditPDF: React.FC = () => {
     </div>
   ) : null;
 
+  // A line that now runs past the paragraph's width is said in the inspector rather than in a
+  // floating note, which used to sit on the very lines the reader was editing.
+  const activeBlockPreview = activeBlock ? blockPreviews[activeBlock.id] : undefined;
+  // Redrawn lines wrap to the paragraph's width, so only text kept on explicit rows (right-to-left
+  // and Devanagari) can still run past it.
+  const activeBlockOverflowsWidth = Boolean(activeBlockPreview && activeBlockPreview.text === activeBlockEdit?.text
+    && (activeBlock?.direction === 'rtl' || activePlan?.reflow?.devanagari)
+    && activeBlockPreview.pieces.some((piece) => piece.x + piece.width > activeBlockPreview.width + 0.5));
+
   const paragraphInspector = (compact: boolean) => (activeBlock ? (
     <PdfParagraphInspector
+      key={activeBlock.id}
       block={activeBlock}
       edit={activeBlockEdit}
       descriptor={activeBlockDescriptor}
@@ -2675,7 +3215,21 @@ export const EditPDF: React.FC = () => {
         : null)}
       plan={activePlan?.plan ?? null}
       overrun={activePlan?.reflow?.overrun ?? 0}
+      overflowsWidth={activeBlockOverflowsWidth}
+      ink={blockColorsRef.current[activeBlock.id]?.ink}
       compact={compact}
+      field={compact && dockEditing ? (
+        <PdfParagraphField
+          block={activeBlock}
+          edit={activeBlockEdit}
+          inks={blockColorsRef.current[activeBlock.id]?.glyphs}
+          bold={activeBlockEdit?.fontOverride?.bold ?? activeBlockDescriptor?.bold ?? false}
+          italic={activeBlockEdit?.fontOverride?.italic ?? activeBlockDescriptor?.italic ?? false}
+          focusRequest={fieldFocus}
+          onBeginChange={handleBeginBlockChange}
+          onChange={handleBlockChange}
+        />
+      ) : undefined}
       onUpdate={(updates) => updateBlockEdit(activeBlock.id, updates)}
       onRevert={() => revertBlock(activeBlock.id)}
       onDone={() => {
@@ -2686,33 +3240,36 @@ export const EditPDF: React.FC = () => {
   ) : null);
 
   saveRef.current = handleSave;
+  // Found on a phone: after a save the result's strip sat over the paragraph's B, I, size and Done.
+  // Tapping Save already takes the caret, so once a file is out the button ends the edit and the
+  // dock closes with it. A refused save keeps the paragraph, whose status line says why. Ctrl+S
+  // leaves the caret where it is.
+  const saveFromButton = async () => {
+    if (!await handleSave()) return;
+    if ((document.activeElement as HTMLElement | null)?.closest('[data-testid="pdf-text-block"]')) {
+      (document.activeElement as HTMLElement).blur();
+    }
+    setActiveBlockId(null);
+    setSelectedId(null);
+  };
 
   if (isImmersiveEditor) {
-    const selectedTypeLabel = selectedElement
-      ? {
-        text: t('edit-pdf.text.71988c'), image: t('edit-pdf.image.1aa4cb'),
-        rectangle: t('edit-pdf.rectangle.030699'), ellipse: t('edit-pdf.ellipse.cb1ee8'),
-        line: t('edit-pdf.line.d7852c'), arrow: t('edit-pdf.arrow.05800e'),
-      }[selectedElement.type]
-      : '';
     const selectedInspector = selectedElement ? (
-      <section aria-label={elementAction(selectedElement.type, 'properties')} className="mx-auto mb-2 max-w-md rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-2 shadow-lg">
-        <div className="custom-scrollbar flex items-end gap-2 overflow-x-auto pb-1">
-          <div className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
-            <span className="block uppercase tracking-[0.12em]">{selectedTypeLabel}</span>
-            <button type="button" onClick={() => deleteElement(selectedElement.id)} className="chef-pressable chef-target mt-1 inline-flex h-10 items-center gap-1 rounded-[var(--radius-control)] px-2 text-xs font-bold text-[var(--status-danger-text)]"><Trash2 aria-hidden size={15} />{t("edit-pdf.delete.3534d6")}</button>
-          </div>
-          {selectedElement.type === 'text' && <label className="w-44 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.text.71988c")}<input value={selectedElement.content} onChange={(event) => updateInspectorText(selectedElement.id, event.currentTarget.value)} onBlur={finishInspectorTextChange} className="mt-1 h-10 w-full rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-rest)]" /></label>}
-          {selectedElement.type !== 'image' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.colour.3a9dfa")}<input type="color" value={selectedElement.color || '#2563eb'} onChange={(event) => commitElementUpdate(selectedElement.id, { color: event.target.value })} className="mt-1 block h-10 w-12 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-transparent p-1" /></label>}
-          {selectedElement.type === 'text' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.font.64d0b3")}<select value={selectedElement.fontFamily || 'Helvetica'} onChange={(event) => commitElementUpdate(selectedElement.id, { fontFamily: event.target.value })} className="mt-1 block h-10 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]"><option value="Helvetica">{t("edit-pdf.helvetica.447688")}</option><option value="TimesRoman">{t("edit-pdf.times.0c0fd3")}</option><option value="Courier">{t("edit-pdf.courier.bbc5df")}</option></select></label>}
-          {selectedElement.type === 'text' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.size.1af851")}<ClampedNumberInput key={selectedElement.id} min={8} max={72} value={selectedElement.fontSize || 16} onCommit={(fontSize) => commitElementUpdate(selectedElement.id, { fontSize })} className="mt-1 block h-10 w-16 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]" /></label>}
-          {(selectedElement.type === 'rectangle' || selectedElement.type === 'ellipse') && <label className="flex h-10 shrink-0 items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-2 text-xs font-semibold text-[var(--text-secondary)]"><input type="checkbox" checked={Boolean(selectedElement.fillColor && selectedElement.fillColor !== 'transparent')} onChange={(event) => commitElementUpdate(selectedElement.id, { fillColor: event.target.checked ? '#93c5fd' : 'transparent' })} className="h-5 w-5" />{t("edit-pdf.fill.c9fa1d")}</label>}
-          {(selectedElement.type === 'rectangle' || selectedElement.type === 'ellipse') && selectedElement.fillColor !== 'transparent' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.fill.033955")}<input type="color" value={selectedElement.fillColor || '#93c5fd'} onChange={(event) => commitElementUpdate(selectedElement.id, { fillColor: event.target.value })} className="mt-1 block h-10 w-12 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-transparent p-1" /></label>}
-          {selectedElement.type !== 'text' && selectedElement.type !== 'image' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.stroke.1582a1")}<ClampedNumberInput key={selectedElement.id} min={1} max={16} value={selectedElement.strokeWidth || 2} onCommit={(strokeWidth) => commitElementUpdate(selectedElement.id, { strokeWidth })} className="mt-1 block h-10 w-16 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]" /></label>}
+      <PdfElementDock
+        key={selectedElement.id}
+        element={selectedElement}
+        label={elementAction(selectedElement.type, 'properties')}
+        more={<>
           {selectedElement.type !== 'line' && selectedElement.type !== 'arrow' && <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.rotate.c3613b")}<ClampedNumberInput key={selectedElement.id} min={-180} max={180} value={selectedElement.rotation || 0} onCommit={(rotation) => commitElementUpdate(selectedElement.id, { rotation })} className="mt-1 block h-10 w-16 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]" /></label>}
-            <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.page.0a30a8")}<select value={selectedElement.pageIndex} onChange={(event) => { const nextPage = Number(event.target.value); commitElementUpdate(selectedElement.id, { pageIndex: nextPage }); goToPage(nextPage); }} className="mt-1 block h-10 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]">{Array.from({ length: pageCount }, (_, index) => <option key={index} value={index}>{formatNumber(index + 1)}</option>)}</select></label>
-        </div>
-      </section>
+          <label className="shrink-0 text-xs font-semibold text-[var(--text-secondary)]">{t("edit-pdf.page.0a30a8")}<select value={selectedElement.pageIndex} onChange={(event) => { const nextPage = Number(event.target.value); commitElementUpdate(selectedElement.id, { pageIndex: nextPage }); goToPage(nextPage); }} className="mt-1 block h-10 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-sm text-[var(--text-primary)]">{Array.from({ length: pageCount }, (_, index) => <option key={index} value={index}>{formatNumber(index + 1)}</option>)}</select></label>
+        </>}
+        onChange={(updates) => commitElementUpdate(selectedElement.id, updates)}
+        onDelete={() => deleteElement(selectedElement.id)}
+        onDone={() => {
+          (document.activeElement as HTMLElement | null)?.blur();
+          setSelectedId(null);
+        }}
+      />
     ) : null;
 
     return (
@@ -2723,7 +3280,7 @@ export const EditPDF: React.FC = () => {
       <div
         className="flex h-[100dvh] flex-col bg-[var(--surface-canvas)]"
         style={{
-          paddingTop: `${immersiveHeaderHeight}px`,
+          paddingTop: `calc(${immersiveHeaderHeight}px + var(--chef-viewport-offset-top, 0px))`,
           paddingBottom: `calc(${immersiveBottomBarHeight}px + var(--chef-keyboard-inset, 0px))`,
         }}
       >
@@ -2754,40 +3311,44 @@ export const EditPDF: React.FC = () => {
                 <Badge tone="caution" className="shrink-0 max-[440px]:hidden">{t("edit-pdf.beta.703390")}</Badge>
               </div>
             </div>
-            <button type="button" onClick={() => setFindOpen((open) => !open)} aria-pressed={findOpen} aria-label={t("edit-pdf.find.and.replace.9898ad")} className={`chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] ${findOpen ? 'bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'text-[var(--text-secondary)]'}`}><Search aria-hidden size={19} /></button>
-            <button type="button" onClick={undo} disabled={undoStack.current.length === 0} aria-label={t("edit-pdf.undo.added.element.change.d99d56")} className="chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><Undo2 aria-hidden size={19} /></button>
-            <button type="button" onClick={redo} disabled={redoStack.current.length === 0} aria-label={t("edit-pdf.redo.added.element.change.2c6d7a")} className="chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><Redo2 aria-hidden size={19} /></button>
-            <button type="button" onClick={handleSave} disabled={status.isProcessing || !hasUnsavedEdits} aria-label={t("edit-pdf.save.1509f5")} className="chef-pressable chef-target inline-flex shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-3 text-sm font-bold text-[var(--text-on-accent)] disabled:opacity-55"><Save aria-hidden size={17} />{/* Always spelled out. This is the one action in the editor that
+            <button type="button" onClick={toggleFind} aria-pressed={findOpen} aria-label={t("edit-pdf.find.and.replace.9898ad")} className={`chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] ${findOpen ? 'bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'text-[var(--text-secondary)]'}`}><Search aria-hidden size={19} /></button>
+            <button type="button" onClick={undo} onPointerDown={holdEditingFocus} disabled={undoStack.current.length === 0} aria-label={t("edit-pdf.undo")} className="chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><Undo2 aria-hidden size={19} /></button>
+            <button type="button" onClick={redo} onPointerDown={holdEditingFocus} disabled={redoStack.current.length === 0} aria-label={t("edit-pdf.redo")} className="chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><Redo2 aria-hidden size={19} /></button>
+            <button type="button" onClick={saveFromButton} disabled={status.isProcessing || !hasUnsavedEdits} aria-label={t("edit-pdf.save.1509f5")} className="chef-pressable chef-target inline-flex shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-3 text-sm font-bold text-[var(--text-on-accent)] disabled:opacity-55"><Save aria-hidden size={17} />{/* Always spelled out. This is the one action in the editor that
                 cannot be discovered by trying it, and a lone disk glyph is exactly the icon a reader
                 who did not grow up with it has to guess at. The title beside it truncates instead. */}<span>{t("edit-pdf.save.1509f5")}</span></button>
           </div>
         </header>
 
         <div className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col px-2 py-2 sm:px-4">
-          {(status.message || status.error) && (
-            <div aria-live="polite" role={status.error ? 'alert' : 'status'} className="mb-2">
-              <StatusLine tone={status.error ? 'danger' : status.progress === 100 ? 'success' : 'info'}>
+          {(status.error || (status.message && !(saveKind === 'complete' && status.progress === 100))) && (
+            <div aria-live="polite" role={status.error ? 'alert' : 'status'} className={`mb-2 ${status.error || status.isProcessing ? '' : 'chef-hide-while-typing'}`}>
+              <StatusLine tone={status.error ? 'danger' : status.progress === 100 ? (saveKind === 'partial' ? 'caution' : 'success') : 'info'}>
                 {status.error || status.message}
               </StatusLine>
             </div>
           )}
 
-          {fillableFieldCount > 0 && (
-            <p className="mb-2 px-1 text-xs font-medium text-[var(--text-secondary)]">{t("edit-pdf.form.values.are.not.included.in.undo.aaad15")}</p>
-          )}
-
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-1 rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-0.5">
-              <button type="button" onClick={() => goToPage(targetPageIndex - 1)} disabled={targetPageIndex === 0} aria-label={t("edit-pdf.previous.page.1208ec")} className="chef-pressable chef-hit-y grid h-9 w-touch place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><ChevronLeft aria-hidden size={19} className="rtl:rotate-180" /></button>
-              <label className="flex h-9 items-center gap-1 px-1 text-xs font-semibold text-[var(--text-primary)]">
-                <span className="sr-only">{t("edit-pdf.page.0a30a8")}</span>
-                <select value={targetPageIndex} onChange={(event) => goToPage(Number(event.target.value))} aria-label={t("edit-pdf.current.editor.page.7fc923")} className="h-9 bg-transparent tabular outline-none">
-                  {Array.from({ length: pageCount }, (_, index) => <option key={index} value={index}>{t("edit-pdf.message.ef59ff32b8", { v0: index + 1, v1: pageCount })}</option>)}
-                </select>
-              </label>
-              <button type="button" onClick={() => goToPage(targetPageIndex + 1)} disabled={targetPageIndex >= pageCount - 1} aria-label={t("edit-pdf.next.page.c08ac7")} className="chef-pressable chef-hit-y grid h-9 w-touch place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><ChevronRight aria-hidden size={19} className="rtl:rotate-180" /></button>
-            </div>
-            <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} />
+          {/* One row on a phone: the page box, not the chrome, gets the height. It wraps only where
+              a narrow screen or large text leaves no other way. While the keyboard is up it goes
+              too: pinching still zooms, and the row is back as soon as the keyboard closes. */}
+          <div className="chef-hide-while-typing mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-3">
+            {pageCount > 1 && (
+              <div className="flex min-w-0 items-center gap-0.5 rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-0.5">
+                <button type="button" onClick={() => goToPage(targetPageIndex - 1)} disabled={targetPageIndex === 0} aria-label={t("edit-pdf.previous.page.1208ec")} className="chef-pressable chef-hit-y grid h-9 w-touch shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><ChevronLeft aria-hidden size={19} className="rtl:rotate-180" /></button>
+                <label className="flex h-9 min-w-0 items-center text-xs font-semibold text-[var(--text-primary)]">
+                  <span className="sr-only">{t("edit-pdf.page.0a30a8")}</span>
+                  {/* The select keeps the 48px touch floor but overhangs the 36px pill, so the page
+                      pill and the zoom pill stay the same height. */}
+                  <select value={targetPageIndex} onChange={(event) => goToPage(Number(event.target.value))} aria-label={t("edit-pdf.current.editor.page.7fc923")} className="-my-1.5 min-w-0 max-w-full bg-transparent tabular outline-none">
+                    {/* "12 / 61", not "12 of 61": the shorter label keeps the zoom controls on the same row. */}
+                    {Array.from({ length: pageCount }, (_, index) => <option key={index} value={index}>{`${formatNumber(index + 1)} / ${formatNumber(pageCount)}`}</option>)}
+                  </select>
+                </label>
+                <button type="button" onClick={() => goToPage(targetPageIndex + 1)} disabled={targetPageIndex >= pageCount - 1} aria-label={t("edit-pdf.next.page.c08ac7")} className="chef-pressable chef-hit-y grid h-9 w-touch shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><ChevronRight aria-hidden size={19} className="rtl:rotate-180" /></button>
+              </div>
+            )}
+            <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={EDITOR_MAX_ZOOM} compact keepFocus className="ms-auto" />
           </div>
 
           <div className="flex max-h-[48rem] min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-panel)] bg-[var(--surface-sunken)]">
@@ -2807,7 +3368,7 @@ export const EditPDF: React.FC = () => {
                 formFields={formFields.filter((field) => field.pageIndex === targetPageIndex)}
                 formValues={formValues}
                 selectedId={selectedId}
-                onSelect={setSelectedId}
+                onSelect={selectElement}
                 onUpdate={updateElement}
                 onBeginElementChange={rememberSnapshot}
                 onDelete={deleteElement}
@@ -2819,7 +3380,7 @@ export const EditPDF: React.FC = () => {
                 coarsePointer={coarsePointer}
                 cachedText={readCachedPageText}
                 onBlocksReady={handleBlocksReady}
-                onActivateBlock={handleActivateBlock}
+                onActivateBlock={handlePageActivate}
                 onBlockChange={handleBlockChange}
                 onBeginBlockChange={handleBeginBlockChange}
                 insertMode={insertMode}
@@ -2837,17 +3398,32 @@ export const EditPDF: React.FC = () => {
         <div
           ref={immersiveBottomBarRef}
           style={{ bottom: 'var(--chef-keyboard-inset, 0px)' }}
-          className="chef-chrome chef-safe-bottom chef-safe-x fixed inset-x-0 z-40 border-t border-[var(--border-hairline)] px-2 pb-2 pt-2"
+          className={`chef-chrome chef-safe-bottom chef-keyboard-flush chef-safe-x fixed inset-x-0 z-40 border-t border-[var(--border-hairline)] px-2 pb-2 pt-2${activeBlock ? ' chef-paragraph-bar' : ''}`}
         >
           {findBar}
           {scannedNotice}
           {blockedNotice}
           {paragraphInspector(true)}
           {selectedInspector}
+          {/* Shape asks which shape only once it is chosen, instead of keeping a picker on screen. */}
+          {insertMode === 'shape' && (
+            <div role="radiogroup" aria-label={t("edit-pdf.shape.type.78d36b")} className="mx-auto mb-1 grid max-w-md grid-cols-4 gap-1">
+              {([
+                ['rectangle', Square, t("edit-pdf.rectangle.030699")],
+                ['ellipse', Circle, t("edit-pdf.ellipse.cb1ee8")],
+                ['line', Minus, t("edit-pdf.line.d7852c")],
+                ['arrow', ArrowRight, t("edit-pdf.arrow.05800e")],
+              ] as const).map(([kind, Icon, label]) => (
+                <button key={kind} type="button" role="radio" aria-checked={shapeKind === kind} aria-label={label} onClick={() => setShapeKind(kind)} className={`chef-pressable chef-target flex items-center justify-center rounded-[var(--radius-control)] ${shapeKind === kind ? 'bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'text-[var(--text-secondary)]'}`}><Icon aria-hidden size={19} /></button>
+              ))}
+            </div>
+          )}
           {insertMode && (
             <div aria-live="polite" className="mx-auto mb-1 max-w-md text-center text-xs font-semibold text-[var(--accent-text)]">{elementAction(insertMode === 'text' ? 'text' : shapeKind, 'place')}</div>
           )}
-          <div role="toolbar" aria-label={t("edit-pdf.add.content.006e1f")} className="mx-auto grid max-w-md grid-cols-[1fr_1fr_1fr_minmax(6.5rem,1.25fr)] gap-1">
+          {/* Text, Image and Shape give their row to the page while the keyboard is up, and to a
+              paragraph's or an added item's own controls while one is chosen. Done brings them back. */}
+          {!activeBlock && !selectedElement && <div role="toolbar" aria-label={t("edit-pdf.add.content.006e1f")} className="chef-hide-while-typing mx-auto grid max-w-md grid-cols-3 gap-1">
             <button
               type="button"
               aria-pressed={insertMode === 'text'}
@@ -2867,13 +3443,7 @@ export const EditPDF: React.FC = () => {
               }}
               className={`chef-pressable chef-target flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-[var(--radius-control)] text-xs font-bold ${insertMode === 'shape' ? 'bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'text-[var(--text-secondary)]'}`}
             ><Shapes aria-hidden size={19} /><span>{t("edit-pdf.shape.e0e492")}</span></button>
-            <label className="flex min-h-11 min-w-0 items-center rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-2">
-              <span className="sr-only">{t("edit-pdf.shape.type.78d36b")}</span>
-              <select value={shapeKind} onChange={(event) => { setShapeKind(event.target.value as EditorElement['type']); setActiveBlockId(null); setSelectedId(null); setInsertMode('shape'); }} aria-label={t("edit-pdf.shape.type.78d36b")} className="h-10 min-w-0 w-full bg-transparent text-xs font-semibold text-[var(--text-primary)] outline-none">
-                <option value="rectangle">{t("edit-pdf.rectangle.030699")}</option><option value="ellipse">{t("edit-pdf.ellipse.cb1ee8")}</option><option value="line">{t("edit-pdf.line.d7852c")}</option><option value="arrow">{t("edit-pdf.arrow.05800e")}</option>
-              </select>
-            </label>
-          </div>
+          </div>}
           <input ref={imageInputRef} type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" className="hidden" onChange={(event) => { void addImage(event.target.files?.[0]); event.currentTarget.value = ''; }} />
         </div>
         {discardSheet}
@@ -2898,9 +3468,9 @@ export const EditPDF: React.FC = () => {
                 </label>
                 <button type="button" onClick={() => goToPage(targetPageIndex + 1)} disabled={targetPageIndex >= pageCount - 1} aria-label={t("edit-pdf.next.page.c08ac7")} className="chef-hit-y chef-pressable flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-strong)] text-[var(--text-secondary)] disabled:opacity-55"><ChevronRight size={20} className="rtl:rotate-180" /></button>
                 <span className="mx-1 hidden h-7 w-px bg-[var(--border-hairline)] sm:block" aria-hidden="true" />
-                <button type="button" onClick={undo} disabled={undoStack.current.length === 0} aria-label={t("edit-pdf.undo.added.element.change.d99d56")} className="chef-hit-y chef-pressable flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] text-[var(--text-secondary)] disabled:opacity-55"><Undo2 size={18} /></button>
-                <button type="button" onClick={redo} disabled={redoStack.current.length === 0} aria-label={t("edit-pdf.redo.added.element.change.2c6d7a")} className="chef-hit-y chef-pressable flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] text-[var(--text-secondary)] disabled:opacity-55"><Redo2 size={18} /></button>
-                <button type="button" onClick={() => setFindOpen((open) => !open)} aria-pressed={findOpen} className={`chef-hit-y chef-pressable flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border px-4 font-bold ${findOpen ? 'border-[var(--accent-rest)] bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'border-[var(--border-strong)] text-[var(--text-primary)] hover:border-[var(--accent-rest)]'}`}><Search size={18}/>{t("edit-pdf.find.0684d7")}</button>
+                <button type="button" onClick={undo} disabled={undoStack.current.length === 0} aria-label={t("edit-pdf.undo")} className="chef-hit-y chef-pressable flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] text-[var(--text-secondary)] disabled:opacity-55"><Undo2 size={18} /></button>
+                <button type="button" onClick={redo} disabled={redoStack.current.length === 0} aria-label={t("edit-pdf.redo")} className="chef-hit-y chef-pressable flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] text-[var(--text-secondary)] disabled:opacity-55"><Redo2 size={18} /></button>
+                <button type="button" onClick={toggleFind} aria-pressed={findOpen} className={`chef-hit-y chef-pressable flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border px-4 font-bold ${findOpen ? 'border-[var(--accent-rest)] bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'border-[var(--border-strong)] text-[var(--text-primary)] hover:border-[var(--accent-rest)]'}`}><Search size={18}/>{t("edit-pdf.find.0684d7")}</button>
                 <button type="button" aria-pressed={insertMode === 'text'} onClick={(event) => { if (event.detail === 0) addText(); else toggleInsertMode('text'); }} className={`chef-hit-y chef-pressable flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border px-4 font-bold ${insertMode === 'text' ? 'border-[var(--accent-rest)] bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'border-[var(--border-strong)] text-[var(--text-primary)] hover:border-[var(--accent-rest)]'}`}><Type size={18}/>{t("edit-pdf.text.d0bd6e")}</button>
                 <button type="button" onClick={() => { setInsertMode(null); imageInputRef.current?.click(); }} className="chef-hit-y chef-pressable flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-4 font-bold text-[var(--text-primary)] hover:border-[var(--accent-rest)]"><ImagePlus size={18}/>{t("edit-pdf.image.246731")}</button>
                 <input ref={imageInputRef} type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" className="hidden" onChange={(event) => { void addImage(event.target.files?.[0]); event.currentTarget.value = ''; }} />
@@ -2910,7 +3480,7 @@ export const EditPDF: React.FC = () => {
                   </select>
                   <button type="button" onClick={() => addShape()} aria-label={elementAction(shapeKind, 'add')} className="chef-hit-y chef-pressable flex min-h-11 items-center gap-1 border-l border-[var(--border-strong)] px-3 font-bold text-[var(--text-primary)]"><Shapes size={18}/>{t("edit-pdf.add.0d40dd")}</button>
                 </div>
-                <button type="button" onClick={handleSave} disabled={status.isProcessing || !hasUnsavedEdits} className="chef-hit-y chef-pressable flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-6 font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] disabled:opacity-55"><Save size={18}/>{t("edit-pdf.save.52453d")}</button>
+                <button type="button" onClick={saveFromButton} disabled={status.isProcessing || !hasUnsavedEdits} className="chef-hit-y chef-pressable flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-6 font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] disabled:opacity-55"><Save size={18}/>{t("edit-pdf.save.52453d")}</button>
              </div>
           )}
           {insertMode && (
@@ -2937,12 +3507,9 @@ export const EditPDF: React.FC = () => {
               </div>
             </div>
           )}
-          {file && fillableFieldCount > 0 && (
-            <p className="px-1 text-xs font-medium text-[var(--text-secondary)]">{t("edit-pdf.form.values.are.not.included.in.undo.aaad15")}</p>
-          )}
           {file && (status.message || status.error) && (
             <div aria-live="polite" role={status.error ? 'alert' : 'status'}>
-              <StatusLine tone={status.error ? 'danger' : status.progress === 100 ? 'success' : 'info'}>
+              <StatusLine tone={status.error ? 'danger' : status.progress === 100 ? (saveKind === 'partial' ? 'caution' : 'success') : 'info'}>
                 {status.error || status.message}
               </StatusLine>
             </div>
@@ -2963,7 +3530,7 @@ export const EditPDF: React.FC = () => {
           ) : (
              <div className="relative overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)]">
                 <div className="flex justify-end border-b border-[var(--border-hairline)] bg-[var(--surface-raised)] px-2 py-1.5 [&_button]:h-11 [&_button]:w-11 [&_button]:p-0">
-                  <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} />
+                  <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={EDITOR_MAX_ZOOM} keepFocus />
                 </div>
                 <div
                   ref={bindPdfZoomViewport}
@@ -2977,7 +3544,7 @@ export const EditPDF: React.FC = () => {
                           elements={elements.filter(e => e.pageIndex === targetPageIndex)}
                           formFields={formFields.filter((field) => field.pageIndex === targetPageIndex)}
                           formValues={formValues}
-                          selectedId={selectedId} onSelect={setSelectedId}
+                          selectedId={selectedId} onSelect={selectElement}
                           onUpdate={updateElement} onBeginElementChange={rememberSnapshot} onDelete={deleteElement}
                           onFormValueChange={updateFormValue}
                           onPagePress={handlePagePress}
@@ -2987,7 +3554,7 @@ export const EditPDF: React.FC = () => {
                           coarsePointer={coarsePointer}
                           cachedText={readCachedPageText}
                           onBlocksReady={handleBlocksReady}
-                          onActivateBlock={handleActivateBlock}
+                          onActivateBlock={handlePageActivate}
                           onBlockChange={handleBlockChange}
                           onBeginBlockChange={handleBeginBlockChange}
                           insertMode={insertMode}

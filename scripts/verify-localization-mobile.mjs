@@ -70,7 +70,7 @@ try {
     for (const route of ['de-DE', 'ar-SA'].includes(locale) ? routes : ['/', '/recent', '/settings', '/help', '/edit']) checkedRoutes.push(await check(route));
     await check('/settings');
     const language = page.locator('#app-language');
-    assert.equal(await language.locator('option').count(), 25);
+    assert.equal(await language.locator('option').count(), 26);
     await page.screenshot({ path: `${output}/${locale}-settings.png`, fullPage: true });
     if (['de-DE', 'fr-FR', 'ar-SA'].includes(locale)) {
       await page.evaluate(() => localStorage.setItem('pdfchef.appearance.text-scale.v1', 'larger'));
@@ -231,22 +231,24 @@ try {
     const editable = page.locator('[data-testid="pdf-text-block"][contenteditable="plaintext-only"]').first();
     await editable.waitFor({ timeout: 60_000 });
     await editable.fill('PDF Chef localization control. Keep this document edited.');
-    await page.getByLabel('Typeface', { exact: true }).selectOption('serif');
+    await page.getByRole('group', { name: 'Typeface', exact: true }).getByRole('button', { name: 'Serif', exact: true }).click();
     const provenance = page.getByTestId('pdf-paragraph-provenance');
-    await page.waitForFunction(() => document.querySelector('[data-testid="pdf-paragraph-provenance"]')?.textContent.includes('font overridden for this paragraph'));
+    const redrawn = 'This paragraph will be redrawn with a matching typeface.';
+    await page.waitForFunction(text => document.querySelector('[data-testid="pdf-paragraph-provenance"]')?.textContent.includes(text), redrawn);
     await page.evaluate(() => {
       Object.defineProperty(navigator, 'languages', { configurable: true, value: ['de-DE'] });
       window.dispatchEvent(new Event('languagechange'));
     });
-    const translatedReason = german['pdf-font-resolution.font.overridden.for.this.paragraph.4e3f4b'];
+    const translatedReason = german['pdf-paragraph-inspector.this.paragraph.will.be.redrawn.with.a.519080'].replace('{v0}', '').split('. ')[0];
     await page.waitForFunction(reason => document.querySelector('[data-testid="pdf-paragraph-provenance"]')?.textContent.includes(reason), translatedReason);
-    assert(!(await provenance.innerText()).includes('font overridden'));
+    assert(!(await provenance.textContent()).includes(redrawn));
     assert((await editable.innerText()).includes('document edited.'), 'Language changes retain the edit');
     await page.getByRole('button', { name: german['pdf-paragraph-inspector.done.12e9a0'], exact: true }).click();
     await page.getByRole('button', { name: german['edit-pdf.shape.e0e492'], exact: true }).press('Enter');
     const inspector = page.getByRole('region', { name: german['editor.rectangle.properties'], exact: true });
     await inspector.waitFor();
-    assert.equal(await inspector.locator('span.uppercase').innerText(), german['edit-pdf.rectangle.030699'].toUpperCase());
+    await inspector.getByRole('button', { name: german['edit-pdf.fill.033955'], exact: true }).waitFor();
+    await inspector.getByRole('group', { name: german['edit-pdf.stroke.1582a1'], exact: true }).waitFor();
     await context.close();
     console.log('PASS live editor language change refreshes diagnostics and selected-element labels without losing edits');
   }

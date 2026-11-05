@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_ready_title">Pembaruan siap</string>
+    <string name="update_ready_message">Mulai ulang PDF Chef untuk menyelesaikan pembaruan.</string>
+    <string name="update_later">Nanti</string>
+    <string name="update_restart">Mulai ulang</string>
+</resources>

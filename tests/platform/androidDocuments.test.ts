@@ -537,18 +537,21 @@ test('generated output delivery accepts owned ZIP, text and WebP without widenin
 test('external PDF events are separate from picker events and accept only opaque owned refs', async () => {
   const native = nativeStub();
   let incoming: ((event: unknown) => void) | undefined;
-  const received: string[] = [];
+  const received: string[][] = [];
   native.addListener = async (name, listener) => {
     assert.equal(name, 'incomingPdfReady'); incoming = listener;
     return { remove: async () => undefined };
   };
-  await new AndroidDocumentsClient(native).addIncomingPdfListener(ref => received.push(ref));
-  incoming!({ ref: ownedRef });
-  incoming!({ ref: 'a1_1' });
-  incoming!({ ref: 'content://private/document' });
+  await new AndroidDocumentsClient(native).addIncomingPdfListener((ref, toolPath) => received.push([ref, toolPath]));
   incoming!({ ref: ownedRef, toolPath: '/edit' });
+  incoming!({ ref: ownedRef });
+  incoming!({ ref: ownedRef, toolPath: '/settings' });
+  incoming!({ ref: ownedRef, toolPath: 'https://example.com' });
+  incoming!({ ref: 'a1_1', toolPath: '/edit' });
+  incoming!({ ref: 'content://private/document', toolPath: '/edit' });
+  incoming!({ ref: ownedRef, toolPath: '/edit', extra: true });
   incoming!({ batchRef: 'b1_' + 'A'.repeat(22), itemCount: 1 });
-  assert.deepEqual(received, [ownedRef]);
+  assert.deepEqual(received, [[ownedRef, '/edit']]);
 });
 
 // NAV-45, FIL-31: a refused hand-over now reaches the page, as one of three fixed words.

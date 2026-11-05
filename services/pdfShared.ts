@@ -201,6 +201,45 @@ const createOutputRecord = (
   blob,
 });
 
+/**
+ * Keeps a browser result in Recent when history is on. A failed history write is not a failed
+ * delivery: the result is still handed over, only marked as not kept, so the tool and the
+ * result sheet never disagree about whether it was saved.
+ */
+const keepInHistory = async (
+  blob: Blob,
+  filename: string,
+  mimeType: string,
+  toolPath: string,
+  keepLocalHistory: boolean,
+): Promise<{ record: OutputRecord; retained: boolean }> => {
+  try {
+    return { record: await recordOutput(blob, filename, mimeType, toolPath), retained: keepLocalHistory };
+  } catch (error) {
+    console.warn('Unable to keep the result in Recent.', error);
+    return { record: createOutputRecord(blob, filename, mimeType, toolPath), retained: false };
+  }
+};
+
+/** Starts keeping a browser result and returns how to announce it once its delivery settles. */
+const browserResultAnnouncer = (
+  blob: Blob,
+  filename: string,
+  mimeType: string,
+  toolPath: string,
+  keepLocalHistory: boolean,
+) => {
+  const kept = keepInHistory(blob, filename, mimeType, toolPath, keepLocalHistory);
+  return async (deliveryError?: unknown) => {
+    const { record, retained } = await kept;
+    if (deliveryError !== undefined) announceRetryableOutput(record, deliveryError, retained);
+    else {
+      const ready: OutputReadyRecord = { ...record, historyRetained: retained };
+      announceOutput(ready);
+    }
+  };
+};
+
 const checkOutputAccess = async (
   blob: Blob,
   filename: string,
@@ -304,22 +343,7 @@ export const downloadBlob = (
   }
 
   const settings = getWorkspaceSettings();
-  const recorded = recordOutput(blob, filename, resolvedMimeType, toolPath)
-    .then(record => ({ record, retained: settings.keepLocalHistory, historyError: undefined as unknown }))
-    .catch(historyError => ({
-      record: createOutputRecord(blob, filename, resolvedMimeType, toolPath),
-      retained: false,
-      historyError,
-    }));
-  const announceResult = async (deliveryError?: unknown) => {
-    const { record, retained, historyError } = await recorded;
-    const issue = deliveryError ?? (!settings.autoDownload ? historyError : undefined);
-    if (issue !== undefined) announceRetryableOutput(record, issue, retained);
-    else {
-      const ready: OutputReadyRecord = { ...record, historyRetained: retained };
-      announceOutput(ready);
-    }
-  };
+  const announceResult = browserResultAnnouncer(blob, filename, resolvedMimeType, toolPath, settings.keepLocalHistory);
 
   if (!settings.autoDownload) {
     void announceResult();
@@ -377,22 +401,7 @@ const downloadBlobWithoutAccess = (
   toolPath: string,
 ) => {
   const settings = getWorkspaceSettings();
-  const recorded = recordOutput(blob, filename, resolvedMimeType, toolPath)
-    .then(record => ({ record, retained: settings.keepLocalHistory, historyError: undefined as unknown }))
-    .catch(historyError => ({
-      record: createOutputRecord(blob, filename, resolvedMimeType, toolPath),
-      retained: false,
-      historyError,
-    }));
-  const announceResult = async (deliveryError?: unknown) => {
-    const { record, retained, historyError } = await recorded;
-    const issue = deliveryError ?? (!settings.autoDownload ? historyError : undefined);
-    if (issue !== undefined) announceRetryableOutput(record, issue, retained);
-    else {
-      const ready: OutputReadyRecord = { ...record, historyRetained: retained };
-      announceOutput(ready);
-    }
-  };
+  const announceResult = browserResultAnnouncer(blob, filename, resolvedMimeType, toolPath, settings.keepLocalHistory);
   if (!settings.autoDownload) {
     void announceResult();
     return null;
@@ -435,15 +444,8 @@ export const deliverBlob = async (
   }
 
   const settings = getWorkspaceSettings();
-  let record: OutputRecord | null = null;
-  let historyError: unknown;
-  try {
-    record = await recordOutput(blob, filename, resolvedMimeType, toolPath);
-  } catch (error) {
-    historyError = error;
-  }
-  const recoverable = record ?? createOutputRecord(blob, filename, resolvedMimeType, toolPath);
-  const historyRetained = settings.keepLocalHistory && record !== null;
+  const { record: recoverable, retained: historyRetained } = await keepInHistory(
+    blob, filename, resolvedMimeType, toolPath, settings.keepLocalHistory);
   const announceSuccess = () => {
     const ready: OutputReadyRecord = { ...recoverable, historyRetained };
     announceOutput(ready);
@@ -459,10 +461,6 @@ export const deliverBlob = async (
   };
 
   if (!settings.autoDownload) {
-    if (!record) {
-      announceRetryableOutput(recoverable, historyError);
-      throw historyError;
-    }
     announceSuccess();
     return { status: 'delivered' };
   }
@@ -489,7 +487,7 @@ export const deliverBlob = async (
       if (error?.name === 'AbortError') {
         announceRetryableOutput(recoverable, error, historyRetained);
         if (historyRetained) return { status: 'delivered' };
-        throw historyError ?? error;
+        throw error;
       }
       download();
       return { status: 'delivered' };

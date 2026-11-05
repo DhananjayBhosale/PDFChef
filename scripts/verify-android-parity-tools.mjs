@@ -28,11 +28,12 @@ const saveDownload = async (download, prefix) => {
   return target;
 };
 
+// A new result opens its actions sheet; Download there saves the file.
 const saveCurrentOutput = async (page, prefix) => {
-  const outputCard = page.locator('aside').filter({ hasText: 'Result ready' });
-  await outputCard.getByText('Result ready').waitFor({ timeout: 120_000 });
+  const actions = page.getByRole('dialog').filter({ hasText: 'Result ready' });
+  await actions.waitFor({ timeout: 120_000 });
   const downloadPromise = page.waitForEvent('download');
-  await outputCard.getByRole('button', { name: 'Save' }).click();
+  await actions.getByRole('button', { name: 'Download', exact: true }).click();
   return saveDownload(await downloadPromise, prefix);
 };
 
@@ -113,9 +114,9 @@ try {
   await page.locator('canvas').first().waitFor({ state: 'visible', timeout: 60_000 });
   await page.getByLabel('Shape type').selectOption('rectangle');
   await page.getByRole('button', { name: 'Add rectangle', exact: true }).click();
-  await page.getByText('Selected rectangle').waitFor();
-  await page.getByRole('button', { name: 'Undo added element change' }).click();
-  await page.getByRole('button', { name: 'Redo added element change' }).click();
+  await page.getByText(/^rectangle selected$/i).waitFor();
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
   const editorImageBase64 = await page.evaluate(() => {
     const canvas = document.createElement('canvas');
     canvas.width = 64;
@@ -133,7 +134,7 @@ try {
     mimeType: 'image/png',
     buffer: Buffer.from(editorImageBase64, 'base64'),
   });
-  await page.getByText('Selected image').waitFor();
+  await page.getByText(/^image selected$/i).waitFor();
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   const editPath = await saveCurrentOutput(page, 'edit');
   const editPdf = await inspectPdf(editPath);

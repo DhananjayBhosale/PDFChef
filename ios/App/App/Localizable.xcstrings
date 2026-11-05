@@ -328,6 +328,36 @@
             }
           }
         },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld совпадения"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld совпадений"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld совпадение"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld совпадения"
+                }
+              }
+            }
+          }
+        },
         "sv" : {
           "variations" : {
             "plural" : {
@@ -495,6 +525,12 @@
             "value" : "%lld de %lld"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld из %lld"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -624,6 +660,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Não foi possível copiar uma página em segurança."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось безопасно скопировать страницу."
           }
         },
         "sv" : {
@@ -757,6 +799,12 @@
             "value" : "Existe uma estrutura de assinatura, mas não foi possível lê-la em segurança."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Структура подписи есть, но её не удалось безопасно прочитать."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -867,7 +915,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Een kleinere pdf kon niet worden gemaakt."
+            "value" : "Een kleinere PDF kon niet worden gemaakt."
           }
         },
         "pl" : {
@@ -886,6 +934,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Não foi possível criar um PDF mais pequeno."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось создать PDF меньшего размера."
           }
         },
         "sv" : {
@@ -1019,6 +1073,12 @@
             "value" : "Existe um carimbo temporal, mas não pode ser validado neste dispositivo."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Метка времени есть, но её нельзя проверить на этом устройстве."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1148,6 +1208,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cancelar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отмена"
           }
         },
         "sv" : {
@@ -1281,6 +1347,12 @@
             "value" : "A cancelar…"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отмена…"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1410,6 +1482,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Validade do certificado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Срок действия сертификата"
           }
         },
         "sv" : {
@@ -1543,6 +1621,12 @@
             "value" : "Não foi possível ler as datas de validade do certificado."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось прочитать даты действия сертификата."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1672,6 +1756,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "A validade do certificado não foi avaliada."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Срок действия сертификата не проверялся."
           }
         },
         "sv" : {
@@ -1805,6 +1895,12 @@
             "value" : "A verificar as assinaturas digitais"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверка цифровых подписей"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1814,7 +1910,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dijital imzalar denetleniyor"
+            "value" : "Dijital imzalar kontrol ediliyor"
           }
         },
         "zh-Hans" : {
@@ -1936,6 +2032,12 @@
             "value" : "A verificar as assinaturas…"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверка подписей…"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1945,7 +2047,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "İmzalar denetleniyor…"
+            "value" : "İmzalar kontrol ediliyor…"
           }
         },
         "zh-Hans" : {
@@ -2065,6 +2167,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fechar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Закрыть"
           }
         },
         "sv" : {
@@ -2198,6 +2306,12 @@
             "value" : "Resumo de comparação"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сводка сравнения"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2329,6 +2443,12 @@
             "value" : "Comprimir PDF"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сжать PDF"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2439,7 +2559,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kan geen kleinere pdf’s maken"
+            "value" : "Kan geen kleinere PDF’s maken"
           }
         },
         "pl" : {
@@ -2458,6 +2578,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Não foi possível criar PDFs mais pequenos"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось создать PDF меньшего размера"
           }
         },
         "sv" : {
@@ -2570,7 +2696,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kan geen gecontroleerde kopie maken"
+            "value" : "Kan geen geverifieerde kopie maken"
           }
         },
         "pl" : {
@@ -2589,6 +2715,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Não foi possível criar uma cópia verificada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось сделать проверенную копию"
           }
         },
         "sv" : {
@@ -2612,7 +2744,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "無法建立已驗證副本"
+            "value" : "無法建立已驗證複本"
           }
         }
       }
@@ -2671,7 +2803,7 @@
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF नहीं खोला जा सका"
+            "value" : "PDF नहीं खोली जा सकी"
           }
         },
         "id" : {
@@ -2695,7 +2827,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF를 열 수 없습니다"
+            "value" : "PDF를 열 수 없음"
           }
         },
         "nl" : {
@@ -2720,6 +2852,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Não foi possível abrir o PDF"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось открыть PDF"
           }
         },
         "sv" : {
@@ -2853,6 +2991,12 @@
             "value" : "Não foi possível abrir o ficheiro"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось открыть файл"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2933,7 +3077,7 @@
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF साझा नहीं किया जा सका"
+            "value" : "PDF साझा नहीं की जा सकी"
           }
         },
         "id" : {
@@ -2963,7 +3107,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kan pdf niet delen"
+            "value" : "Kan PDF niet delen"
           }
         },
         "pl" : {
@@ -2982,6 +3126,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Não foi possível partilhar o PDF"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось поделиться PDF"
           }
         },
         "sv" : {
@@ -3088,7 +3238,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "작은 부분 만들기"
+            "value" : "더 작은 파일로 나누기"
           }
         },
         "nl" : {
@@ -3115,6 +3265,12 @@
             "value" : "Criar partes mais pequenas"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Разделить на части"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3130,13 +3286,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "创建较小部分"
+            "value" : "拆分为较小文件"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "建立較小部分"
+            "value" : "分割為較小檔案"
           }
         }
       }
@@ -3210,13 +3366,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld kleineres PDF erstellt. Du findest es unter „Zuletzt verwendet“ und kannst es mit „Werkzeuge“ öffnen."
+                  "value" : "%lld kleineres PDF erstellt. Sie finden es unter „Zuletzt verwendet“ und können es mit „Werkzeuge“ öffnen."
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld kleinere PDFs erstellt. Du findest sie unter „Zuletzt verwendet“ und kannst jeden Teil mit „Werkzeuge“ öffnen."
+                  "value" : "%lld kleinere PDFs erstellt. Sie finden sie unter „Zuletzt verwendet“ und können jeden Teil mit „Werkzeuge“ öffnen."
                 }
               }
             }
@@ -3318,13 +3474,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld छोटी PDF बनाई गई। इसे हाल ही के में ढूँढें और टूल से खोलें।"
+                  "value" : "%lld छोटी PDF बनाई गई। इसे “हाल ही के” में ढूँढें और “टूल्स” से खोलें।"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld छोटी PDF बनाई गईं। इन्हें हाल ही के में ढूँढें और किसी भी हिस्से को टूल से खोलें।"
+                  "value" : "%lld छोटी PDF बनाई गईं। इन्हें “हाल ही के” में ढूँढें और किसी भी हिस्से को “टूल्स” से खोलें।"
                 }
               }
             }
@@ -3390,13 +3546,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld kleinere pdf gemaakt. Je vindt hem in Recente bestanden en opent hem met Hulpmiddelen."
+                  "value" : "%lld kleinere PDF gemaakt. Je vindt hem in Recente bestanden en opent hem met Hulpmiddelen."
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld kleinere pdf’s gemaakt. Je vindt ze in Recente bestanden en opent elk deel met Hulpmiddelen."
+                  "value" : "%lld kleinere PDF’s gemaakt. Je vindt ze in Recente bestanden en opent elk deel met Hulpmiddelen."
                 }
               }
             }
@@ -3463,6 +3619,36 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "Foram criados %lld PDFs mais pequenos. Encontre-os em Recentes e abra qualquer parte com Ferramentas."
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Создано %lld PDF меньшего размера. Найдите их в разделе «Недавние» и откройте любую часть через «Инструменты»."
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Создано %lld PDF меньшего размера. Найдите их в разделе «Недавние» и откройте любую часть через «Инструменты»."
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Создан %lld PDF меньшего размера. Найдите его в разделе «Недавние» и откройте через «Инструменты»."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Создано %lld PDF меньшего размера. Найдите их в разделе «Недавние» и откройте любую часть через «Инструменты»."
                 }
               }
             }
@@ -3614,7 +3800,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kleinere pdf’s maken"
+            "value" : "Kleinere PDF’s maken"
           }
         },
         "pl" : {
@@ -3633,6 +3819,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "A criar PDFs mais pequenos"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создание PDF меньшего размера"
           }
         },
         "sv" : {
@@ -3766,6 +3958,12 @@
             "value" : "Eliminar páginas"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить страницы"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3895,6 +4093,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Assinaturas digitais"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цифровые подписи"
           }
         },
         "sv" : {
@@ -4028,6 +4232,12 @@
             "value" : "Informações do documento"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сведения о документе"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4157,6 +4367,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Integridade do documento"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Целостность документа"
           }
         },
         "sv" : {
@@ -4290,6 +4506,12 @@
             "value" : "Concluído"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Готово"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4421,6 +4643,12 @@
             "value" : "Editar PDF"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редактировать PDF"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4465,7 +4693,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Verschlüsselte PDFs können im Hintergrund nicht sicher aufgeteilt werden. Sichere zuerst eine entsperrte Kopie."
+            "value" : "Verschlüsselte PDFs können im Hintergrund nicht sicher aufgeteilt werden. Speichern Sie zuerst eine entsperrte Kopie."
           }
         },
         "en" : {
@@ -4531,7 +4759,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Versleutelde pdf’s kunnen niet veilig op de achtergrond worden gesplitst. Bewaar eerst een ontgrendelde kopie."
+            "value" : "Versleutelde PDF’s kunnen niet veilig op de achtergrond worden gesplitst. Sla eerst een ontgrendelde kopie op."
           }
         },
         "pl" : {
@@ -4550,6 +4778,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Os PDFs encriptados não podem ser divididos em segurança em segundo plano. Guarde primeiro uma cópia desbloqueada."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зашифрованные PDF нельзя безопасно разделить в фоне. Сначала сохраните копию без защиты."
           }
         },
         "sv" : {
@@ -4573,7 +4807,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "加密的 PDF 無法在背景安全分割。請先儲存一份已解鎖的副本。"
+            "value" : "加密的 PDF 無法在背景安全分割。請先儲存一份已解鎖的複本。"
           }
         }
       }
@@ -4681,6 +4915,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Expirado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Срок действия истёк"
           }
         },
         "sv" : {
@@ -4814,6 +5054,12 @@
             "value" : "Extrair páginas"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Извлечь страницы"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4943,6 +5189,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Extrair texto"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Извлечь текст"
           }
         },
         "sv" : {
@@ -5076,6 +5328,12 @@
             "value" : "Aplanar PDF"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зафиксировать поля формы"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -5205,6 +5463,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Indeterminado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не определено"
           }
         },
         "sv" : {
@@ -5338,6 +5602,12 @@
             "value" : "Inválido"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Недействительна"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -5467,6 +5737,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Os ficheiros grandes podem demorar um pouco."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Большие файлы могут обрабатываться дольше."
           }
         },
         "sv" : {
@@ -5600,6 +5876,12 @@
             "value" : "Mais tarde"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Позже"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -5729,6 +6011,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Existem dados de validação de longo prazo, mas não podem ser validados neste dispositivo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Данные долговременной проверки есть, но их нельзя проверить на этом устройстве."
           }
         },
         "sv" : {
@@ -5862,6 +6150,12 @@
             "value" : "Tornar preenchível"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сделать PDF заполняемым"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -5991,6 +6285,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Juntar PDF"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Объединить PDF"
           }
         },
         "sv" : {
@@ -6124,6 +6424,12 @@
             "value" : "Seguinte"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Далее"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -6139,7 +6445,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "下一页"
+            "value" : "下一个"
           }
         },
         "zh-Hant" : {
@@ -6253,6 +6559,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Página seguinte"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Следующая страница"
           }
         },
         "sv" : {
@@ -6386,6 +6698,12 @@
             "value" : "Nenhuma assinatura digital encontrada"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цифровые подписи не найдены"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -6515,6 +6833,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nenhum resultado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Совпадений нет"
           }
         },
         "sv" : {
@@ -6648,6 +6972,12 @@
             "value" : "Nenhuma revogação encontrada"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отзыв не найден"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -6777,6 +7107,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Não existe carimbo temporal fidedigno nem dados de validação de longo prazo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет ни доверенной метки времени, ни данных долговременной проверки."
           }
         },
         "sv" : {
@@ -6910,6 +7246,12 @@
             "value" : "Não verificado"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не проверено"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -6919,7 +7261,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Denetlenmedi"
+            "value" : "Kontrol edilmedi"
           }
         },
         "zh-Hans" : {
@@ -7039,6 +7381,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Não presente"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отсутствует"
           }
         },
         "sv" : {
@@ -7172,6 +7520,12 @@
             "value" : "Não fidedigno"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Недоверенная"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -7303,6 +7657,12 @@
             "value" : "Ainda não é válido"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ещё не действует"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -7429,6 +7789,12 @@
           }
         },
         "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        },
+        "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "OK"
@@ -7565,6 +7931,12 @@
             "value" : "Uma página excede o limite seguro de processamento de %@."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Одна страница превышает безопасный предел обработки в %@."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -7696,6 +8068,12 @@
             "value" : "Abrir"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открыть"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -7776,7 +8154,7 @@
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF खोला जा रहा है"
+            "value" : "PDF खोली जा रही है"
           }
         },
         "id" : {
@@ -7825,6 +8203,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "A abrir o PDF"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открытие PDF"
           }
         },
         "sv" : {
@@ -7931,7 +8315,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF Chef %@ 버전이 App Store에 있습니다."
+            "value" : "PDF Chef %@ 버전을 App Store에서 받을 수 있습니다."
           }
         },
         "nl" : {
@@ -7956,6 +8340,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "O PDF Chef %@ já está disponível na App Store."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF Chef %@ доступен в App Store."
           }
         },
         "sv" : {
@@ -8089,16 +8479,22 @@
             "value" : "O PDF Chef verifica as assinaturas neste dispositivo sem contactar serviços de revogação de certificados."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF Chef проверяет подписи на этом устройстве и не обращается к службам отзыва сертификатов."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF Chef kontrollerar signaturer på den här enheten utan att kontakta tjänster för återkallade certifikat."
+            "value" : "PDF Chef kontrollerar signaturer på den här enheten utan att kontakta tjänster för återkallelse av certifikat."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF Chef, sertifika iptal hizmetlerine bağlanmadan imzaları bu cihazda denetler."
+            "value" : "PDF Chef, sertifika iptal hizmetlerine bağlanmadan imzaları bu cihazda kontrol eder."
           }
         },
         "zh-Hans" : {
@@ -8199,7 +8595,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF Chef opent alleen pdf-bestanden."
+            "value" : "PDF Chef opent alleen PDF-bestanden."
           }
         },
         "pl" : {
@@ -8218,6 +8614,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "O PDF Chef abre apenas ficheiros PDF."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF Chef открывает только файлы PDF."
           }
         },
         "sv" : {
@@ -8300,7 +8702,7 @@
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF Chef छोटे PDF हिस्से बनाएगा और मूल फ़ाइल को नहीं बदलेगा। हर हिस्सा अलग फ़ाइल है, इसलिए फ़ॉर्म, हस्ताक्षर, मेटाडेटा और पेज नंबरिंग हिस्सों में आगे नहीं भी जा सकते।"
+            "value" : "PDF Chef छोटे PDF हिस्से बनाएगा और मूल फ़ाइल को नहीं बदलेगा। हर हिस्सा अलग फ़ाइल है, इसलिए हो सकता है कि सभी हिस्सों में फ़ॉर्म, हस्ताक्षर, मेटाडेटा और पेज नंबर बरकरार न रहें।"
           }
         },
         "id" : {
@@ -8330,7 +8732,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF Chef maakt kleinere pdf-delen en laat het origineel ongewijzigd. Elk deel is een apart bestand, dus formulieren, handtekeningen, metadata en paginanummering gaan mogelijk niet mee over de delen."
+            "value" : "PDF Chef maakt kleinere PDF-delen en laat het origineel ongewijzigd. Elk deel is een apart bestand, dus formulieren, handtekeningen, metadata en paginanummering worden mogelijk niet in alle delen behouden."
           }
         },
         "pl" : {
@@ -8351,6 +8753,12 @@
             "value" : "O PDF Chef vai criar partes de PDF mais pequenas e manter o original inalterado. Cada parte é um ficheiro separado, pelo que formulários, assinaturas, metadados e numeração de páginas podem não passar entre as partes."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF Chef создаст части PDF меньшего размера, а оригинал останется без изменений. Каждая часть — отдельный файл, поэтому формы, подписи, метаданные и нумерация страниц могут не сохраниться в частях."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -8366,13 +8774,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF Chef 会创建较小的 PDF 部分，原始文件保持不变。每个部分都是单独的文件，因此表单、签名、元数据和页码可能不会在各部分之间延续。"
+            "value" : "PDF Chef 会将 PDF 拆分为多个较小的文件，原始文件保持不变。每一部分都是单独的文件，因此表单、签名、元数据和页码可能无法在所有部分中保留。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF Chef 會建立較小的 PDF 部分，原始檔案保持不變。每個部分都是獨立檔案，因此表單、簽名、中繼資料和頁碼可能不會在各部分之間延續。"
+            "value" : "PDF Chef 會將 PDF 分割為多個較小的檔案，原始檔案保持不變。每一部分都是獨立檔案，因此表單、簽名、中繼資料和頁碼可能無法在所有部分中保留。"
           }
         }
       }
@@ -8480,6 +8888,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ferramentas de PDF"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Инструменты PDF"
           }
         },
         "sv" : {
@@ -8613,6 +9027,12 @@
             "value" : "Palavra-passe do PDF"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пароль PDF"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -8742,6 +9162,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "PDF para imagem"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF в изображения"
           }
         },
         "sv" : {
@@ -8875,6 +9301,12 @@
             "value" : "PDF para Word"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF в Word"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -8985,7 +9417,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pdf’s met gedraaide pagina’s kunnen nog niet met een vinkje worden gekopieerd."
+            "value" : "PDF’s met gedraaide pagina’s kunnen nog niet met een vinkje worden gekopieerd."
           }
         },
         "pl" : {
@@ -9004,6 +9436,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Os PDFs com páginas rodadas ainda não podem ser copiados com a marca de verificação."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF с повёрнутыми страницами пока нельзя скопировать с галочкой."
           }
         },
         "sv" : {
@@ -9104,7 +9542,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%2$lld ページ中 %1$lld ページ"
+            "value" : "%lld / %lld ページ"
           }
         },
         "ko" : {
@@ -9135,6 +9573,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Página %lld de %lld"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Страница %lld из %lld"
           }
         },
         "sv" : {
@@ -9268,6 +9712,12 @@
             "value" : "Números de página"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нумерация страниц"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -9399,6 +9849,12 @@
             "value" : "Partes prontas"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Части готовы"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -9414,13 +9870,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "部分已就绪"
+            "value" : "拆分文件已就绪"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "部分已就緒"
+            "value" : "分割檔案已就緒"
           }
         }
       }
@@ -9530,6 +9986,12 @@
             "value" : "Palavra-passe necessária"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Требуется пароль"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -9574,7 +10036,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bitte versuche es erneut."
+            "value" : "Bitte versuchen Sie es erneut."
           }
         },
         "en" : {
@@ -9659,6 +10121,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Попробуйте ещё раз."
           }
         },
         "sv" : {
@@ -9777,7 +10245,7 @@
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Przygotować do narzędzi?"
+            "value" : "Przygotować do użycia w narzędziach?"
           }
         },
         "pt-BR" : {
@@ -9790,6 +10258,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Preparar para as ferramentas?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подготовить для инструментов?"
           }
         },
         "sv" : {
@@ -9807,13 +10281,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "要为工具做准备吗？"
+            "value" : "要准备此 PDF 以便使用工具吗？"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "要為工具做準備嗎？"
+            "value" : "要準備此 PDF 以便使用工具嗎？"
           }
         }
       }
@@ -9921,6 +10395,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "A preparar a página %lld de %lld"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подготовка страницы %lld из %lld"
           }
         },
         "sv" : {
@@ -10054,6 +10534,12 @@
             "value" : "A preparar as páginas…"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подготовка страниц…"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -10164,7 +10650,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Het voorbereiden van kleinere pdf’s is geannuleerd."
+            "value" : "Het voorbereiden van kleinere PDF’s is geannuleerd."
           }
         },
         "pl" : {
@@ -10183,6 +10669,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "A preparação de PDFs mais pequenos foi cancelada."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подготовка PDF меньшего размера отменена."
           }
         },
         "sv" : {
@@ -10295,7 +10787,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voor deze pdf is ongeveer %@ vrije ruimte nodig. Er is %@ beschikbaar."
+            "value" : "Voor deze PDF is ongeveer %@ vrije ruimte nodig. Er is %@ beschikbaar."
           }
         },
         "pl" : {
@@ -10314,6 +10806,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Preparar este PDF exige cerca de %@ de espaço livre. Estão disponíveis %@."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Для подготовки этого PDF нужно около %@ свободного места. Доступно: %@."
           }
         },
         "sv" : {
@@ -10447,6 +10945,12 @@
             "value" : "Anterior"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Назад"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -10462,7 +10966,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "上一页"
+            "value" : "上一个"
           }
         },
         "zh-Hant" : {
@@ -10578,6 +11082,12 @@
             "value" : "Página anterior"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Предыдущая страница"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -10688,7 +11198,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gecontroleerde kopie afdrukken"
+            "value" : "Geverifieerde kopie afdrukken"
           }
         },
         "pl" : {
@@ -10707,6 +11217,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Imprimir cópia verificada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Напечатать проверенную копию"
           }
         },
         "sv" : {
@@ -10730,7 +11246,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "列印已驗證副本"
+            "value" : "列印已驗證複本"
           }
         }
       }
@@ -10753,7 +11269,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Druckt dieses PDF mit dem Prüfhäkchen im Signaturfeld. Es wird nichts gesichert."
+            "value" : "Druckt dieses PDF mit dem Prüfhäkchen im Signaturfeld. Es wird nichts gespeichert."
           }
         },
         "en" : {
@@ -10819,7 +11335,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Drukt deze pdf af met het controlevinkje in het handtekeningvak. Er wordt niets bewaard."
+            "value" : "Drukt deze PDF af met het controlevinkje in het handtekeningvak. Er wordt niets opgeslagen."
           }
         },
         "pl" : {
@@ -10838,6 +11354,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Imprime este PDF com a marca de verificação na caixa de assinatura. Nada é guardado."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Печатает этот PDF с галочкой проверки в поле подписи. Ничего не сохраняется."
           }
         },
         "sv" : {
@@ -10971,6 +11493,12 @@
             "value" : "Proteger PDF"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Защитить PDF"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -11100,6 +11628,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reordenar páginas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Упорядочить страницы"
           }
         },
         "sv" : {
@@ -11233,6 +11767,12 @@
             "value" : "Reparar PDF"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Восстановить PDF"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -11364,6 +11904,12 @@
             "value" : "Tentar novamente"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Повторить"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -11373,7 +11919,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tekrar dene"
+            "value" : "Tekrar deneyin"
           }
         },
         "zh-Hans" : {
@@ -11493,6 +12039,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Revogação"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отзыв"
           }
         },
         "sv" : {
@@ -11626,6 +12178,12 @@
             "value" : "O estado de revogação não foi avaliado."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Статус отзыва не оценивался."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -11755,6 +12313,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Revogado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отозван"
           }
         },
         "sv" : {
@@ -11888,6 +12452,12 @@
             "value" : "Rodar páginas"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Повернуть страницы"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -11932,7 +12502,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sichere eine entsperrte Kopie, bevor dieses große PDF für Werkzeuge vorbereitet wird."
+            "value" : "Speichern Sie eine entsperrte Kopie, bevor dieses große PDF für Werkzeuge vorbereitet wird."
           }
         },
         "en" : {
@@ -11998,13 +12568,13 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bewaar een ontgrendelde kopie voordat je deze grote pdf voorbereidt voor hulpmiddelen."
+            "value" : "Sla een ontgrendelde kopie op voordat je deze grote PDF voorbereidt voor hulpmiddelen."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zapisz odblokowaną kopię, zanim przygotujesz ten duży plik PDF do narzędzi."
+            "value" : "Zapisz odblokowaną kopię, zanim przygotujesz ten duży plik PDF do użycia w narzędziach."
           }
         },
         "pt-BR" : {
@@ -12017,6 +12587,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Guarde uma cópia desbloqueada antes de preparar este PDF grande para as ferramentas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Прежде чем подготавливать этот большой PDF для инструментов, сохраните копию без защиты."
           }
         },
         "sv" : {
@@ -12040,7 +12616,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在為工具準備這個大型 PDF 之前，請先儲存一份已解鎖的副本。"
+            "value" : "在為工具準備這個大型 PDF 之前，請先儲存一份已解鎖的複本。"
           }
         }
       }
@@ -12063,7 +12639,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld von %lld gesichert"
+            "value" : "%lld von %lld gespeichert"
           }
         },
         "en" : {
@@ -12129,7 +12705,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld van %lld bewaard"
+            "value" : "%lld van %lld opgeslagen"
           }
         },
         "pl" : {
@@ -12148,6 +12724,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld de %lld guardados"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохранено: %lld из %lld"
           }
         },
         "sv" : {
@@ -12194,7 +12776,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kleinere PDFs werden gesichert"
+            "value" : "Kleinere PDFs werden gespeichert"
           }
         },
         "en" : {
@@ -12260,7 +12842,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kleinere pdf’s bewaren"
+            "value" : "Kleinere PDF’s opslaan"
           }
         },
         "pl" : {
@@ -12279,6 +12861,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "A guardar PDFs mais pequenos"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохранение PDF меньшего размера"
           }
         },
         "sv" : {
@@ -12361,7 +12949,7 @@
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDF खोजें"
+            "value" : "PDF में खोजें"
           }
         },
         "id" : {
@@ -12379,7 +12967,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "PDFを検索"
+            "value" : "PDF内を検索"
           }
         },
         "ko" : {
@@ -12410,6 +12998,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pesquisar PDF"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Искать в PDF"
           }
         },
         "sv" : {
@@ -12543,6 +13137,12 @@
             "value" : "Nota de segurança"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Примечание по безопасности"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -12674,6 +13274,12 @@
             "value" : "Partilhar PDF"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поделиться PDF"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -12784,7 +13390,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gecontroleerde kopie delen"
+            "value" : "Geverifieerde kopie delen"
           }
         },
         "pl" : {
@@ -12803,6 +13409,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Partilhar cópia verificada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поделиться проверенной копией"
           }
         },
         "sv" : {
@@ -12826,7 +13438,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "分享已驗證副本"
+            "value" : "分享已驗證複本"
           }
         }
       }
@@ -12936,6 +13548,12 @@
             "value" : "Partilha uma cópia separada com a marca de verificação, protegida com a mesma palavra-passe. O ficheiro original não é alterado."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отправляет отдельную копию с галочкой проверки, защищённую тем же паролем. Исходный файл не изменяется."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -12957,7 +13575,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "分享一份帶已驗證勾號的獨立副本，並使用相同密碼保護。原始檔案不會變更。"
+            "value" : "分享一份帶已驗證勾號的獨立複本，並使用相同密碼保護。原始檔案不會變更。"
           }
         }
       }
@@ -13065,6 +13683,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Assinar PDF"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подписать PDF"
           }
         },
         "sv" : {
@@ -13198,6 +13822,12 @@
             "value" : "Assinatura %lld · %@"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подпись %lld · %@"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -13329,6 +13959,12 @@
             "value" : "Verificação da assinatura concluída"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверка подписей завершена"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -13338,7 +13974,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "İmza denetimi tamamlandı"
+            "value" : "İmza kontrolü tamamlandı"
           }
         },
         "zh-Hans" : {
@@ -13460,6 +14096,12 @@
             "value" : "A verificação de assinaturas não está disponível neste ambiente criptográfico."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверка подписи недоступна в этой криптографической среде."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -13492,7 +14134,7 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "الثقة في المُوقّع"
+            "value" : "موثوقية المُوقّع"
           }
         },
         "da" : {
@@ -13528,13 +14170,13 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Confiance du signataire"
+            "value" : "Fiabilité du signataire"
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Confiance du signataire"
+            "value" : "Fiabilité du signataire"
           }
         },
         "hi" : {
@@ -13546,7 +14188,7 @@
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kepercayaan penanda tangan"
+            "value" : "Kepercayaan terhadap penanda tangan"
           }
         },
         "it" : {
@@ -13591,6 +14233,12 @@
             "value" : "Confiança no signatário"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доверие к подписанту"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -13600,19 +14248,19 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "İmzacı güvenilirliği"
+            "value" : "İmzalayanın güvenilirliği"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "签名者信任"
+            "value" : "签名者可信度"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "簽署者信任"
+            "value" : "簽署者可信度"
           }
         }
       }
@@ -13623,7 +14271,7 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "لم يُقيَّم الوثوق بالمُوقّع."
+            "value" : "لم تُقيَّم موثوقية المُوقّع."
           }
         },
         "da" : {
@@ -13659,13 +14307,13 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La confiance du signataire n’a pas été évaluée."
+            "value" : "La fiabilité du signataire n’a pas été évaluée."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La confiance du signataire n’a pas été évaluée."
+            "value" : "La fiabilité du signataire n’a pas été évaluée."
           }
         },
         "hi" : {
@@ -13677,7 +14325,7 @@
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kepercayaan penanda tangan tidak dinilai."
+            "value" : "Kepercayaan terhadap penanda tangan tidak dinilai."
           }
         },
         "it" : {
@@ -13722,6 +14370,12 @@
             "value" : "A confiança no signatário não foi avaliada."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доверие к подписанту не оценивалось."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -13731,19 +14385,19 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "İmzacının güvenilirliği değerlendirilmedi."
+            "value" : "İmzalayanın güvenilirliği değerlendirilmedi."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未评估签名者信任。"
+            "value" : "未评估签名者的可信度。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未評估簽署者信任。"
+            "value" : "未評估簽署者的可信度。"
           }
         }
       }
@@ -13851,6 +14505,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dividir PDF"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Разделить PDF"
           }
         },
         "sv" : {
@@ -13984,6 +14644,12 @@
             "value" : "Essa palavra-passe não abriu este PDF."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот пароль не подошёл к PDF."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -14115,6 +14781,12 @@
             "value" : "Não foi possível identificar o signatário CMS sem ambiguidade."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось однозначно определить подписанта CMS."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -14124,7 +14796,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CMS imzacısı kesin olarak belirlenemedi."
+            "value" : "CMS imzalayanı kesin olarak belirlenemedi."
           }
         },
         "zh-Hans" : {
@@ -14225,7 +14897,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Het pdf-wachtwoord is vereist of onjuist."
+            "value" : "Het PDF-wachtwoord ontbreekt of is onjuist."
           }
         },
         "pl" : {
@@ -14244,6 +14916,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "A palavra-passe do PDF é necessária ou está incorreta."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пароль PDF не указан или неверен."
           }
         },
         "sv" : {
@@ -14278,7 +14956,7 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "التوقيع المشفر غير صالح."
+            "value" : "التوقيع التشفيري غير صالح."
           }
         },
         "da" : {
@@ -14350,7 +15028,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "암호화 서명이 유효하지 않습니다."
+            "value" : "디지털 서명이 유효하지 않습니다."
           }
         },
         "nl" : {
@@ -14377,6 +15055,12 @@
             "value" : "A assinatura criptográfica é inválida."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Криптографическая подпись недействительна."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -14392,13 +15076,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "加密签名无效。"
+            "value" : "数字签名无效。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "加密簽名無效。"
+            "value" : "數位簽名無效。"
           }
         }
       }
@@ -14508,6 +15192,12 @@
             "value" : "Não foi possível ler o documento em segurança."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось безопасно прочитать документ."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -14612,13 +15302,13 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "파일이 손상되었거나 지원되지 않는 PDF 기능을 사용할 수 있습니다."
+            "value" : "파일이 손상되었거나 지원되지 않는 PDF 기능이 사용되었을 수 있습니다."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Het bestand is mogelijk beschadigd of gebruikt een niet-ondersteunde pdf-functie."
+            "value" : "Het bestand is mogelijk beschadigd of gebruikt een niet-ondersteunde PDF-functie."
           }
         },
         "pl" : {
@@ -14637,6 +15327,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "O ficheiro pode estar danificado ou usar uma funcionalidade de PDF não suportada."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Файл может быть повреждён или использовать неподдерживаемую функцию PDF."
           }
         },
         "sv" : {
@@ -14770,6 +15466,12 @@
             "value" : "A caixa de assinatura é demasiado complexa para ser redesenhada em segurança."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поле подписи слишком сложное, чтобы безопасно перерисовать его."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -14899,6 +15601,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "O contentor da assinatura não corresponde ao formato declarado."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Контейнер подписи не соответствует заявленному формату."
           }
         },
         "sv" : {
@@ -15032,6 +15740,12 @@
             "value" : "O contentor da assinatura não corresponde ao intervalo de bytes assinado."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Контейнер подписи не соответствует диапазону подписанных байтов."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -15161,6 +15875,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "O contentor da assinatura está malformado."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Контейнер подписи повреждён."
           }
         },
         "sv" : {
@@ -15294,6 +16014,12 @@
             "value" : "O contentor da assinatura está em falta."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Контейнер подписи отсутствует."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -15423,6 +16149,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "A estrutura do campo de assinatura está malformada."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Структура поля подписи повреждена."
           }
         },
         "sv" : {
@@ -15556,6 +16288,12 @@
             "value" : "A estrutura do campo de assinatura está demasiado aninhada para ser inspecionada em segurança."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Структура поля подписи слишком глубоко вложена для безопасной проверки."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -15685,6 +16423,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "O formato da assinatura está em falta."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Формат подписи отсутствует."
           }
         },
         "sv" : {
@@ -15818,6 +16562,12 @@
             "value" : "A estrutura da assinatura está malformada."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Структура подписи повреждена."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -15947,6 +16697,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "O intervalo de bytes assinado está intacto, mas existem dados posteriores não assinados no documento."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Диапазон подписанных байтов не изменён, но после него есть неподписанные данные документа."
           }
         },
         "sv" : {
@@ -16080,6 +16836,12 @@
             "value" : "O intervalo de bytes assinado está malformado."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Диапазон подписанных байтов повреждён."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -16209,6 +16971,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "O intervalo de bytes assinado corresponde ao documento completo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Диапазон подписанных байтов совпадает со всем документом."
           }
         },
         "sv" : {
@@ -16342,6 +17110,12 @@
             "value" : "Os bytes assinados já não correspondem a este documento ou a assinatura é inválida."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подписанные байты больше не совпадают с этим документом, либо подпись недействительна."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -16473,6 +17247,12 @@
             "value" : "Os bytes assinados já não correspondem a este documento."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подписанные байты больше не совпадают с этим документом."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -16583,7 +17363,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Het certificaat van de ondertekenaar leidt naar CCA India 2022, de root van de Indiase Controller of Certifying Authorities, die PDF Chef vertrouwt."
+            "value" : "Het certificaat van de ondertekenaar leidt naar CCA India 2022, het rootcertificaat van de Indiase Controller of Certifying Authorities, dat door PDF Chef wordt vertrouwd."
           }
         },
         "pl" : {
@@ -16604,6 +17384,12 @@
             "value" : "O certificado do signatário está ligado ao CCA India 2022, a raiz do Controller of Certifying Authorities da Índia, em que o PDF Chef confia."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сертификат подписанта восходит к CCA India 2022 — корневому сертификату индийского Controller of Certifying Authorities, которому доверяет PDF Chef."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -16613,7 +17399,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "İmzacının sertifikası, PDF Chef’in güvendiği Hindistan Sertifika Makamları Denetçisi’nin (CCA) kökü olan CCA India 2022’ye bağlanıyor."
+            "value" : "İmzalayanın sertifikası, PDF Chef’in güvendiği Hindistan Sertifika Makamları Denetçisi’nin (CCA) kökü olan CCA India 2022’ye bağlanıyor."
           }
         },
         "zh-Hans" : {
@@ -16648,7 +17434,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Das Zertifikat des Unterzeichners führt zu einem Stammzertifikat, das PDF Chef mitbringt."
+            "value" : "Das Zertifikat des Unterzeichners führt zu einem Stammzertifikat, das in PDF Chef enthalten ist."
           }
         },
         "en" : {
@@ -16735,6 +17521,12 @@
             "value" : "O certificado do signatário está ligado a uma raiz incluída no PDF Chef."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сертификат подписанта восходит к корневому сертификату, входящему в состав PDF Chef."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -16744,7 +17536,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "İmzacının sertifikası PDF Chef ile gelen bir köke bağlanıyor."
+            "value" : "İmzalayanın sertifikası PDF Chef ile gelen bir köke bağlanıyor."
           }
         },
         "zh-Hans" : {
@@ -16779,7 +17571,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Das Zertifikat des Unterzeichners führt zu einer von Apple vertrauten Stelle."
+            "value" : "Das Zertifikat des Unterzeichners führt zu einer Stelle, der Apple vertraut."
           }
         },
         "en" : {
@@ -16815,7 +17607,7 @@
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "हस्ताक्षरकर्ता का प्रमाणपत्र Apple द्वारा भरोसेमंद प्राधिकारी से जुड़ा है।"
+            "value" : "हस्ताक्षरकर्ता का प्रमाणपत्र ऐसे प्राधिकारी से जुड़ा है जिस पर Apple भरोसा करता है।"
           }
         },
         "id" : {
@@ -16866,6 +17658,12 @@
             "value" : "O certificado do signatário está ligado a uma autoridade fidedigna para a Apple."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сертификат подписанта восходит к центру, которому доверяет Apple."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -16875,7 +17673,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "İmzacının sertifikası Apple’ın güvendiği bir makama bağlanıyor."
+            "value" : "İmzalayanın sertifikası Apple’ın güvendiği bir makama bağlanıyor."
           }
         },
         "zh-Hans" : {
@@ -16997,6 +17795,12 @@
             "value" : "O certificado do signatário expirou."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Срок действия сертификата подписанта истёк."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -17006,7 +17810,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "İmzacının sertifikasının süresi dolmuş."
+            "value" : "İmzalayanın sertifikasının süresi dolmuş."
           }
         },
         "zh-Hans" : {
@@ -17128,6 +17932,12 @@
             "value" : "O certificado do signatário ainda não é válido."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сертификат подписанта ещё не действует."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -17137,7 +17947,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "İmzacının sertifikası henüz geçerli değil."
+            "value" : "İmzalayanın sertifikası henüz geçerli değil."
           }
         },
         "zh-Hans" : {
@@ -17259,6 +18069,12 @@
             "value" : "O certificado do signatário não está disponível."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сертификат подписанта недоступен."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -17268,7 +18084,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "İmzacının sertifikası kullanılamıyor."
+            "value" : "İmzalayanın sertifikası kullanılamıyor."
           }
         },
         "zh-Hans" : {
@@ -17390,6 +18206,12 @@
             "value" : "O certificado do signatário é válido na hora atual deste dispositivo."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сертификат подписанта действителен на текущее время этого устройства."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -17399,7 +18221,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "İmzacının sertifikası bu cihazın şu anki saatine göre geçerli."
+            "value" : "İmzalayanın sertifikası bu cihazın şu anki saatine göre geçerli."
           }
         },
         "zh-Hans" : {
@@ -17422,7 +18244,7 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "تعذر تقييم الثقة في المُوقّع."
+            "value" : "تعذر تقييم موثوقية المُوقّع."
           }
         },
         "da" : {
@@ -17458,13 +18280,13 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La confiance du signataire n’a pas pu être évaluée."
+            "value" : "La fiabilité du signataire n’a pas pu être évaluée."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La confiance du signataire n’a pas pu être évaluée."
+            "value" : "La fiabilité du signataire n’a pas pu être évaluée."
           }
         },
         "hi" : {
@@ -17476,7 +18298,7 @@
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kepercayaan penanda tangan tidak dapat dinilai."
+            "value" : "Kepercayaan terhadap penanda tangan tidak dapat dinilai."
           }
         },
         "it" : {
@@ -17521,6 +18343,12 @@
             "value" : "Não foi possível avaliar a confiança no signatário."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось оценить доверие к подписанту."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -17530,19 +18358,19 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "İmzacının güvenilirliği değerlendirilemedi."
+            "value" : "İmzalayanın güvenilirliği değerlendirilemedi."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "无法评估签名者信任。"
+            "value" : "无法评估签名者的可信度。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "無法評估簽署者信任。"
+            "value" : "無法評估簽署者的可信度。"
           }
         }
       }
@@ -17565,7 +18393,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Die geprüfte Kopie konnte nicht gesichert werden."
+            "value" : "Die geprüfte Kopie konnte nicht gespeichert werden."
           }
         },
         "en" : {
@@ -17631,7 +18459,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "De gecontroleerde kopie kon niet worden bewaard."
+            "value" : "De geverifieerde kopie kon niet worden opgeslagen."
           }
         },
         "pl" : {
@@ -17650,6 +18478,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Não foi possível guardar a cópia verificada."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось сохранить проверенную копию."
           }
         },
         "sv" : {
@@ -17673,7 +18507,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "無法儲存已驗證副本。"
+            "value" : "無法儲存已驗證複本。"
           }
         }
       }
@@ -17762,7 +18596,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Deze pdf kon niet worden gelezen om een kopie te maken."
+            "value" : "Deze PDF kon niet worden gelezen om een kopie te maken."
           }
         },
         "pl" : {
@@ -17781,6 +18615,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Não foi possível ler este PDF para criar uma cópia."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось прочитать этот PDF, чтобы сделать копию."
           }
         },
         "sv" : {
@@ -17804,7 +18644,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "無法讀取此 PDF 來建立副本。"
+            "value" : "無法讀取此 PDF 來建立複本。"
           }
         }
       }
@@ -17893,7 +18733,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Deze pdf bevat geen ondersteund handtekeningveld."
+            "value" : "Deze PDF bevat geen ondersteund handtekeningveld."
           }
         },
         "pl" : {
@@ -17912,6 +18752,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Este PDF não contém um campo de assinatura suportado."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В этом PDF нет поддерживаемого поля подписи."
           }
         },
         "sv" : {
@@ -18024,7 +18870,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Deze pdf heeft geen pagina’s om voor te bereiden."
+            "value" : "Deze PDF heeft geen pagina’s om voor te bereiden."
           }
         },
         "pl" : {
@@ -18043,6 +18889,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Este PDF não tem páginas para preparar."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В этом PDF нет страниц для подготовки."
           }
         },
         "sv" : {
@@ -18155,7 +19007,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Deze pdf zou meer dan %lld kleinere delen nodig hebben."
+            "value" : "Deze PDF zou meer dan %lld kleinere delen nodig hebben."
           }
         },
         "pl" : {
@@ -18176,6 +19028,12 @@
             "value" : "Este PDF precisaria de mais de %lld partes mais pequenas."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Для этого PDF понадобится больше %lld частей меньшего размера."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -18185,7 +19043,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bu PDF için %lld’den fazla küçük parça gerekir."
+            "value" : "Bu PDF için gereken küçük parça sayısı %lld sınırını aşar."
           }
         },
         "zh-Hans" : {
@@ -18286,7 +19144,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Het wachtwoord van deze pdf kan niet op een gedeelde kopie blijven. Je kunt hem nog wel afdrukken."
+            "value" : "Het wachtwoord van deze PDF kan niet op een gedeelde kopie worden bewaard. Je kunt hem nog wel afdrukken."
           }
         },
         "pl" : {
@@ -18307,6 +19165,12 @@
             "value" : "A palavra-passe deste PDF não pode ser mantida numa cópia partilhada. Ainda pode imprimi-lo."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пароль этого PDF нельзя сохранить в копии для отправки. Её всё равно можно напечатать."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -18322,13 +19186,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此 PDF 的密码无法保留在共享副本中。你仍可以打印它。"
+            "value" : "此 PDF 的密码无法保留在共享副本中。您仍可以打印它。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此 PDF 的密碼無法保留在分享的副本中。你仍可以列印它。"
+            "value" : "此 PDF 的密碼無法保留在分享的複本中。您仍可以列印它。"
           }
         }
       }
@@ -18438,6 +19302,12 @@
             "value" : "Este documento contém demasiadas assinaturas para ser inspecionado em segurança."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В этом документе слишком много подписей для безопасной проверки."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -18482,7 +19352,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Diese Datei konnte nicht geöffnet werden. Bitte versuche es erneut."
+            "value" : "Diese Datei konnte nicht geöffnet werden. Bitte versuchen Sie es erneut."
           }
         },
         "en" : {
@@ -18567,6 +19437,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Não foi possível abrir este ficheiro. Tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось открыть этот файл. Попробуйте ещё раз."
           }
         },
         "sv" : {
@@ -18673,7 +19549,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 서명 상자는 안전하게 표시할 수 없습니다."
+            "value" : "이 서명 상자에 안전하게 확인 표시를 넣을 수 없습니다."
           }
         },
         "nl" : {
@@ -18698,6 +19574,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Esta caixa de assinatura não pode ser marcada em segurança."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это поле подписи нельзя безопасно отметить."
           }
         },
         "sv" : {
@@ -18831,6 +19713,12 @@
             "value" : "Este formato de assinatura não é suportado neste dispositivo."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот формат подписи не поддерживается на этом устройстве."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -18935,7 +19823,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 서명에는 표시할 수 있는 서명 상자가 없습니다."
+            "value" : "이 서명에는 확인 표시를 넣을 수 있는, 눈에 보이는 서명 상자가 없습니다."
           }
         },
         "nl" : {
@@ -18960,6 +19848,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Esta assinatura não tem uma caixa de assinatura visível para marcar."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "У этой подписи нет видимого поля, которое можно отметить."
           }
         },
         "sv" : {
@@ -19066,7 +19960,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 서명은 기존 SHA-1 다이제스트를 사용합니다."
+            "value" : "이 서명은 오래된 SHA-1 해시 방식을 사용합니다."
           }
         },
         "nl" : {
@@ -19091,6 +19985,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Esta assinatura usa o resumo SHA-1 antigo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Эта подпись использует устаревшее хеширование SHA-1."
           }
         },
         "sv" : {
@@ -19224,6 +20124,12 @@
             "value" : "Carimbo temporal e validação de longo prazo"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Метка времени и долговременная проверка"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -19355,6 +20261,12 @@
             "value" : "O carimbo temporal e a validação de longo prazo não foram avaliados."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Метка времени и долговременная проверка не оценивались."
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -19435,7 +20347,7 @@
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "टूल"
+            "value" : "टूल्स"
           }
         },
         "id" : {
@@ -19484,6 +20396,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ferramentas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Инструменты"
           }
         },
         "sv" : {
@@ -19566,7 +20484,7 @@
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "इस समय भरोसा स्थापित नहीं हो सका; जारीकर्ता भरोसेमंद नहीं हो सकता, कोई प्रमाणपत्र समाप्त हो सकता है, या चेन अधूरी हो सकती है।"
+            "value" : "इस समय भरोसा स्थापित नहीं हो सका; हो सकता है कि जारीकर्ता भरोसेमंद न हो, किसी प्रमाणपत्र की वैधता समाप्त हो गई हो या चेन अधूरी हो।"
           }
         },
         "id" : {
@@ -19615,6 +20533,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Não foi possível estabelecer a confiança neste momento. O emissor pode não ser fidedigno, um certificado pode ter expirado ou a cadeia pode estar incompleta."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось установить доверие на текущее время: издатель может быть недоверенным, срок действия сертификата мог истечь или цепочка может быть неполной."
           }
         },
         "sv" : {
@@ -19748,6 +20672,12 @@
             "value" : "Fidedigno"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доверенная"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -19879,6 +20809,12 @@
             "value" : "Signatário desconhecido"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Неизвестный подписант"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -19888,7 +20824,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bilinmeyen imzacı"
+            "value" : "Bilinmeyen imzalayan"
           }
         },
         "zh-Hans" : {
@@ -20008,6 +20944,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Desbloquear PDF"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Снять защиту с PDF"
           }
         },
         "sv" : {
@@ -20141,6 +21083,12 @@
             "value" : "É necessária uma cópia desbloqueada"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нужна копия без защиты"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -20162,7 +21110,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "需要已解鎖的副本"
+            "value" : "需要已解鎖的複本"
           }
         }
       }
@@ -20270,6 +21218,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Existem alterações não assinadas após a revisão assinada do documento."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "После подписанной редакции документа есть неподписанные изменения."
           }
         },
         "sv" : {
@@ -20403,6 +21357,12 @@
             "value" : "Não suportado"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не поддерживается"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -20532,6 +21492,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Atualizar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обновить"
           }
         },
         "sv" : {
@@ -20665,6 +21631,12 @@
             "value" : "Atualização disponível"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доступно обновление"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -20796,6 +21768,12 @@
             "value" : "Válido"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Действительна"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -20834,7 +21812,7 @@
         "da" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bekræft"
+            "value" : "Kontrollér"
           }
         },
         "de" : {
@@ -20906,13 +21884,13 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Controleren"
+            "value" : "Verifiëren"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zweryfikuj"
+            "value" : "Weryfikuj"
           }
         },
         "pt-BR" : {
@@ -20925,6 +21903,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Verificar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверить"
           }
         },
         "sv" : {
@@ -20965,7 +21949,7 @@
         "da" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bekræft PDF-signaturer"
+            "value" : "Kontrollér PDF-signaturer"
           }
         },
         "de" : {
@@ -21037,13 +22021,13 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pdf-handtekeningen controleren"
+            "value" : "PDF-handtekeningen verifiëren"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zweryfikuj podpisy PDF"
+            "value" : "Weryfikuj podpisy PDF"
           }
         },
         "pt-BR" : {
@@ -21056,6 +22040,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Verificar assinaturas do PDF"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверка подписей PDF"
           }
         },
         "sv" : {
@@ -21189,6 +22179,12 @@
             "value" : "Marca de água no PDF"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Водяной знак для PDF"
+          }
+        },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
@@ -21233,7 +22229,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Du hast die kostenlosen Aufträge dieser Woche aufgebraucht. Schalte PDF Chef Pro frei, um große PDFs in kleinere Teile aufzuteilen."
+            "value" : "Sie haben die kostenlosen Vorgänge dieser Woche aufgebraucht. Schalten Sie PDF Chef Pro frei, um große PDFs in kleinere Teile aufzuteilen."
           }
         },
         "en" : {
@@ -21245,13 +22241,13 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ya has usado los trabajos gratuitos de esta semana. Desbloquea PDF Chef Pro para dividir PDF grandes en partes más pequeñas."
+            "value" : "Ya has usado las tareas gratuitas de esta semana. Desbloquea PDF Chef Pro para dividir PDF grandes en partes más pequeñas."
           }
         },
         "es-419" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ya usaste los trabajos gratuitos de esta semana. Desbloquea PDF Chef Pro para dividir PDF grandes en partes más pequeñas."
+            "value" : "Ya usaste las tareas gratuitas de esta semana. Desbloquea PDF Chef Pro para dividir PDF grandes en partes más pequeñas."
           }
         },
         "fr" : {
@@ -21263,31 +22259,31 @@
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vous avez utilisé les tâches gratuites de cette semaine. Débloquez PDF Chef Pro pour diviser les gros PDF en parties plus petites."
+            "value" : "Vous avez utilisé les tâches gratuites de cette semaine. Déverrouillez PDF Chef Pro pour diviser les gros PDF en parties plus petites."
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "आपने इस हफ़्ते के मुफ़्त काम इस्तेमाल कर लिए हैं। बड़ी PDF को छोटे हिस्सों में बाँटने के लिए PDF Chef Pro अनलॉक करें।"
+            "value" : "आपने इस हफ़्ते के मुफ़्त टास्क इस्तेमाल कर लिए हैं। बड़ी PDF को छोटे हिस्सों में बाँटने के लिए PDF Chef Pro अनलॉक करें।"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Anda telah memakai pekerjaan gratis minggu ini. Buka PDF Chef Pro untuk membagi PDF besar menjadi bagian yang lebih kecil."
+            "value" : "Anda telah memakai tugas gratis minggu ini. Buka kunci PDF Chef Pro untuk membagi PDF besar menjadi bagian yang lebih kecil."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hai usato i lavori gratuiti di questa settimana. Sblocca PDF Chef Pro per dividere i PDF grandi in parti più piccole."
+            "value" : "Hai esaurito le operazioni gratuite di questa settimana. Sblocca PDF Chef Pro per dividere i PDF grandi in parti più piccole."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "今週の無料ジョブを使い切りました。大きなPDFを小さく分けるには、PDF Chef Proをアンロックしてください。"
+            "value" : "今週の無料処理を使い切りました。大きなPDFを小さく分けるには、PDF Chef Proのロックを解除してください。"
           }
         },
         "ko" : {
@@ -21299,25 +22295,31 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Je hebt de gratis taken van deze week gebruikt. Ontgrendel PDF Chef Pro om grote pdf’s in kleinere delen te splitsen."
+            "value" : "Je hebt de gratis taken van deze week gebruikt. Ontgrendel PDF Chef Pro om grote PDF’s in kleinere delen te splitsen."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wykorzystano już darmowe zadania w tym tygodniu. Odblokuj PDF Chef Pro, aby dzielić duże pliki PDF na mniejsze części."
+            "value" : "Wykorzystano już bezpłatne zadania w tym tygodniu. Odblokuj PDF Chef Pro, aby dzielić duże pliki PDF na mniejsze części."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Você já usou os trabalhos gratuitos desta semana. Desbloqueie o PDF Chef Pro para dividir PDFs grandes em partes menores."
+            "value" : "Você já usou as tarefas gratuitas desta semana. Desbloqueie o PDF Chef Pro para dividir PDFs grandes em partes menores."
           }
         },
         "pt-PT" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Já utilizou os trabalhos gratuitos desta semana. Desbloqueie o PDF Chef Pro para dividir PDFs grandes em partes mais pequenas."
+            "value" : "Já utilizou as tarefas gratuitas desta semana. Desbloqueie o PDF Chef Pro para dividir PDFs grandes em partes mais pequenas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Бесплатные задачи на этой неделе закончились. Разблокируйте PDF Chef Pro, чтобы разделять большие PDF на части меньшего размера."
           }
         },
         "sv" : {
@@ -21329,19 +22331,19 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bu haftanın ücretsiz işlerini kullandınız. Büyük PDF’leri küçük parçalara bölmek için PDF Chef Pro’nun kilidini açın."
+            "value" : "Bu haftaki ücretsiz işlemlerinizi kullandınız. Büyük PDF’leri küçük parçalara bölmek için PDF Chef Pro’nun kilidini açın."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你已用完本周的免费任务。解锁 PDF Chef Pro 即可将大型 PDF 拆分为较小的部分。"
+            "value" : "您已用完本周的免费任务。解锁 PDF Chef Pro 即可将大型 PDF 拆分为较小的部分。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你已用完本週的免費工作。解鎖 PDF Chef Pro 即可將大型 PDF 分割成較小的部分。"
+            "value" : "您已用完本週的免費工作。解鎖 PDF Chef Pro 即可將大型 PDF 分割成較小的部分。"
           }
         }
       }

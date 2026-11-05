@@ -61,13 +61,14 @@ const entries = [
   'registerPlugin(AndroidDocumentsPlugin.class)',
   'registerPlugin(AndroidDocumentScannerPlugin.class)',
   'registerPlugin(AndroidSupportPlugin.class)',
+  'registerPlugin(AndroidLanguagePlugin.class)',
   'super.onCreate(savedInstanceState)',
 ];
 const positions = entries.map(entry => activity.indexOf(entry));
 assert(positions.every(value => value >= 0), 'accepted registration missing');
 assert(positions.every((value, index) => index === 0 || value > positions[index - 1]), 'registration order drift');
-assert((activity.match(/registerPlugin\(/g) ?? []).length === 7, 'registration count drift');
-for (const entry of entries.slice(0, 7)) assert(activity.split(entry).length - 1 === 1, `duplicate ${entry}`);
+assert((activity.match(/registerPlugin\(/g) ?? []).length === 8, 'registration count drift');
+for (const entry of entries.slice(0, 8)) assert(activity.split(entry).length - 1 === 1, `duplicate ${entry}`);
 const documentMethods = [
   'readChunk', 'beginWrite', 'appendWrite', 'finishWrite', 'abortWrite',
   'listOwned', 'renameItem', 'trashOwned', 'restoreOwned', 'deleteOwned', 'clearOwned',

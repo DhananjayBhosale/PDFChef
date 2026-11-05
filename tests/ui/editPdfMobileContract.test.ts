@@ -90,14 +90,15 @@ test('selected text annotations edit directly on the page with one history snaps
   assert.match(editor, /y=\{line\.baseline\} textLength=\{line\.width\}/);
 });
 
-test('mobile and desktop inspector text fields group typing into one undo snapshot', () => {
+test('the desktop inspector text field groups typing into one undo snapshot', () => {
   assert.match(editor, /const inspectorTextChanged = useRef\(false\)/);
   assert.match(editor, /if \(!inspectorTextChanged\.current\) \{\s*rememberSnapshot\(\);\s*inspectorTextChanged\.current = true;/);
+  // A phone types into the text box itself; the panel's second copy of the text was dropped there.
   assert.equal(
     (editor.match(/onChange=\{\(event\) => updateInspectorText\(selectedElement\.id, event\.currentTarget\.value\)\}/g) ?? []).length,
-    2,
+    1,
   );
-  assert.equal((editor.match(/onBlur=\{finishInspectorTextChange\}/g) ?? []).length, 2);
+  assert.equal((editor.match(/onBlur=\{finishInspectorTextChange\}/g) ?? []).length, 1);
   assert.doesNotMatch(editor, /Text<input[^>]*onChange=\{\(event\) => commitElementUpdate/);
 });
 
@@ -159,18 +160,18 @@ test('a rewrite that the document cannot express falls back to a clean redraw fi
   assert.match(editor, /unencodableCharacters\(introduced, font \?\? FALLBACK_RESOLVED_FONT, descriptor\)/);
   // The redraw is aimed at the paragraphs that actually refused, not at every edited one.
   assert.match(editor, /buildParagraphSaveEdits\(\{ forceReflow: stubborn, plans: \[\.\.\.redrawable\] \}\)/);
-  assert.match(editor, /buildParagraphSaveEdits\(\{ forceReflow: stubborn, deleteOriginalRuns: false, plans: \[\.\.\.redrawable\] \}\)/);
-  assert.match(copyText(editor), /your old wording is still in the file underneath the new text/);
+  // Found on a phone: after a replace-all, the redraw could not remove the old words and drew the
+  // new ones over them, so a search still found every old word. Those paragraphs now stay unsaved.
+  assert.doesNotMatch(editor, /deleteOriginalRuns/);
+  assert.match(editor, /keepUnsaved\(stillRefused,/);
 });
 
 test('one paragraph the engine will not rewrite does not redraw the others', () => {
   // The save offers every rewrite at once, so a single refusal used to fail the whole call and
-  // cost every other paragraph its own typeface — and on some documents the save then gave up
-  // entirely. Each is offered again alone, and only the ones that still refuse are redrawn.
-  assert.match(editor, /const directPlans = savablePlans\.filter\(\(entry\) => entry\.plan\.mode === 'direct'\)/);
-  assert.match(editor, /const stubborn = new Set<string>\(\)/);
-  assert.match(editor, /stubborn\.add\(entry\.edit\.blockId\)/);
-  assert.match(editor, /const MAX_REWRITE_ISOLATION_ATTEMPTS = 12/);
+  // cost every other paragraph its own typeface. The refusing ones are found by halving the set
+  // (tests/services/findRefusingItems.test.ts), and only those are redrawn.
+  assert.match(editor, /const refused = await findRefusingItems<[^>]*>\(savablePlans, savesAlone\(new Set\(\)\)\)/);
+  assert.match(editor, /const stubborn = new Set\(refused\.filter\(\(entry\) => entry\.plan\.mode === 'direct'\)/);
   // Only what will actually be redrawn has to be drawable by a standard face.
   assert.match(editor, /const willRedraw = savablePlans\.filter\([\s\S]*?stubborn\.has\(entry\.edit\.blockId\)/);
 });
@@ -230,9 +231,17 @@ test('the editing overlay leaves scrolling, pinch zoom and native selection to t
   assert.match(blockLayer, /transform: iosZoomGuard > 1 \? `scale\(\$\{1 \/ iosZoomGuard\}\)` : undefined/);
   assert.match(editor, /const MINIMUM_EDITING_FONT_PX = 16/);
   assert.match(editor, /const EDITOR_MAX_ZOOM = 4/);
-  assert.match(editor, /setExactZoom\(Math\.min\(EDITOR_MAX_ZOOM, zoom \* \(MINIMUM_EDITING_FONT_PX \/ renderedFontSize\)\)\)/);
+  // Found on a phone: zooming 12 pt text to 16 px (250%) cut every line in half. The tap fits the
+  // paragraph's width, keeps text at least 10 px, stays under the 16 px zoom, and is undone on Done.
+  // On a phone the paragraph is typed into the dock field, so the page only fits its width: the
+  // 10 px floor cut a fifth off every line of A4 body text (OnePlus 15).
+  assert.match(editor, /const autoZoomTo = useCallback\(\(element: HTMLElement, fitOnly = dockEditing\) =>/);
+  assert.match(editor, /const target = Math\.min\(EDITOR_MAX_ZOOM, ceiling, fitOnly \? fitsWidth : Math\.max\(fitsWidth, legible\)\)/);
+  assert.match(editor, /const dockEditing = isImmersiveEditor && coarsePointer && !APPLE_TOUCH;/);
+  assert.match(editor, /const LEGIBLE_EDITING_FONT_PX = 10;/);
+  assert.match(editor, /autoZoomRef\.current = null;\n    setExactZoom\(from\);/);
   assert.match(blockLayer, /window\.visualViewport/);
-  assert.match(editor, /useKeyboardSafeFocus\(\s*pdfZoomViewportRef\.current,\s*activeBlockId,\s*zoom,\s*immersiveBottomBarRef\.current,\s*immersiveHeaderRef\.current,\s*selectedTextId,\s*\)/);
+  assert.match(editor, /useKeyboardSafeFocus\(\s*pdfZoomViewportRef\.current,\s*activeBlockId,\s*zoom,\s*immersiveBottomBarRef\.current,\s*immersiveHeaderRef\.current,\s*selectedTextId,\s*dockEditing,\s*\)/);
 });
 
 // EDT-16: with the keyboard up (the Android window shrinks), the paragraph being edited slid
@@ -247,9 +256,11 @@ test('what is being typed stays between the fixed header and the bottom bar', ()
   assert.match(editor, /const selectedTextId = selectedElement\?\.type === 'text' \? selectedElement\.id : null;/);
   assert.match(editor, /data-testid="inline-text-editor"\s*data-element-id=\{element\.id\}/);
   assert.match(blockLayer, /: selectedTextId \? `\[data-element-id="\$\{CSS\.escape\(selectedTextId\)\}"\]` : null;/);
-  assert.match(blockLayer, /if \(element instanceof HTMLTextAreaElement\) return element\.getBoundingClientRect\(\);/);
+  assert.match(blockLayer, /if \(element instanceof HTMLTextAreaElement \|\| element instanceof HTMLInputElement \|\| element instanceof HTMLSelectElement\) \{\n    return element\.getBoundingClientRect\(\);/);
+  // Found on a phone: a focused form field sat half under the top of the PDF box.
+  assert.match(blockLayer, /const element = selector \? scrollContainer\.querySelector<HTMLElement>\(selector\) : focusedField;/);
   assert.match(blockLayer, /element\.addEventListener\('focus', selectionChanged\)/);
-  assert.match(blockLayer, /\[activeBlockId, bottomBar, header, scrollContainer, selectedTextId, zoom\]/);
+  assert.match(blockLayer, /\[activeBlockId, bottomBar, focusedField, header, scrollContainer, selectedTextId, wholeFields, zoom\]/);
   // The editor is exactly one screen tall and the PDF box takes what the chrome leaves, so a
   // window shrunk by the keyboard never makes the document itself scroll under the fixed bars.
   const immersiveStart = editor.indexOf('if (isImmersiveEditor) {');
@@ -273,13 +284,13 @@ test('a paragraph edit states whether it rewrites the PDF or redraws the paragra
   assert.match(editor, /mode: 'reflow'/);
   assert.match(copyText(paragraphInspector), /goes straight into the document/);
   assert.match(copyText(paragraphInspector), /redrawn with a matching typeface/);
-  assert.match(copyText(paragraphInspector), /line breaks are kept/);
+  assert.match(copyText(paragraphInspector), /Long lines wrap to fit its width/);
   assert.match(paragraphInspector, /data-testid="pdf-paragraph-provenance"/);
   // "Original" is a selectable state, so a paragraph is never silently restyled.
   assert.match(paragraphInspector, /\{ value: 'original', get label\(\) \{ return t\("pdf-paragraph-inspector\.original\./);
   assert.ok(localizedCopy(paragraphInspector).includes('Original'));
-  // A phone lays the controls out in two rows rather than a strip that scrolls sideways.
-  assert.match(paragraphInspector, /\{compact \? \(\s*<div className="flex flex-col gap-1\.5">/);
+  // A phone lays the controls out in rows rather than a strip that scrolls sideways.
+  assert.match(paragraphInspector, /\{compact \? \(\s*<div className="flex flex-col">/);
   assert.doesNotMatch(paragraphInspector, /overflow-x-auto/);
   assert.match(paragraphInspector, /prettyFontName\(descriptor\)/);
   assert.match(copyText(paragraphInspector), /Substituted \{v0\}/);
@@ -304,8 +315,13 @@ test('find and replace covers the whole document, not just the visible page', ()
   assert.match(editor, /!pageTextRef\.current\.has\(index\)/);
   assert.match(editor, /findInStyledLines/);
   assert.match(editor, /replaceInStyledLines/);
-  // A match is revealed by selecting it, so it is ready to type over.
-  assert.match(editor, /selectRangeInBlock\(element, match\.offset/);
+  // A match is shown, not entered: the find field keeps the caret, so Enter and Next keep
+  // searching instead of typing into the document (found on a phone with Gboard).
+  assert.doesNotMatch(editor, /selectRangeInBlock/);
+  assert.match(editor, /scrollBlockIntoViewport\(viewport, range, immersiveBottomBarRef\.current\?\.getBoundingClientRect\(\)\.top\)/);
+  // A new query shows its first match at once, so Enter goes on to the second.
+  assert.match(editor, /shownMatchRef\.current = 0;\n    revealMatch\(0\);/);
+  assert.match(read('index.css'), /::highlight\(pdfchef-find-current\)/);
   assert.match(editor, /setFindOpen\(true\)/);
   assert.match(findReplace, /data-testid="pdf-find-replace"/);
   assert.match(findReplace, /data-testid="pdf-find-count"/);
@@ -316,11 +332,10 @@ test('find and replace covers the whole document, not just the visible page', ()
   // than by wrapping matches in elements the browser owns while someone types.
   assert.match(blockLayer, /export const paintFindHighlights/);
   assert.match(blockLayer, /registry\.set\(FIND_HIGHLIGHT/);
-  assert.match(editor, /paintFindHighlights\(ranges\)/);
+  assert.match(editor, /paintFindHighlights\(ranges\.map/);
   assert.match(read('index.css'), /::highlight\(pdfchef-find\)/);
   // Stepping through matches moves the page inside its own box, not the document around it.
   assert.match(blockLayer, /export const scrollBlockIntoViewport/);
-  assert.match(editor, /scrollBlockIntoViewport\(viewport, element\)/);
   assert.doesNotMatch(editor, /scrollIntoView\(/);
 });
 
@@ -431,7 +446,7 @@ test('the editor chrome stays against the top of what the reader can see', () =>
   assert.match(editor, /const immersiveHeaderRef = useRef<HTMLElement>\(null\)/);
   assert.match(editor, /ref=\{immersiveHeaderRef\}/);
   assert.match(editor, /style=\{\{ top: 'var\(--chef-viewport-offset-top, 0px\)' \}\}/);
-  assert.match(editor, /paddingTop: `\$\{immersiveHeaderHeight\}px`/);
+  assert.match(editor, /paddingTop: `calc\(\$\{immersiveHeaderHeight\}px \+ var\(--chef-viewport-offset-top, 0px\)\)`/);
   // A bar that sticks to the layout viewport is exactly what put Save under the clock.
   assert.doesNotMatch(editor, /<header[^>]*sticky top-0/);
 });
@@ -512,4 +527,73 @@ test('document form controls retain paper colours when the app uses dark appeara
   assert.match(controls, /backgroundColor: 'rgba\(255, 255, 255, 0\.92\)'/);
   assert.match(controls, /color: '#111827'/);
   assert.doesNotMatch(controls, /bg-white\/92|text-paper-900/);
+});
+
+test('typing on a phone leaves the screen to the page', () => {
+  const css = read('index.css');
+  const zoomControls = read('components/UI/ZoomControls.tsx');
+  // Page and zoom share one row, the percentage doubles as reset, and + reaches the editor's maximum.
+  // While the keyboard is up the row goes, so the page keeps the height; pinching still zooms.
+  assert.match(editor, /<div className="chef-hide-while-typing mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-3">\s*\{pageCount > 1 && \(/);
+  assert.match(editor, /<ZoomControls zoom=\{zoom\} onZoomIn=\{zoomIn\} onZoomOut=\{zoomOut\} onReset=\{resetZoom\} max=\{EDITOR_MAX_ZOOM\} compact /);
+  assert.equal((editor.match(/max=\{EDITOR_MAX_ZOOM\}/g) ?? []).length, 2);
+  assert.match(zoomControls, /\{percent\}<span className="sr-only">/);
+  // The add row and the home-indicator inset give way to the keyboard.
+  assert.match(css, /:root\[data-chef-keyboard\] \.chef-hide-while-typing \{\s*display: none;/);
+  assert.match(css, /:root\[data-chef-keyboard\] \.chef-safe-bottom\.chef-keyboard-flush \{\s*padding-bottom: var\(--chef-safe-bottom-base, 0px\);/);
+  assert.match(editor, /role="toolbar" aria-label=\{t\("edit-pdf\.add\.content\.006e1f"\)\} className="chef-hide-while-typing /);
+  assert.match(editor, /chef-safe-bottom chef-keyboard-flush/);
+  // iOS pans the page to the caret, so the content moves down with the header.
+  assert.match(editor, /paddingTop: `calc\(\$\{immersiveHeaderHeight\}px \+ var\(--chef-viewport-offset-top, 0px\)\)`/);
+  // The paragraph says what saving does in one line; the long account waits behind a button.
+  assert.match(paragraphInspector, /data-testid="pdf-paragraph-status"\s*role="status"/);
+  assert.match(paragraphInspector, /hidden=\{!detailsOpen \|\| !pending\}/);
+  // Found on a phone: the dock took a quarter of the screen above the keyboard. Nothing is said
+  // before a change, a caution is always shown, the ordinary outcome waits while typing, and the
+  // dock lies flat on the bar with no card around it.
+  assert.match(paragraphInspector, /const status = !plan \|\| plan\.mode === 'unchanged'\s*\? ''/);
+  assert.match(paragraphInspector, /const statusVisibility = !status \? 'sr-only' : caution \? 'flex' : 'chef-sr-while-typing flex';/);
+  assert.match(css, /:root\[data-chef-keyboard\] \.chef-paragraph-dock \{\s*margin-bottom: 0;\s*padding-bottom: 0;\s*border-bottom-width: 0;/);
+  assert.match(css, /:root\[data-chef-keyboard\] \.chef-safe-bottom\.chef-keyboard-flush\.chef-paragraph-bar \{\s*padding-top: 0;\s*padding-bottom: 0;/);
+  assert.match(editor, /\$\{activeBlock \? ' chef-paragraph-bar' : ''\}/);
+  assert.doesNotMatch(blockLayer, /pdf-block-overflow|createPortal/);
+  // Formatting buttons keep the caret, so the keyboard does not drop on every tap: typeface,
+  // colour swatches, B, I, −, + and details.
+  assert.equal((paragraphInspector.match(/onPointerDown=\{keepCaret\}/g) ?? []).length, 7);
+  // Found on a phone: with the keyboard closed, a swatch tap opened it again and hid the swatches.
+  assert.match(paragraphInspector, /event\.pointerType === 'mouse' \|\| document\.documentElement\.hasAttribute\('data-chef-keyboard'\)/);
+  // Found on a phone: after a save the exported-file strip covered Find's own row.
+  assert.match(editor, /if \(findOpen \|\| activeBlockId \|\| selectedId\) dismissOutputBanner\(\);/);
+  // Found on a phone: the result's strip covered the paragraph's dock after a save.
+  assert.equal((editor.match(/onClick=\{saveFromButton\}/g) ?? []).length, 2);
+  assert.doesNotMatch(editor, /onClick=\{handleSave\}/);
+  // Back with the result sheet open after a save closed the editor as well as the sheet.
+  assert.match(editor, /if \(document\.querySelector\('\[role="dialog"\]\[aria-modal="true"\]'\)\) return;/);
+  // Restoring the caret after a restyle would take focus, and the keyboard, back.
+  assert.match(blockLayer, /selection && document\.activeElement === element\) \{/);
+  // Found on a phone: the native typeface and colour pickers took the keyboard away. They are
+  // buttons now, and with the keyboard up only B, I, size and Done stay in the dock.
+  assert.doesNotMatch(paragraphInspector, /<select/);
+  assert.equal((paragraphInspector.match(/className="chef-hide-while-typing /g) ?? []).length, 2);
+});
+
+// Found on a OnePlus 15: no zoom shows both whole lines and readable text on a phone, so the
+// paragraph is typed into a wrapped 16 px field in the dock, at the letter the reader tapped.
+test('a phone types a paragraph into a wrapped field in the dock', () => {
+  const field = read('components/Tools/PdfParagraphField.tsx');
+  assert.match(editor, /field=\{compact && dockEditing \? \(\s*<PdfParagraphField/);
+  assert.match(editor, /onActivateBlock=\{handlePageActivate\}/);
+  assert.match(editor, /setFieldFocus\(\{ blockId, offset, nonce: Date\.now\(\) \}\)/);
+  // Every change keeps the paragraph's styled runs and is one Undo step per typing session.
+  assert.match(field, /preserveStyledTextEdit\(segments\.current, next,/);
+  assert.match(field, /onBeginChange\(block\.id\);/);
+  // The PDF's own wrapping reads as spaces; the saved text keeps the line breaks.
+  assert.match(field, /edit\?\.softBreaks \?\? softLineBreaks\(text, block\)/);
+  assert.match(editor, /softBreaks: softBreaks \?\? carrySoftBreaks\(/);
+  // A tap on a redrawn paragraph is read off its drawing; Ctrl+Z in the field is the editor's Undo.
+  assert.match(editor, /svg\[data-preview-block-id=/);
+  assert.match(editor, /&& !target\.dataset\.fieldFor\) return;/);
+  assert.match(field, /moveSoftBreaks\(soft\.current \?\? \[\], shown, value, inputRange\.current\)/);
+  // The page follows the paragraph while its caret is in the dock.
+  assert.match(blockLayer, /active\?\.dataset\.fieldFor === element\.dataset\.blockId/);
 });

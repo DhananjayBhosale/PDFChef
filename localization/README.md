@@ -1,13 +1,13 @@
 # PDF Chef localization
 
 **Current status: incomplete.** See [HANDOFF.md](HANDOFF.md) and `status.json`
-for review coverage and verification blockers. All 24 application locales have
-complete catalogs; the 20 non-English catalogs are installed and `drafts/` mirrors
+for review coverage and verification blockers. All 25 application locales have
+complete catalogs; the 21 non-English catalogs are installed and `drafts/` mirrors
 their current text. Mandatory final model review remains incomplete.
 
 The shared React application owns application translations. Native resource packages in
-`native-handoff/` are prepared text only. Nothing in this directory uploads store
-metadata, changes prices or enables billing.
+`native-handoff/` are the source text for the native screens. Nothing in this directory
+uploads store metadata, changes prices or enables billing.
 
 ## Application catalogs
 
@@ -66,8 +66,22 @@ before any future publication. `stores/keyword-research.json` records region-spe
 search terminology and qualitative sources, not measured search volume or rankings.
 
 `native-handoff/source-map.json` links text to read-only native source locations.
-Native owners must integrate these translations into their platform resources,
-connect language selection where appropriate, and verify native layouts separately.
+All 21 non-English languages are integrated into the native resources:
+`android/app/src/main/res/values-*/` (`pdf_reader_strings.xml`, `strings.xml`) and
+`ios/App/App/Localizable.xcstrings` plus `InfoPlist.xcstrings`.
+
+Both apps use one rule. On System, everything follows the phone's language when the app
+supports it, otherwise English. A language chosen in Settings applies to the web
+screens and the native screens alike. Both native layers receive the chosen language, or
+`system` while Settings is on System, once the saved choice has loaded
+(`subscribeNativeLanguage` in `services/i18n/core.ts`): iOS through
+`PdfChefDocuments.setLanguage` (`PdfChefLocalization.swift`), Android through the
+`AndroidLanguage` plugin (`AppLanguage.java`). On `system`, native screens use the
+platform's own language matching, so they stay right after the phone's language changes.
+Portuguese outside Brazil resolves to pt-PT, as Android's resources do. Both systems also list the
+app's languages in their own per-app Language setting; on Android that list is
+`android/app/src/main/res/xml/locales_config.xml`, so keep it in step with
+`services/i18n/locales.ts`.
 System-owned picker, permission and purchase interfaces follow platform localization.
 Do not replace system UI with custom translations of price or purchase facts.
 
@@ -81,7 +95,7 @@ Model review is not native-speaker or legal review.
 node scripts/check-localization.mjs
 node scripts/check-localization.mjs --drafts
 node scripts/check-localization-assets.mjs
-node --experimental-strip-types --test tests/localization/core.test.ts
+node --experimental-strip-types --test tests/localization/*.test.ts
 npm run test:catalog
 npm run lint
 node scripts/verify-localization-mobile.mjs

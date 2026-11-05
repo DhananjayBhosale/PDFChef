@@ -24,6 +24,7 @@ export const locales = [
   ['tr-TR', 'Türkçe', 'tr', 'tr-TR', 'ltr'],
   ['sv-SE', 'Svenska', 'sv', 'sv-SE', 'ltr'],
   ['da-DK', 'Dansk', 'da', 'da-DK', 'ltr'],
+  ['ru-RU', 'Русский', 'ru', 'ru-RU', 'ltr'],
 ] as const;
 export type Locale = typeof locales[number][0];
 export type LocalePreference = Locale | 'system';
@@ -31,6 +32,7 @@ export const fallbackLocale: Locale = 'en-US';
 const supported = new Set<string>(locales.map(([locale]) => locale));
 export const isLocale = (value: unknown): value is Locale => typeof value === 'string' && supported.has(value);
 
+const portugalRegions = new Set(['AO', 'CH', 'CV', 'FR', 'GQ', 'GW', 'LU', 'MO', 'MZ', 'PT', 'ST', 'TL']);
 export function resolveLocale(languages: readonly string[]): Locale {
   for (const language of languages) {
     let canonical: string;
@@ -41,6 +43,8 @@ export function resolveLocale(languages: readonly string[]): Locale {
     if (tag.language === 'zh') return tag.maximize().script === 'Hant' ? 'zh-Hant' : 'zh-Hans';
     if (tag.language === 'fr') return 'fr-FR';
     if (tag.language === 'es') return tag.region && tag.region !== 'ES' ? 'es-419' : 'es-ES';
+    // CLDR's parent for these regions is pt-PT, which Android's native screens also follow.
+    if (tag.language === 'pt') return portugalRegions.has(tag.region ?? '') ? 'pt-PT' : 'pt-BR';
     const match = locales.find(([locale]) => locale.split('-')[0] === tag.language);
     if (match) return match[0];
   }

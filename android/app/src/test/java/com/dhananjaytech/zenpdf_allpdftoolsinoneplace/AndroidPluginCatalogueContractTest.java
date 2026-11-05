@@ -54,11 +54,12 @@ public final class AndroidPluginCatalogueContractTest {
         int documents = activity.indexOf("registerPlugin(AndroidDocumentsPlugin.class)");
         int scanner = activity.indexOf("registerPlugin(AndroidDocumentScannerPlugin.class)");
         int support = activity.indexOf("registerPlugin(AndroidSupportPlugin.class)");
+        int language = activity.indexOf("registerPlugin(AndroidLanguagePlugin.class)");
         int bridge = activity.indexOf("super.onCreate(savedInstanceState)");
         assertTrue(inspector >= 0 && inspector < writer && writer < metadata
                 && metadata < storage && storage < documents && documents < scanner
-                && scanner < support && support < bridge);
-        assertEquals(7, occurrences(activity, "registerPlugin("));
+                && scanner < support && support < language && language < bridge);
+        assertEquals(8, occurrences(activity, "registerPlugin("));
         assertEquals(1, occurrences(activity, "registerPlugin(AndroidDocumentsPlugin.class)"));
 
         String manifest = source("src/main/AndroidManifest.xml");

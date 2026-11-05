@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_ready_title">التحديث جاهز</string>
+    <string name="update_ready_message">أعد تشغيل PDF Chef لإكمال التحديث.</string>
+    <string name="update_later">لاحقاً</string>
+    <string name="update_restart">إعادة التشغيل</string>
+</resources>

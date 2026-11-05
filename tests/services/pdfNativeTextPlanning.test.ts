@@ -321,3 +321,12 @@ test('a comma below the baseline remains part of a fragmented original-font word
     assert.deepEqual(result.changes.map(change => change.objectIndex), [1, 2, 3, 4]);
   }
 });
+
+test('a word split across two colours is never merged into one of them', () => {
+  const { objects, target } = fragmentedRun(['Impor', 'tant']);
+  objects[0].fillColor = [0, 0, 0, 255];
+  objects[1].fillColor = [220, 26, 26, 255];
+  assert.equal(planNativePdfTextEdits(objects, [{ ...target, replacementText: 'Importent' }]).supported, false);
+  objects[1].fillColor = [0, 0, 0, 255];
+  assert.equal(planNativePdfTextEdits(objects, [{ ...target, replacementText: 'Importent' }]).supported, true);
+});

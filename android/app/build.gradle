@@ -34,8 +34,8 @@ android {
         applicationId "com.dhananjaytech.pdfchef"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 29
-        versionName "2.4.0"
+        versionCode 30
+        versionName "2.4.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -85,6 +85,20 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_21
         targetCompatibility JavaVersion.VERSION_21
+    }
+    androidResources {
+        // Only the app's own languages (res/xml/locales_config.xml). Library translations for others
+        // would let Android pick, say, Ukrainian over a Russian the app supports, in English, while
+        // the web screens pick Russian.
+        localeFilters += ["en", "ar", "da", "de", "es", "b+es+419", "fr", "fr-rCA", "hi", "in", "it", "ja",
+                          "ko", "nl", "pl", "pt-rBR", "pt-rPT", "ru", "sv", "tr", "b+zh+Hans", "b+zh+Hant"]
+    }
+    bundle {
+        // The in-app language picker applies its choice itself, so every language must be on the
+        // phone. With language splits Play would install only the phone's languages.
+        language {
+            enableSplit = false
+        }
     }
 }
 

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_ready_title">업데이트 준비 완료</string>
+    <string name="update_ready_message">PDF Chef를 다시 시작하여 업데이트를 완료하세요.</string>
+    <string name="update_later">나중에</string>
+    <string name="update_restart">다시 시작</string>
+</resources>

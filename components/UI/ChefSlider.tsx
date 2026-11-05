@@ -3,6 +3,8 @@ import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+// Arabic and other right-to-left layouts mirror the slider: the minimum sits on the right.
+const isRtl = (element: Element) => getComputedStyle(element).direction === 'rtl';
 
 interface ChefSliderProps {
   value: number;
@@ -42,7 +44,7 @@ export const ChefSlider: React.FC<ChefSliderProps> = ({
 }) => {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const pointerIdRef = useRef<number | null>(null);
-  const dragGeometryRef = useRef<{ left: number; width: number } | null>(null);
+  const dragGeometryRef = useRef<{ left: number; width: number; rtl: boolean } | null>(null);
   const frameRef = useRef<number | null>(null);
   const pendingValueRef = useRef<number | null>(null);
   const latestDragValueRef = useRef<number | null>(null);
@@ -105,7 +107,8 @@ export const ChefSlider: React.FC<ChefSliderProps> = ({
   const getValueFromClientX = (clientX: number) => {
     const geometry = dragGeometryRef.current;
     if (!geometry || geometry.width <= 0) return safeValueRef.current;
-    const ratio = clamp((clientX - geometry.left) / geometry.width, 0, 1);
+    const fromLeft = clamp((clientX - geometry.left) / geometry.width, 0, 1);
+    const ratio = geometry.rtl ? 1 - fromLeft : fromLeft;
     return normalize(safeMin + ratio * (safeMax - safeMin));
   };
   getValueFromClientXRef.current = getValueFromClientX;
@@ -168,7 +171,7 @@ export const ChefSlider: React.FC<ChefSliderProps> = ({
     const rect = event.currentTarget.getBoundingClientRect();
     if (rect.width <= 0) return;
     event.preventDefault();
-    dragGeometryRef.current = { left: rect.left, width: rect.width };
+    dragGeometryRef.current = { left: rect.left, width: rect.width, rtl: isRtl(event.currentTarget) };
     lastEmittedValueRef.current = null;
     setIsDragging(true);
     pointerIdRef.current = event.pointerId;
@@ -178,10 +181,11 @@ export const ChefSlider: React.FC<ChefSliderProps> = ({
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (disabled) return;
 
+    const rtl = isRtl(event.currentTarget);
     let next: number | null = null;
-    if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+    if (event.key === (rtl ? 'ArrowRight' : 'ArrowLeft') || event.key === 'ArrowDown') {
       next = safeValue - safeStep;
-    } else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+    } else if (event.key === (rtl ? 'ArrowLeft' : 'ArrowRight') || event.key === 'ArrowUp') {
       next = safeValue + safeStep;
     } else if (event.key === 'PageDown') {
       next = safeValue - safeStep * 10;

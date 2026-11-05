@@ -9,6 +9,8 @@ export interface PdfTextObjectSnapshot {
   /** Engine-local font identity and upright baseline, used to match fragmented source runs. */
   fontId?: number;
   baseline?: [number, number];
+  /** RGBA fill, so a word split across two colours is never merged into one of them. */
+  fillColor?: [number, number, number, number];
 }
 
 export interface PdfTextCharacterSnapshot {
@@ -286,6 +288,10 @@ const expandFragmentedRunEdit = (
   while (end < source.text.length && !/\s/.test(source.text[end])) end += 1;
   const touched = spans.filter((span) => span.start < end && span.end > start);
   if (!touched.length || start < touched[0].start || end > touched.at(-1)!.end) return null;
+  // Every touched object's text moves into the first, which would give "Impor" + red "tant" one
+  // colour. Leave those to the redraw, which keeps each stretch's own colour.
+  const fill = (object: PdfTextObjectSnapshot) => object.fillColor?.join(',');
+  if (touched.some(({ object }) => fill(object) !== fill(touched[0].object))) return null;
   const first = touched[0];
   const last = touched.at(-1)!;
   const rebuilt = source.text.slice(first.start, start)

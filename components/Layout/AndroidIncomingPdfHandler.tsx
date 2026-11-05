@@ -1,7 +1,6 @@
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useRef, useState } from 'react';
-import { App as CapacitorApp } from '@capacitor/app';
 import { useNavigate } from 'react-router-dom';
 import { useOpenedPdf } from '../../hooks/useOpenedPdf';
 import { useWorkspacePlatform } from '../../hooks/useWorkspaceRuntime';
@@ -37,21 +36,19 @@ export const AndroidIncomingPdfHandler = () => {
     const rejected = client.addIncomingPdfRejectedListener(reason => {
       if (!disposed) setNotice(reason);
     });
-    const listener = client.addIncomingPdfListener(ref => {
+    // The PDF was opened from another app straight in the native reader; this is the tool
+    // the person then chose there.
+    const listener = client.addIncomingPdfListener((ref, toolPath) => {
       queue = queue.catch(() => undefined).then(async () => {
         if (disposed) return;
         setNotice(null);
         // The handed-over copy is already a Recent row; a Recent screen that is open now shows it.
         announceRecordsChanged();
         try {
-          await openIncomingAndroidPdf(platform, ref, (file, toolPath) => {
+          await openIncomingAndroidPdf(platform, ref, toolPath, (file, path) => {
             if (disposed) return;
             const opened = openFile.current(file);
-            navigate(toolPath, { state: { useOpenedPdf: true, openedPdfId: opened.id } });
-          }, () => {
-            // The PDF came from another app, so closing it goes back to that app
-            // rather than leaving this one's Home on top of it.
-            void CapacitorApp.minimizeApp().catch(() => undefined);
+            navigate(path, { state: { useOpenedPdf: true, openedPdfId: opened.id } });
           });
         } catch {
           if (!disposed) setNotice('failed');

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_ready_title">Güncelleme hazır</string>
+    <string name="update_ready_message">Güncellemeyi tamamlamak için PDF Chef\'i yeniden başlatın.</string>
+    <string name="update_later">Sonra</string>
+    <string name="update_restart">Yeniden başlat</string>
+</resources>

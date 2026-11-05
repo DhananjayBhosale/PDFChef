@@ -9,7 +9,7 @@ import type {
 import type { ImportedDocument, StorageInformation } from '../../services/platform/contracts.ts';
 import { deliverBlob, downloadBlob, type OutputReadyRecord } from '../../services/pdfShared.ts';
 import { LOW_MEMORY_IMAGE_PIXELS, MAX_IMAGE_PIXELS, photoPixelCap, setDeviceMemorySource } from '../../services/imageNormalization.ts';
-import { getLocale } from '../../services/i18n/core.ts';
+import { setLocalePreference } from '../../services/i18n/core.ts';
 import {
   createIOSWorkspacePlatform,
   type IOSDocumentBridge,
@@ -404,9 +404,12 @@ test('Create PDF gets the device scanner only when the iPhone has one', async ()
   assert.equal(bridge.scans, 1);
 });
 
-test('native screens are told the app language when the platform starts', () => {
+test('native screens follow the phone on System and the chosen language otherwise', async () => {
+  await setLocalePreference('system', false);
   const { bridge } = harness();
-  assert.deepEqual(bridge.languages, [getLocale()]);
+  await setLocalePreference('ru-RU', false);
+  await setLocalePreference('system', false);
+  assert.deepEqual(bridge.languages, ['system', 'ru-RU', 'system']);
 });
 
 test('aggregate exposes native services and crash-safe pending delivery seam', async () => {

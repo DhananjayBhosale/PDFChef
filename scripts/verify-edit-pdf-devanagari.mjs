@@ -62,7 +62,8 @@ try {
       document.querySelector('[data-testid="pdf-paragraph-provenance"]')?.textContent ?? '',
     ), null, { timeout: 20_000 });
     const provenance = await page.getByTestId('pdf-paragraph-provenance').innerText();
-    assert.match(provenance, english ? /Mukta/ : new RegExp(`Drawn with ${fontId.startsWith('Martel') ? 'Martel' : 'Mukta'}`));
+    // The copy no longer names the font resolver's reason; the saved file's fonts are checked below.
+    assert.match(provenance, /will be redrawn/i);
 
     let resolveOutput;
     const output = new Promise(resolve => { resolveOutput = resolve; });
@@ -82,6 +83,14 @@ try {
     assert.ok(text.includes(replacement), `Replacement missing: ${text}`);
     assert.ok(!text.includes(english ? englishOriginal : hindiOriginal), `Old wording remains: ${text}; ${warnings.join('; ')}`);
     if (!english) assert.ok(text.includes('Account 2026'), `Adjacent text was removed: ${text}`);
+    // The redrawn Devanagari is embedded with Mukta (Martel for a Martel original).
+    const first = await pdf.getPage(1);
+    await first.getOperatorList();
+    const expectedFace = !english && fontId.startsWith('Martel') ? 'Martel' : 'Mukta';
+    const embedded = (await first.getTextContent()).items.map(item => item.fontName)
+      .map(name => first.commonObjs.get(name)?.name ?? '');
+    assert.ok(embedded.some(name => name.includes(expectedFace)),
+      `the saved Devanagari is not drawn with ${expectedFace}: ${JSON.stringify([...new Set(embedded)])}`);
     await task.destroy();
     assert.deepEqual(errors, []);
     await page.close();

@@ -11,9 +11,13 @@ import {
 import {
   blockStyledSegments,
   findInStyledLines,
+  carrySoftBreaks,
+  flowStyledLines,
+  moveSoftBreaks,
   planBlockEdit,
   preserveStyledTextEdit,
   replaceInStyledLines,
+  softLineBreaks,
   styledLineText,
   wrapStyledText,
 } from '../../services/pdfBlockEditPlanning.ts';
@@ -368,6 +372,9 @@ test('wrapping keeps the paragraph inside its original measure', () => {
     ['one two', 'three four', 'five'],
   );
   assert.deepEqual(wrapStyledText(plain('short'), measure, 60).map(styledLineText), ['short']);
+  // A word whose last letters were typed in another face still moves to the next line whole.
+  assert.deepEqual(wrapStyledText([[{ text: '2099 Dr fdagad', fontKey: 'body' }, { text: 'ga', fontKey: 'bold' }]],
+    measure, 60).map(styledLineText), ['2099 Dr', 'fdagadga']);
 });
 
 test('wrapping keeps each stretch with the face it is drawn in', () => {
@@ -850,4 +857,49 @@ test('a repeated-text selection uses its actual range and rejects a differently 
   // If a browser omits a usable range, mismatched offsets must not change the result's text.
   assert.equal(preserveStyledTextEdit(blockStyledSegments(block), 'Newabc',
     { text: '', fontKey: 'regular', fontSize: 12 }, { start: 5, end: 6 })[0].map(run => run.text).join(''), 'Newabc');
+});
+
+test('a redrawn paragraph wraps from its first too-wide line and keeps the writer\'s own breaks', () => {
+  const width = (text: string) => text.length;
+  const plain = (...lines: string[]) => lines.map((text) => [{ text, fontKey: 'regular' }]);
+  const text = (lines: ReturnType<typeof plain>) => lines.map(styledLineText);
+  // Nothing is too wide: the lines are left exactly as they were.
+  assert.deepEqual(text(flowStyledLines(plain('one two', 'three'), width, 10)), ['one two', 'three']);
+  // The second line grew; the first stays, the rest flows across the soft break.
+  assert.deepEqual(text(flowStyledLines(plain('aaaa bbbb', 'cc dd ee ff', 'gg'), width, 9)),
+    ['aaaa bbbb', 'cc dd ee', 'ff gg']);
+  // "x" would have fitted after "end.", so that break was the writer's and stays.
+  assert.deepEqual(text(flowStyledLines(plain('a long line here', 'end.', 'x'), width, 10)),
+    ['a long', 'line here', 'end.', 'x']);
+  // A line ending in a hyphen is not joined to the next.
+  assert.deepEqual(text(flowStyledLines(plain('aaaa bbbb cc', 'well-', 'known'), width, 9)),
+    ['aaaa bbbb', 'cc well-', 'known']);
+  // With the soft breaks known, a break typed after a too-wide line stays, the PDF's own flows.
+  assert.deepEqual(text(flowStyledLines(plain('aaaa bbbb cc', 'dd', 'ee ff'), width, 9, [15])),
+    ['aaaa bbbb', 'cc', 'dd ee ff']);
+  assert.deepEqual(text(flowStyledLines(plain('aaaa bbbb cc', 'dd', 'ee ff'), width, 9, [])),
+    ['aaaa bbbb', 'cc', 'dd', 'ee ff']);
+});
+
+test('the dock field shows only the PDF\'s own wrapping as spaces and carries it through edits', () => {
+  const line = (u0: number, u1: number, text: string) => ({ v: 0, u0, u1, fontSize: 10, runs: [], text });
+  const block = {
+    measure: 100,
+    lines: [line(0, 98, 'Volunteers keep the beds'), line(0, 60, 'healthy and'), line(0, 20, 'Name')],
+  };
+  const text = 'Volunteers keep the beds\nhealthy and\nName';
+  // "Name" would have fitted after "healthy and", so that break is the writer's.
+  assert.deepEqual(softLineBreaks(text, block), [24]);
+  // Without the PDF's lines, empty lines, hyphens and list items still keep their breaks.
+  assert.deepEqual(softLineBreaks('a\nb\n\nc-\nd\n\u2022 e\n2. f'), [1]);
+  const before = 'beds healthy';
+  // Typing before the soft space moves it; replacing it removes it.
+  assert.deepEqual(moveSoftBreaks([4], before, 'bedsX healthy', { start: 4, end: 4 }), [5]);
+  assert.deepEqual(moveSoftBreaks([4], before, 'bedshealthy', { start: 4, end: 5 }), []);
+  assert.deepEqual(moveSoftBreaks([4], before, 'Xbeds healthy'), [5]);
+  assert.deepEqual(moveSoftBreaks([4], before, 'beds healthy!'), [4]);
+  // Carried from the PDF's lines on the first edit; a break typed in is never soft.
+  assert.deepEqual(carrySoftBreaks(undefined, block, text, 'Volunteers keep the beds\nhealthy and\nName\nX'), [24]);
+  assert.deepEqual(carrySoftBreaks([24], block, text, 'Volunteers\n keep the beds\nhealthy and\nName'), [25]);
+  assert.deepEqual(carrySoftBreaks([24], block, text, 'Volunteers keep the beds healthy and\nName'), []);
 });

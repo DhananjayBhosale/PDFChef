@@ -1,8 +1,6 @@
 package com.dhananjaytech.zenpdf_allpdftoolsinoneplace;
 
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.documents.AndroidDocumentsPlugin;
-import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.documents.DocumentLifecycleCoordinator;
-import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.documents.IncomingPdfIntake;
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.legacy.AndroidLegacyInspectorPlugin;
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.legacy.AndroidLegacySettingsWriterPlugin;
 import com.dhananjaytech.zenpdf_allpdftoolsinoneplace.scanner.AndroidDocumentScannerPlugin;
@@ -12,6 +10,7 @@ import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
 import com.getcapacitor.CapConfig;
+import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -31,17 +30,17 @@ import androidx.activity.result.IntentSenderRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
 import com.getcapacitor.PluginHandle;
 import java.io.ByteArrayInputStream;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 /** Capacitor host that registers the fixed legacy bridge surface before bridge startup. */
 public class MainActivity extends BridgeActivity {
     /** The route a renderer death interrupted; kept in the process so no other app can set it. */
     private static final AtomicReference<String> PENDING_RENDERER_RECOVERY_URL = new AtomicReference<>();
     private static final AtomicLong LAST_RENDERER_RECOVERY_MILLIS = new AtomicLong();
+    /** What a PDF opened from another app still needs from the page; kept in the process so no other app can set it. */
+    private static final AtomicReference<Consumer<AndroidDocumentsPlugin>> PENDING_HANDOVER = new AtomicReference<>();
     private android.view.ViewTreeObserver.OnPreDrawListener systemBarBackgroundListener;
     private Boolean lightSystemBars;
     private boolean rendererGone;
@@ -55,11 +54,6 @@ public class MainActivity extends BridgeActivity {
                             inAppUpdateController.onUpdateFlowResult(result.getResultCode());
                         }
                     });
-    private final ExecutorService intakeExecutor = Executors.newSingleThreadExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "pdfchef-incoming-pdf");
-        thread.setDaemon(true);
-        return thread;
-    });
 
     @Override
     public void onStart() {
@@ -78,7 +72,6 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onDestroy() {
         if (inAppUpdateController != null) inAppUpdateController.close();
-        intakeExecutor.shutdownNow();
         if (systemBarBackgroundListener != null) {
             getWindow().getDecorView().getViewTreeObserver().removeOnPreDrawListener(systemBarBackgroundListener);
         }
@@ -94,21 +87,16 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AndroidDocumentsPlugin.class);
         registerPlugin(AndroidDocumentScannerPlugin.class);
         registerPlugin(AndroidSupportPlugin.class);
-        // Capacitor passes the launch intent to onNewIntent from inside onCreate; it is
-        // handled once below instead.
+        registerPlugin(AndroidLanguagePlugin.class);
+        // Capacitor passes the launch intent to onNewIntent from inside onCreate; a hand-over
+        // is delivered once below instead, after the bridge exists.
         creating = true;
         try {
             super.onCreate(savedInstanceState);
         } finally {
             creating = false;
         }
-        // Reopening from Recents after the process ended gives back the task's first intent,
-        // either as a restored screen (saved state) or as a relaunch from history. That PDF
-        // was taken in already; showing it again would be a surprise.
-        if (savedInstanceState == null
-                && !IncomingPdfIntake.isReplayedFromRecents(getIntent().getFlags())) {
-            acceptIncomingPdf(getIntent());
-        }
+        deliverHandOver();
         inAppUpdateController = PlayInAppUpdateController.create(this, inAppUpdateLauncher);
         inAppUpdateController.checkForUpdate();
     }
@@ -122,70 +110,32 @@ public class MainActivity extends BridgeActivity {
     }
 
     /**
-     * A PDF arriving from another app.
-     *
-     * `singleTask` means a second hand-over reaches the running Activity here
-     * rather than through onCreate, so both entry points feed the same intake.
+     * Brings the app forward to finish what a PDF opened from another app needs from the page:
+     * a tool chosen in the reader, or a refused file to explain. Only {@link IncomingPdfActivity}
+     * calls this, in this process, so no other app can choose the document or the tool.
      */
+    static void handOver(Activity from, Consumer<AndroidDocumentsPlugin> announcement) {
+        PENDING_HANDOVER.set(announcement);
+        from.startActivity(new Intent(from, MainActivity.class));
+    }
+
+    /** `singleTask` means a hand-over to the running app arrives here rather than through onCreate. */
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        if (!creating) acceptIncomingPdf(intent);
+        if (!creating) deliverHandOver();
     }
 
-    /**
-     * Copy the handed-over document into owned storage, then tell the page it is
-     * waiting. The bytes are read off the main thread. A file this app refuses is
-     * reported to the page too, or "Open with PDF Chef" would seem to do nothing.
-     */
-    private void acceptIncomingPdf(Intent intent) {
-        if (!IncomingPdfIntake.isIncomingPdf(intent)) return;
-        // Consume it: a configuration change must not import the same file twice.
-        setIntent(new Intent(Intent.ACTION_MAIN));
-        final Intent handedOver = intent;
-        try {
-            intakeExecutor.execute(() -> {
-                String documentRef;
-                try {
-                    DocumentLifecycleCoordinator coordinator =
-                            ((PdfChefApplication) getApplicationContext())
-                                    .getDocumentLifecycleCoordinator();
-                    String sourceName = IncomingPdfIntake.sourceDisplayName(
-                            getContentResolver(), handedOver);
-                    documentRef = new IncomingPdfIntake().accept(
-                            coordinator, handedOver, sourceName);
-                } catch (DocumentLifecycleCoordinator.Failure failure) {
-                    String reason = IncomingPdfIntake.rejectionReason(failure.code());
-                    if (reason != null) runOnUiThread(() -> announceRejected(reason));
-                    return;
-                } catch (Exception failure) {
-                    runOnUiThread(() -> announceRejected(IncomingPdfIntake.rejectionReason(null)));
-                    return;
-                }
-                if (documentRef == null) return;
-                runOnUiThread(() -> announceIncoming(documentRef));
-            });
-        } catch (RejectedExecutionException ignored) {
-            // The Activity is going away; the document was never copied in.
-        }
-    }
-
-    private void announceIncoming(String documentRef) {
+    /** The plugin keeps the event until the page listens, so a cold start loses nothing. */
+    private void deliverHandOver() {
+        Consumer<AndroidDocumentsPlugin> announcement = PENDING_HANDOVER.getAndSet(null);
+        if (announcement == null) return;
         try {
             AndroidDocumentsPlugin documents = documentsPlugin();
-            if (documents != null) documents.announceIncomingPdf(documentRef);
+            if (documents != null) announcement.accept(documents);
         } catch (Exception ignored) {
-            // Without the bridge the copy still exists; the page collects it on its next look.
-        }
-    }
-
-    private void announceRejected(String reason) {
-        try {
-            AndroidDocumentsPlugin documents = documentsPlugin();
-            if (documents != null) documents.announceIncomingPdfRejected(reason);
-        } catch (Exception ignored) {
-            // Nothing was copied in, so the app is simply left as it was.
+            // Without the bridge the copy still exists and is listed in Recent.
         }
     }
 

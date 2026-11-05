@@ -103,7 +103,7 @@ try {
       selection.addRange(range);
     }, item.action);
     const formattingOnly = ['colour', 'size', 'restore-bold', 'restore-italic'].includes(item.action);
-    const changeColour = async () => page.getByLabel('Text color', { exact: true }).evaluate(element => {
+    const changeColour = async () => page.getByLabel('More colors', { exact: true }).evaluate(element => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(element, '#b91c1c');
       element.dispatchEvent(new Event('input', { bubbles: true }));
       element.dispatchEvent(new Event('change', { bubbles: true }));
@@ -125,7 +125,7 @@ try {
     }
     const inserted = formattingOnly ? original : item.action === 'replace' ? 'Device tone' : item.action === 'unicode' ? ' Ω' : item.action === 'missing' ? ' zebra' : ' and more';
     const sizeRatio = item.action === 'size' ? (before[0].size + 0.5) / before[0].size : 1;
-    await page.getByTestId('pdf-paragraph-provenance').waitFor();
+    await page.getByTestId('pdf-paragraph-provenance').waitFor({ state: 'attached' });
     assert.deepEqual(await spanSizes(), originalSizes, `${item.label}: typing changed run sizes`);
     await page.getByRole('button', { name: 'Done', exact: true }).click();
     const preview = page.getByTestId('pdf-block-preview');
@@ -213,18 +213,20 @@ try {
     const paragraph = page.getByTestId('pdf-text-block').filter({ hasText: /[א-ת]/ }).first();
     await paragraph.waitFor();
     await paragraph.focus();
-    await page.getByLabel('Text color', { exact: true }).evaluate(element => {
+    await page.getByLabel('More colors', { exact: true }).evaluate(element => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(element, '#b91c1c');
       element.dispatchEvent(new Event('input', { bubbles: true }));
       element.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    await page.getByTestId('pdf-paragraph-provenance').filter({ hasText: /cannot be changed/ }).waitFor();
+    await page.getByTestId('pdf-paragraph-provenance').filter({ hasText: /cannot be changed/ }).waitFor({ state: 'attached' });
     await page.evaluate(() => {
       window.__fontGuardOutput = false;
       window.addEventListener('pdfchef:output-ready', () => { window.__fontGuardOutput = true; });
     });
     await page.getByRole('button', { name: /^Save/ }).first().click();
-    await page.getByRole('status').filter({ hasText: /cannot be changed/ }).waitFor();
+    // The paragraph is still the one being edited, so its own status line carries the refusal.
+    await page.getByTestId('pdf-paragraph-status').filter({ hasText: /Can’t be changed/ }).waitFor();
+    await page.waitForTimeout(1_000);
     assert.equal(await page.evaluate(() => window.__fontGuardOutput), false, 'Unsupported bidirectional redraw must not produce a PDF');
     console.log('PASS covered Hebrew with digits and Latin: unsafe redraw is refused before export');
     await context.close();

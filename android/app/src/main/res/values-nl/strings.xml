@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_ready_title">Update gereed</string>
+    <string name="update_ready_message">Start PDF Chef opnieuw om het updaten te voltooien.</string>
+    <string name="update_later">Later</string>
+    <string name="update_restart">Opnieuw starten</string>
+</resources>

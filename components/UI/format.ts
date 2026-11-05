@@ -24,21 +24,26 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
+const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+
 /** Short, glanceable timestamp for a list row. */
-export const formatTimestamp = (value: number): string => {
+export const formatTimestamp = (value: number, now = Date.now()): string => {
   if (!Number.isFinite(value) || value <= 0) return t('format.unknownTime');
   const date = new Date(value);
-  const elapsed = Date.now() - value;
+  const elapsed = now - value;
 
   if (elapsed < MINUTE) return t('format.justNow');
   if (elapsed < HOUR) {
     const minutes = Math.round(elapsed / MINUTE);
     return new Intl.RelativeTimeFormat(getLocale(), { style: 'short' }).format(-minutes, 'minute');
   }
-  if (elapsed < DAY) {
+  // Calendar days, not 24-hour spans: a bare time means today, so last night shows its weekday.
+  // Rounding absorbs the hour a daylight-saving change adds or removes.
+  const days = Math.round((startOfDay(new Date(now)) - startOfDay(date)) / DAY);
+  if (days === 0) {
     return formatDate(date, { hour: 'numeric', minute: '2-digit' });
   }
-  if (elapsed < 7 * DAY) {
+  if (days < 7) {
     return formatDate(date, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
   }
   return formatDate(date, { month: 'short', day: 'numeric', year: 'numeric' });

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_ready_title">アップデートの準備ができました</string>
+    <string name="update_ready_message">PDF Chefを再起動して、アップデートを完了してください。</string>
+    <string name="update_later">後で</string>
+    <string name="update_restart">再起動</string>
+</resources>

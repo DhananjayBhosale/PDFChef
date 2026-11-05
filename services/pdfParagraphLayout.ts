@@ -46,6 +46,8 @@ export interface ParagraphLayoutPiece {
   text: string;
   face: ParagraphFace;
   fontSize: number;
+  /** The stretch's own colour, where the paragraph mixes colours. */
+  color?: string;
   x: number;
   /** Baseline measured down from the top of the paragraph. */
   y: number;
@@ -72,7 +74,7 @@ export const paragraphLineOrigins = (block: PdfTextBlock, lineCount: number, fon
 
 /** Place explicit lines once, for both the rendered preview and PDF drawing. Never soft-wrap. */
 export const layoutParagraphLines = (
-  lines: Array<Array<{ text: string; face: ParagraphFace; fontSize?: number }>>,
+  lines: Array<Array<{ text: string; face: ParagraphFace; fontSize?: number; color?: string }>>,
   { width, fontSize, lineHeight, align, lineOrigins, measure = measureParagraphText, normalizeText }: {
     width: number;
     fontSize: number;

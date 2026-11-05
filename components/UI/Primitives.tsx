@@ -396,31 +396,43 @@ export const ConfirmSheet: React.FC<{
   confirmLabel: string;
   onConfirm: () => void | Promise<void>;
   onCancel: () => void;
-}> = ({ open, title, description, confirmLabel, onConfirm, onCancel }) => {
+  /** A way out that keeps the work, such as Save, shown as the main button. */
+  keepLabel?: string;
+  onKeep?: () => Promise<void>;
+}> = ({ open, title, description, confirmLabel, onConfirm, onCancel, keepLabel, onKeep }) => {
   useI18n();
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<'confirm' | 'keep' | null>(null);
 
-  const confirm = useCallback(async () => {
-    setBusy(true);
+  const run = useCallback(async (which: 'confirm' | 'keep', action: () => void | Promise<void>) => {
+    setBusy(which);
     try {
-      await onConfirm();
+      await action();
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
-  }, [onConfirm]);
+  }, []);
 
   return (
     <Sheet
       open={open}
       onClose={onCancel}
+      // While Save or Discard runs, the sheet stays: closing it would keep the page, then the
+      // finished action would leave it anyway.
+      dismissible={busy === null}
       title={title}
       description={description}
       footer={
         <>
-          <Button tone="secondary" onClick={onCancel} disabled={busy}>{t("primitives.cancel.19766e")}</Button>
-          <Button tone="destructive" busy={busy} onClick={() => void confirm()}>
+          <Button tone="secondary" onClick={onCancel} disabled={busy !== null}>{t("primitives.cancel.19766e")}</Button>
+          <Button tone={onKeep ? 'secondary' : 'destructive'} busy={busy === 'confirm'} disabled={busy === 'keep'}
+            onClick={() => void run('confirm', onConfirm)}>
             {confirmLabel}
           </Button>
+          {onKeep && keepLabel && (
+            <Button tone="primary" busy={busy === 'keep'} disabled={busy === 'confirm'} onClick={() => void run('keep', onKeep)}>
+              {keepLabel}
+            </Button>
+          )}
         </>
       }
     />

@@ -60,15 +60,23 @@ try {
       const placed = await editor.getByTestId('editor-element').last().boundingBox();
       const pageBounds = await editor.locator('[data-pdf-page="0"]').boundingBox();
       assert.ok(placed && pageBounds);
-      assert.ok(Math.abs((placed.x - pageBounds.x) - (x - pageBefore.x - pageBounds.width * 0.03)) < 5,
-        'text box missed the tapped X position');
-      assert.ok(Math.abs((placed.y - pageBounds.y) - (y - pageBefore.y - pageBounds.height * 0.025)) < 5,
-        `text box missed the tapped Y position: ${JSON.stringify({ placedY: placed.y, pageY: pageBounds.y, tapY: y, originalPageY: pageBefore.y })}`);
+      // A phone zooms to 16 px text when the new box takes focus, so compare in page coordinates:
+      // the share of the page's width and height, which a zoom does not change.
+      const tolerance = 5;
+      const placedX = (placed.x - pageBounds.x) / pageBounds.width;
+      const placedY = (placed.y - pageBounds.y) / pageBounds.height;
+      const tappedX = (x - pageBefore.x) / pageBefore.width - 0.03;
+      const tappedY = (y - pageBefore.y) / pageBefore.height - 0.025;
+      assert.ok(Math.abs(placedX - tappedX) * pageBefore.width < tolerance, 'text box missed the tapped X position');
+      assert.ok(Math.abs(placedY - tappedY) * pageBefore.height < tolerance,
+        `text box missed the tapped Y position: ${JSON.stringify({ placedY, tappedY })}`);
     };
 
     await placeOver(paragraph);
     assert.equal(await editor.getByTestId('pdf-paragraph-inspector').count(), 0);
     await editor.getByTestId('inline-text-editor').fill('New text box');
+    // On a phone the add row waits while a text box is selected; Done brings it back.
+    if (mobile) await editor.getByRole('button', { name: 'Done', exact: true }).click();
     await placeOver(field);
     assert.equal(await editor.getByTestId('editor-element').count(), 2);
     await editor.getByTestId('inline-text-editor').fill('Text above field');

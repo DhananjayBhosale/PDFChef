@@ -241,18 +241,73 @@ test('fire-and-forget browser cancellation exposes exact bytes without retaining
   }
 });
 
-test('unavailable browser history leaves a retryable result when automatic saving is off', async () => {
+// Node has no IndexedDB, so keeping a result in history fails before a write can occur.
+const withWarningsCounted = async (run: () => Promise<void>) => {
+  const warning = console.warn;
+  let warnings = 0;
+  console.warn = () => { warnings += 1; };
+  try {
+    await run();
+  } finally {
+    console.warn = warning;
+  }
+  return warnings;
+};
+
+test('unavailable browser history still delivers the result, only not kept, so the tool and sheet agree', async () => {
   const browser = installBrowserHarness({ keepLocalHistory: true, autoDownload: false });
   const blob = new Blob(['private output']);
   try {
-    // Node has no IndexedDB: persistence fails before a write can occur.
-    await assert.rejects(deliverBlob(blob, 'result.pdf', 'application/pdf'));
+    const warnings = await withWarningsCounted(async () => {
+      assert.deepEqual(await deliverBlob(blob, 'result.pdf', 'application/pdf'), { status: 'delivered' });
+    });
+    assert.equal(warnings, 1, 'the history failure is logged, not swallowed');
+    assert.equal(browser.events.length, 1);
+    const ready = browser.events[0].detail as OutputReadyRecord;
+    assert.equal(ready.blob, blob);
+    assert.equal(ready.deliveryIssue, undefined, 'a history failure must not read as a failed save');
+    assert.equal(ready.historyRetained, false);
+    assert.deepEqual(browser.created, []);
+  } finally {
+    browser.restore();
+  }
+});
+
+test('fire-and-forget delivery with unavailable history announces a ready, unkept result', async () => {
+  const browser = installBrowserHarness({ keepLocalHistory: true, autoDownload: false });
+  const blob = new Blob(['private output']);
+  try {
+    await withWarningsCounted(async () => {
+      assert.equal(downloadBlob(blob, 'result.pdf', 'application/pdf'), null);
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+    assert.equal(browser.events.length, 1);
+    const ready = browser.events[0].detail as OutputReadyRecord;
+    assert.equal(ready.blob, blob);
+    assert.equal(ready.deliveryIssue, undefined);
+    assert.equal(ready.historyRetained, false);
+  } finally {
+    browser.restore();
+  }
+});
+
+test('a cancelled picker with unavailable history reports the cancellation, not the history failure', async () => {
+  const browser = installBrowserHarness({ keepLocalHistory: true, autoDownload: true });
+  (globalThis.window as unknown as { showSaveFilePicker: () => Promise<never> }).showSaveFilePicker = async () => {
+    throw new DOMException('cancelled', 'AbortError');
+  };
+  try {
+    await withWarningsCounted(async () => {
+      await assert.rejects(
+        deliverBlob(new Blob(['result']), 'result.pdf', 'application/pdf'),
+        (error: unknown) => error instanceof Error && error.name === 'AbortError',
+      );
+    });
     assert.equal(browser.events.length, 1);
     const retry = browser.events[0].detail as OutputReadyRecord;
-    assert.equal(retry.blob, blob);
-    assert.equal(retry.deliveryIssue, 'failed');
+    assert.equal(retry.deliveryIssue, 'cancelled');
     assert.equal(retry.historyRetained, false);
-    assert.deepEqual(browser.created, []);
+    assert.deepEqual(browser.clicks, []);
   } finally {
     browser.restore();
   }
