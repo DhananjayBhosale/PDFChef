@@ -310,8 +310,11 @@ check('c4', 'Watermark large preview at about 375%: one finger on blank page pan
   await page.waitForTimeout(200);
   const centre = await dialog.locator('.tk-wm-surface').evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
   const before3 = await readPosition();
-  await touch('touchStart', [[centre.x, centre.y]]);
-  for (let step = 1; step <= 6; step += 1) { await touch('touchMove', [[centre.x + step * 10, centre.y + step * 8]]); await page.waitForTimeout(30); }
+  // Grabbed off its centre (along the -45° text, down and right) and moved straight right: the
+  // text follows the finger, it does not jump its centre under it (🍎 sync, 25 Nov).
+  const grab = { x: centre.x + 30, y: centre.y + 30 };
+  await touch('touchStart', [[grab.x, grab.y]]);
+  for (let step = 1; step <= 6; step += 1) { await touch('touchMove', [[grab.x + step * 10, grab.y]]); await page.waitForTimeout(30); }
   await touch('touchEnd', []);
   await page.waitForTimeout(300);
   const after3 = await readPosition();
@@ -321,6 +324,11 @@ check('c4', 'Watermark large preview at about 375%: one finger on blank page pan
   assert.notDeepEqual(after1.scroll, before1.scroll, 'one finger on blank page must pan');
   assert.equal(after2.position, before2.position, 'two fingers must not move the text');
   assert.notEqual(after3, before3, 'a drag that starts on the text must move it');
+  const numbers = (text) => text.match(/[\d.]+/g).map(Number);
+  const [x0, y0] = numbers(before3);
+  const [x1, y1] = numbers(after3);
+  assert.ok(x1 > x0, 'a drag to the right moves the text right');
+  assert.ok(Math.abs(y1 - y0) < 0.5, `a straight drag right keeps Y (${y0} -> ${y1}): no jump to the finger`);
 });
 
 const browser = await chromium.launch({ headless: true });

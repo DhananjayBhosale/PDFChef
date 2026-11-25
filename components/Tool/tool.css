@@ -764,7 +764,7 @@
 .tk-band-top .tk-rows[data-many] > .tk-row-inline .tk-swatch { margin-block: -4px; }
 .tk-band-top .tk-rows[data-many] .tk-row-label { flex: none; font-size: 0.75rem; line-height: 1rem; }
 .tk-band-top .tk-rows[data-many] .tk-row-value { max-width: 100%; text-align: start; line-height: 1.25rem; }
-.tk-band-top .tk-rows[data-many] .tk-row-value .tk-slot-text { min-width: 0; white-space: normal; overflow-wrap: break-word; }
+.tk-band-top .tk-rows[data-many] .tk-row-value .tk-slot-text { white-space: normal; }
 .tk-band-top .tk-rows[data-many] > .tk-row:has(> .tk-slot-caret) { padding-inline-end: 22px; }
 .tk-band-top .tk-rows[data-many] > .tk-row > .tk-slot-caret { position: absolute; inset-inline-end: 2px; top: 50%; translate: 0 -50%; }
 /* Largest text keeps the two columns too (one column left the page under 30% with a card open);
@@ -789,6 +789,9 @@
    instead of running under the value (round 6, found while checking mobile-03 in German). */
 .tk-row-label { overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; }
 .tk-row-value { display: inline-flex; align-items: center; gap: 4px; min-width: 0; font-weight: 650; text-align: end; color: var(--accent-text); }
+/* A value that is one long word ("CONFIDENTIAL" at Largest text) breaks inside its column rather
+   than running off the screen (🍎 sync 25 Nov 2026, S1). Short values never break. */
+.tk-row-value .tk-slot-text { min-width: 0; overflow-wrap: anywhere; }
 .tk-row[data-tone="error"] .tk-row-value { color: var(--status-danger-text); }
 .tk-row[data-tone="pending"] .tk-row-value { text-decoration: underline dashed var(--border-strong); text-underline-offset: 4px; }
 .tk-row-static .tk-row-value { color: var(--text-primary); }

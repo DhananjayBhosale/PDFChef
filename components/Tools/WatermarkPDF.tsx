@@ -311,27 +311,37 @@ export const WatermarkPDF: React.FC = () => {
     };
   }, [file]);
 
+  /** Where the finger is on the page, 0–1 from the left and from the bottom. */
+  const pointerOnPage = (container: HTMLDivElement, clientX: number, clientY: number) => {
+    const rect = container.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    // Pointer Y grows downwards; the option value is measured from the bottom of the page.
+    return { x: (clientX - rect.left) / rect.width, y: 1 - (clientY - rect.top) / rect.height };
+  };
+
+  // A drag that starts on the text keeps the point it was grabbed by (🍎 sync 25 Nov 2026): the
+  // text follows the finger instead of jumping its centre under it. A tap elsewhere places it.
+  const grabOffsetRef = useRef({ x: 0, y: 0 });
+
   const placeWatermarkFromPointer = useCallback((clientX: number, clientY: number) => {
     const container = dragContainerRef.current;
-    if (!container) return;
-    const rect = container.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return;
-
-    // Pointer Y grows downwards; the option value is measured from the bottom of the page.
-    setXPercent(clamp((clientX - rect.left) / rect.width, 0, 1));
-    setYPercent(clamp(1 - (clientY - rect.top) / rect.height, 0, 1));
+    const point = container && pointerOnPage(container, clientX, clientY);
+    if (!point) return;
+    setXPercent(clamp(point.x + grabOffsetRef.current.x, 0, 1));
+    setYPercent(clamp(point.y + grabOffsetRef.current.y, 0, 1));
   }, []);
+
+  const grabsText = (event: React.PointerEvent, container: HTMLDivElement): boolean => {
+    const point = layout && pointerOnPage(container, event.clientX, event.clientY);
+    return Boolean(point && layout && isOnWatermark(layout, point.x * previewDimensions.width, point.y * previewDimensions.height));
+  };
 
   // Large preview, zoomed in (C4, owner 25 Nov 2026): only a drag that starts on the text moves it;
   // one finger on blank page scrolls the page, as on Page Numbers. Not zoomed, a tap places the text.
   const panInsteadOfDrag = (event: React.PointerEvent, container: HTMLDivElement): boolean => {
     const view = container.closest<HTMLElement>('.tk-largepreview-view');
     if (!view || !layout || (view.scrollWidth <= view.clientWidth + 1 && view.scrollHeight <= view.clientHeight + 1)) return false;
-    const rect = container.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return false;
-    const x = ((event.clientX - rect.left) / rect.width) * previewDimensions.width;
-    const y = (1 - (event.clientY - rect.top) / rect.height) * previewDimensions.height;
-    if (isOnWatermark(layout, x, y)) return false;
+    if (grabsText(event, container)) return false;
     const start = { x: event.clientX, y: event.clientY, left: view.scrollLeft, top: view.scrollTop };
     const id = event.pointerId;
     const move = (next: PointerEvent) => {
@@ -364,6 +374,10 @@ export const WatermarkPDF: React.FC = () => {
     dragContainerRef.current = container;
     activePointerIdRef.current = event.pointerId;
     dragStartRef.current = { x: xPercent, y: yPercent };
+    const point = pointerOnPage(container, event.clientX, event.clientY);
+    grabOffsetRef.current = point && grabsText(event, container)
+      ? { x: xPercent - point.x, y: yPercent - point.y }
+      : { x: 0, y: 0 };
     setIsDragging(true);
     placeWatermarkFromPointer(event.clientX, event.clientY);
   };
