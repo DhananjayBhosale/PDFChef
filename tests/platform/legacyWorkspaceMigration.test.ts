@@ -46,6 +46,7 @@ class MemoryJournal implements LegacyWorkspaceMigrationJournal {
   readonly entries = new Map<string, LegacyWorkspaceMigrationJournalEntry>();
   failRefSaveOnce = false;
 
+  async list() { return [...this.entries.values()]; }
   async get(id: string) { return this.entries.get(id) ?? null; }
   async save(entry: LegacyWorkspaceMigrationJournalEntry) {
     if (this.failRefSaveOnce && entry.status === 'pending' && entry.documentRef) {
@@ -58,7 +59,8 @@ class MemoryJournal implements LegacyWorkspaceMigrationJournal {
 
 class MemorySource implements LegacyWorkspaceSource {
   listCalls = 0;
-  readonly outputs: readonly LegacyWorkspaceOutput[];
+  failNextDelete = false;
+  outputs: readonly LegacyWorkspaceOutput[];
   private readonly beforeList: (() => void) | undefined;
 
   constructor(outputs: readonly LegacyWorkspaceOutput[], beforeList?: () => void) {
@@ -69,6 +71,14 @@ class MemorySource implements LegacyWorkspaceSource {
     this.listCalls += 1;
     this.beforeList?.();
     return this.outputs;
+  }
+  async delete(legacyIds: readonly string[]) {
+    if (this.failNextDelete) {
+      this.failNextDelete = false;
+      throw new Error('Legacy delete did not commit');
+    }
+    const removed = new Set(legacyIds);
+    this.outputs = this.outputs.filter(output => !removed.has(output.id));
   }
 }
 
@@ -118,7 +128,12 @@ class MigrationBridge implements IOSDocumentBridge {
     this.renamed.push({ ref: value, name });
     return renamed;
   }
-  async delete() { throw new Error('migration must not delete retained documents'); }
+  /** Migration itself must never delete; tests of Recent deletion turn this on. */
+  allowDeletes = false;
+  async delete(value?: DurableDocumentRef) {
+    if (!this.allowDeletes || !value) throw new Error('migration must not delete retained documents');
+    this.documents.delete(value);
+  }
   async clear() { throw new Error('migration must not clear retained documents'); }
   async storageInformation(): Promise<StorageInformation> {
     return { retainedBytes: 0, availableBytes: null, capacityBytes: null };
@@ -303,4 +318,126 @@ test('native startup registers pending-import delivery before reading legacy Ind
 
   assert.equal(source.listCalls, 1);
   await platform.dispose();
+});
+
+const migratedPlatform = async (outputs: readonly LegacyWorkspaceOutput[]) => {
+  const source = new MemorySource(outputs);
+  const journal = new MemoryJournal();
+  const recent = new MemoryRecent();
+  const bridge = new MigrationBridge();
+  const platform = createIOSWorkspacePlatform({
+    bridge,
+    recent,
+    settings: { async load() { return null; }, async save() {}, async clear() {} },
+    legacyWorkspaceSource: source,
+    legacyWorkspaceJournal: journal,
+  });
+  await platform.ready;
+  bridge.allowDeletes = true;
+  return { source, journal, recent, bridge, platform };
+};
+
+const secondLegacyOutput = (): LegacyWorkspaceOutput => ({
+  ...legacyOutput(),
+  id: 'legacy-second',
+  filename: 'second.pdf',
+  blob: new Blob([new Uint8Array([4, 5])], { type: 'application/pdf' }),
+});
+
+test('deleting a migrated result also deletes its legacy original', async () => {
+  const state = await migratedPlatform([legacyOutput()]);
+  try {
+    const [record] = await state.platform.records.list();
+    assert.equal(record.entry.id, legacyOutput().id);
+
+    await state.platform.records.delete(record.entry.id);
+
+    assert.equal((await state.platform.records.list()).length, 0);
+    assert.equal(state.bridge.documents.size, 0, 'native copy is deleted');
+    assert.deepEqual(await state.source.list(), [], 'legacy Blob and file name are deleted');
+  } finally {
+    await state.platform.dispose();
+  }
+});
+
+test('a legacy delete that does not commit keeps the Recent row and the native copy', async () => {
+  const state = await migratedPlatform([legacyOutput()]);
+  try {
+    state.source.failNextDelete = true;
+
+    await assert.rejects(state.platform.records.delete(legacyOutput().id), /did not commit/);
+
+    assert.equal((await state.platform.records.list()).length, 1);
+    assert.equal(state.bridge.documents.size, 1);
+    assert.equal((await state.source.list()).length, 1);
+  } finally {
+    await state.platform.dispose();
+  }
+});
+
+test('deleting a non-migrated result leaves other legacy originals alone', async () => {
+  const state = await migratedPlatform([legacyOutput()]);
+  try {
+    const saved = await state.bridge.retain(new Blob([new Uint8Array([9])]).stream(), {
+      name: 'fresh.pdf',
+      mimeType: 'application/pdf',
+    });
+    await state.recent.save({
+      id: 'fresh',
+      documentRef: saved.ref,
+      name: 'fresh.pdf',
+      mimeType: 'application/pdf',
+      toolId: null,
+      createdAt: 1,
+      inputSizeBytes: null,
+      outputSizeBytes: 1,
+      spaceSavedBytes: null,
+    });
+
+    await state.platform.records.delete('fresh');
+
+    assert.equal((await state.source.list()).length, 1);
+    assert.equal((await state.platform.records.list()).length, 1);
+  } finally {
+    await state.platform.dispose();
+  }
+});
+
+test('Clear Recent deletes completed legacy originals and keeps pending imports', async () => {
+  const first = legacyOutput();
+  const second = secondLegacyOutput();
+  const state = await migratedPlatform([first, second]);
+  try {
+    // An import interrupted before it finished is not in Recent yet; it must survive.
+    const secondEntry = state.journal.entries.get(second.id)!;
+    state.journal.entries.set(second.id, { ...secondEntry, status: 'pending' });
+
+    await state.platform.records.clearRecords();
+
+    assert.equal(state.recent.entries.size, 0);
+    assert.deepEqual((await state.source.list()).map(output => output.id), [second.id]);
+  } finally {
+    await state.platform.dispose();
+  }
+});
+
+test('a deleted legacy original is not imported again on the next launch', async () => {
+  const state = await migratedPlatform([legacyOutput()]);
+  await state.platform.records.delete(legacyOutput().id);
+  await state.platform.dispose();
+
+  const relaunched = createIOSWorkspacePlatform({
+    bridge: state.bridge,
+    recent: state.recent,
+    settings: { async load() { return null; }, async save() {}, async clear() {} },
+    legacyWorkspaceSource: state.source,
+    legacyWorkspaceJournal: state.journal,
+  });
+  try {
+    await relaunched.ready;
+    assert.equal((await relaunched.records.list()).length, 0);
+    assert.equal(state.bridge.retainedBytes.length, 1, 'nothing was retained again');
+  } finally {
+    await relaunched.dispose();
+  }
 });

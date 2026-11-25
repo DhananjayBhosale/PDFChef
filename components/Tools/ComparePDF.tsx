@@ -3,7 +3,6 @@ import { pdfProblemMessage } from '../../services/i18n/errors.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -13,15 +12,20 @@ import {
   Loader2,
   Move,
   RefreshCw,
-  Undo2,
 } from 'lucide-react';
 import { FileUpload } from '../UI/FileUpload';
-import { Button } from '../UI/Primitives';
 import { StatusToast } from '../UI/StatusToast';
-import { ToolShell } from '../UI/ToolLayout';
+import { ToolScreen } from '../Tool/ToolScreen';
+import { useWorkInput } from '../UI/workSignature';
+import { ChangeFile } from '../Tool/ToolTop';
+import { Sentence } from '../Tool/Sentence';
+import { useStatusNotice } from '../Tool/parts';
+import { useWide } from '../../hooks/useMediaQuery';
 import { ZoomControls } from '../UI/ZoomControls';
-import { useZoom } from '../../hooks/useZoom';
-import { getPageTextSignatures, loadPDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
+import { PreviewFrame } from '../Tool/PreviewFrame';
+import { usePanZoom } from '../../hooks/usePanZoom';
+import { PeekButton, usePagePreview } from '../Tool/PagePeek';
+import { getPageTextSignatures, loadPDFDocument, renderPageAsImage } from '../../services/pdfLazy';
 import { downloadBlob } from '../../services/pdfShared';
 import { ProcessingStatus } from '../../types';
 import { compareExtractedPageText } from '../../services/pdfToolResults';
@@ -56,6 +60,8 @@ export const ComparePDF: React.FC = () => {
   useI18n();
   const [file1, setFile1] = useState<File | null>(null);
   const [file2, setFile2] = useState<File | null>(null);
+  // The two files are inputs of the report ("Earlier result" once either changes).
+  useWorkInput(`${file1?.name ?? ''}:${file1?.size ?? 0}\u0000${file2?.name ?? ''}:${file2?.size ?? 0}`);
   const [pdf1, setPdf1] = useState<any>(null);
   const [pdf2, setPdf2] = useState<any>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
@@ -71,9 +77,13 @@ export const ComparePDF: React.FC = () => {
   const comparisonGrantRef = useRef<JobAccessGrant | null>(null);
   const { completeJob, runWithExportAccess } = useMonetization();
 
-  const { zoom, zoomIn, zoomOut, resetZoom } = useZoom(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
+  // Both pages zoom and move together: two fingers on either, Ctrl+wheel, or − and + (about the
+  // top of the page), with the shared page zoom (pass 5), up to 400% like the other viewers.
+  const { zoom, zoomIn, zoomOut, reset: resetZoom, panning: isPanning, gestureRef, onPointerDown: handlePointerDown, transform, touchAction } = usePanZoom({ max: 4 });
+  // Each pane's eye opens its own document large, at the page shown (fable-2 item 3).
+  const previewA = usePagePreview(file1, file1?.name);
+  const previewB = usePagePreview(file2, file2?.name);
+  const wide = useWide();
   const previewRef = useRef<PreviewState | null>(null);
 
   const maxPageCount = Math.min(pdf1?.numPages ?? 0, pdf2?.numPages ?? 0);
@@ -134,9 +144,13 @@ export const ComparePDF: React.FC = () => {
     };
   }, [pdf1, pdf2, pageIndex, previewAttempt]);
 
-  useEffect(() => {
-    if (zoom === 1) setPan({ x: 0, y: 0 });
-  }, [zoom]);
+  // Two PDFs dropped together fill both documents, the first where they were dropped (research r3,
+  // desktop-05). One at a time, so the status names each.
+  const takeFiles = async (slot: 'left' | 'right', files: File[]) => {
+    const other = slot === 'left' ? 'right' : 'left';
+    if (files[0]) await handleFileSelection(slot, files[0]);
+    if (files[1] && !(other === 'left' ? file1 : file2)) await handleFileSelection(other, files[1]);
+  };
 
   const handleFileSelection = async (slot: 'left' | 'right', file: File) => {
     const label = slot === 'left' ? t("compare-pdf.document.a.e39e3d") : t("compare-pdf.document.b.80d6f4");
@@ -154,7 +168,6 @@ export const ComparePDF: React.FC = () => {
         setPdf2(nextDocument);
       }
       setPageIndex(0);
-      setPan({ x: 0, y: 0 });
       resetZoom();
       setStatus({
         isProcessing: false,
@@ -176,32 +189,6 @@ export const ComparePDF: React.FC = () => {
     }
   };
 
-  const handlePointerDown = (event: React.PointerEvent) => {
-    if (zoom <= 1) return;
-
-    const target = event.currentTarget;
-    target.setPointerCapture(event.pointerId);
-    setIsPanning(true);
-    const startX = event.clientX - pan.x;
-    const startY = event.clientY - pan.y;
-
-    const onMove = (moveEvent: PointerEvent) => {
-      setPan({ x: moveEvent.clientX - startX, y: moveEvent.clientY - startY });
-    };
-
-    const onUp = (upEvent: PointerEvent) => {
-      setIsPanning(false);
-      if (target.hasPointerCapture(upEvent.pointerId)) {
-        target.releasePointerCapture(upEvent.pointerId);
-      }
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
-
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-  };
-
   const reset = () => {
     revokePreview(previewRef.current?.left);
     revokePreview(previewRef.current?.right);
@@ -212,7 +199,6 @@ export const ComparePDF: React.FC = () => {
     setPdf1(null);
     setPdf2(null);
     setPageIndex(0);
-    setPan({ x: 0, y: 0 });
     setPreviewError(null);
     setResult(null);
     comparisonOperationIdRef.current = null;
@@ -330,182 +316,220 @@ export const ComparePDF: React.FC = () => {
     }
   };
 
-  return (
-    // The shell already reserves the tab bar with `chef-tab-inset`; the extra
-    // bottom pad this route added was a second, unpaid-for one.
-    <ToolShell width="full" centered={!file1 && !file2}>
-      <div className="mb-3">
-        <h1 className="text-3xl font-bold text-[var(--text-primary)]">{t("compare-pdf.compare.summary.62ec42")}</h1>
-        {/* Kept: the report is text-based, so a visually different PDF can still
-            report as matching. Stated once, here. */}
-        <p className="mt-1 max-w-measure text-sm text-[var(--text-secondary)]">{t("compare-pdf.the.report.compares.page.count.and.extracted.c1f4a2")}</p>
-        {file1 && file2 && (
-          <div className="sticky top-[var(--size-nav-bar)] z-20 -mx-4 mt-3 flex flex-col gap-2 border-b border-[var(--border-hairline)] bg-[var(--surface-canvas)] px-4 py-2 sm:flex-row sm:flex-wrap sm:items-center">
-            <div className="flex items-center justify-between gap-1 rounded-[var(--radius-pill)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-1 text-sm sm:justify-start">
-              <button
-                type="button"
-                aria-label={t("compare-pdf.previous.comparison.page.472b4c")}
-                onClick={() => setPageIndex((value) => Math.max(0, value - 1))}
-                disabled={pageIndex === 0}
-                className="chef-pressable chef-target grid place-items-center rounded-full text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:opacity-55"
-              >
-                <ArrowLeft aria-hidden size={18} className="rtl:rotate-180" />
-              </button>
-              <span className="min-w-[7.5rem] text-center font-medium text-[var(--text-primary)]">{t("compare-pdf.message.477c22095a", { v0: pageIndex + 1, v1: maxPageCount })}</span>
-              <button
-                type="button"
-                aria-label={t("compare-pdf.next.comparison.page.ce0d56")}
-                onClick={() => setPageIndex((value) => Math.min(maxPageCount - 1, value + 1))}
-                disabled={pageIndex >= maxPageCount - 1}
-                className="chef-pressable chef-target grid place-items-center rounded-full text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:opacity-55"
-              >
-                <ArrowRight aria-hidden size={18} className="rtl:rotate-180" />
-              </button>
-            </div>
-            <div className="scroll-mb-[calc(var(--size-tab-bar)+2rem)]">
-              <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} />
-            </div>
-          </div>
-        )}
+  const title = t("compare-pdf.compare.summary.62ec42");
+  // "Document A ready." is never a floating box that looks like a text field (T-16). With both
+  // files open it is the notice line's plain text; before that the zone already shows the file's
+  // name, so it is only said. The toast keeps progress and failures.
+  const statusNotice = useStatusNotice(status);
+  const loadedToast = <StatusToast status={status.error || status.isProcessing ? status : { ...status, message: '' }} />;
+  const readySaid = !status.error && !status.isProcessing && status.message
+    ? <p role="status" className="sr-only">{status.message}</p>
+    : null;
 
-      </div>
+  // Kept: the report is text-based, so a visually different PDF can still report as matching.
+  const statement = (
+    <Sentence
+      template="compare-pdf.the.report.compares.page.count.and.extracted.c1f4a2"
+      groupLabel={t('sentence.groupLabel', { tool: title })}
+      disabled={reportLoading}
+    />
+  );
 
-      <AnimatePresence mode="wait">
-        {!file1 || !file2 ? (
-          <motion.div key="selection" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-            <div className="grid gap-3 md:grid-cols-2">
+  if (!file1 || !file2) {
+    return (
+      <ToolScreen
+        title={title}
+        kind="file"
+        body={(
+          <div className="tk-empty tk-compare-empty">
+            <div className="tk-compare-pickers">
               <section>
-                <h2 className="mb-1.5 text-sm font-semibold text-[var(--text-secondary)]">{t("compare-pdf.document.a.e39e3d")}</h2>
+                <h2 className="tk-compare-cap">{t("compare-pdf.document.a.e39e3d")}</h2>
                 <FileUpload
-                  onFilesSelected={(files) => files[0] && void handleFileSelection('left', files[0])}
+                  onFilesSelected={(files) => takeFiles('left', files)}
                   accept=".pdf"
+                  dropsAll
                   label={file1 ? file1.name : t("compare-pdf.choose.first.pdf.0434be")}
                 />
               </section>
               <section>
-                <h2 className="mb-1.5 text-sm font-semibold text-[var(--text-secondary)]">{t("compare-pdf.document.b.80d6f4")}</h2>
+                <h2 className="tk-compare-cap">{t("compare-pdf.document.b.80d6f4")}</h2>
                 <FileUpload
-                  onFilesSelected={(files) => files[0] && void handleFileSelection('right', files[0])}
+                  onFilesSelected={(files) => takeFiles('right', files)}
                   accept=".pdf"
+                  dropsAll
                   label={file2 ? file2.name : t("compare-pdf.choose.second.pdf.479128")}
                   allowOpenedPdf={false}
                 />
               </section>
             </div>
             {selectingSlot && (
-              <p role="status" aria-live="polite" className="mt-3 flex items-center justify-center gap-2 text-sm font-medium text-[var(--text-secondary)]">
+              <p role="status" aria-live="polite" className="tk-compare-opening">
                 <Loader2 aria-hidden className="h-4 w-4 animate-spin text-[var(--accent-text)]" />{t("compare-pdf.message.c5898b3744", { v0: selectingSlot === 'left' ? t('compare.documentA') : t('compare.documentB') })}</p>
             )}
-          </motion.div>
-        ) : (
-          <motion.div key="comparison" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                tone="primary"
-                icon={<Download aria-hidden size={18} />}
-                busy={reportLoading}
-                onClick={handleExportReport}
-                className="w-full sm:w-auto"
-              >{t("compare-pdf.save.the.summary.64af76")}</Button>
-              <Button icon={<Undo2 aria-hidden size={18} />} onClick={reset} disabled={reportLoading} className="w-full sm:w-auto">{t("compare-pdf.choose.different.pdfs.ad084f")}</Button>
-            </div>
-
-            {result && (
-              <section
-                aria-live="polite"
-                className="rounded-[var(--radius-panel)] border border-[var(--status-success-text)] bg-[var(--status-success-quiet)] p-3 text-[var(--status-success-text)]"
-              >
-                <div className="flex items-start gap-2">
-                  <CheckCircle2 aria-hidden className="mt-0.5 h-5 w-5 shrink-0" />
-                  <div className="min-w-0">
-                    <h2 className="font-semibold">{t("compare-pdf.comparison.summary.ready.a3f394")}</h2>
-                    <p className="chef-filename mt-1 break-words text-sm">{result.reportName}</p>
-                  </div>
-                </div>
-                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-current/20 pt-3 sm:grid-cols-4">
-                  <div>
-                    <dt className="text-xs font-medium">{t("compare-pdf.page.count.2905c1")}</dt>
-                    <dd className="mt-0.5 font-semibold">{result.pageCountEqual ? t("compare-pdf.same.2a98b1") : t("compare-pdf.different.e9cdbd")}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-medium">{t("compare-pdf.first.page.text.c7e08a")}</dt>
-                    <dd className="mt-0.5 font-semibold">{result.firstPageTextEqual === null ? t("compare-pdf.unavailable.ca1844") : result.firstPageTextEqual ? t("compare-pdf.matches.98abff") : t("compare-pdf.differs.627bb3")}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-medium">{t("compare-pdf.pages.checked.7f0722")}</dt>
-                    <dd className="mt-0.5 font-semibold">{result.pagesCompared}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-medium">{t("compare-pdf.wording.that.matches.83d290")}</dt>
-                    <dd className="mt-0.5 font-semibold">{result.matchRatio === null ? t("compare-pdf.unavailable.ca1844") : t("compare-pdf.match.9d6f0a", { v0: result.matchRatio })}</dd>
-                  </div>
-                </dl>
-                <p className="type-footnote mt-2">
-                  {result.differentPages.length === 0
-                    ? result.identicalPageCount > 0
-                      ? t("compare-pdf.wording.matches.on.the.checked.pages.with.dcb9c6")
-                      : t("compare-pdf.these.pages.need.visual.comparison.inspect.the.80af94")
-                    : t("compare-pdf.the.wording.differs.on.page.pictures.layout.ae9fa8", { v1: result.differentPages.join(', '), count: result.differentPages.length })}
-                  {result.limitedToFirstFifty ? t("compare-pdf.only.the.first.50.common.pages.were.f8becd") : ''}
-                  {result.unavailablePages.length > 0 ? t("compare-pdf.text.could.not.be.compared.on.pages.09f2e2", { v0: result.unavailablePages.join(', ') }) : ''}
-                </p>
-              </section>
-            )}
-
-            {previewError && (
-              <div role="alert" className="flex flex-col gap-3 rounded-[var(--radius-field)] bg-[var(--status-danger-quiet)] p-3.5 text-[var(--status-danger-text)] sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle aria-hidden className="mt-0.5 h-5 w-5 shrink-0" />
-                  <p className="text-sm font-medium leading-5">{previewError}</p>
-                </div>
-                <Button
-                  icon={<RefreshCw aria-hidden size={16} />}
-                  onClick={() => setPreviewAttempt((value) => value + 1)}
-                  className="shrink-0"
-                >{t("compare-pdf.retry.preview.ceba35")}</Button>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-2 sm:gap-3">
-              {[
-                { name: file1.name, src: preview?.left },
-                { name: file2.name, src: preview?.right },
-              ].map((entry, index) => (
-                <figure key={`${index}-${entry.name}`} className="min-w-0">
-                  <figcaption className="chef-filename mb-1.5 break-words rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] px-2 py-1.5 text-center text-xs font-semibold text-[var(--text-primary)] sm:px-4 sm:text-sm">
-                    {entry.name}
-                  </figcaption>
-                  <div
-                    className={`relative flex aspect-[210/297] items-center justify-center overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)] ${zoom > 1 ? 'touch-none cursor-grab active:cursor-grabbing' : ''}`}
-                    onPointerDown={handlePointerDown}
-                  >
-                    {previewLoading && (
-                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--surface-raised)]/80">
-                        <Loader2 aria-label={t("compare-pdf.loading.page.preview.73f2ff", { v0: pageIndex + 1 })} className="h-6 w-6 animate-spin text-[var(--accent-text)]" />
-                      </div>
-                    )}
-                    {entry.src && (
-                      <img
-                        src={entry.src}
-                        alt={t("compare-pdf.page.of.477c22", { v0: pageIndex + 1, v1: entry.name })}
-                        draggable={false}
-                        className="max-h-full max-w-full select-none object-contain shadow-[var(--elevation-raised)] will-change-transform"
-                        style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
-                      />
-                    )}
-                    {zoom > 1 && isPanning && (
-                      <div className="absolute left-2 top-2 flex items-center gap-1 rounded-[var(--radius-pill)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-2 py-1 text-xs font-semibold text-[var(--text-primary)]">
-                        <Move aria-hidden size={12} />{t("compare-pdf.synced.pan.5774cd")}</div>
-                    )}
-                  </div>
-                </figure>
-              ))}
-            </div>
-          </motion.div>
+            {readySaid}
+          </div>
         )}
-      </AnimatePresence>
+        toast={loadedToast}
+      />
+    );
+  }
 
-      <StatusToast status={status} />
-    </ToolShell>
+  const summary = result ? (
+    <section aria-live="polite" className="tk-compare-summary">
+      <div className="tk-compare-summary-head">
+        <CheckCircle2 aria-hidden className="mt-0.5 h-5 w-5 shrink-0" />
+        <div className="min-w-0">
+          <h2 className="tk-compare-summary-title">{t("compare-pdf.comparison.summary.ready.a3f394")}</h2>
+          <p className="chef-filename tk-compare-summary-name">{result.reportName}</p>
+        </div>
+      </div>
+      <dl className="tk-compare-facts">
+        <div>
+          <dt>{t("compare-pdf.page.count.2905c1")}</dt>
+          <dd>{result.pageCountEqual ? t("compare-pdf.same.2a98b1") : t("compare-pdf.different.e9cdbd")}</dd>
+        </div>
+        <div>
+          <dt>{t("compare-pdf.first.page.text.c7e08a")}</dt>
+          <dd>{result.firstPageTextEqual === null ? t("compare-pdf.unavailable.ca1844") : result.firstPageTextEqual ? t("compare-pdf.matches.98abff") : t("compare-pdf.differs.627bb3")}</dd>
+        </div>
+        <div>
+          <dt>{t("compare-pdf.pages.checked.7f0722")}</dt>
+          <dd>{result.pagesCompared}</dd>
+        </div>
+        <div>
+          <dt>{t("compare-pdf.wording.that.matches.83d290")}</dt>
+          <dd>{result.matchRatio === null ? t("compare-pdf.unavailable.ca1844") : t("compare-pdf.match.9d6f0a", { v0: result.matchRatio })}</dd>
+        </div>
+      </dl>
+      <p className="tk-compare-summary-lines">
+        {result.differentPages.length === 0
+          ? result.identicalPageCount > 0
+            ? t("compare-pdf.wording.matches.on.the.checked.pages.with.dcb9c6")
+            : t("compare-pdf.these.pages.need.visual.comparison.inspect.the.80af94")
+          : t("compare-pdf.the.wording.differs.on.page.pictures.layout.ae9fa8", { v1: result.differentPages.join(', '), count: result.differentPages.length })}
+        {result.limitedToFirstFifty ? t("compare-pdf.only.the.first.50.common.pages.were.f8becd") : ''}
+        {result.unavailablePages.length > 0 ? t("compare-pdf.text.could.not.be.compared.on.pages.09f2e2", { v0: result.unavailablePages.join(', ') }) : ''}
+      </p>
+    </section>
+  ) : null;
+
+  const pager = (
+    <div className="tk-pager">
+        <button
+          type="button"
+          aria-label={t("compare-pdf.previous.comparison.page.472b4c")}
+          onClick={() => setPageIndex((value) => Math.max(0, value - 1))}
+          disabled={pageIndex === 0}
+          className="tk-iconbtn chef-pressable"
+        >
+          <ArrowLeft aria-hidden size={18} className="rtl:rotate-180" />
+        </button>
+        <span className="tk-compare-pagelabel tabular">{t("compare-pdf.message.477c22095a", { v0: pageIndex + 1, v1: maxPageCount })}</span>
+        <button
+          type="button"
+          aria-label={t("compare-pdf.next.comparison.page.ce0d56")}
+          onClick={() => setPageIndex((value) => Math.min(maxPageCount - 1, value + 1))}
+          disabled={pageIndex >= maxPageCount - 1}
+          className="tk-iconbtn chef-pressable"
+        >
+          <ArrowRight aria-hidden size={18} className="rtl:rotate-180" />
+        </button>
+    </div>
+  );
+
+  // Phone: the summary sits under the pager, in the canvas, where it has room to show whole
+  // (fable-2 item 3); the pager is drawn inside so the summary can follow it.
+  const body = (
+    <PreviewFrame
+      className="tk-compare"
+      tools={<ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={4} />}
+      pager={wide ? pager : undefined}
+    >
+      {previewError && (
+        <div role="alert" className="tk-compare-error">
+          <div className="flex items-start gap-2">
+            <AlertTriangle aria-hidden className="mt-0.5 h-5 w-5 shrink-0" />
+            <p className="text-sm font-medium leading-5">{previewError}</p>
+          </div>
+          <button type="button" onClick={() => setPreviewAttempt((value) => value + 1)} className="tk-btn chef-pressable">
+            <RefreshCw aria-hidden size={16} />
+            <span>{t("compare-pdf.retry.preview.ceba35")}</span>
+          </button>
+        </div>
+      )}
+      <div ref={gestureRef} className="tk-compare-panes" style={{ touchAction }}>
+        {[
+          { name: file1.name, src: preview?.left, large: previewA },
+          { name: file2.name, src: preview?.right, large: previewB },
+        ].map((entry, index) => (
+          <figure key={`${index}-${entry.name}`} className="tk-compare-pane">
+            <figcaption className="chef-filename tk-compare-name" title={entry.name}>
+              {entry.name}
+            </figcaption>
+            <div
+              data-zoom-frame=""
+              className={`tk-compare-page ${zoom > 1 ? 'touch-none cursor-grab active:cursor-grabbing' : ''}`}
+              onPointerDown={handlePointerDown}
+            >
+              {previewLoading && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--surface-raised)]/80">
+                  <Loader2 aria-label={t("compare-pdf.loading.page.preview.73f2ff", { v0: pageIndex + 1 })} className="h-6 w-6 animate-spin text-[var(--accent-text)]" />
+                </div>
+              )}
+              {entry.src && (
+                <img
+                  src={entry.src}
+                  alt={t("compare-pdf.page.of.477c22", { v0: pageIndex + 1, v1: entry.name })}
+                  draggable={false}
+                  className="select-none will-change-transform"
+                  style={{ transform }}
+                />
+              )}
+              {zoom > 1 && isPanning && (
+                <div className="tk-compare-synced">
+                  <Move aria-hidden size={12} />{t("compare-pdf.synced.pan.5774cd")}</div>
+              )}
+              <PeekButton page={pageIndex + 1} label={t('queue-row.preview.file', { v0: entry.name })} onOpen={() => entry.large.open(pageIndex)} disabled={!entry.src} />
+            </div>
+          </figure>
+        ))}
+      </div>
+      {!wide && pager}
+      {!wide && summary}
+      {previewA.modal}
+      {previewB.modal}
+    </PreviewFrame>
+  );
+
+  const action = (
+    <button
+      type="button"
+      onClick={() => void handleExportReport()}
+      disabled={reportLoading}
+      aria-busy={reportLoading || undefined}
+      className="tk-primary chef-pressable"
+    >
+      {reportLoading ? <Loader2 aria-hidden className="animate-spin" size={18} /> : <Download aria-hidden size={18} />}
+      <span>{t("compare-pdf.save.the.summary.64af76")}</span>
+    </button>
+  );
+
+  return (
+    <ToolScreen
+      title={title}
+      // Desktop: the two pages fill the canvas under the band. Phone: the panes scroll above a
+      // foot sheet, because the summary needs the room (plan 2.22).
+      kind={wide ? 'preview' : 'file'}
+      className="tk-comparetool"
+      heavyJob={{ bytes: (file1?.size ?? 0) + (file2?.size ?? 0), files: 2 }}
+      change={<ChangeFile label={t("compare-pdf.choose.different.pdfs.ad084f")} onClick={reset} disabled={reportLoading} />}
+      bodyLabel={title}
+      body={body}
+      sentence={statement}
+      notice={wide ? <>{summary}{statusNotice}</> : statusNotice}
+      action={action}
+      toast={loadedToast}
+    />
   );
 };

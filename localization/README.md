@@ -52,6 +52,32 @@ Inter remains the preferred interface font, with local system fallbacks for miss
 glyphs. Arabic changes interface direction; document coordinate spaces, signatures,
 artwork and the logo retain their direction and orientation.
 
+## Pending translation (English first)
+
+New interface text is written in English first. `services/i18n/pending.ts` lists the keys
+that still show English in the other 21 languages. `node scripts/sync-locale-fallbacks.mjs`
+gives every catalog in `services/i18n/locales/` and every file in `drafts/` each missing key
+with the English message, under the comment `// English until translated`. A plural message
+gets every category its language needs: `one` carries the English singular, every other
+category the English plural. Nothing is missing at runtime, so `npm run lint` and
+`node scripts/check-localization.mjs` pass without a rule changing.
+
+- Add the key to `en-US.ts` and to `pending.ts` in the phase that first uses it, then run the
+  sync script. A missing key that is not listed as pending fails the script.
+- `--prune` removes keys that `en-US.ts` no longer has. `--check` changes nothing and exits 1
+  if a file would change. `--mirror-drafts` rewrites each draft as a copy of its locale
+  catalog, which catches up drafts that have fallen behind.
+- To translate: edit the value in the locale file and in its draft, then take the key off
+  `pending.ts`. The script fails if a listed key no longer carries the English text.
+- `node scripts/check-localization.mjs` reports `pendingTranslation` (the count). With
+  `--no-pending` it fails while the list is not empty; use that flag at the translation
+  milestone, not before.
+- Right-to-left: `t()` wraps a pending message in Unicode isolates (U+2066 ... U+2069) in
+  Arabic, and `pendingTextProps(key)` gives `lang="en" dir="ltr"` for an element that renders
+  one, so English punctuation stays on the right side.
+- Frame rules for translators: one whole message per sentence, each placeholder once, value
+  phrases written for their place in the frame.
+
 ## Prepared store and native packages
 
 `locale-mapping.json` maps all application locales to Apple and Google identifiers,

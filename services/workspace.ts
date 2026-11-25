@@ -116,12 +116,15 @@ export const updateWorkspaceSettings = (patch: Partial<WorkspaceSettings>): Work
   return next;
 };
 
-export const shouldWarnForFiles = (files: File[]): boolean => {
+/** "Warn before a heavy job": true when the setting is on and `bytes` reach its threshold. */
+export const shouldWarnForBytes = (bytes: number): boolean => {
   const settings = getWorkspaceSettings();
   if (!settings.confirmLargeJobs) return false;
-  const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
-  return totalBytes >= settings.largeFileWarningMb * 1024 * 1024;
+  return bytes >= settings.largeFileWarningMb * 1024 * 1024;
 };
+
+export const shouldWarnForFiles = (files: File[]): boolean =>
+  shouldWarnForBytes(files.reduce((sum, file) => sum + file.size, 0));
 
 export const rememberToolUse = (path: string) => {
   if (typeof window === 'undefined' || !path.startsWith('/') || path === '/') return;
@@ -202,6 +205,24 @@ export const listOutputs = async (): Promise<OutputRecord[]> => {
   }
 };
 
+// Another tab of the app on this device (round 5, desktop-11): its Recent and Settings follow the
+// changes made here without a reload. Browser tabs only; nothing leaves the device.
+const otherTabs = typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined'
+  ? new BroadcastChannel('pdfchef-workspace')
+  : null;
+const tellOtherTabs = () => {
+  try { otherTabs?.postMessage('records'); } catch { /* A closed channel: nothing to tell. */ }
+};
+if (typeof window !== 'undefined') {
+  otherTabs?.addEventListener('message', (event) => {
+    if (event.data === 'records') window.dispatchEvent(new Event(RECORDS_CHANGED_EVENT));
+  });
+  window.addEventListener('storage', (event) => {
+    if (event.key !== WORKSPACE_SETTINGS_KEY) return;
+    window.dispatchEvent(new CustomEvent('pdfchef:settings-changed', { detail: getWorkspaceSettings() }));
+  });
+}
+
 export const getOutput = async (id: string): Promise<OutputRecord | undefined> => {
   const db = await openWorkspaceDb();
   try {
@@ -218,6 +239,23 @@ export const deleteOutput = async (id: string): Promise<void> => {
     const transaction = db.transaction(OUTPUT_STORE, 'readwrite');
     transaction.objectStore(OUTPUT_STORE).delete(id);
     await transactionComplete(transaction);
+    tellOtherTabs();
+  } finally {
+    db.close();
+  }
+};
+
+/** Renames a result kept in this browser. Only its name changes; the bytes and the date stay. */
+export const renameOutput = async (id: string, filename: string): Promise<void> => {
+  const db = await openWorkspaceDb();
+  try {
+    const transaction = db.transaction(OUTPUT_STORE, 'readwrite');
+    const store = transaction.objectStore(OUTPUT_STORE);
+    const record = await requestValue(store.get(id)) as OutputRecord | undefined;
+    if (!record) throw new LocalizedError("workspace.local.history.operation.failed.c82c2d");
+    store.put({ ...record, filename });
+    await transactionComplete(transaction);
+    tellOtherTabs();
   } finally {
     db.close();
   }
@@ -229,6 +267,7 @@ export const clearOutputs = async (): Promise<void> => {
     const transaction = db.transaction(OUTPUT_STORE, 'readwrite');
     transaction.objectStore(OUTPUT_STORE).clear();
     await transactionComplete(transaction);
+    tellOtherTabs();
   } finally {
     db.close();
   }
@@ -260,6 +299,7 @@ export const clearOutputDocuments = async (): Promise<void> => {
       cursor.continue();
     };
     await transactionComplete(transaction);
+    tellOtherTabs();
   } finally {
     db.close();
   }
@@ -289,6 +329,7 @@ export const recordOutput = async (
     const transaction = db.transaction(OUTPUT_STORE, 'readwrite');
     transaction.objectStore(OUTPUT_STORE).put(record);
     await transactionComplete(transaction);
+    tellOtherTabs();
   } finally {
     db.close();
   }

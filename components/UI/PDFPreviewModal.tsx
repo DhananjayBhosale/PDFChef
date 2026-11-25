@@ -5,31 +5,34 @@ import React, { useEffect, useId, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ArrowLeft, ArrowRight, Move } from 'lucide-react';
 import { PDFLoadingProgress } from './PDFLoadingProgress';
-import { loadDisposablePDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
+import { loadDisposablePDFDocument, renderPageAsImage } from '../../services/pdfLazy';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ZoomControls } from './ZoomControls';
-import { useZoom } from '../../hooks/useZoom';
+import { usePanZoom } from '../../hooks/usePanZoom';
 
 interface PDFPreviewModalProps {
   file: File;
   pageIndex: number; // 0-based index
   pageLabel: string; // e.g., "Page 1"
   onClose: () => void;
+  /** A picture of the one page to show instead of reading `file` (PowerPoint's first slide). */
+  image?: string;
 }
 
-export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageIndex, pageLabel, onClose }) => {
+export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageIndex, pageLabel, onClose, image }) => {
   useI18n();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [pdfDoc, setPdfDoc] = useState<any | null>(null);
   const [currentPageIndex, setCurrentPageIndex] = useState(pageIndex);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
-  const { zoom, zoomIn, zoomOut, resetZoom } = useZoom(1.0, 0.5, 5.0);
+  // Pinch, Ctrl+wheel, − and + about the top of the page, and a drag or the wheel that moves a page
+  // larger than the frame, never past its edges (pass 5; fable-2 item 1: 100% is the whole page).
+  const { zoom, zoomIn, zoomOut, reset: resetZoom, panning: isPanning, movable, moving, gestureRef, onPointerDown, transform, touchAction } = usePanZoom({ min: 0.5, max: 5 });
   const [error, setError] = useState<string | null>(null);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
-  const stopPanRef = useRef<(() => void) | null>(null);
   const imageUrlRef = useRef<string | null>(null);
+  /** The document and page the picture on screen shows. */
+  const shownPageRef = useRef<{ doc: any; page: number } | null>(null);
   const pdfDocRef = useRef<any | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -101,16 +104,15 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
     setCurrentPageIndex(pageIndex);
   }, [pageIndex]);
 
-  useEffect(() => {
-    if (zoom <= 1) {
-      stopPanRef.current?.();
-      setPan({ x: 0, y: 0 });
-    }
-  }, [zoom]);
-
   // Load document once
   useEffect(() => {
     let active = true;
+    if (image) {
+      setImageUrl(image);
+      setTotalPages(1);
+      setLoading(false);
+      return () => { active = false; };
+    }
     setLoading(true);
     setPdfDoc(null);
     setTotalPages(0);
@@ -140,15 +142,17 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
       }
       pdfDocRef.current = null;
     };
-  }, [file]);
+  }, [file, image]);
 
-  // Load active page
+  // Load active page. A new scale for the same page keeps the picture on screen until the sharper
+  // one is ready, so the page never leaves the frame in the middle of a pinch (overnight 2026-11-24).
   useEffect(() => {
     let active = true;
     if (!pdfDoc) return undefined;
     (async () => {
       try {
-        setLoading(true);
+        const shown = shownPageRef.current;
+        if (shown?.doc !== pdfDoc || shown.page !== currentPageIndex) setLoading(true);
         setError(null);
         const { objectUrl } = await renderPageAsImage(pdfDoc, currentPageIndex, {
           scale: renderScale,
@@ -163,6 +167,7 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
           URL.revokeObjectURL(imageUrlRef.current);
         }
         imageUrlRef.current = objectUrl;
+        shownPageRef.current = { doc: pdfDoc, page: currentPageIndex };
         setImageUrl(objectUrl);
       } catch (err) {
         console.error(err);
@@ -178,57 +183,19 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
     };
   }, [pdfDoc, currentPageIndex, renderScale]);
 
+  // Another page starts whole again.
   useEffect(() => {
-    stopPanRef.current?.();
-    setPan({ x: 0, y: 0 });
-  }, [currentPageIndex, file]);
+    resetZoom();
+  }, [currentPageIndex, file, resetZoom]);
 
   useEffect(() => {
     return () => {
-      stopPanRef.current?.();
       if (imageUrlRef.current && imageUrlRef.current.startsWith('blob:')) {
         URL.revokeObjectURL(imageUrlRef.current);
       }
       imageUrlRef.current = null;
     };
   }, []);
-
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (zoom <= 1 || e.button !== 0 || !e.isPrimary) return;
-    stopPanRef.current?.();
-    const target = e.currentTarget;
-    const pointerId = e.pointerId;
-    target.setPointerCapture(pointerId);
-    setIsPanning(true);
-    const startX = e.clientX - pan.x;
-    const startY = e.clientY - pan.y;
-
-    const onMove = (moveEvent: PointerEvent) => {
-      if (moveEvent.pointerId !== pointerId) return;
-      setPan({ x: moveEvent.clientX - startX, y: moveEvent.clientY - startY });
-    };
-
-    const stop = () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
-      window.removeEventListener('blur', stop);
-      target.removeEventListener('lostpointercapture', onUp);
-      stopPanRef.current = null;
-      if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
-      setIsPanning(false);
-    };
-    const onUp = (upEvent: PointerEvent) => {
-      if (upEvent.pointerId === pointerId) stop();
-    };
-
-    stopPanRef.current = stop;
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onUp);
-    window.addEventListener('blur', stop);
-    target.addEventListener('lostpointercapture', onUp);
-  };
 
   return createPortal(
     <motion.div 
@@ -290,9 +257,11 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
 
         {/* Content Area */}
         <div
-          className={`relative flex flex-1 items-center justify-center overflow-hidden bg-black/50 p-4 ${zoom > 1 ? 'cursor-grab active:cursor-grabbing' : ''}`}
-          style={{ touchAction: zoom > 1 ? 'none' : undefined }}
-          onPointerDown={handlePointerDown}
+          ref={gestureRef}
+          data-preview-zoom={zoom}
+          className={`relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black/50 p-4 ${movable ? 'cursor-grab active:cursor-grabbing' : ''}`}
+          style={{ touchAction }}
+          onPointerDown={onPointerDown}
         >
           {loading ? (
             <PDFLoadingProgress pageNumber={pdfDoc ? currentPageIndex + 1 : undefined} />
@@ -303,21 +272,23 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
           ) : imageUrl ? (
             <div 
               style={{ 
-                transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                transform,
                 transformOrigin: 'center',
-                transition: reduceMotion ? 'none' : 'transform 0.2s ease-out'
+                // No easing while fingers or the mouse move the page: it must stay under them.
+                transition: reduceMotion || moving ? 'none' : 'transform 0.2s ease-out'
               }}
-              className="flex max-h-full max-w-full items-center justify-center shadow-2xl"
+              // The frame's own size, so the page inside fits it whole at 100% (fable-2 item 1).
+              className="flex h-full w-full items-center justify-center"
             >
               <img 
                 src={imageUrl} 
                 alt={pageLabel} 
-                className="block max-h-full max-w-full object-contain bg-white rounded-sm"
+                className="block max-h-full max-w-full object-contain bg-white rounded-sm shadow-2xl"
                 draggable={false}
               />
             </div>
           ) : null}
-          {zoom > 1 && isPanning && (
+          {isPanning && (
             <div className="absolute start-4 top-4 flex items-center gap-1 rounded-full bg-slate-950/80 px-2 py-1 text-xs text-white">
               <Move size={12} />{t("pdfpreview-modal.dragging.26d17c")}</div>
           )}

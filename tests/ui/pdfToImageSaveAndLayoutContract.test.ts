@@ -52,13 +52,25 @@ test('the PDF to Image preview fits the whole page inside its box', () => {
   assert.doesNotMatch(preview, /max-h-\[\d+[a-z]*\]/, 'a fixed height cap can be taller than the preview box');
   assert.match(preview, /<figure className="absolute inset-0">/);
   assert.match(preview, /className="absolute inset-0 m-auto block max-h-full max-w-full /);
-  // The page box starts below the zoom controls (top-2 + 42 px, or top-4 from sm up).
-  assert.match(source, /className="absolute inset-x-3 bottom-3 top-14 sm:top-16"\s*style=\{zoom === 1 \? undefined/);
+  // T-13: the zoom sits in the preview frame's own row above the stage, so the page box fills it.
+  assert.match(source, /<PreviewFrame tools=\{<ZoomControls /);
+  assert.match(source, /className="absolute inset-0"\s*style=\{zoom === 1 \? undefined/);
 });
 
 // NAV-39: Quality and Resolution side by side were wider than the card on a 360 px screen.
-test('the PDF to Image sliders take one row each', () => {
-  const settings = between('t("pdfto-image.format.2f3436")', 'htmlFor="pdf-to-image-pages"');
-  assert.doesNotMatch(settings, /grid-cols-2/);
-  assert.doesNotMatch(settings, /col-span-2/);
+// In the sentence layout each slider is the whole body of its own slot editor (phones) or of its
+// own row beside the page (desktop, owner decision 1, A-008), so each takes a row.
+test('the PDF to Image sliders each sit in their own slot editor', () => {
+  const quality = between('const qualityEditor = (', 'const scaleEditor = (');
+  const scale = between('const scaleEditor = (', 'const settingSlot = ');
+  assert.equal(quality.split('<ChefSliderField').length - 1, 1);
+  assert.equal(scale.split('<ChefSliderField').length - 1, 1);
+  for (const slot of [quality, scale]) {
+    assert.doesNotMatch(slot, /grid-cols-2/);
+    assert.doesNotMatch(slot, /col-span-2/);
+  }
+  assert.match(source, /\.\.\.settingSlot\('quality', qualityEditor\)/);
+  assert.match(source, /\.\.\.settingSlot\('scale', scaleEditor\)/);
+  assert.match(source, /<div data-setting="quality" className="tk-side-setting">\{qualityEditor\}<\/div>/);
+  assert.match(source, /<div data-setting="scale" className="tk-side-setting">\{scaleEditor\}<\/div>/);
 });

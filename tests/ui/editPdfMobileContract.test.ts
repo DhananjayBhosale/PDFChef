@@ -27,11 +27,13 @@ const copyText = (source: string) => localizedCopy(source).join('\n');
 test('Edit PDF runs inside the data router required by the navigation blocker', () => {
   assert.match(app, /createBrowserRouter/);
   assert.match(app, /<RouterProvider router=\{router\}/);
-  assert.match(editor, /const navigationBlocker = useBlocker\(hasUnsavedEdits\)/);
+  // The tool screen holds the one blocker (fix round 2, item 2); Edit PDF hands it its own question.
+  assert.match(editor, /useLeaveGuarded\(hasUnsavedEdits, askToDiscard\)/);
+  assert.match(read('components/Tool/ToolScreen.tsx'), /const blocker = useBlocker\(/);
 });
 
 test('compact browser and iOS viewports share the immersive editor', () => {
-  assert.match(editor, /matchMedia\('\(max-width: 767px\)'\)/);
+  assert.match(editor, /matchMedia\(MQ_LG\)/);
   assert.match(editor, /const isCompactViewportEditor = Boolean\(file\) && compactViewport/);
   assert.match(editor, /const isImmersiveEditor = isNativeAndroidEditor \|\| isCompactViewportEditor/);
   assert.doesNotMatch(editor, /!Capacitor\.isNativePlatform\(\) && compactViewport/);
@@ -39,13 +41,18 @@ test('compact browser and iOS viewports share the immersive editor', () => {
 
 test('dirty edits block routes and unload, while load and save establish clean baselines', () => {
   assert.match(editor, /const hasUnsavedEdits = Boolean\(file\) && currentSnapshot !== savedSnapshot/);
-  assert.match(editor, /window\.addEventListener\('beforeunload', handleBeforeUnload\)/);
+  // The tool screen owns the browser's leave prompt for every tool (research r3, desktop-03); Edit PDF
+  // asks for it only while an edit is unsaved.
+  assert.match(editor, /holdsWork=\{hasUnsavedEdits\}/);
+  assert.match(read('components/Tool/ToolScreen.tsx'), /window\.addEventListener\('beforeunload', onBeforeUnload\)/);
   assert.match(editor, /setSavedSnapshot\(serializeEditorState\(\[\], \{\}\)\)/);
   // The page appears before its form fields are looked for, which on a long report is seconds.
   assert.match(editor, /void getPdfFormFields\(doc\)\.then\(/);
   assert.match(editor, /setSavedSnapshot\(serializeEditorState\(savingElements, savingFormValues, savedBlockEdits\)\)/);
-  assert.match(editor, /navigationBlocker\.proceed\(\)/);
-  assert.match(editor, /navigationBlocker\.reset\(\)/);
+  const screen = read('components/Tool/ToolScreen.tsx');
+  assert.match(screen, /blocker\.proceed\(\)/);
+  assert.match(screen, /blocker\.reset\(\)/);
+  assert.match(screen, /const guard = activeLeaveGuard\(\)/);
   const save = editor.slice(editor.indexOf('const handleSave'), editor.indexOf('if (isImmersiveEditor)'));
   assert.match(save, /await deliverBlob\([\s\S]*setSavedSnapshot\(/);
   assert.match(save, /error\.name === 'AbortError'/);
@@ -353,7 +360,10 @@ test('the one action a reader cannot guess at keeps its word on every phone', ()
   assert.doesNotMatch(editor, /max-\[400px\]:sr-only/, 'the Save label must not be hidden on narrow phones');
   // The badge is what gives up its width instead; it says something useful but nothing urgent.
   // At 402 points (iPhone 17 Pro) it left the title as "Edit …", so it goes below 440.
-  assert.match(editor, /Badge tone="caution" className="shrink-0 max-\[440px\]:hidden"/);
+  // The header is the shared tool header, whose badge the editor's own rule hides below 440.
+  assert.match(editor, /className="tk-edit-top /);
+  assert.match(editor, /<ToolTop\s+title=\{t\("edit-pdf\.edit\.pdf\.0e484d"\)\}\s+tool=\{routeTool\}/);
+  assert.match(read('components/Tool/tool.css'), /@media \(max-width: 439\.98px\) \{ \.tk-edit-top \.tk-top-beta \{ display: none; \} \}/);
 });
 
 test('a page that is only a picture says so and offers the two ways forward', () => {
@@ -382,7 +392,8 @@ test('an edit the document cannot draw is refused while it is being typed', () =
   assert.match(read('services/pdfParagraphLayout.ts'), /: exportText\(piece\.text\)/);
   // The refusal is an answer the editor chose, so it is not also logged as a fault.
   assert.match(editor, /const chosen = error instanceof Error && error\.name === 'PdfChefRefusal'/);
-  assert.match(editor, /if \(!chosen && message !== PDF_EDIT_PERMISSION_MESSAGE\)/);
+  // The English text itself, not pdfDocument's constant: importing that would load pdf-lib with the screen.
+  assert.match(editor, /if \(!chosen && message !== english\['error\.pdfEditPermission'\]\)/);
 });
 
 test('a password-protected PDF is explained rather than reported as broken', () => {

@@ -1,14 +1,16 @@
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
-import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate, useNavigationType, type NavigateFunction } from 'react-router-dom';
-import { ChevronLeft, History, LayoutGrid, SlidersHorizontal } from 'lucide-react';
+import { ChevronLeft, Download, History, LayoutGrid, SlidersHorizontal } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { mobileAppLinks } from '../../services/mobileAppWelcome';
 import { TAB_ENTRY, rememberHistoryEntry, returnToTools } from './navigationHistory';
 import { tools } from '../Tools/toolCatalog';
-import type { ToolCardData } from '../Tools/toolCatalog';
-import { ToolIdentity } from '../Tools/ToolIdentity';
+import { ToolTop } from '../Tool/ToolTop';
 import { cx } from '../UI/Primitives';
 import { useHaptics } from '../../hooks/useWorkspaceRuntime';
+import { MQ_LG } from '../../hooks/useMediaQuery';
 import './tabBarGlass.css';
 
 /**
@@ -22,36 +24,15 @@ export const TABS = [
 ] as const;
 
 /**
- * Routes that may take the whole screen. Permission, not a state: a route in
- * this set is still an ordinary tool screen until it says it has a workspace
- * worth the whole viewport, because an empty drop zone is not one.
+ * Help, Privacy, Terms and Licenses are reading pages behind the Settings tab, not
+ * tools: they keep the tab bar and the side rail (owner decision 4, B-020). No tab is
+ * current on them, as before the redesign (polish item 6).
  */
-export const IMMERSIVE_ROUTES = new Set(['/view', '/image-to-pdf', '/pdf-to-jpg', '/edit']);
-
-const ImmersiveWorkspaceContext = createContext<((active: boolean) => void) | null>(null);
-
-/**
- * How one of those routes asks for the whole screen. Before a document is
- * loaded the shell keeps its navigation bar and its tab bar, so the way back
- * and the other two destinations are where they are on every other tool
- * screen. The route gives them up only once there is a live workspace behind
- * them, and takes them back when it is cleared or left.
- */
-export const useImmersiveWorkspace = (active: boolean) => {
-  const setImmersive = useContext(ImmersiveWorkspaceContext);
-
-  // Before paint, so a route that arrives with a workspace already loaded never
-  // shows a frame of chrome it is about to drop.
-  useLayoutEffect(() => {
-    if (!setImmersive) return;
-    setImmersive(active);
-    return () => setImmersive(false);
-  }, [active, setImmersive]);
-};
+const SETTINGS_PAGES = new Set(['/help', '/privacy', '/privacy-policy', '/pdf-chef-privacy', '/terms', '/terms-and-conditions', '/licenses']);
+export const isSettingsPage = (path: string) => SETTINGS_PAGES.has(path);
 
 // Tab highlighting and tab-root layout are different decisions. Tool routes
-// highlight Tools, but they still need their own nav bar, safe-area inset, and
-// measured workspace for exact picker centering.
+// highlight Tools, but they have no rail and no tab bar of their own to share.
 const isTabRoot = (path: string) => path === '/' || path === '/recent' || path === '/history' || path === '/settings';
 
 const KEYBOARD_EDITABLE_SELECTOR = [
@@ -194,7 +175,7 @@ const TabBar: React.FC = () => {
                 <span className="grid px-3">
                   <Icon aria-hidden size={24} strokeWidth={active ? 2.5 : 1.9} />
                 </span>
-                <span className="text-[0.8125rem] font-semibold leading-none tracking-[0.005em]">{label}</span>
+                <span className="chef-tab-label text-[0.8125rem] font-semibold leading-none tracking-[0.005em]">{label}</span>
               </Link>
             </li>
           );
@@ -223,7 +204,7 @@ const SideRail: React.FC = () => {
     <Link to="/" replace state={TAB_ENTRY} onClick={pressTab('/', navigate)} className="chef-pressable mb-6 flex items-center gap-3 rounded-[var(--radius-control)] px-2 py-1">
       <img src="/pdf-chef-logo-exact.webp" alt="" aria-hidden className="h-9 w-9 object-contain" />
       <span className="min-w-0">
-        <span className="block font-semibold leading-tight text-[var(--text-primary)]">PDF Chef</span>
+        <span className="chef-display block leading-tight text-[var(--text-primary)]">PDF Chef</span>
         <span className="type-caption block font-medium normal-case tracking-normal text-[var(--text-secondary)]">{t("app-shell.on.this.device.38b9d8")}</span>
       </span>
     </Link>
@@ -254,97 +235,109 @@ const SideRail: React.FC = () => {
       })}
     </ul>
 
+    {/* The website's way to the apps on a tablet or computer, where no "get the app" screen opens
+        (owner, 25 Nov 2026). The apps themselves have none. */}
+    {!Capacitor.isNativePlatform() && (
+      <ul className="mt-auto space-y-1">
+        {(['android', 'ios'] as const).map((platform) => (
+          <li key={platform}>
+            <a
+              href={mobileAppLinks[platform]}
+              className="chef-pressable chef-target flex items-center gap-3 rounded-[var(--radius-control)] px-3 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)]"
+            >
+              <Download aria-hidden size={18} className="shrink-0" />
+              <span className="chef-wrap-words py-1">{t(platform === 'android' ? 'mobileAppWelcome.android' : 'mobileAppWelcome.ios')}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    )}
   </nav>
   );
 };
 
-/* ----------------------------------------------------------- Nav bar ----- */
+/* ------------------------------------------------------ Tool header ---- */
 
 /**
- * Tool routes get a navigation bar with the tool's own name and a back control
- * that reads "Tools", so the destination is stated rather than implied.
+ * The three destinations with today's names and behaviour, for a header that draws
+ * its own links (the tool header's Tools link and brand link). Render each item as
+ * `<Link {...item.linkProps}>`: the links keep `replace`, the tab entry state,
+ * `aria-current` and the Tools press rule.
  */
-const ToolNavBar: React.FC<{ title: string; tool?: ToolCardData }> = ({ title, tool }) => {
+export const usePrimaryNav = () => {
   useI18n();
+  const location = useLocation();
   const navigate = useNavigate();
-  // A page opened from another tab (Privacy from Settings) names that tab instead.
+  const haptic = useHaptics();
+  return {
+    label: t("app-shell.primary.efe10c"),
+    items: TABS.map(({ to, label, icon, match }) => {
+      const active = match(location.pathname);
+      return {
+        to,
+        label,
+        icon,
+        active,
+        linkProps: {
+          to,
+          replace: true,
+          state: TAB_ENTRY,
+          onClick: pressTab(to, navigate),
+          onPointerDown: () => haptic('selection'),
+          'aria-current': active ? ('page' as const) : undefined,
+        },
+      };
+    }),
+  };
+};
+
+/** Where a page opened from another tab (Privacy from Settings) goes back to, and how. */
+export const useToolBack = () => {
+  const navigate = useNavigate();
   const from = (useLocation().state as { from?: string } | null)?.from;
   const backTab = TABS.find((tab) => tab.to === from) ?? TABS[0];
-  const [scrolled, setScrolled] = useState(false);
-  const bar = useRef<HTMLDivElement>(null);
-  const back = useRef<HTMLButtonElement>(null);
-  const [titleFits, setTitleFits] = useState(true);
+  const goBack = () => {
+    const historyIndex = Number(window.history.state?.idx ?? 0);
+    if (historyIndex > 0) navigate(-1);
+    else navigate(backTab.to, { replace: true });
+  };
+  return { backTab, goBack };
+};
 
-  // The tool's own heading is the title while it is on screen. Once it scrolls
-  // away the bar takes over, which is how iOS hands a large title to the nav bar
-  // and why the two never read as duplicates.
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 48);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  // A centred title has to clear the Back control on both sides, so the room it
-  // really has is the bar minus twice the Back width. At large text Back grows
-  // until nothing is left; rather than let the two collide, the title stands
-  // down and the tool's own heading carries the name.
-  useEffect(() => {
-    const measure = () => {
-      const barWidth = bar.current?.clientWidth ?? 0;
-      const backWidth = back.current?.offsetWidth ?? 0;
-      setTitleFits(barWidth - backWidth * 2 >= 96);
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    if (bar.current) observer.observe(bar.current);
-    if (back.current) observer.observe(back.current);
-    return () => observer.disconnect();
-  }, [title]);
-
+/** "‹ Settings" on a page opened from Settings: names the tab it returns to. */
+export const ToolBackButton: React.FC<{ className?: string }> = ({ className }) => {
+  useI18n();
+  const { backTab, goBack } = useToolBack();
   return (
-    <header
+    <button
+      type="button"
+      onClick={goBack}
       className={cx(
-        'chef-chrome chef-safe-top chef-safe-x chef-scroll-edge chef-scroll-edge-top sticky top-0 z-30 border-b border-transparent',
-        scrolled && 'border-[var(--border-hairline)]',
+        'chef-pressable chef-target inline-flex items-center gap-0.5 rounded-[var(--radius-control)] ps-1 pe-2 font-medium text-[var(--accent-text)]',
+        className,
       )}
     >
-      <div ref={bar} className="relative mx-auto flex min-h-[var(--size-nav-bar)] max-w-4xl items-center px-1 py-1">
-        <button
-          ref={back}
-          type="button"
-          onClick={() => {
-            const historyIndex = Number(window.history.state?.idx ?? 0);
-            if (historyIndex > 0) navigate(-1);
-            else navigate(backTab.to, { replace: true });
-          }}
-          className="chef-pressable chef-target inline-flex items-center gap-0.5 rounded-[var(--radius-control)] ps-1 pe-2 font-medium text-[var(--accent-text)]"
-        >
-          <ChevronLeft aria-hidden size={22} className="rtl:rotate-180" />{backTab.label}</button>
-        {/* Identity and title are one unit: the mark never appears without the
-            name it belongs to, so the bar is either empty or fully legible. */}
-        <div
-          aria-hidden={!scrolled || !titleFits}
-          className={cx(
-            'pointer-events-none absolute left-1/2 flex max-w-[52%] -translate-x-1/2 items-center gap-1.5 text-center font-semibold text-[var(--text-primary)]',
-            'transition-opacity duration-transition ease-settle',
-            scrolled && titleFits ? 'opacity-100' : 'opacity-0',
-          )}
-        >
-          {tool && (
-            <ToolIdentity
-              tool={tool}
-              size={16}
-              assetSize={22}
-              className="shrink-0"
-              assetClassName="h-[22px] w-[22px] shrink-0 object-contain"
-            />
-          )}
-          <span className="chef-wrap-words">{title}</span>
-        </div>
-      </div>
-    </header>
+      <ChevronLeft aria-hidden size={22} className="rtl:rotate-180" />{backTab.label}</button>
   );
+};
+
+const ShellChromeContext = createContext<((delta: 1 | -1) => void) | null>(null);
+
+/**
+ * A tool screen that draws its own header (`ToolScreen`, Read PDF's reader, Edit PDF's
+ * immersive editor) says so while mounted, and the shell stops drawing the header for
+ * that route. The shell's own header covers pages with no `ToolScreen` (Help, legal
+ * pages). Each caller adds one to a count while it is active, so one screen
+ * unmounting (an empty state giving way to a reader) never brings the shell's header
+ * back while another still draws its own.
+ */
+export const useShellOwnChrome = (active: boolean) => {
+  const change = useContext(ShellChromeContext);
+  useLayoutEffect(() => {
+    if (!change || !active) return undefined;
+    change(1);
+    return () => change(-1);
+  }, [change, active]);
 };
 
 /* -------------------------------------------------------------- Shell ---- */
@@ -380,10 +373,20 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const routeTool = useMemo(() => tools.find((item) => item.path === path), [path]);
   const title = ROUTE_TITLE_OVERRIDES[path] ?? routeTool?.name ?? ROUTE_TITLES[path] ?? '';
 
-  const [workspaceImmersive, setWorkspaceImmersive] = useState(false);
-  const immersive = IMMERSIVE_ROUTES.has(path) && workspaceImmersive;
   const root = isTabRoot(path);
+  const settingsPage = SETTINGS_PAGES.has(path);
+  // The tab bar and the side rail: the three roots and the pages behind Settings.
+  const tabbed = root || settingsPage;
   const navigationType = useNavigationType();
+  // A tool route's screen draws its own <main> after its header, so the header is the page's banner
+  // (research r3, desktop-10); the shell's box is then a plain one. The route decides, not the
+  // screen's own chrome, so the box never changes under a mounted screen.
+  const MainBox = (tabbed ? 'main' : 'div') as 'main';
+  // A route drawn by `ToolScreen` has its own header. Any other non-root route (Help,
+  // the legal pages, a tool still loading) gets one here.
+  const [ownChromeCount, setOwnChromeCount] = useState(0);
+  const ownChrome = ownChromeCount > 0;
+  const changeOwnChrome = useCallback((delta: 1 | -1) => setOwnChromeCount((count) => Math.max(0, count + delta)), []);
 
   // What sits at each history entry, so the Tools tab and Back can tell what is behind.
   useEffect(() => {
@@ -392,41 +395,85 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
   // A route change moves focus to the top of the new view so a screen reader or
   // keyboard user lands where a sighted user's eyes land, not where they were.
-  // Tools home puts back its own scroll position, so returning to it keeps its place.
+  // Not on the first load: there the page starts at its top, so the first Tab is
+  // "Skip to content" (T-16). Tools home puts back its own scroll position.
+  const shownPathRef = useRef(path);
   useEffect(() => {
-    mainRef.current?.focus({ preventScroll: true });
+    if (shownPathRef.current === path) return;
+    shownPathRef.current = path;
+    // On a tablet or desktop a tool screen's content start, past its header (research r2,
+    // desktop-03): it is named by the screen, and Shift+Tab still reaches the header. A screen
+    // that is still loading moves focus there itself once it arrives (ToolScreen).
+    const start = window.matchMedia?.(MQ_LG).matches
+      ? mainRef.current?.querySelector<HTMLElement>('[data-skip-target]')
+      : null;
+    (start ?? mainRef.current)?.focus({ preventScroll: true });
     if (path !== '/') window.scrollTo({ top: 0, behavior: 'auto' });
   }, [path]);
 
-  // The chrome is added and removed around a `<main>` that stays where it is,
-  // rather than by returning a different tree. A route that turns immersive the
-  // moment it has a workspace would otherwise be unmounted by its own state
-  // change and come back empty.
+  // A page behind Settings names itself in its own heading (B-024). Once that heading scrolls
+  // under the sticky header, the header shows the page's name, so a title is always in view
+  // (polish item 6; today's header always showed it).
+  const [headingAway, setHeadingAway] = useState(false);
+  useEffect(() => {
+    setHeadingAway(false);
+    const main = mainRef.current;
+    if (!settingsPage || !main || typeof IntersectionObserver === 'undefined') return undefined;
+    let intersection: IntersectionObserver | null = null;
+    const watch = () => {
+      const heading = main.querySelector('h1');
+      if (!heading || intersection) return Boolean(heading);
+      const header = document.querySelector<HTMLElement>('.tk-top-sticky');
+      const top = Math.round(header?.getBoundingClientRect().height ?? 49);
+      intersection = new IntersectionObserver(
+        ([entry]) => setHeadingAway(!entry.isIntersecting && entry.boundingClientRect.top < top),
+        { rootMargin: `-${top}px 0px 0px 0px` },
+      );
+      intersection.observe(heading);
+      return true;
+    };
+    // The page is loaded lazily: wait for its heading.
+    const mutation = watch() ? null : new MutationObserver(() => { if (watch()) mutation?.disconnect(); });
+    mutation?.observe(main, { childList: true, subtree: true });
+    return () => { mutation?.disconnect(); intersection?.disconnect(); };
+  }, [path, settingsPage]);
+
+  // Root screens (Tools, Recent, Settings) keep the side rail and the tab bar. Every
+  // other route is a tool screen: no rail, no tab bar, and one header with Tools at
+  // its end (plan 2.2). The chrome is added and removed around a `<main>` that stays
+  // where it is, rather than by returning a different tree: a route that turns its own
+  // chrome on would otherwise be unmounted by its own state change and come back empty.
   return (
-    <ImmersiveWorkspaceContext.Provider value={setWorkspaceImmersive}>
-      <div className="chef-viewport-floor flex">
-        {!immersive && <SideRail />}
+    <ShellChromeContext.Provider value={changeOwnChrome}>
+      <div className="chef-viewport-floor flex" data-chef-route={root ? 'root' : settingsPage ? 'settings-page' : 'tool'}>
+        {tabbed && <SideRail />}
         <div className="flex min-w-0 flex-1 flex-col">
-          {!immersive && !root && title && <ToolNavBar title={title} tool={routeTool} />}
-          <main
+          {/* A page behind Settings names itself once, in its own heading (B-024): its header
+              keeps only "‹ Settings" (or Tools). */}
+          {!root && !ownChrome && title && <ToolTop title={title} tool={routeTool} heading={false} sticky bare={settingsPage} bareTitle={settingsPage && headingAway} />}
+          <MainBox
             ref={mainRef}
             tabIndex={-1}
             id="main"
+            // Focus coming back to the page (a closed sheet returns it here) scrolls it into view;
+            // stop below the sticky header so the page's heading is not hidden under it.
+            style={!root ? { scrollMarginTop: 'calc(49px + env(safe-area-inset-top, 0px))' } : undefined}
             // Every non-root route is a tool surface. The marker is set once here
-            // so the phone density rules in `index.css` reach all 34 tools without
-            // 34 sets of edits; a tab root keeps its own header rhythm.
+            // so the phone density rules in `index.css` reach all the tools without
+            // a set of edits each; a tab root keeps its own header rhythm.
             className={cx(
               'chef-main-surface flex-1 outline-none',
-              !immersive && 'chef-safe-x chef-tab-inset md:pb-10',
-              !immersive && !root && 'chef-tool-surface',
+              tabbed && 'chef-safe-x chef-tab-inset md:pb-10',
+              settingsPage && 'chef-tool-surface',
+              !tabbed && !ownChrome && 'chef-safe-x chef-tool-inset chef-tool-surface',
             )}
           >
             {children}
-          </main>
+          </MainBox>
         </div>
-        {!immersive && <TabBar />}
+        {tabbed && <TabBar />}
       </div>
-    </ImmersiveWorkspaceContext.Provider>
+    </ShellChromeContext.Provider>
   );
 };
 

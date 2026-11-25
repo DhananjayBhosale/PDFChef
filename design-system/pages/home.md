@@ -127,8 +127,15 @@
   the same tools in the same order as the same phrase in the Android app.
 - The homepage order is a projection only: `/view` keeps its catalog identity,
   route, keywords, and search scoring. Search ties continue to use catalog order.
-- Beta and Not available status must remain visible on the row itself.
+- Beta and Not available status must remain visible on the row itself. Beta is the
+  small `BetaBadge`, the same one beside a beta tool's title.
 - The empty result must offer a reset and suggest what to type instead.
 - Must stay scannable on a 320px viewport and at 200% text.
 - The fixed phone tab bar uses the shared 60px size token, 24px icons, and 13px
   labels. Its safe-area and content inset remain token-linked.
+
+## Identity update
+
+The layout is unchanged. The screen takes the new tokens (warm paper, one tomato
+accent) and the serif title (`--font-display`). The category filter keeps its raised
+chip with a ring on a sunken track.

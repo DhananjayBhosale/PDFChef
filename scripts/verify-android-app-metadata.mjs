@@ -32,7 +32,7 @@ assert(plugin.includes('APP_METADATA_INVALID_ARGUMENT') && plugin.includes('APP_
 assert(!/getMessage\s*\(|printStackTrace\s*\(|\bLog\.|System\.out/.test(plugin), 'plugin detail leak');
 assert(!/output\.put\("(?:package|installer|signer|certificate|path|device|channel|telemetry|permission)/.test(plugin), 'private metadata output forbidden');
 assert(!/addListener|set[A-Z]|getPackageId|getInstaller|signer|certificate/.test(plugin), 'unaccepted method or private surface exposed');
-assert(!/AndroidAppMetadataPlugin/.test(mainActivity), 'registration must remain gated');
+assert(count(mainActivity, /registerPlugin\(AndroidAppMetadataPlugin\.class\)/g) === 1, 'MainActivity must register the plugin exactly once');
 
 assert(/getMetadata\(\):\s*Promise<unknown>/.test(client), 'strict no-argument native shape missing');
 assert(client.includes("registerPlugin<AndroidAppMetadataNativePlugin>('AndroidAppMetadata')"), 'native proxy drift');

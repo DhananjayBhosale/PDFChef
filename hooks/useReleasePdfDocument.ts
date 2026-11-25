@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { releasePDFDocument } from '../services/pdfBrowser';
+import { releasePDFDocument } from '../services/pdfLazy';
 
 /**
  * Closes a file's shared PDF.js document when the screen that opened it switches files or closes.

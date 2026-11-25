@@ -56,3 +56,10 @@
 - Rotated-page geometry is covered, and PDF.js can hit-test rotated or skewed source runs. Replacement-preview and Visual-fallback rendering for a text run whose own matrix is rotated or skewed is not yet certified; rotated-page proof must not be presented as rotated-run fidelity.
 - Editing document content can invalidate an existing digital signature and the interface says so.
 - Replacement-specific status follows the selected replacement and clears when the user selects an ordinary added annotation, so a stale Direct/Visual message is never presented as the mode of unrelated text or shapes.
+
+## Header
+
+The editor draws the shared `ToolTop` header (the title, Tools, and the conditional
+Back); the compact-viewport editor keeps its own slim bar (Close, Undo, Redo, Save)
+under it. The header's height is fixed (48px plus the top safe area on a phone,
+52px on desktop), so the geometry the editor measures does not move.

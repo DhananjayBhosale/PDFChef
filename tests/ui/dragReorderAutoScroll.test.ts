@@ -218,11 +218,83 @@ test('Reorder Pages drags with the shared hook and records one undo step per dra
   assert.match(hook, /onReorder: setItems/);
   assert.match(hook, /onDragEnd: commitToHistory/);
   assert.match(source, /ref=\{\(element\) => registerItem\(item\.id, element\)\}/);
-  assert.match(source, /onPointerDown=\{\(e\) => dragHandlers\.onPointerDown\(e, item\.id\)\}/);
+  // A page marks itself as the drag starts, so it stays marked where it lands.
+  assert.match(source, /onPointerDown=\{\(e\) => \{ setSelectedId\(item\.id\); dragHandlers\.onPointerDown\(e, item\.id\); \}\}/);
   assert.match(source, /top: overlayStyle\.top/);
   // The hand-rolled drag that never scrolled is gone.
   assert.doesNotMatch(source, /requestAnimationFrame|data-pageid|addEventListener\('pointermove'/);
-  // The buttons still move a page one place without dragging.
-  assert.match(source, /onClick=\{\(\) => moveItem\(i, i - 1\)\}/);
-  assert.match(source, /onClick=\{\(\) => moveItem\(i, i \+ 1\)\}/);
+  // The buttons still move a page one place without dragging, and the moved page stays marked.
+  assert.match(source, /onClick=\{\(\) => moveAndMark\(item, i, i - 1, 'up'\)\}/);
+  assert.match(source, /onClick=\{\(\) => moveAndMark\(item, i, i \+ 1, 'down'\)\}/);
+  assert.match(between(source, 'const moveAndMark', '};'), /moveItem\(from, to\);\s*setSelectedId\(item\.id\);/);
+});
+
+test('phone tiles show Move up and Move down at rest, with no tap first (research r1, H2-01)', () => {
+  const source = read('components/Tools/ReorderPDF.tsx');
+  // A file whose pages all fit lays the same tiles out by the kit's grid fit (pass 4).
+  const phoneGrid = between(source, 'ref={phoneGridRef}', '</div>\n  );');
+  assert.match(phoneGrid, /<div className="tk-rtile-moves">\{moveButtons\(item, i, true\)\}<\/div>/);
+  const css = read('components/Tool/tool.css');
+  // No rule hides an unselected tile's arrows any more, and the row is a 48 px touch target.
+  assert.doesNotMatch(css, /\.tk-rtile:not\(\[data-selected\]\)[^{]*\.tk-move/);
+  assert.match(css, /\.tk-tool \.tk-rgrid \.tk-rtile-moves > \.tk-move \{[^}]*height: 48px/);
+});
+
+/** Twelve 100 x 150 tiles in three columns with 10 px gaps, no scrolling, placed by the current order. */
+const grid = (count: number) => {
+  const scope = globalThis as unknown as Record<string, unknown>;
+  const listeners = new Map<string, Set<PointerListener>>();
+  scope.window = {
+    scrollX: 0, scrollY: 0, innerHeight: 900,
+    scrollBy: () => {},
+    addEventListener: (type: string, listener: PointerListener) => {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type)!.add(listener);
+    },
+    removeEventListener: (type: string, listener: PointerListener) => { listeners.get(type)?.delete(listener); },
+  };
+  scope.requestAnimationFrame = () => 0;
+  scope.cancelAnimationFrame = () => {};
+  let pages: Page[] = Array.from({ length: count }, (_, index) => ({ id: `page-${index}` }));
+  const rectAt = (index: number) => {
+    const left = 16 + (index % 3) * 110;
+    const top = 200 + Math.floor(index / 3) * 160;
+    return { left, top, right: left + 100, bottom: top + 150, width: 100, height: 150 };
+  };
+  return {
+    get pages() { return pages; },
+    set pages(next: Page[]) { pages = next; },
+    node: (id: string) => ({ getBoundingClientRect: () => rectAt(pages.findIndex((page) => page.id === id)) }),
+    rectAt,
+    dispatch: (type: string, clientX: number, clientY: number) => {
+      for (const listener of [...(listeners.get(type) ?? [])]) listener({ clientX, clientY });
+    },
+  };
+};
+
+test('in a grid the dragged tile takes the place it is dropped on, wherever its grip is (research r1, H2-01)', () => {
+  const run = (path: Array<[number, number]>) => {
+    const screen = grid(12);
+    const api = mountHook({
+      items: screen.pages,
+      onReorder: (next) => { screen.pages = next; },
+      keyExtractor: (page) => page.id,
+    });
+    for (const page of screen.pages) api.registerItem(page.id, screen.node(page.id) as unknown as HTMLElement);
+    // The grip is in page 12's top end corner, as on the phone tiles.
+    const start = screen.rectAt(11);
+    api.dragHandlers.onPointerDown(pointerDown(start.right - 20, start.top + 20), 'page-11');
+    for (const [x, y] of path) screen.dispatch('pointermove', x, y);
+    const [x, y] = path[path.length - 1];
+    screen.dispatch('pointerup', x, y);
+    return screen.pages.map((page) => Number(page.id.slice(5)) + 1);
+  };
+  const tile1 = grid(12).rectAt(0);
+  const tile3 = grid(12).rectAt(2);
+  // Carried by its grip onto page 1's tile (the grip over page 1's grip): it becomes page 1.
+  assert.deepEqual(run([[tile1.right - 20, 600], [tile1.right - 20, tile1.top + 20]]).slice(0, 3), [12, 1, 2]);
+  // Straight up its own column onto page 3's tile: it takes page 3's place, not a row lower.
+  assert.deepEqual(run([[tile3.right - 20, 600], [tile3.right - 20, tile3.top + 20]]).slice(0, 4), [1, 2, 12, 3]);
+  // A short wobble on its own tile changes nothing.
+  assert.deepEqual(run([[ -1 + grid(12).rectAt(11).right - 20, grid(12).rectAt(11).top + 25]]), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
 });

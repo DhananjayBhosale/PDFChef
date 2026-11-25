@@ -34,6 +34,8 @@ try {
       autoDownload: true, keepLocalHistory: false, confirmLargeJobs: false,
       largeFileWarningMb: 80, onboardingComplete: true, interfaceFont: 'inter',
     }));
+    // The app-store welcome is a modal; left up, it sits over the quality presets.
+    sessionStorage.setItem('pdfchef.mobile-app-welcome.dismissed.v1', 'true');
   });
   await page.goto(`${origin}/compress`);
   const images = await page.evaluate(() => {
@@ -74,23 +76,47 @@ try {
   const quality = page.getByRole('slider', { name: 'Compression quality' });
   const selectable = page.getByRole('switch', { name: 'Keep text selectable' });
   const compress = page.getByRole('button', { name: 'Compress', exact: true });
+  // "Keep text selectable" is the sentence's one-tap switch word (owner decision 1, A-004): one tap sets it.
+  const setSelectable = async (on) => {
+    await selectable.waitFor();
+    if (on) await selectable.check(); else await selectable.uncheck();
+    assert.equal(await selectable.getAttribute('aria-checked'), on ? 'true' : 'false');
+    // The switch keeps its words on or off (decision 2026-11-15); the sentence around it changes (pass 5, item 3).
+    assert.equal((await selectable.innerText()).trim(), 'keep the text selectable');
+  };
+  // Save opens the "PDF exported" sheet; close it before the next file.
+  // The file stays loaded after a run (T-01), so Clear brings the drop zone back for the next one.
+  const closeExported = async () => {
+    const sheet = page.getByRole('dialog').filter({ hasText: 'PDF exported' });
+    await sheet.waitFor();
+    await page.keyboard.press('Escape');
+    await sheet.waitFor({ state: 'detached' });
+    await page.getByRole('button', { name: 'Clear', exact: true }).click();
+    await page.locator('input[type=file]').waitFor({ state: 'attached' });
+  };
+  // T-01: a finished run is saved like every tool's result. With "Download automatically" on
+  // (this check's settings) Compress itself downloads and the sheet says "PDF exported"; the
+  // old "Ready to save" card and its Save button are gone.
+  const compressAndDownload = async () => {
+    const downloadPromise = page.waitForEvent('download', { timeout: 120_000 });
+    await compress.click();
+    return downloadPromise;
+  };
   const outputs = [];
   for (const preset of ['Low', 'High']) {
     await page.locator('input[type=file]').setInputFiles({
       name: 'selectable-with-photo.pdf', mimeType: 'application/pdf', buffer: sourceBytes,
     });
     await quality.waitFor();
-    await selectable.check();
+    await setSelectable(true);
     assert.equal(await quality.count(), 1, 'Quality slider must remain when text is selectable');
     await page.getByRole('button', { name: preset, exact: true }).click();
-    await selectable.uncheck();
+    await setSelectable(false);
     assert.equal(await quality.count(), 1, 'Quality slider must remain after disabling selectable text');
-    await selectable.check();
+    await setSelectable(true);
     assert.equal(await page.getByRole('button', { name: preset, exact: true }).getAttribute('aria-pressed'), 'true');
-    await compress.click();
-    const downloadPromise = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Save', exact: true }).click();
-    const download = await downloadPromise;
+    const download = await compressAndDownload();
+    await closeExported();
     const stream = await download.createReadStream();
     const chunks = [];
     for await (const chunk of stream) chunks.push(chunk);
@@ -105,12 +131,10 @@ try {
   await page.locator('input[type=file]').setInputFiles({
     name: 'selectable-with-png.pdf', mimeType: 'application/pdf', buffer: pngSource,
   });
-  await selectable.check();
+  await setSelectable(true);
   await page.getByRole('button', { name: 'Low', exact: true }).click();
-  await compress.click();
-  const pngDownloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
-  const pngDownload = await pngDownloadPromise;
+  const pngDownload = await compressAndDownload();
+  await closeExported();
   const pngStream = await pngDownload.createReadStream();
   const pngChunks = [];
   for await (const chunk of pngStream) pngChunks.push(chunk);
@@ -180,17 +204,21 @@ try {
   };
   const compressMedium = async (fileName, buffer) => {
     await page.locator('input[type=file]').setInputFiles({ name: fileName, mimeType: 'application/pdf', buffer });
-    await selectable.check();
+    await setSelectable(true);
     await page.getByRole('button', { name: 'Medium', exact: true }).click();
+    // With nothing to gain the notice says so instead of a result; that means unchanged.
+    const downloadPromise = page.waitForEvent('download', { timeout: 120_000 }).catch(() => null);
     await compress.click();
-    // With nothing to gain the result says so instead of offering Save; that means unchanged.
-    const save = page.getByRole('button', { name: 'Save', exact: true });
-    await save.or(page.getByText('Already as small as it gets')).first().waitFor();
-    if (!(await save.isVisible())) return null;
-    const downloadPromise = page.waitForEvent('download');
-    await save.click();
+    const skipped = page.getByText('Already as small as it gets');
+    const first = await Promise.race([downloadPromise, skipped.waitFor({ timeout: 120_000 }).then(() => 'skipped')]);
+    if (first === 'skipped' || !first) {
+      await page.getByRole('button', { name: 'Clear', exact: true }).click();
+      await page.locator('input[type=file]').waitFor({ state: 'attached' });
+      return null;
+    }
     const chunks = [];
-    for await (const chunk of await (await downloadPromise).createReadStream()) chunks.push(chunk);
+    for await (const chunk of await first.createReadStream()) chunks.push(chunk);
+    await closeExported();
     return Buffer.concat(chunks);
   };
   const iccSource = await makeIccSource(SRGB);
@@ -204,9 +232,51 @@ try {
   await page.locator('input[type=file]').setInputFiles({
     name: 'mobile.pdf', mimeType: 'application/pdf', buffer: sourceBytes,
   });
-  await selectable.check();
+  await setSelectable(true);
+  // On a phone the quality is a value in the sentence whose card holds the slider (owner decision 2026-11-15).
+  await page.getByRole('button', { name: /^Quality, / }).click();
   assert.equal(await quality.isVisible(), true, 'Mobile app layout must keep quality available');
-  console.log(JSON.stringify({ status: 'PASS', outputs: outputs.map(({ preset, bytes, dimensions }) => ({ preset, bytes, dimensions })), pngBytes: pngOutput.length, icc: { from: iccSource.length, to: iccOutput.length } }, null, 2));
+  // s5-01 (overnight A4): automatic download off and Recent off, two PDFs, one run. Nothing saves or
+  // keeps the results by themselves, so each would replace the last on the strip: the run gives one
+  // ZIP with both, saved from the result sheet without running again.
+  const both = await browser.newPage({ acceptDownloads: true, viewport: { width: 1280, height: 900 } });
+  await both.addInitScript(() => {
+    delete window.showSaveFilePicker;
+    localStorage.setItem('pdfchef.workspace.settings.v1', JSON.stringify({
+      autoDownload: false, keepLocalHistory: false, confirmLargeJobs: false,
+      largeFileWarningMb: 80, onboardingComplete: true, interfaceFont: 'inter',
+    }));
+    sessionStorage.setItem('pdfchef.mobile-app-welcome.dismissed.v1', 'true');
+  });
+  const early = [];
+  both.on('download', (download) => early.push(download));
+  await both.goto(`${origin}/compress`);
+  await both.locator('input[type=file]').setInputFiles([
+    { name: 'photo-a.pdf', mimeType: 'application/pdf', buffer: sourceBytes },
+    { name: 'photo-b.pdf', mimeType: 'application/pdf', buffer: pngSource },
+  ]);
+  await both.getByRole('button', { name: 'Compress', exact: true }).click();
+  const bothSheet = both.getByRole('dialog').filter({ hasText: /\.zip/ });
+  await bothSheet.waitFor({ timeout: 120_000 });
+  await both.waitForTimeout(1_000);
+  assert.equal(early.length, 0, 'nothing is saved by itself');
+  const zipDownload = both.waitForEvent('download', { timeout: 30_000 });
+  await bothSheet.getByRole('button', { name: 'Download', exact: true }).click();
+  const zipFile = await zipDownload;
+  assert.match(zipFile.suggestedFilename(), /\.zip$/, 'one ZIP');
+  const zipChunks = [];
+  for await (const chunk of await zipFile.createReadStream()) zipChunks.push(chunk);
+  const { default: JSZip } = await import('jszip');
+  const archive = await JSZip.loadAsync(Buffer.concat(zipChunks));
+  const entries = Object.keys(archive.files).sort();
+  assert.deepEqual(entries, ['compress-photo-a.pdf', 'compress-photo-b.pdf'], 'both results are in the ZIP');
+  for (const entry of entries) {
+    const head = Buffer.from(await archive.file(entry).async('uint8array')).subarray(0, 5).toString();
+    assert.equal(head, '%PDF-', `${entry} is a PDF`);
+  }
+  await both.close();
+
+  console.log(JSON.stringify({ status: 'PASS', outputs: outputs.map(({ preset, bytes, dimensions }) => ({ preset, bytes, dimensions })), pngBytes: pngOutput.length, icc: { from: iccSource.length, to: iccOutput.length }, multiFileZip: ['compress-photo-a.pdf', 'compress-photo-b.pdf'] }, null, 2));
 } finally {
   await browser.close();
 }

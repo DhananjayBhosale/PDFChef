@@ -163,7 +163,8 @@ try {
 
   await page.goto(`${baseUrl}/batch`);
   await page.getByRole('heading', { name: 'Batch processing' }).waitFor();
-  await page.getByLabel('Operation').selectOption('rotate');
+  // Operation is on screen again (owner decision 1); the sentence slot reads it back.
+  await page.getByRole('combobox', { name: 'Operation' }).first().selectOption('rotate');
   await page.locator('input[type=file]').setInputFiles([qaPdfPath, formPdfPath]);
   await page.getByRole('button', { name: /Process 2 files/ }).click();
   const batchPath = await saveCurrentOutput(page, 'batch');

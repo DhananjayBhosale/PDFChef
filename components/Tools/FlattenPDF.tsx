@@ -1,20 +1,22 @@
-import { t } from '../../services/i18n/core.ts';
+import { t, formatPercent } from '../../services/i18n/core.ts';
 import { pdfProblemMessage } from '../../services/i18n/errors.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useState } from 'react';
 import { FileUpload } from '../UI/FileUpload';
 import { PDFFile, ProcessingStatus } from '../../types';
-import { flattenPDF } from '../../services/pdfDocument';
+import { flattenPDF } from '../../services/pdfLazy';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
-import { Eye, Maximize, FileCheck } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Eye, Maximize } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { PDFPreviewModal } from '../UI/PDFPreviewModal';
-import { StatusToast } from '../UI/StatusToast';
-import { Button, StatusLine } from '../UI/Primitives';
-import { ToolHeader, ToolPanel, ToolShell } from '../UI/ToolLayout';
 import { formatBytes, toolOutputName } from '../UI/format';
 import { useConfirmDiscard } from '../../hooks/useConfirmDiscard';
+import { ToolScreen } from '../Tool/ToolScreen';
+import { ChangeFile } from '../Tool/ToolTop';
+import { Sentence } from '../Tool/Sentence';
+import { Notice, ProgressLine } from '../Tool/parts';
+import { FilePreview } from '../Tool/FilePreview';
+import { useWide } from '../../hooks/useMediaQuery';
 
 export const FlattenPDF: React.FC = () => {
   useI18n();
@@ -22,6 +24,7 @@ export const FlattenPDF: React.FC = () => {
   const [savedFile, setSavedFile] = useState<PDFFile | null>(null);
   const discardSheet = useConfirmDiscard(file !== null && file !== savedFile);
   const [showPreview, setShowPreview] = useState(false);
+  const wide = useWide();
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
 
   const handleFilesSelected = (files: File[]) => {
@@ -61,57 +64,75 @@ export const FlattenPDF: React.FC = () => {
     }
   };
 
-  return (
-    <ToolShell centered={!file}>
-      <ToolHeader title={t("flatten-pdf.flatten.pdf.86c838")} />
+  const title = t("flatten-pdf.flatten.pdf.86c838");
 
-      <AnimatePresence mode="wait">
-        {!file ? (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-             <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("flatten-pdf.choose.a.pdf.to.flatten.ed41a4")} />
-          </motion.div>
-        ) : (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mx-auto flex max-w-md flex-col gap-3">
-            <ToolPanel className="flex items-center gap-2.5">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius-control)] bg-[var(--surface-sunken)] text-[var(--text-secondary)]">
-                <FileCheck aria-hidden size={18} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <h2 className="chef-filename text-sm font-semibold text-[var(--text-primary)]">{file.name}</h2>
-                <p className="type-caption text-[var(--text-tertiary)]">{formatBytes(file.size)}</p>
-              </div>
-            </ToolPanel>
-
-            {/* Kept, and kept here rather than under the title: flattening is
-                one-way for the exported copy, and this is the line beside the
-                button that does it. */}
-            <StatusLine tone="caution">{t("flatten-pdf.filled.form.fields.become.page.content.keep.c504aa")}</StatusLine>
-
-            <div className="flex flex-col gap-2">
-              <Button
-                tone="primary"
-                block
-                busy={status.isProcessing}
-                icon={<Maximize aria-hidden size={18} />}
-                onClick={() => void handleFlatten()}
-              >{t("flatten-pdf.lock.the.answers.and.save.264d62")}</Button>
-              <Button tone="secondary" block disabled={status.isProcessing} icon={<Eye aria-hidden size={18} />} onClick={() => setShowPreview(true)}>{t("flatten-pdf.preview.pdf.f53f8f")}</Button>
-              <Button tone="quiet" block disabled={status.isProcessing} onClick={reset}>{t("flatten-pdf.choose.another.pdf.9434e3")}</Button>
-            </div>
-          </motion.div>
+  if (!file) {
+    return (
+      <ToolScreen
+        title={title}
+        kind="file"
+        body={(
+          <div className="tk-empty">
+            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("flatten-pdf.choose.a.pdf.to.flatten.ed41a4")} error={status.error} />
+          </div>
         )}
-      </AnimatePresence>
+      />
+    );
+  }
 
-      {showPreview && file && (
-        <PDFPreviewModal
-          file={file.file}
-          pageIndex={0}
-          pageLabel={file.name}
-          onClose={() => setShowPreview(false)}
+  return (
+    <ToolScreen
+      title={title}
+      file={{ name: file.name, meta: formatBytes(file.size) }}
+      heavyJob={{ bytes: file.size }}
+      change={<ChangeFile label={t('tool.chooseAnotherFile')} onClick={reset} disabled={status.isProcessing} />}
+      kind="file"
+      bodyLabel={title}
+      body={<FilePreview file={file.file} name={file.name} meta={formatBytes(file.size)} />}
+      // Kept, and kept at the button that does it: flattening is one-way for the exported copy.
+      sentence={(
+        <Sentence
+          // Two lines on a phone (review 2, item 10).
+          template="flatten-pdf.statement"
+          groupLabel={t('sentence.groupLabel', { tool: title })}
+          disabled={status.isProcessing}
         />
       )}
-      {discardSheet}
-      <StatusToast status={status} />
-    </ToolShell>
+      notice={status.error
+        ? <Notice tone="error" role="alert">{status.error}</Notice>
+        : !status.isProcessing && status.progress === 100 && status.message
+          ? <Notice role="status">{status.message}</Notice>
+          : null}
+      // On a phone the eye sits beside the main action, with its words as its name, so the foot
+      // is one row of actions (review 2, item 10). Desktop keeps the words.
+      secondary={(
+        <button type="button" disabled={status.isProcessing} onClick={() => setShowPreview(true)} title={wide ? undefined : t("flatten-pdf.preview.pdf.f53f8f")} className="tk-btn chef-pressable">
+          <Eye aria-hidden size={18} />
+          <span className={wide ? undefined : 'sr-only'}>{t("flatten-pdf.preview.pdf.f53f8f")}</span>
+        </button>
+      )}
+      action={(
+        <button type="button" disabled={status.isProcessing} onClick={() => void handleFlatten()} className="tk-primary chef-pressable">
+          <Maximize aria-hidden size={18} />
+          <span>{t("flatten-pdf.lock.the.answers.and.save.264d62")}</span>
+        </button>
+      )}
+      progress={status.isProcessing ? (
+        <ProgressLine label={status.message} percent={formatPercent(Math.max(0, Math.min(100, status.progress)))} value={status.progress} />
+      ) : undefined}
+      extra={(
+        <>
+          {showPreview && (
+            <PDFPreviewModal
+              file={file.file}
+              pageIndex={0}
+              pageLabel={file.name}
+              onClose={() => setShowPreview(false)}
+            />
+          )}
+          {discardSheet}
+        </>
+      )}
+    />
   );
 };

@@ -334,7 +334,7 @@ export const PdfParagraphInspector: React.FC<Props> = ({
       aria-label={t("pdf-paragraph-inspector.paragraph.formatting.b29313")}
       className={compact
         ? 'chef-paragraph-dock relative mx-auto mb-2 max-w-md border-b border-[var(--border-hairline)] pb-1'
-        : 'mx-auto w-full rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 shadow-lg'}
+        : 'min-w-0 flex-1'}
     >
       {/* A phone wraps rather than scrolling sideways: every control has to be reachable without
           discovering that the strip moves. While the keyboard is up only the row a typist reaches
@@ -351,10 +351,11 @@ export const PdfParagraphInspector: React.FC<Props> = ({
             {colourField}
           </div>
           {details}
+          {/* Its own row, clear of the field's focus ring under it (review 2, item 14). */}
           <p
             data-testid="pdf-paragraph-status"
             role="status"
-            className={`${statusVisibility} items-start gap-1.5 px-0.5 pt-1 text-sm font-medium leading-5 ${caution ? 'text-[var(--status-caution-text)]' : 'text-[var(--text-secondary)]'}`}
+            className={`${statusVisibility} items-start gap-1.5 px-0.5 pb-2 pt-1 text-sm font-medium leading-5 ${caution ? 'text-[var(--status-caution-text)]' : 'text-[var(--text-secondary)]'}`}
           >{caution && <AlertTriangle aria-hidden size={16} className="mt-0.5 shrink-0" />}{status}</p>
           {field}
           <div className="flex min-h-11 flex-wrap items-center gap-x-1.5">
@@ -367,7 +368,9 @@ export const PdfParagraphInspector: React.FC<Props> = ({
         </div>
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-2">
+          {/* A wide screen draws this row in the page panel's top band, beside the zoom, where the
+              room already is: choosing a paragraph moves nothing (path to 9, part 2). */}
+          <div className="flex min-h-12 flex-wrap items-center gap-1.5">
             {typefaceGroup}
             {emphasisGroup}
             {sizeGroup}
@@ -378,8 +381,9 @@ export const PdfParagraphInspector: React.FC<Props> = ({
             {doneButton}
           </div>
           {/* This line is the answer to "what will saving do to my document", so it is set at the
-              body size rather than the smallest one available. */}
-          <div className="mt-1 flex min-h-8 items-center gap-1 px-0.5">
+              body size rather than the smallest one available. It takes a line only once there is
+              something to say; until then it is only announced. */}
+          <div className={status ? 'mt-1 flex min-h-8 items-center gap-1 px-0.5' : 'sr-only'}>
             <p
               data-testid="pdf-paragraph-status"
               role="status"

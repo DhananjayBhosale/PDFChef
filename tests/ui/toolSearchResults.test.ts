@@ -23,3 +23,19 @@ test('Word to PDF can be found by name', () => {
   assert.equal(search('word to pdf')[0], '/word-to-pdf');
   assert.equal(search('docx to pdf')[0], '/word-to-pdf');
 });
+
+test('a word that names no tool lists nothing, and two letters match only whole words', () => {
+  // "zzzz-no-tool" listed six tools: "no" started "notes", "tool" started "tools".
+  assert.deepEqual(search('zzzz-no-tool'), []);
+  assert.deepEqual(search('no'), []);
+  // The start of a tool's own name still counts at two letters.
+  assert.equal(search('ro')[0], '/rotate');
+  // A synonym found only in descriptions no longer lists every tool that says "document".
+  assert.ok(search('scan').length <= 4);
+  assert.equal(search('scan')[0], '/make-pdf');
+  // "numbers" means "page" too, but that must not list every page tool.
+  assert.deepEqual(search('page numbers'), ['/page-numbers']);
+  // A phrase the app knows still finds its tool.
+  assert.deepEqual(search('make smaller'), ['/compress']);
+  assert.equal(search('remove password')[0], '/unlock');
+});

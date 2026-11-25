@@ -1,31 +1,28 @@
-import { formatPercent, formatNumber } from '../../services/i18n/core.ts';
-import { localizeError } from '../../services/i18n/errors.ts';
+import { formatPercent } from '../../services/i18n/core.ts';
+import { pdfFailureMessage } from '../../services/i18n/errors.ts';
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
-import React, { useMemo, useRef, useState } from 'react';
-import JSZip from 'jszip';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { reserveArchiveName } from '../../services/pdfToolResults';
-import { AlertTriangle, Plus, ArrowDown, ArrowUp, Files, Loader2, Trash2, XCircle } from 'lucide-react';
+import { Plus, Files, XCircle } from 'lucide-react';
 import { FileUpload } from '../UI/FileUpload';
 import { StatusToast } from '../UI/StatusToast';
-import { ToolHeader, ToolShell } from '../UI/ToolLayout';
-import { analyzePDF, compressPDFAdaptive, extractTextFromPDF, loadPDFDocument, releasePDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
-import {
-  addPageNumbersToPDF,
-  addWatermarkToPDF,
-  flattenPDF,
-  protectPDF,
-  removePDFMetadata,
-  repairPDF,
-  rotatePDF,
-  splitPDFByPagesPerFile,
-  unlockPDF,
-} from '../../services/pdfDocument';
-import { convertPDFToDocx } from '../../services/docxExport';
+import { ClampedNumberInput } from '../UI/ClampedNumberInput';
+import { ToolScreen } from '../Tool/ToolScreen';
+import { Sentence, type SlotDef } from '../Tool/Sentence';
+import { Notice, ProgressLine } from '../Tool/parts';
+import { QueueGhost, QueueRow } from '../Tool/QueueRow';
+import { useCanvasScroller } from '../Tool/useCanvasScroller';
+import { useDragReorder } from '../../hooks/useDragReorder';
+import { useFileDrop } from '../../hooks/useFileDrop';
+import { quoted, clipLength } from '../Tool/values';
+import { useWide } from '../../hooks/useMediaQuery';
+import { addPageNumbersToPDF, addWatermarkToPDF, analyzePDF, compressPDFAdaptive, convertPDFToDocx, extractTextFromPDF, flattenPDF, loadJSZip, loadPDFDocument, needsOpenPassword, pdfFileProblem, protectPDF, releasePDFDocument, removePDFMetadata, renderPageAsImage, repairPDF, rotatePDF, splitPDFByPagesPerFile, unlockPDF } from '../../services/pdfLazy';
 import { downloadBlob, revokeObjectUrl } from '../../services/pdfShared';
-import { recordSavings, shouldWarnForFiles } from '../../services/workspace';
+import { recordSavings } from '../../services/workspace';
 import type { ProcessingStatus } from '../../types';
-import { formatBytes, toolOutputName, datedOutputName } from '../UI/format';
+import { formatBytes, keptPdfName, toolOutputName, datedOutputName } from '../UI/format';
+import { useRemembered } from '../Tool/useRemembered';
 
 type BatchAction = 'compress' | 'split' | 'pdf-to-image' | 'pdf-to-word' | 'rotate' | 'protect' | 'unlock' | 'metadata' | 'flatten' | 'extract-text' | 'watermark' | 'page-numbers' | 'repair';
 type BatchItemPhase = 'queued' | 'processing' | 'completed' | 'failed' | 'canceled';
@@ -84,27 +81,63 @@ const phaseClasses: Record<BatchItemPhase, string> = {
 
 export const BatchPDF: React.FC = () => {
   useI18n();
+  const wide = useWide();
   const [files, setFiles] = useState<File[]>([]);
-  const [action, setAction] = useState<BatchAction>('compress');
+  const [action, setAction] = useRemembered<BatchAction>('operation', 'compress', (value) => actions.some((item) => item.value === value));
   const [password, setPassword] = useState('');
-  const [pagesPerSplit, setPagesPerSplit] = useState(1);
-  const [rotation, setRotation] = useState(90);
-  const [watermark, setWatermark] = useState('CONFIDENTIAL');
+  const [pagesPerSplit, setPagesPerSplit] = useRemembered<number>('pagesPerPart', 1, (value) => Number.isSafeInteger(value) && value >= 1);
+  const [rotation, setRotation] = useRemembered<number>('rotation', 90, (value) => value === 90 || value === 180 || value === 270);
+  const [watermark, setWatermark] = useRemembered<string>('watermarkText', 'CONFIDENTIAL');
   const [status, setStatus] = useState<ProcessingStatus>(idleStatus());
   const [itemStatuses, setItemStatuses] = useState<Record<string, BatchItemStatus>>({});
   const [selectionNotice, setSelectionNotice] = useState('');
+  const operationRef = useRef<HTMLSelectElement>(null);
+  const optionInputRef = useRef<HTMLInputElement>(null);
+  const optionSelectRef = useRef<HTMLSelectElement>(null);
   const [cancelPending, setCancelPending] = useState(false);
   const cancelRequestedRef = useRef(false);
+  // Leaving the tool discards the files, as its question says, so a running job stops with it
+  // (no result arrives after the person has left).
+  useEffect(() => () => { cancelRequestedRef.current = true; }, []);
+  // Unlock: which files ask for a password (true), open without one (false), or cannot be read
+  // (null), so the sentence and each row say so (path to 9, part 2). Asked once per file.
+  const [locks, setLocks] = useState<Record<string, boolean | null>>({});
+  useEffect(() => {
+    if (action !== 'unlock') return undefined;
+    let stale = false;
+    for (const file of files) {
+      const key = fileKey(file);
+      if (key in locks) continue;
+      void needsOpenPassword(file).then((locked) => {
+        if (!stale) setLocks((current) => (key in current ? current : { ...current, [key]: locked }));
+      });
+    }
+    return () => { stale = true; };
+    // `locks` is read, not watched: a new answer must not ask again for the files still pending.
+  }, [action, files]);
+  const unlockChecked = action === 'unlock' && files.length > 0 && files.every((file) => fileKey(file) in locks);
+  // Every file opens without a password: Unlock only lifts their limits, and asks for no password.
+  const noneLocked = unlockChecked && files.every((file) => locks[fileKey(file)] === false);
+  // Some files are locked and some are not: the password is for the locked ones only.
+  const lockedCount = files.filter((file) => locks[fileKey(file)] === true).length;
+  const someLocked = unlockChecked && lockedCount > 0 && lockedCount < files.length;
+  // Page counts come from the row thumbnails, as each first page is drawn.
+  const [pageCounts, setPageCounts] = useState<Record<string, number>>({});
   const selectedAction = useMemo(() => actions.find((item) => item.value === action)!, [action]);
   const totalSize = useMemo(() => files.reduce((sum, file) => sum + file.size, 0), [files]);
   const validationMessage = useMemo(() => {
     if (!files.length) return t("batch-pdf.add.at.least.one.pdf.to.start.8ab537");
-    if ((action === 'protect' || action === 'unlock') && password.length === 0) {
+    if ((action === 'protect' || (action === 'unlock' && !noneLocked)) && password.length === 0) {
       return t("batch-pdf.enter.the.password.exactly.as.it.should.aae08d");
     }
+    // Protect PDF's own rules and words (s3-05): a password it would refuse fails every file here.
+    if (action === 'protect' && !/\S/.test(password)) return t("security-pdf.password.is.required.to.protect.a.pdf.5153a4");
+    if (action === 'protect' && password.length < 4) return t("security-pdf.at.least.4.characters.with.spaces.preserved.e0bf40");
     if (action === 'watermark' && watermark.trim().length === 0) return t("batch-pdf.enter.visible.watermark.text.7de701");
+    // Whole pages only: 1.5 would split into one-page parts (s3-04). The existing Split wording.
+    if (action === 'split' && !(Number.isSafeInteger(pagesPerSplit) && pagesPerSplit >= 1)) return t("split-pdf.pages.per.file.must.be.a.positive.85ff63");
     return '';
-  }, [action, files.length, password, watermark]);
+  }, [action, files.length, noneLocked, pagesPerSplit, password, watermark]);
 
   const clearRunFeedback = () => {
     if (status.isProcessing) return;
@@ -125,7 +158,6 @@ export const BatchPDF: React.FC = () => {
     const merged = [...files, ...pdfs].filter((file, index, all) => (
       all.findIndex((candidate) => fileKey(candidate) === fileKey(file)) === index
     ));
-    if (shouldWarnForFiles(merged) && !window.confirm(t("batch-pdf.these.pdfs.may.use.substantial.browser.memory.982c0c"))) return;
 
     const duplicateCount = pdfs.length - (merged.length - files.length);
     const noticeParts: string[] = [];
@@ -160,6 +192,19 @@ export const BatchPDF: React.FC = () => {
     clearRunFeedback();
   };
 
+  const scroller = useCanvasScroller();
+  const { activeId, dragHandlers, registerItem, overlayStyle } = useDragReorder<File>({
+    scrollContainerRef: scroller.ref,
+    items: files,
+    onReorder: (next) => {
+      if (status.isProcessing) return;
+      setFiles(next);
+      clearRunFeedback();
+    },
+    keyExtractor: fileKey,
+  });
+  const draggedFile = files.find((file) => fileKey(file) === activeId);
+
   const processFile = async (
     file: File,
     onProgress: (progress: number) => void,
@@ -190,7 +235,7 @@ export const BatchPDF: React.FC = () => {
       checkCanceled();
       if (result.status !== 'success') throw new Error(t("batch-pdf.compression.was.blocked.by.the.readability.safety.99233a"));
       // Like Compress PDF: when the new copy is not smaller, the original is what is kept.
-      if (result.data.length === 0 || result.data.length >= file.size) return { blob: file, filename: file.name };
+      if (result.data.length === 0 || result.data.length >= file.size) return { blob: file, filename: keptPdfName(file.name) };
       recordSavings(file.size, result.data.length);
       return { blob: bytesBlob(result.data), filename: toolOutputName('compress', file.name, 'pdf') };
     }
@@ -200,10 +245,10 @@ export const BatchPDF: React.FC = () => {
     }
     if (action === 'pdf-to-image') {
       const pdf = await loadPDFDocument(file);
-      const zip = new JSZip();
+      const zip = new (await loadJSZip())();
       for (let pageIndex = 0; pageIndex < pdf.numPages; pageIndex += 1) {
         checkCanceled();
-        const rendered = await renderPageAsImage(pdf, pageIndex, { format: 'image/jpeg', quality: 0.88, scale: 1.5 });
+        const rendered = await renderPageAsImage(pdf, pageIndex, { format: 'image/jpeg', quality: 0.88, scale: 1.5 }, { fullSize: true });
         try {
           zip.file(`page-${String(pageIndex + 1).padStart(3, '0')}.jpg`, rendered.blob);
         } finally {
@@ -217,7 +262,8 @@ export const BatchPDF: React.FC = () => {
     if (action === 'pdf-to-word') return { blob: finish(await convertPDFToDocx(file)), filename: `${baseName(file.name)}.docx` };
     if (action === 'rotate') return { blob: bytesBlob(finish(await rotatePDF(file, rotation))), filename: toolOutputName('rotate', file.name, 'pdf') };
     if (action === 'protect') return { blob: bytesBlob(finish(await protectPDF(file, password))), filename: toolOutputName('protect', file.name, 'pdf') };
-    if (action === 'unlock') return { blob: bytesBlob(finish(await unlockPDF(file, password))), filename: toolOutputName('unlock', file.name, 'pdf') };
+    // A file that opens without a password only has its limits lifted, as Unlock PDF does.
+    if (action === 'unlock') return { blob: bytesBlob(finish(await unlockPDF(file, locks[fileKey(file)] === false ? '' : password))), filename: toolOutputName('unlock', file.name, 'pdf') };
     if (action === 'metadata') return { blob: bytesBlob(finish(await removePDFMetadata(file))), filename: toolOutputName('metadata', file.name, 'pdf') };
     if (action === 'flatten') return { blob: bytesBlob(finish(await flattenPDF(file))), filename: toolOutputName('flatten', file.name, 'pdf') };
     if (action === 'extract-text') return { blob: new Blob([finish(await extractTextFromPDF(file))], { type: 'text/plain' }), filename: `${baseName(file.name)}.txt` };
@@ -262,7 +308,7 @@ export const BatchPDF: React.FC = () => {
     ])));
     setStatus({ isProcessing: true, progress: 1, message: t("batch-pdf.starting.batch.ae96f9") });
 
-    const zip = new JSZip();
+    const zip = new (await loadJSZip())();
     const archiveNames = new Set<string>(['failures.txt']);
     const failures: string[] = [];
     let completedCount = 0;
@@ -296,7 +342,12 @@ export const BatchPDF: React.FC = () => {
             setItemStatuses((current) => ({ ...current, [key]: { phase: 'canceled', progress: 0 } }));
             break;
           }
-          const message = error instanceof Error ? localizeError(error) : t("batch-pdf.this.file.could.not.be.processed.skip.c11e2e");
+          // A file problem in words (locked, not a PDF, unreadable), this app's own message, or the
+          // queue's fallback: never the PDF engine's raw error text (round 6, desktop-02).
+          // A job that fails on a locked file (Protect PDF on one, h4 F4) is told to unlock it, not
+          // to run Repair PDF, which would only say the same.
+          const message = await pdfFileProblem(file, error).catch(() => null)
+            ?? pdfFailureMessage(error, t("batch-pdf.this.file.could.not.be.processed.skip.c11e2e"));
           failures.push(`${file.name}: ${message}`);
           setItemStatuses((current) => ({ ...current, [key]: { phase: 'failed', progress: 0, message } }));
         } finally {
@@ -365,245 +416,354 @@ export const BatchPDF: React.FC = () => {
     setStatus((current) => ({ ...current, message: t("batch-pdf.canceling.after.the.current.file.step.52a454") }));
   };
 
-  return (
-    <ToolShell width="wide" centered={files.length === 0}>
-      {/* Kept: the ZIP is the one thing the Operation control and the Process
-          button do not say. */}
-      <ToolHeader title={t("batch-pdf.batch.processing.36bf5b")} note={t("batch-pdf.every.result.is.returned.in.one.zip.5e9c36")} />
+  const title = t("batch-pdf.batch.processing.36bf5b");
+  const toast = <StatusToast status={status} />;
+  const queueEmpty = files.length === 0;
+  const hasOption = action === 'split' || action === 'rotate' || action === 'protect' || action === 'unlock' || action === 'watermark';
+  const rotationText = rotation === 180 ? '180°' : rotation === 270 ? t("batch-pdf.90.counter.clockwise.6e82c5") : t("batch-pdf.90.clockwise.999bed");
 
-      <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
-        <aside className="order-1 h-fit rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 sm:p-4 lg:order-1">
+  // Today's Operation select and its option field, on the screen at rest (owner decision 1,
+  // B-013): under the sentence in the foot sheet on phones, in the band on desktop. The
+  // sentence reads the choice back in plain words. The detail line and the
+  // password rule are visible again (decision 4, B-014).
+  const operationControl = (
+    <>
+      <label className="tk-field">
+        <span>{t("batch-pdf.operation.0f044f")}</span>
+        <select
+          ref={operationRef}
+          value={action}
+          onChange={(event) => {
+            setAction(event.target.value as BatchAction);
+            clearRunFeedback();
+          }}
+          disabled={status.isProcessing}
+          aria-describedby={selectedAction.detail ? 'batch-operation-detail' : undefined}
+          className="chef-field disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {actions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+        </select>
+      </label>
+      {selectedAction.detail && <p id="batch-operation-detail" className="tk-caution tk-batch-detail">{selectedAction.detail}</p>}
+    </>
+  );
+
+  const optionControl = action === 'split' ? (
+    <label className="tk-field">
+      <span>{t("batch-pdf.pages.per.part.889bc1")}</span>
+      <ClampedNumberInput
+        ref={optionInputRef}
+        min={1}
+        max={1000}
+        inputMode="numeric"
+        value={pagesPerSplit}
+        onCommit={(next) => {
+          clearRunFeedback();
+          setPagesPerSplit(next);
+        }}
+        disabled={status.isProcessing}
+        className="chef-field disabled:cursor-not-allowed disabled:opacity-60"
+      />
+    </label>
+  ) : action === 'rotate' ? (
+    <label className="tk-field">
+      <span>{t("batch-pdf.rotation.57b5e2")}</span>
+      <select
+        ref={optionSelectRef}
+        value={rotation}
+        onChange={(event) => {
+          clearRunFeedback();
+          setRotation(Number(event.target.value));
+        }}
+        disabled={status.isProcessing}
+        className="chef-field disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <option value={90}>{t("batch-pdf.90.clockwise.999bed")}</option>
+        <option value={180}>180°</option>
+        <option value={270}>{t("batch-pdf.90.counter.clockwise.6e82c5")}</option>
+      </select>
+    </label>
+  ) : (action === 'protect' || action === 'unlock') ? (
+    <label className="tk-field">
+      <span>{t("batch-pdf.password.e7cf3e")}</span>
+      <input
+        ref={optionInputRef}
+        type="password"
+        value={password}
+        onChange={(event) => {
+          clearRunFeedback();
+          setPassword(event.target.value);
+        }}
+        autoComplete="new-password"
+        aria-describedby="batch-password-hint"
+        disabled={status.isProcessing}
+        className="chef-field disabled:cursor-not-allowed disabled:opacity-60"
+      />
+      <span id="batch-password-hint" className="tk-caution">{t("batch-pdf.spaces.are.preserved.exactly.876f4a")}</span>
+    </label>
+  ) : action === 'watermark' ? (
+    <label className="tk-field">
+      <span>{t("batch-pdf.watermark.text.9429e8")}</span>
+      <input
+        ref={optionInputRef}
+        value={watermark}
+        onChange={(event) => {
+          clearRunFeedback();
+          setWatermark(event.target.value);
+        }}
+        disabled={status.isProcessing}
+        className="chef-field disabled:cursor-not-allowed disabled:opacity-60"
+      />
+    </label>
+  ) : null;
+
+  // The option's value in the sentence (the password is never shown). Desktop: plain words, like
+  // the operation; the field itself is on screen under the sentence, the one place to change it.
+  // Phone: the value opens a card that holds the field, so the setting shows once (owner decision
+  // 2026-11-15, item 1).
+  const optionSlot = (): SlotDef | null => {
+    if (!optionControl) return null;
+    const base: Partial<SlotDef> = wide ? { static: true } : { editor: optionControl, showTitle: false };
+    if (action === 'split') return { ...base, label: t("batch-pdf.pages.per.part.889bc1"), text: t('sentence.batch.option.split', { count: pagesPerSplit }) };
+    if (action === 'rotate') return { ...base, label: t("batch-pdf.rotation.57b5e2"), text: rotationText };
+    // No file here needs a password: the sentence does not say "with a password".
+    if (action === 'unlock' && noneLocked) return null;
+    if (action === 'watermark') {
+      const empty = watermark.trim().length === 0;
+      return {
+        ...base,
+        label: t("batch-pdf.watermark.text.9429e8"),
+        text: empty ? t('sentence.batch.option.watermark.unset') : quoted(watermark.trim(), clipLength(wide)),
+        tone: empty ? 'error' : undefined,
+      };
+    }
+    const empty = password.length === 0;
+    return {
+      ...base,
+      label: t("batch-pdf.password.e7cf3e"),
+      text: empty
+        ? t('sentence.batch.option.password.unset')
+        : someLocked
+          ? t('sentence.batch.option.password.forLocked', { count: lockedCount })
+          : t('sentence.batch.option.password.set'),
+      tone: empty ? 'error' : undefined,
+    };
+  };
+
+  // Desktop: the sentence reads the choice back as plain words; the Operation select under it is
+  // the one place it is chosen (polish item 5). Phone: the operation opens a card with the select
+  // (and the option's field when the sentence has no slot for it).
+  const option = optionSlot();
+  const operationSlot: SlotDef = {
+    label: t("batch-pdf.operation.0f044f"),
+    text: selectedAction.label,
+    ...(wide ? { static: true } : {
+      editor: (
+        <div className="tk-batch-settings">
+          <div className="tk-batch-setting">{operationControl}</div>
+          {optionControl && !(option && !queueEmpty) && <div className="tk-batch-setting">{optionControl}</div>}
+        </div>
+      ),
+      showTitle: false,
+    }),
+  };
+  const settings = (
+    <div className="tk-batch-settings" data-option={hasOption ? '' : undefined}>
+      <div className="tk-batch-setting">{operationControl}</div>
+      {optionControl && <div className="tk-batch-setting">{optionControl}</div>}
+    </div>
+  );
+
+  const sentence = (
+    <Sentence
+      // A turn reads as one ("…, turning each 90° clockwise."), not "with 90° clockwise" (review 2, item 17).
+      template={queueEmpty ? 'sentence.batch.empty' : option ? (action === 'rotate' ? 'sentence.batch.rotate' : 'sentence.batch.withOption') : 'sentence.batch.plain'}
+      values={{ files: t('sentence.batch.files', { count: files.length || 1 }) }}
+      groupLabel={t('sentence.groupLabel', { tool: title })}
+      disabled={status.isProcessing}
+      slots={queueEmpty || !option ? { operation: operationSlot } : { operation: operationSlot, option }}
+    />
+  );
+
+  // One line, the first that applies (D10): a failed run, a canceled run (no ZIP, so no
+  // result strip to carry it), today's validation, the skipped-files line, the ZIP line.
+  // A finished run's summary is the result strip's line (owner decision 2).
+  const notice = !status.isProcessing && status.error
+    ? <Notice tone="error" role="alert">{status.error}</Notice>
+    : !status.isProcessing && status.message && status.progress !== 100
+      ? <Notice tone="caution" role="status">{status.message}</Notice>
+    : !status.isProcessing && validationMessage && files.length > 0
+    // Today shows the skipped-files line and the validation together; keep both.
+    ? <Notice tone="caution">{validationMessage}{selectionNotice && <><br />{selectionNotice}</>}</Notice>
+    : selectionNotice
+      ? <Notice tone="caution" role="status">{selectionNotice}</Notice>
+      : <Notice>{t("batch-pdf.every.result.is.returned.in.one.zip.5e9c36")}</Notice>;
+
+  const runAction = (
+    <button
+      type="button"
+      onClick={() => void runBatch()}
+      disabled={status.isProcessing || Boolean(validationMessage)}
+      className="tk-primary chef-pressable"
+    >
+      <Files aria-hidden size={18} />
+      <span>{t("batch-pdf.message.cc8a61d63f", { count: files.length })}</span>
+    </button>
+  );
+
+  const progress = status.isProcessing ? (
+    <ProgressLine
+      label={status.message}
+      percent={formatPercent(status.progress)}
+      value={clampProgress(status.progress)}
+      cancel={(
+        <button
+          type="button"
+          onClick={cancelBatch}
+          disabled={cancelPending}
+          className="tk-btn chef-pressable"
+        >
+          <XCircle aria-hidden size={16} />
+          {cancelPending ? t("batch-pdf.canceling.7d0901") : t("batch-pdf.cancel.batch.db540a")}
+        </button>
+      )}
+    />
+  ) : undefined;
+
+  // A file dropped on the loaded list joins it (research r3, desktop-01).
+  useFileDrop({ accept: queueEmpty ? '' : '.pdf,application/pdf', onFiles: addFiles });
+
+  if (queueEmpty) {
+    return (
+      <ToolScreen
+        title={title}
+        kind="file"
+        body={(
+          <div className="tk-empty">
+            <FileUpload onFilesSelected={addFiles} accept=".pdf,application/pdf" multiple label={t("batch-pdf.add.pdfs.to.the.batch.c7745d")} />
+          </div>
+        )}
+        sentence={sentence}
+        chips={wide ? settings : undefined}
+        notice={notice}
+        action={runAction}
+        toast={toast}
+      />
+    );
+  }
+
+  const body = (
+    <div ref={scroller.attach} aria-busy={status.isProcessing} className="select-none">
+      <section aria-labelledby="batch-queue-heading">
+        {/* "Files run from top to bottom" is what a numbered queue with
+            move-up and move-down controls already shows. */}
+        <div className="tk-listhead tk-listhead-batch mb-2 flex-wrap">
+          <div className="min-w-0">
+            <h2 id="batch-queue-heading" className="text-sm font-bold text-[var(--text-primary)]">{t("batch-pdf.ordered.queue.0d6495")}</h2>
+            <p className="type-footnote font-semibold text-[var(--text-secondary)]">{t("batch-pdf.message.ab18fb4c2c", { v2: formatBytes(totalSize), count: files.length })}</p>
+          </div>
+          {/* The one "Add PDFs": the head of the queue stays at the top however long it is (B-015, T-12). */}
           {!status.isProcessing && (
-            <div className="mb-3">
-              {files.length > 0 ? (
-                <label className="chef-target chef-pressable flex w-full cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-field)] border border-dashed border-[var(--border-strong)] px-4 text-sm font-semibold text-[var(--accent-text)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--focus-ring)]">
-                  <Plus aria-hidden size={18} />{t("batch-pdf.add.pdfs.e2f591")}<input
-                    type="file"
-                    accept=".pdf,application/pdf"
-                    multiple
-                    aria-label={t("batch-pdf.add.pdfs.to.the.batch.c7745d")}
-                    className="sr-only"
-                    onChange={(event) => {
-                      const picked = Array.from(event.target.files ?? []) as File[];
-                      if (picked.length) addFiles(picked);
-                      event.target.value = '';
-                    }}
-                  />
-                </label>
-              ) : (
-                <FileUpload onFilesSelected={addFiles} accept=".pdf,application/pdf" multiple label={t("batch-pdf.add.pdfs.to.the.batch.c7745d")} />
-              )}
-            </div>
-          )}
-          <label className="block text-sm font-bold text-[var(--text-body)]">{t("batch-pdf.operation.0f044f")}<select
-              value={action}
-              onChange={(event) => {
-                setAction(event.target.value as BatchAction);
-                clearRunFeedback();
-              }}
-              disabled={status.isProcessing}
-              className="chef-field mt-1 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {actions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-            </select>
-          </label>
-          {selectedAction.detail && (
-            <p className="type-footnote mt-1.5 text-[var(--text-secondary)]">{selectedAction.detail}</p>
-          )}
-
-          {action === 'split' && (
-            <label className="mt-3 block text-sm font-bold text-[var(--text-body)]">{t("batch-pdf.pages.per.part.889bc1")}<input
-                type="number"
-                min={1}
-                max={1000}
-                inputMode="numeric"
-                value={pagesPerSplit}
+            <label className="tk-btn tk-add-btn chef-pressable cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--focus-ring)]">
+              <Plus aria-hidden size={16} />{t("batch-pdf.add.pdfs.e2f591")}<input
+                type="file"
+                accept=".pdf,application/pdf"
+                multiple
+                aria-label={t("batch-pdf.add.pdfs.to.the.batch.c7745d")}
+                className="sr-only"
                 onChange={(event) => {
-                  clearRunFeedback();
-                  setPagesPerSplit(Math.min(1000, Math.max(1, Number(event.target.value) || 1)));
+                  const picked = Array.from(event.target.files ?? []) as File[];
+                  if (picked.length) addFiles(picked);
+                  event.target.value = '';
                 }}
-                disabled={status.isProcessing}
-                className="chef-field mt-2 disabled:cursor-not-allowed disabled:opacity-60"
               />
             </label>
-          )}
-          {action === 'rotate' && (
-            <label className="mt-3 block text-sm font-bold text-[var(--text-body)]">{t("batch-pdf.rotation.57b5e2")}<select
-                value={rotation}
-                onChange={(event) => {
-                  clearRunFeedback();
-                  setRotation(Number(event.target.value));
-                }}
-                disabled={status.isProcessing}
-                className="chef-field mt-2 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <option value={90}>{t("batch-pdf.90.clockwise.999bed")}</option>
-                <option value={180}>180°</option>
-                <option value={270}>{t("batch-pdf.90.counter.clockwise.6e82c5")}</option>
-              </select>
-            </label>
-          )}
-          {(action === 'protect' || action === 'unlock') && (
-            <label className="mt-3 block text-sm font-bold text-[var(--text-body)]">{t("batch-pdf.password.e7cf3e")}<input
-                type="password"
-                value={password}
-                onChange={(event) => {
-                  clearRunFeedback();
-                  setPassword(event.target.value);
-                }}
-                autoComplete="new-password"
-                disabled={status.isProcessing}
-                className="chef-field mt-2 disabled:cursor-not-allowed disabled:opacity-60"
-              />
-              <span className="mt-1 block text-xs font-normal text-[var(--text-tertiary)]">{t("batch-pdf.spaces.are.preserved.exactly.876f4a")}</span>
-            </label>
-          )}
-          {action === 'watermark' && (
-            <label className="mt-3 block text-sm font-bold text-[var(--text-body)]">{t("batch-pdf.watermark.text.9429e8")}<input
-                value={watermark}
-                onChange={(event) => {
-                  clearRunFeedback();
-                  setWatermark(event.target.value);
-                }}
-                disabled={status.isProcessing}
-                className="chef-field mt-2 disabled:cursor-not-allowed disabled:opacity-60"
-              />
-            </label>
-          )}
-
-          {status.isProcessing && (
-            <div role="status" aria-live="polite" className="mt-3 rounded-[var(--radius-field)] bg-[var(--surface-sunken)] px-3 py-2.5">
-              <div className="flex items-start justify-between gap-3 text-sm font-semibold text-[var(--text-body)]">
-                <span className="min-w-0 break-words">{status.message}</span>
-                <span className="shrink-0 tabular-nums">{formatPercent(status.progress)}</span>
-              </div>
-              <div
-                role="progressbar"
-                aria-label={t("batch-pdf.batch.progress.17a0e5")}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={status.progress}
-                className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--surface-canvas)]"
-              >
-                <div className="h-full rounded-full bg-[var(--accent-rest)] transition-[width]" style={{ width: `${clampProgress(status.progress)}%` }} />
-              </div>
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={() => void runBatch()}
-            disabled={status.isProcessing || Boolean(validationMessage)}
-            className="chef-target chef-pressable mt-3 inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-transparent bg-[var(--accent-rest)] px-4 text-sm font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:border-[var(--border-hairline)] disabled:bg-[var(--surface-sunken)] disabled:text-[var(--text-tertiary)] disabled:opacity-100"
-          >
-            {status.isProcessing ? <Loader2 aria-hidden className="animate-spin" size={18} /> : <Files aria-hidden size={18} />}{t("batch-pdf.message.cc8a61d63f", { count: files.length })}</button>
-          {!status.isProcessing && validationMessage && files.length > 0 && (
-            <p className="mt-2 text-sm text-[var(--text-secondary)]">{validationMessage}</p>
-          )}
-          {status.isProcessing && (
-            <button
-              type="button"
-              onClick={cancelBatch}
-              disabled={cancelPending}
-              className="chef-target chef-pressable mt-2 inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-4 text-sm font-semibold text-[var(--text-primary)] hover:border-[var(--accent-rest)] disabled:cursor-not-allowed disabled:opacity-55"
-            >
-              <XCircle aria-hidden size={18} />
-              {cancelPending ? t("batch-pdf.canceling.7d0901") : t("batch-pdf.cancel.batch.db540a")}
-            </button>
-          )}
-        </aside>
-
-        <div className="order-2 min-w-0 lg:order-2" aria-busy={status.isProcessing}>
-          {selectionNotice && (
-            <p role="status" className="flex items-start gap-2 rounded-[var(--radius-field)] bg-[var(--status-caution-quiet)] px-3 py-2 text-sm font-medium text-[var(--status-caution-text)]">
-              <AlertTriangle aria-hidden className="mt-0.5 shrink-0" size={16} />
-              <span>{selectionNotice}</span>
-            </p>
-          )}
-          {files.length > 0 && (
-            <section className="mt-3 lg:mt-0" aria-labelledby="batch-queue-heading">
-              {/* "Files run from top to bottom" is what a numbered queue with
-                  move-up and move-down controls already shows. */}
-              <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
-                <h2 id="batch-queue-heading" className="text-sm font-bold text-[var(--text-primary)]">{t("batch-pdf.ordered.queue.0d6495")}</h2>
-                <p className="type-footnote font-semibold text-[var(--text-secondary)]">{t("batch-pdf.message.ab18fb4c2c", { v2: formatBytes(totalSize), count: files.length })}</p>
-              </div>
-              <ol className="divide-y divide-[var(--border-hairline)] overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)]">
-                {files.map((file, index) => {
-                  const itemStatus: BatchItemStatus = itemStatuses[fileKey(file)] ?? { phase: 'queued', progress: 0 };
-                  return (
-                    <li key={fileKey(file)} className="p-2.5 sm:p-3">
-                      <div className="flex items-start gap-2.5">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-[var(--accent-quiet)] text-sm font-bold text-[var(--accent-on-quiet)]">
-                          {formatNumber(index + 1)}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="chef-filename text-sm font-semibold text-[var(--text-primary)]">{file.name}</p>
-                          <p className="type-caption text-[var(--text-tertiary)]">{formatBytes(file.size)}</p>
-                        </div>
-                        <button
-                          type="button"
-                          aria-label={t("batch-pdf.remove.9fc927", { v0: file.name })}
-                          onClick={() => removeFile(file)}
-                          disabled={status.isProcessing}
-                          className="chef-target chef-pressable inline-flex shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--status-danger-quiet)] hover:text-[var(--status-danger-text)] disabled:cursor-not-allowed disabled:opacity-55"
-                        >
-                          <Trash2 aria-hidden size={18} />
-                        </button>
-                      </div>
-
-                      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 pl-10">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${phaseClasses[itemStatus.phase]}`} aria-live={itemStatus.phase === 'processing' ? 'polite' : undefined}>
-                          {phaseLabel(itemStatus)}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            aria-label={t("batch-pdf.move.up.6cabe2", { v0: file.name })}
-                            title={t("batch-pdf.move.up.c66feb")}
-                            onClick={() => moveFile(index, index - 1)}
-                            disabled={status.isProcessing || index === 0}
-                            className="chef-hit-y chef-pressable inline-flex h-11 w-touch items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-55"
-                          >
-                            <ArrowUp aria-hidden size={18} />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={t("batch-pdf.move.down.ab5f2b", { v0: file.name })}
-                            title={t("batch-pdf.move.down.40bb50")}
-                            onClick={() => moveFile(index, index + 1)}
-                            disabled={status.isProcessing || index === files.length - 1}
-                            className="chef-hit-y chef-pressable inline-flex h-11 w-touch items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-55"
-                          >
-                            <ArrowDown aria-hidden size={18} />
-                          </button>
-                        </div>
-                      </div>
-
-                      {itemStatus.phase === 'processing' && (
-                        <div
-                          role="progressbar"
-                          aria-label={t("batch-pdf.progress.459332", { v0: file.name })}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-valuenow={itemStatus.progress}
-                          className="ml-10 mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--surface-sunken)]"
-                        >
-                          <div className="h-full rounded-full bg-[var(--accent-rest)] transition-[width]" style={{ width: `${itemStatus.progress}%` }} />
-                        </div>
-                      )}
-                      {itemStatus.phase === 'failed' && itemStatus.message && (
-                        <p role="alert" className="ml-10 mt-1.5 break-words text-sm font-medium text-[var(--status-danger-text)]">{itemStatus.message}</p>
-                      )}
-                    </li>
-                  );
-                })}
-              </ol>
-            </section>
           )}
         </div>
-      </div>
-      <StatusToast status={status} />
-    </ToolShell>
+        <ol className="tk-queue" aria-labelledby="batch-queue-heading">
+          {files.map((file, index) => {
+            const key = fileKey(file);
+            const itemStatus: BatchItemStatus = itemStatuses[key] ?? { phase: 'queued', progress: 0 };
+            const pages = pageCounts[key];
+            return (
+              <QueueRow
+                key={key}
+                roomy={files.length <= 3}
+                file={file}
+                name={file.name}
+                index={index}
+                total={files.length}
+                meta={(
+                  <>
+                    {pages ? <span>{t("merge-pdf..24a420", { count: pages })} ·</span> : null}
+                    <span>{formatBytes(file.size)}</span>
+                    {/* Unlock: whether this file asks for a password at all. */}
+                    {action === 'unlock' && typeof locks[key] === 'boolean' && (
+                      <span className={`tk-qrow-phase ${phaseClasses.queued}`}>{locks[key] ? t('batch.unlock.locked') : t('batch.unlock.noPassword')}</span>
+                    )}
+                    {/* At rest every file waits, which the queue already says; the phase shows once a run starts. */}
+                    {(itemStatus.phase !== 'queued' || status.isProcessing) && (
+                      <span className={`tk-qrow-phase ${phaseClasses[itemStatus.phase]}`} aria-live={itemStatus.phase === 'processing' ? 'polite' : undefined}>
+                        {phaseLabel(itemStatus)}
+                      </span>
+                    )}
+                  </>
+                )}
+                busy={status.isProcessing}
+                dragging={activeId === key}
+                rowRef={(element) => registerItem(key, element)}
+                onGrab={(event) => dragHandlers.onPointerDown(event, key)}
+                onMove={(direction) => moveFile(index, index + direction)}
+                onRemove={() => removeFile(file)}
+                onPages={(count) => setPageCounts((current) => (current[key] === count ? current : { ...current, [key]: count }))}
+                labels={{
+                  drag: t("merge-pdf.drag.to.reorder.781049", { v0: file.name }),
+                  up: t("batch-pdf.move.up.6cabe2", { v0: file.name }),
+                  down: t("batch-pdf.move.down.ab5f2b", { v0: file.name }),
+                  remove: t("batch-pdf.remove.9fc927", { v0: file.name }),
+                  upTip: t("batch-pdf.move.up.c66feb"),
+                  downTip: t("batch-pdf.move.down.40bb50"),
+                  removeTip: t("merge-pdf.remove.caa0ce").trim(),
+                }}
+              >
+                {itemStatus.phase === 'processing' && (
+                  <div
+                    role="progressbar"
+                    aria-label={t("batch-pdf.progress.459332", { v0: file.name })}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={itemStatus.progress}
+                    className="tk-qrow-below h-1.5 overflow-hidden rounded-full bg-[var(--surface-sunken)]"
+                  >
+                    <div className="h-full rounded-full bg-[var(--accent-rest)] transition-[width]" style={{ width: `${itemStatus.progress}%` }} />
+                  </div>
+                )}
+                {itemStatus.phase === 'failed' && itemStatus.message && (
+                  <p role="alert" className="tk-qrow-below break-words text-sm font-medium text-[var(--status-danger-text)]">{itemStatus.message}</p>
+                )}
+              </QueueRow>
+            );
+          })}
+        </ol>
+      </section>
+    </div>
+  );
+
+  return (
+    <>
+      <ToolScreen
+        title={title}
+        kind="list"
+        heavyJob={{ bytes: files.reduce((sum, item) => sum + item.size, 0), files: files.length }}
+        body={body}
+        sentence={sentence}
+        chips={wide ? settings : undefined}
+        notice={notice}
+        action={runAction}
+        progress={progress}
+        toast={toast}
+      />
+      {draggedFile && <QueueGhost name={draggedFile.name} style={overlayStyle} />}
+    </>
   );
 };

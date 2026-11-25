@@ -85,12 +85,34 @@ try {
     await freshPage.getByTestId('mobile-app-welcome').waitFor();
     await freshPage.waitForURL('**/make-pdf');
     await freshPage.getByRole('button', { name: 'Visit the website', exact: true }).click();
-    await freshPage.getByRole('dialog', { name: 'Before you start', exact: true }).waitFor();
-    await freshPage.getByRole('button', { name: 'Start using PDF Chef', exact: true }).click();
     await freshPage.getByRole('heading', { name: 'Create PDF', exact: true }).waitFor();
     assert.equal(new URL(freshPage.url()).pathname, '/make-pdf', 'Legacy deep links are preserved');
+    // Overnight 2026-11-24, Q6: on the website "Before you start" waits for Home. A visitor who
+    // came to a tool gets the tool, and its picker takes the first tap.
+    await freshPage.waitForTimeout(1000);
+    assert.equal(await freshPage.getByRole('dialog').count(), 0, 'The first-run sheet does not cover a tool page');
+    const [chooser] = await Promise.all([
+      freshPage.waitForEvent('filechooser', { timeout: 5000 }),
+      freshPage.getByRole('button', { name: 'Gallery', exact: true }).click(),
+    ]);
+    assert.ok(chooser, 'The picker takes the first tap');
+    // Home shows the sheet once; closed, it never comes back.
+    await freshPage.locator('a[data-tk-tools]').click();
+    await freshPage.waitForURL(url => new URL(url).pathname === '/');
+    await freshPage.getByRole('dialog', { name: 'Before you start', exact: true }).waitFor();
+    await freshPage.getByRole('button', { name: 'Start using PDF Chef', exact: true }).click();
+    await freshPage.getByRole('dialog', { name: 'Before you start', exact: true }).waitFor({ state: 'detached' });
+    assert.equal(await freshPage.evaluate(() => JSON.parse(localStorage.getItem('pdfchef.workspace.settings.v1')).onboardingComplete), true);
+    // In-app links only: a new page load would run prepare() again and reset the setting.
+    await freshPage.locator('main a[href="/merge"]').first().click();
+    await freshPage.waitForURL(url => new URL(url).pathname === '/merge');
+    await freshPage.locator('a[data-tk-tools]').click();
+    await freshPage.waitForURL(url => new URL(url).pathname === '/');
+    await freshPage.locator('main').waitFor();
+    await freshPage.waitForTimeout(800);
+    assert.equal(await freshPage.getByRole('dialog').count(), 0, 'A closed first-run sheet never comes back');
     await freshContext.close();
-    console.log(`PASS ${platform}: four actions, preferred download, narrow/landscape layout, Skip, Visit, session persistence, deep links and onboarding`);
+    console.log(`PASS ${platform}: four actions, preferred download, narrow/landscape layout, Skip, Visit, session persistence, deep links, and onboarding only on Home`);
   }
 
   const browser = browsers[0];

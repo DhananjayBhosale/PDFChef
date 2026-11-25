@@ -6,37 +6,35 @@
  */
 
 :root {
-  /* --- Paper: warm neutral carrying the Android app's reddish tint, hue 24 ---
-     50 and 100 are the Android app's own background and card values verbatim
-     (#FFF8F4 and #FFF1EB); 200 is its divider. The rest of the scale is those
-     three resolved up and down at the same hue, so light and dark sit on the
-     same ground. */
-  --paper-25: #fffcfa;
-  --paper-50: #fff8f4;
-  --paper-100: #fff1eb;
-  --paper-200: #f0e2db;
-  --paper-300: #ddc9c0;
-  --paper-400: #a2918b;
-  --paper-500: #80716c;
-  --paper-600: #70625d;
-  --paper-700: #564a46;
-  --paper-800: #3a302e;
-  --paper-900: #261f1e;
-  --paper-950: #17100f;
+  /* --- Paper: warm neutral, a faint yellow-brown cast like uncoated stock ---
+     Canvas is 50, the raised card is 25 (white), the sunken track is 100. Every
+     step keeps the same warm hue so light and dark sit on one ground. */
+  --paper-25: #ffffff;
+  --paper-50: #faf7f2;
+  --paper-100: #f2ede5;
+  --paper-200: #e6dfd4;
+  --paper-300: #d3c9ba;
+  --paper-400: #a89c8c;
+  --paper-500: #857a6b;
+  --paper-600: #6f665c;
+  --paper-700: #57504a;
+  --paper-800: #34302a;
+  --paper-900: #1d1a16;
+  --paper-950: #14120f;
 
-  /* --- Ink: the single accent, Android logo red, hue 24-28 --- */
-  --ink-25: #fff8f7;
-  --ink-50: #fff2f0;
-  --ink-100: #ffe4e1;
-  --ink-200: #ffc8c3;
-  --ink-300: #ff9b95;
-  --ink-400: #ff4d52;
-  --ink-500: #e42121;
-  --ink-600: #dc2020;
-  --ink-700: #b01e22;
-  --ink-800: #881a1b;
-  --ink-900: #631b19;
-  --ink-950: #38100e;
+  /* --- Ink: the single accent, one tomato red --- */
+  --ink-25: #fef6f3;
+  --ink-50: #fbe9e3;
+  --ink-100: #f6d3c8;
+  --ink-200: #ffc2b2;
+  --ink-300: #ff8a70;
+  --ink-400: #c9402a;
+  --ink-500: #c63c24;
+  --ink-600: #c23a22;
+  --ink-700: #a93119;
+  --ink-800: #8a2814;
+  --ink-900: #3a2018;
+  --ink-950: #24120d;
 
   /* --- Status --- */
   --success-50: #ecf3ea;
@@ -76,50 +74,40 @@
   --danger-950: #28100c;
 
   /* --- Semantic: light ---
-     Every value below is stated with the contrast ratio it holds against the
-     three surfaces it can sit on: canvas #fff8f4, raised #fffcfa, sunken
-     #fff1eb. Text clears 4.5:1 on all three, edges that bound a control clear
-     3:1 on all three. Ratios are the reason a value is what it is, so they are
-     written down rather than rediscovered. */
-  --surface-canvas: var(--paper-50);
-  --surface-raised: var(--paper-25);
-  --surface-sunken: var(--paper-100);
-  --surface-chrome: rgba(255, 252, 250, 0.82);
-  --surface-scrim: rgba(38, 31, 30, 0.44);
-  /* Two edges, and the difference between them is a rule, not a shade. The
-     hairline separates (panel outline, row divider, scroll edge) and only has
-     to be seen; the strong edge *bounds a control* and therefore clears 3:1
-     against every surface it can be drawn on. The old paper-200 hairline sat at
-     1.24:1 and disappeared on a bright OLED panel. */
-  --border-hairline: #b6a69f; /* 2.23 / 2.30 / 2.13 */
-  --border-strong: #8e7e79; /* 3.69 / 3.80 / 3.52 */
-  --text-primary: var(--paper-900); /* 15.41 / 15.85 / 14.67 */
-  /* Body is the step under the heading: a paragraph, a row title, a control
-     label that is not the page's subject. */
-  --text-body: #4c423f; /* 9.26 / 9.52 / 8.82 */
-  --text-secondary: #635754; /* 6.61 / 6.80 / 6.30 */
-  /* Tertiary carries readable prose, so it clears 4.5:1 on the *sunken*
-     surface too, which is the darkest ground a light theme puts text on. */
-  --text-tertiary: #70635f; /* 5.49 / 5.65 / 5.23 */
-  --text-on-accent: var(--paper-25);
-  --accent-rest: var(--ink-600);
-  --accent-hover: var(--ink-700);
-  --accent-quiet: var(--ink-50);
-  --accent-on-quiet: var(--ink-700);
-  /* The brand red is a fill, a border and a focus ring at 4.52:1, which is the
-     3:1 a non-text indicator owes. As *text* it only just clears 4.5:1 on the
-     canvas and misses it on the sunken surface, so accent-coloured labels and
-     glyphs take one step darker instead of the fill colour. */
-  --accent-text: var(--ink-700); /* 6.54 / 6.73 / 6.23 */
-  --focus-ring: var(--ink-600);
-  --status-success-text: var(--success-600);
-  --status-success-quiet: var(--success-50);
-  /* Caution at -600 read 4.94:1 on its own quiet ground, which is inside the
-     margin of error for a warning. One step darker settles it. */
-  --status-caution-text: var(--caution-700);
-  --status-caution-quiet: var(--caution-50);
-  --status-danger-text: var(--danger-600);
-  --status-danger-quiet: var(--danger-50);
+     Contrast ratios for every pair are computed by scripts/check-token-contrast.mjs
+     and written in design-system/MASTER.md. Text clears 4.5:1 on canvas, raised
+     and sunken; --border-strong, which bounds a control, clears 3:1 on all three. */
+  --surface-canvas: #faf7f2;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f2ede5;
+  --surface-chrome: rgba(250, 247, 242, 0.94);
+  --surface-scrim: rgba(29, 26, 22, 0.42);
+  /* The hairline separates and only has to be seen; the strong edge bounds a
+     control and so owes 3:1 against every surface it can be drawn on. */
+  --border-hairline: #e6dfd4;
+  --border-strong: #857a6b;
+  --text-primary: #1d1a16;
+  --text-body: #34302a;
+  --text-secondary: #57504a;
+  --text-tertiary: #6f665c;
+  --text-on-accent: #ffffff;
+  --accent-rest: #c23a22;
+  --accent-hover: #a5301b;
+  --accent-quiet: #fbe9e3;
+  --accent-on-quiet: #8a2814;
+  /* As text the fill colour is one step too light on the sunken surface, so
+     accent-coloured labels use the darker step. */
+  --accent-text: #a93119;
+  --focus-ring: #1d1a16;
+  --status-success-text: #2f6a35;
+  --status-success-quiet: #e9f1e4;
+  --status-caution-text: #845600;
+  --status-caution-quiet: #f8eed6;
+  --status-danger-text: #a3301c;
+  --status-danger-quiet: #fae6df;
+  /* A slot is a value in a sentence that opens an editor. */
+  --slot-tint: var(--accent-quiet);
+  --chef-tab-rest: #6f665c;
 
   /* --- Typography --- */
   /* `-apple-system` and `system-ui` are deliberately absent, and the CJK faces deliberately named.
@@ -132,6 +120,11 @@
   --font-system: "SF Pro Text", BlinkMacSystemFont, "Segoe UI", Roboto, var(--font-cjk), "Noto Sans Arabic", "Geeza Pro", "Noto Sans Devanagari", "Kohinoor Devanagari", "Nirmala UI", sans-serif;
   --font-ui: "Inter Variable", "Inter", var(--font-system);
   --font-numeric: "Inter Variable", var(--font-system);
+  /* Titles and the tool sentence only. A system serif, chosen per script below,
+     so nothing is downloaded. Everything else follows the interface font the
+     person picks in Settings. */
+  --font-display: "Iowan Old Style", Charter, "Noto Serif", Georgia, serif;
+  --font-display-weight: 600;
 
   /* The Android app's six fixed UI sizes are the size authority for the whole
      product, because the two shells ship the same typeface at the same density
@@ -179,12 +172,14 @@
   --space-16: 4rem;
 
   /* --- Radius --- */
-  --radius-control: 0.75rem;
-  --radius-field: 0.875rem;
+  --radius-control: 999px;
+  --radius-field: 10px;
   --radius-row: 1rem;
-  --radius-panel: 1.375rem;
-  --radius-sheet: 1.75rem;
+  --radius-panel: 10px;
+  --radius-sheet: 18px;
   --radius-pill: 999px;
+  --radius-slot: 6px;
+  --radius-pop: 10px;
 
   /* --- Size --- */
   /* One touch floor for the whole product. Android's 48dp is the larger of the
@@ -207,10 +202,14 @@
   --size-nav-bar: 44px;
   --size-reading-measure: 68ch;
 
-  /* --- Elevation --- */
-  --elevation-raised: 0 1px 2px rgba(36, 33, 29, 0.05), 0 1px 1px rgba(36, 33, 29, 0.04);
-  --elevation-panel: 0 2px 8px rgba(36, 33, 29, 0.06), 0 12px 28px -18px rgba(36, 33, 29, 0.28);
-  --elevation-sheet: 0 8px 24px rgba(36, 33, 29, 0.1), 0 32px 64px -32px rgba(36, 33, 29, 0.42);
+  /* --- Elevation ---
+     Surfaces are flat and bounded by a hairline; only floating panels and sheets
+     lift. The selected chip of a segmented strip keeps a small lift of its own
+     (--elevation-chip) so the current choice stays easy to find. */
+  --elevation-raised: none;
+  --elevation-chip: 0 1px 2px rgba(60, 40, 20, 0.14);
+  --elevation-panel: 0 0 0 1px #e6dfd4, 0 12px 30px -12px rgba(60, 40, 20, 0.22);
+  --elevation-sheet: 0 0 0 1px #e2dacd, 0 22px 50px -16px rgba(60, 40, 20, 0.34);
 
   /* --- Motion: critically damped by default --- */
   --duration-instant: 80ms;
@@ -226,43 +225,36 @@
 }
 
 .dark {
-  /* Ratios below are against dark canvas #17100f, raised #271f1e and sunken
-     #110b0b, in that order. Dark carries the same reddish tint as light rather
-     than the cool blue-black the Android app used, so the two themes are one
-     ground at two luminances. */
-  --surface-canvas: var(--paper-950);
-  /* A raised panel one step further from the canvas. Two dark surfaces can only
-     ever be a fraction of a ratio apart before the lighter one stops reading as
-     dark at all, so the separation a nested panel actually needs comes from its
-     edge; this lifts the fill as far as it can honestly go and the hairline
-     below does the rest. */
-  --surface-raised: #271f1e; /* 1.16 vs canvas, 1.21 vs sunken */
-  --surface-sunken: #110b0b;
-  --surface-chrome: rgba(39, 31, 30, 0.84);
-  --surface-scrim: rgba(11, 7, 7, 0.62);
-  --border-hairline: #5d504d; /* 2.43 / 2.09 / 2.53 */
-  --border-strong: #7d6f6b; /* 3.90 / 3.35 / 4.05 */
-  --text-primary: var(--paper-50); /* 17.88 / 15.36 / 18.56 */
-  --text-body: var(--paper-200); /* 14.86 / 12.76 / 15.43 */
-  --text-secondary: #cbbcb7; /* 10.22 / 8.78 / 10.60 */
-  --text-tertiary: #b09f9a; /* 7.40 / 6.36 / 7.68 */
-  --text-on-accent: var(--paper-950);
-  --accent-rest: var(--ink-400);
-  --accent-hover: var(--ink-300);
-  --accent-quiet: var(--ink-900);
-  --accent-on-quiet: var(--ink-200);
-  --accent-text: var(--ink-300); /* 9.28 / 7.97 / 9.64 */
-  --focus-ring: var(--ink-400);
-  --status-success-text: var(--success-300);
-  --status-success-quiet: rgba(78, 122, 70, 0.18);
-  --status-caution-text: var(--caution-300);
-  --status-caution-quiet: rgba(169, 118, 27, 0.18);
-  --status-danger-text: var(--danger-300);
-  --status-danger-quiet: rgba(166, 65, 47, 0.2);
+  --surface-canvas: #14120f;
+  --surface-raised: #1c1915;
+  --surface-sunken: #24201b;
+  --surface-chrome: rgba(20, 18, 15, 0.94);
+  --surface-scrim: rgba(0, 0, 0, 0.6);
+  --border-hairline: #332d25;
+  --border-strong: #857a6a;
+  --text-primary: #f4eee4;
+  --text-body: #e2dacd;
+  --text-secondary: #bfb4a5;
+  --text-tertiary: #9e9385;
+  --text-on-accent: #ffffff;
+  --accent-rest: #c9402a;
+  --accent-hover: #b5361f;
+  --accent-quiet: #3a2018;
+  --accent-on-quiet: #ffc2b2;
+  --accent-text: #ff8a70;
+  --focus-ring: #f4eee4;
+  --status-success-text: #93cf8e;
+  --status-success-quiet: rgba(147, 207, 142, 0.14);
+  --status-caution-text: #e7bb65;
+  --status-caution-quiet: rgba(231, 187, 101, 0.14);
+  --status-danger-text: #ff9f88;
+  --status-danger-quiet: rgba(255, 159, 136, 0.14);
+  --chef-tab-rest: #9e9385;
 
-  --elevation-raised: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --elevation-panel: 0 2px 10px rgba(0, 0, 0, 0.45), 0 16px 32px -20px rgba(0, 0, 0, 0.7);
-  --elevation-sheet: 0 10px 30px rgba(0, 0, 0, 0.5), 0 36px 72px -36px rgba(0, 0, 0, 0.8);
+  --elevation-raised: none;
+  --elevation-chip: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --elevation-panel: 0 0 0 1px #332d25, 0 12px 30px -12px rgba(0, 0, 0, 0.6);
+  --elevation-sheet: 0 0 0 1px #3a332a, 0 22px 50px -16px rgba(0, 0, 0, 0.7);
 }
 
 /* Readable text size steps. Applied on <html> by the appearance preference. */
@@ -280,4 +272,23 @@ html[data-text-scale='larger'] { --text-scale: 1.3; }
 }
 :root:lang(zh-Hant) {
   --font-cjk: "PingFang TC", "Microsoft JhengHei", "Noto Sans CJK TC", sans-serif;
+}
+
+/* The title serif, chosen by script. Arabic and Hindi have no dependable serif
+   on phones, so they keep the interface font (at the display weight). */
+:root:lang(ja) {
+  --font-display: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif CJK JP", serif;
+}
+:root:lang(zh-Hans) {
+  --font-display: "Songti SC", "Noto Serif CJK SC", serif;
+}
+:root:lang(zh-Hant) {
+  --font-display: "Songti TC", "Noto Serif CJK TC", serif;
+}
+:root:lang(ko) {
+  --font-display: "AppleMyungjo", "Noto Serif CJK KR", serif;
+}
+:root:lang(ar),
+:root:lang(hi) {
+  --font-display: var(--font-ui);
 }

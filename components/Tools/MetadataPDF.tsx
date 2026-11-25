@@ -1,17 +1,18 @@
-import { t } from '../../services/i18n/core.ts';
+import { t, formatPercent } from '../../services/i18n/core.ts';
 import { pdfProblemMessage } from '../../services/i18n/errors.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { Loader2, RotateCcw, Save, Trash2 } from 'lucide-react';
+import { RotateCcw, Save, Trash2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { FileUpload } from '../UI/FileUpload';
-import { Button } from '../UI/Primitives';
-import { StatusToast } from '../UI/StatusToast';
-import { ToolHeader, ToolShell } from '../UI/ToolLayout';
+import { ToolScreen } from '../Tool/ToolScreen';
+import { ChangeFile } from '../Tool/ToolTop';
+import { Sentence } from '../Tool/Sentence';
+import { Notice, ProgressLine } from '../Tool/parts';
+import { FilePreview } from '../Tool/FilePreview';
+import { useWide } from '../../hooks/useMediaQuery';
 import { PDFFile, PDFMetadata, ProcessingStatus } from '../../types';
-import { getPDFMetadata, setPDFMetadata } from '../../services/pdfDocument';
-import { loadPDFDocument } from '../../services/pdfBrowser';
+import { getPDFMetadata, loadPDFDocument, setPDFMetadata } from '../../services/pdfLazy';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
 import { formatBytes, toolOutputName } from '../UI/format';
 
@@ -26,10 +27,15 @@ const METADATA_FIELDS: ReadonlyArray<{ key: MetadataTextField; label: string; hi
   { key: 'producer', get label() { return t("metadata-pdf.saved.as.pdf.by.854dda"); }, get hint() { return t("metadata-pdf.the.app.that.turned.it.into.a.ecace5"); } },
 ];
 
+/** A hint's first clause, as the box's placeholder: the whole hint was cut mid-sentence in the box (T-14).
+ *  The whole hint stays the box's description. Same translated string, no new one. */
+const placeholderOf = (hint: string) => hint.split(/[,;،，、；(（]/)[0].trim() || hint;
+
 const emptyStatus = (): ProcessingStatus => ({ isProcessing: false, progress: 0, message: '' });
 
 export const MetadataPDF: React.FC = () => {
   useI18n();
+  const wide = useWide();
   const [file, setFile] = useState<PDFFile | null>(null);
   const [metadata, setMetadata] = useState<PDFMetadata>({});
   const [sourceMetadata, setSourceMetadata] = useState<PDFMetadata>({});
@@ -132,105 +138,112 @@ export const MetadataPDF: React.FC = () => {
     }
   };
 
-  return (
-    <ToolShell width="list" centered={!file}>
-      <ToolHeader title={t("metadata-pdf.document.info.758cc7")} />
+  const title = t("metadata-pdf.document.info.758cc7");
 
-      <AnimatePresence mode="wait">
-        {!file ? (
-          status.isProcessing ? (
-            <motion.div
-              key="reading"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              role="status"
-              aria-live="polite"
-              className="flex items-center justify-center gap-3 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] px-4 py-4 text-[var(--text-secondary)]"
-            >
-              <Loader2 aria-hidden className="h-5 w-5 animate-spin text-[var(--accent-text)]" />
-              <span className="font-medium">{t("metadata-pdf.reading.this.pdf.s.details.on.your.3b0103")}</span>
-            </motion.div>
-          ) : (
-            <motion.div key="upload" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-              <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("metadata-pdf.choose.a.pdf.to.see.its.details.182ae2")} />
-            </motion.div>
-          )
-        ) : (
-          <motion.div
-            key="editor"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-3"
-          >
-            <section
-              aria-label={t("metadata-pdf.selected.pdf.ed0ff3")}
-              className="flex items-center justify-between gap-3 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3"
-            >
-              <div className="min-w-0">
-                <p className="chef-filename text-sm font-semibold text-[var(--text-primary)]">{file.name}</p>
-                <p className="type-caption text-[var(--text-tertiary)]">{formatBytes(file.size)}</p>
-              </div>
-              <Button tone="quiet" onClick={chooseAnotherFile} className="shrink-0">{t("metadata-pdf.change.c0bf75")}</Button>
-            </section>
-
-            <section
-              aria-label={t("metadata-pdf.document.properties.7115a7")}
-              className="rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 sm:p-4"
-            >
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Button icon={<RotateCcw aria-hidden size={18} />} onClick={resetToSource} block>{t("metadata-pdf.undo.my.changes.9ed9fe")}</Button>
-                <Button
-                  tone="destructive"
-                  icon={<Trash2 aria-hidden size={18} />}
-                  onClick={clearSixProperties}
-                  block
-                >{t("metadata-pdf.empty.all.six.boxes.2d84a6")}</Button>
-              </div>
-
-              {/* Kept: without it, "Clear" reads as full sanitization, which
-                  it is not. */}
-              <p className="mt-2 rounded-[var(--radius-field)] bg-[var(--surface-sunken)] px-3 py-2 type-footnote text-[var(--text-secondary)]">{t("metadata-pdf.this.empties.the.six.boxes.below.other.dba172")}</p>
-
-              <div className="mt-3 space-y-2.5">
-                {METADATA_FIELDS.map(({ key, label, hint }) => (
-                  <div key={key}>
-                    <label htmlFor={`metadata-${key}`} className="block text-sm font-semibold text-[var(--text-primary)]">
-                      {label}
-                    </label>
-                    <p id={`metadata-${key}-hint`} className="type-footnote mb-1.5 text-[var(--text-secondary)]">
-                      {hint}
-                    </p>
-                    <input
-                      id={`metadata-${key}`}
-                      type="text"
-                      value={typeof metadata[key] === 'string' ? metadata[key] : ''}
-                      onChange={(event) => updateMetadataField(key, event.target.value)}
-                      aria-describedby={`metadata-${key}-hint`}
-                      autoComplete="off"
-                      className="chef-field"
-                    />
-                  </div>
-                ))}
-              </div>
-
-              {/* Kept: an empty field does not mean an empty value. */}
-              <p className="type-footnote mt-3 text-[var(--text-secondary)]">{t("metadata-pdf.leaving.a.box.empty.keeps.whatever.the.98e023")}</p>
-
-              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
-                <Button
-                  tone="primary"
-                  icon={<Save aria-hidden size={18} />}
-                  busy={status.isProcessing}
-                  onClick={handleSave}
-                  className="w-full sm:w-auto"
-                >{t("metadata-pdf.save.changes.dd0ae7")}</Button>
-              </div>
-            </section>
-          </motion.div>
+  if (!file) {
+    return (
+      <ToolScreen
+        title={title}
+        kind="form"
+        body={(
+          <div className="tk-empty">
+            {status.isProcessing ? (
+              <ProgressLine label={t("metadata-pdf.reading.this.pdf.s.details.on.your.3b0103")} />
+            ) : (
+              <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("metadata-pdf.choose.a.pdf.to.see.its.details.182ae2")} error={status.error} />
+            )}
+          </div>
         )}
-      </AnimatePresence>
+      />
+    );
+  }
 
-      <StatusToast status={status} />
-    </ToolShell>
+  const outcome = status.error
+    ? <Notice tone="error" role="alert">{status.error}</Notice>
+    : !status.isProcessing && status.message
+      ? <Notice role="status">{status.message}</Notice>
+      : null;
+
+  const form = (
+    <div className="tk-form tk-form-grid" role="group" aria-label={t("metadata-pdf.document.properties.7115a7")}>
+      {METADATA_FIELDS.map(({ key, label, hint }) => (
+        <div key={key} className="tk-field">
+          <label htmlFor={`metadata-${key}`}>{label}</label>
+          <input
+            id={`metadata-${key}`}
+            type="text"
+            value={typeof metadata[key] === 'string' ? metadata[key] : ''}
+            onChange={(event) => updateMetadataField(key, event.target.value)}
+            placeholder={placeholderOf(hint)}
+            // The hint is the box's description too (B-021): a box filled from the PDF never shows its placeholder.
+            aria-describedby={`metadata-hint-${key}`}
+            autoComplete="off"
+            disabled={status.isProcessing}
+            className="chef-field"
+          />
+          <span id={`metadata-hint-${key}`} className="sr-only">{hint}</span>
+        </div>
+      ))}
+    </div>
+  );
+
+  const chips = (
+    <>
+      <button type="button" onClick={resetToSource} disabled={status.isProcessing} className="tk-chip chef-pressable">
+        <RotateCcw aria-hidden size={15} />{t("metadata-pdf.undo.my.changes.9ed9fe")}
+      </button>
+      <button type="button" onClick={clearSixProperties} disabled={status.isProcessing} aria-describedby="metadata-empties-note" className="tk-chip tk-chip-danger chef-pressable">
+        <Trash2 aria-hidden size={15} />{t("metadata-pdf.empty.all.six.boxes.2d84a6")}
+      </button>
+    </>
+  );
+  // Without it, "Empty all six boxes" reads as full sanitization, which it is not. It is the
+  // button's description at all times, and is shown once the button is pressed (T-14).
+  const emptiesText = t("metadata-pdf.this.empties.the.six.boxes.below.other.dba172");
+  const emptiesNote = clearAllPending ? <Notice tone="caution">{emptiesText}</Notice> : null;
+  const emptiesDescription = <span id="metadata-empties-note" className="sr-only">{emptiesText}</span>;
+
+  return (
+    <ToolScreen
+      className="tk-info"
+      title={title}
+      file={{ name: file.name, meta: formatBytes(file.size) }}
+      heavyJob={{ bytes: file.size }}
+      change={<ChangeFile label={t('tool.chooseAnotherFile')} onClick={chooseAnotherFile} disabled={status.isProcessing} />}
+      kind="form"
+      bodyLabel={t("metadata-pdf.selected.pdf.ed0ff3")}
+      // Phones: the six fields are the body, with the two chips and their note above them, so
+      // "the six boxes below" is true in both layouts (verify V-05), as in today's build.
+      // Desktop: the first page beside the fields, the chips and the note in the band above.
+      body={wide ? <FilePreview file={file.file} name={file.name} meta={formatBytes(file.size)} /> : (
+        <div className="tk-form">
+          <div className="tk-info-lead">
+            <div className="tk-chips">{chips}{emptiesDescription}</div>
+            {emptiesNote && <div className="tk-notice">{emptiesNote}</div>}
+          </div>
+          {form}
+        </div>
+      )}
+      side={wide ? form : undefined}
+      // Kept: an empty field does not mean an empty value.
+      sentence={(
+        <Sentence
+          template="metadata-pdf.leaving.a.box.empty.keeps.whatever.the.98e023"
+          groupLabel={t('sentence.groupLabel', { tool: title })}
+          disabled={status.isProcessing}
+        />
+      )}
+      chips={wide ? <>{chips}{emptiesDescription}</> : undefined}
+      notice={wide ? <>{outcome}{emptiesNote}</> : outcome}
+      action={(
+        <button type="button" onClick={() => void handleSave()} disabled={status.isProcessing} className="tk-primary chef-pressable">
+          <Save aria-hidden size={18} />
+          <span>{t("metadata-pdf.save.changes.dd0ae7")}</span>
+        </button>
+      )}
+      progress={status.isProcessing ? (
+        <ProgressLine label={status.message} percent={formatPercent(Math.max(0, Math.min(100, status.progress)))} value={status.progress} />
+      ) : undefined}
+    />
   );
 };

@@ -2,6 +2,7 @@ import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useRef } from 'react';
 import { ArrowDown, ArrowUp, CaseSensitive, Replace, X } from 'lucide-react';
+import { isConfirmEnter } from '../UI/keys';
 
 /**
  * Find and replace across the document's paragraphs.
@@ -96,7 +97,7 @@ export const PdfFindReplace: React.FC<Props> = ({
           spellCheck={false}
           onChange={(event) => onQueryChange(event.currentTarget.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') {
+            if (isConfirmEnter(event)) {
               event.preventDefault();
               onStep(event.shiftKey ? -1 : 1);
             }
@@ -159,7 +160,7 @@ export const PdfFindReplace: React.FC<Props> = ({
             spellCheck={false}
             onChange={(event) => onReplacementChange(event.currentTarget.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') {
+              if (isConfirmEnter(event)) {
                 event.preventDefault();
                 onReplaceOne();
               }
@@ -179,7 +180,7 @@ export const PdfFindReplace: React.FC<Props> = ({
             onPointerDown={keepFocus}
             onClick={onReplaceAll}
             className="chef-pressable chef-hit-y h-11 shrink-0 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-3 text-xs font-bold text-[var(--text-primary)] disabled:opacity-55"
-          >{t("pdf-find-replace.all.a52ace")}</button>
+          >{t('pdf-find-replace.replace.all')}</button>
         </div>
       )}
       {report && (

@@ -132,6 +132,8 @@ export const PageThumbnail: React.FC<PageThumbnailProps> = ({
       tabIndex={0}
       aria-pressed={isSelected}
       aria-disabled={disabled || undefined}
+      // The page and its turn are inputs of the result (workSignature.ts).
+      data-work-item={`${pageIndex}:${normalizedRotation}`}
       aria-label={t("page-thumbnail.page.8b21ee", { v0: pageIndex + 1, v1: isSelected ? t("page-thumbnail.selected.bd44f3") : '' })}
       onClick={disabled ? undefined : onToggle}
       onKeyDown={(event: React.KeyboardEvent) => {

@@ -69,6 +69,66 @@ export const splitFilename = (name: string): { stem: string; extension: string }
 };
 
 /**
+ * A name cut in the middle on one line (the result strip, Read PDF's title): the head gives way
+ * first and the tail always shows. The tail is the extension and a few letters before it, and it
+ * starts at a space when the cut would fall inside the last word, so "Merge PDF 16 Nov.pdf" keeps
+ * " 16 Nov.pdf" whole rather than "6 Nov.pdf", which read as the 6th (pass 5, item 4).
+ */
+export const middleNameParts = (name: string): { head: string; tail: string } => {
+  const dot = name.lastIndexOf('.');
+  const extension = dot > 0 ? name.length - dot : 0;
+  let cut = Math.max(0, name.length - Math.max(8, extension + 5));
+  // Inside a word: the tail takes the whole word, from the space before it, unless it is long.
+  if (cut > 0 && !/\s/u.test(name[cut - 1]) && !/\s/u.test(name[cut])) {
+    const space = name.slice(0, cut).search(/\s\S*$/u);
+    if (space >= 0 && cut - space <= 8) cut = space;
+  }
+  // Never between the two halves of one character (an emoji).
+  if (cut > 0 && /[\uDC00-\uDFFF]/u.test(name[cut])) cut -= 1;
+  return { head: name.slice(0, cut), tail: name.slice(cut) };
+};
+
+/** The largest `n` in 0…`max` for which `fits(n)` holds, or -1 (fits grows false as n grows). */
+const largestFitting = (max: number, fits: (n: number) => boolean): number => {
+  let low = 0;
+  let high = max;
+  let best = -1;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    if (fits(middle)) { best = middle; low = middle + 1; } else high = middle - 1;
+  }
+  return best;
+};
+
+/**
+ * The name as it fits `room` pixels on one line, cut in the middle with "…", or null when the
+ * whole name fits. `width` measures a string in the name's font. The tail of `middleNameParts`
+ * stays whole while some of the start fits beside it ("Merge P… 16 Nov.pdf": one letter for a
+ * tail of whole words, three otherwise); in less room the start and end of the stem share it, the
+ * end from a word's start, and the extension stays ("qa-sa…le.pdf").
+ */
+export const fitMiddleName = (name: string, room: number, width: (text: string) => number): string | null => {
+  if (width(name) <= room) return null;
+  const { head, tail } = middleNameParts(name);
+  const headChars = Array.from(head);
+  const withTail = (count: number) => `${headChars.slice(0, count).join('').trimEnd()}…${tail}`;
+  const kept = largestFitting(headChars.length, (count) => width(withTail(count)) <= room);
+  // A tail of whole words (a date, a version) stays with one letter of the start beside it.
+  if (kept >= Math.min(/^\s/u.test(tail) ? 1 : 3, headChars.length)) return withTail(kept);
+  const { stem, extension } = splitFilename(name);
+  const stemChars = Array.from(stem);
+  const balanced = (count: number) => {
+    let end = Math.floor(count / 2);
+    // The end starts at a word, never inside one: "…6 Nov" read as the 6th.
+    const words = stemChars.slice(-end).join('');
+    const space = end && !/\s/u.test(stemChars[stemChars.length - end - 1] ?? ' ') ? words.search(/\s/u) : -1;
+    if (space > 0) end -= Array.from(words.slice(0, space)).length;
+    return `${stemChars.slice(0, count - end).join('').trimEnd()}…${end ? stemChars.slice(-end).join('') : ''}${extension}`;
+  };
+  return balanced(Math.max(0, largestFitting(stemChars.length - 1, (count) => width(balanced(count)) <= room)));
+};
+
+/**
  * A rename changes the name, never the kind of file. The extension is always kept, so
  * "Report.docx" on a PDF becomes "Report.docx.pdf", a typed ".pdf" is not doubled, and a
  * name with nothing usable left (".pdf", ".", spaces) keeps the current name.
@@ -126,11 +186,28 @@ const outputName = (stem: string, extension: string): string => {
 export const datedOutputName = (word: string, extension: string, date = new Date(), locale = getLocale()): string =>
   outputName(datedFileStem(word, date, locale), extension);
 
+/**
+ * The first photo's name without its extension ("IMG_2041" from "IMG_2041.jpg"): a PDF made from
+ * photos is named after them (owner decision, path to 9). Empty when the name has nothing usable.
+ */
+export const photoStem = (photoName: string | undefined): string =>
+  sanitizeFilenameStem(splitFilename(photoName ?? '').stem).replace(/[\s.]+$/u, '').trim();
+
+/** "IMG_2041.pdf" from the first photo, or "<word> 13 Oct.pdf" when it has no usable name. */
+export const photoOutputName = (photoName: string | undefined, word: string): string => {
+  const stem = photoStem(photoName);
+  return stem ? outputName(stem, 'pdf') : datedOutputName(word, 'pdf');
+};
+
 /** "compress-Invoice.pdf": the tool, then the name the file already had. */
 export const toolOutputName = (toolWord: string, sourceName: string, extension: string): string => {
   const stem = sourceName.trim().replace(/\.[^.]*$/u, '').trim();
   return outputName(`${toolWord}-${stem || 'document'}`, extension);
 };
+
+/** A PDF kept as it came in (Batch Compress could not shrink it): its own name, with ".pdf". */
+export const keptPdfName = (sourceName: string): string =>
+  outputName(sourceName.trim().replace(/\.pdf$/iu, '').trim() || 'document', 'pdf');
 
 /**
  * Keep editable names safe for the iOS Files/share handoff and its byte limit. Android stores

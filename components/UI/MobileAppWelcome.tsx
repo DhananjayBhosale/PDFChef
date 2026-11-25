@@ -28,7 +28,7 @@ export const MobileAppWelcome: React.FC<{
       <div className="w-full max-w-sm">
         <img src="/pdf-chef-logo-exact.webp" alt="" aria-hidden className="mx-auto h-20 w-20 object-contain" />
         <p className="mt-3 text-sm font-semibold">PDF Chef</p>
-        <h1 className="type-title1 mt-8 text-3xl font-semibold">{t("mobileAppWelcome.title")}</h1>
+        <h1 className="type-title1 mt-8 text-3xl font-semibold [text-wrap:balance]">{t("mobileAppWelcome.title")}</h1>
         <p className="mt-3 text-sm leading-relaxed text-[var(--text-secondary)]">{t("mobileAppWelcome.description")}</p>
 
         <div className="mt-8 space-y-3">

@@ -20,8 +20,13 @@ export interface LegacyWorkspaceOutput {
 }
 
 export interface LegacyWorkspaceSource {
-  /** Read-only: migration never updates or deletes legacy records. */
+  /** Migration only reads: it never updates or deletes legacy records. */
   list(): Promise<readonly LegacyWorkspaceOutput[]>;
+  /**
+   * Removes legacy records once the person deletes their migrated results. Resolves
+   * only after the deletion has committed; unknown ids are ignored.
+   */
+  delete(legacyIds: readonly string[]): Promise<void>;
 }
 
 export interface LegacyWorkspaceMigrationJournalEntry {
@@ -31,6 +36,7 @@ export interface LegacyWorkspaceMigrationJournalEntry {
 }
 
 export interface LegacyWorkspaceMigrationJournal {
+  list(): Promise<readonly LegacyWorkspaceMigrationJournalEntry[]>;
   get(legacyId: string): Promise<LegacyWorkspaceMigrationJournalEntry | null>;
   save(entry: LegacyWorkspaceMigrationJournalEntry): Promise<void>;
 }
@@ -102,6 +108,25 @@ export class IndexedDbLegacyWorkspaceSource implements LegacyWorkspaceSource {
       database.close();
     }
   }
+
+  async delete(legacyIds: readonly string[]): Promise<void> {
+    if (legacyIds.length === 0) return;
+    const database = await openLegacyDatabase();
+    if (!database) return;
+    try {
+      const transaction = database.transaction(LEGACY_OUTPUT_STORE, 'readwrite');
+      const committed = new Promise<void>((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error ?? new LocalizedError("legacy-workspace-migration.error.289a151a01"));
+        transaction.onabort = () => reject(transaction.error ?? new LocalizedError("legacy-workspace-migration.error.289a151a01"));
+      });
+      const store = transaction.objectStore(LEGACY_OUTPUT_STORE);
+      for (const legacyId of new Set(legacyIds)) store.delete(legacyId);
+      await committed;
+    } finally {
+      database.close();
+    }
+  }
 }
 
 const isJournalEntry = (value: unknown): value is LegacyWorkspaceMigrationJournalEntry => {
@@ -132,6 +157,12 @@ export class LocalStorageLegacyWorkspaceMigrationJournal implements LegacyWorksp
     } catch {
       return [];
     }
+  }
+
+  async list(): Promise<readonly LegacyWorkspaceMigrationJournalEntry[]> {
+    // Without storage no import was ever journaled, so there is nothing to list.
+    if (!this.providedStorage && typeof localStorage === 'undefined') return [];
+    return this.read();
   }
 
   async get(legacyId: string): Promise<LegacyWorkspaceMigrationJournalEntry | null> {

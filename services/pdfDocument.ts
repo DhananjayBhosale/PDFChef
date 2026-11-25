@@ -24,6 +24,9 @@ import type { PDFMetadata } from '../types';
 import type { PdfFormFieldValue } from './pdfBrowser';
 import { loadPDFDocument } from './pdfBrowser';
 import { readFileAsArrayBuffer } from './pdfShared';
+import { clearPDFMetadataAndCatalogActions, removeHiddenInfo, removeUnusedPdfObjects } from './pdfHiddenInfo.ts';
+export { readHiddenInfo, type HiddenInfoItem, type HiddenInfoKey } from './pdfHiddenInfo.ts';
+import { headerFooterFontSize, headerFooterLines, type HeaderFooterOptions } from './headerFooterText';
 import { getPdfPageVisualGeometry } from './pdfPageGeometry';
 import { layoutTextBox, PdfTextBoxError } from './pdfTextBoxLayout';
 import { decryptPdf, encryptPdfWithAes128 } from './qpdfBrowser';
@@ -41,7 +44,11 @@ import { highlightPatches, type TextHighlight } from './pdfTextHighlight';
 import { embeddedPdfFont, type EmbeddedPdfFontId } from './pdfEmbeddedFonts';
 import {
   DevanagariPdfWriter,
+  canShapeDevanagari,
+  hasDevanagari,
+  loadDevanagariFonts,
   measureDevanagariText,
+  WATERMARK_DEVANAGARI_FONT,
   type DevanagariFontId,
 } from './pdfDevanagari';
 import {
@@ -65,6 +72,7 @@ import {
   rotatedTextOrigin,
   sanitizePageNumberFontSize,
   sanitizePdfText,
+  sanitizeWatermarkText,
   watermarkLayout,
   DEFAULT_PAGE_NUMBER_FONT_SIZE,
   DEFAULT_PAGE_NUMBER_X_PERCENT,
@@ -109,8 +117,16 @@ export const mergePDFs = async (files: File[], signal?: AbortSignal): Promise<Ui
     throwIfPdfJobAborted(signal);
     // The list holds several files, so a locked or broken one is named.
     const pdf = await PDFDocument.load(arrayBuffer).catch((error) => { throw namedPdfError(error, file.name); });
+    // A damaged page tree loads and then fails on its pages with a TypeError, which was shown
+    // as it was; it is the file's problem too (round 4, desktop-03).
+    let pageIndices: number[];
+    try {
+      pageIndices = pdf.getPageIndices();
+    } catch (error) {
+      throw namedPdfError(unreadablePdfError(error), file.name);
+    }
     throwIfPdfJobAborted(signal);
-    const copiedPages = await copyPagesWithForms(mergedPdf, pdf, pdf.getPageIndices());
+    const copiedPages = await copyPagesWithForms(mergedPdf, pdf, pageIndices);
     copiedPages.forEach((page) => mergedPdf.addPage(page));
     throwIfPdfJobAborted(signal);
   }
@@ -656,18 +672,29 @@ export const getPDFPageCount = async (file: File): Promise<number> => {
     try {
       pdfDoc = await PDFDocument.load(await readFileAsArrayBuffer(file), { ignoreEncryption: true });
     } catch (error) {
-      if (classifyPdfError(error)) throw error;
-      const unreadable = new LocalizedError('error.pdfUnreadable');
-      unreadable.cause = error;
-      throw unreadable;
+      throw unreadablePdfError(error);
     }
     // Every page-changing tool loads without ignoreEncryption, which an encrypted file fails.
+    // Asked first: an encrypted page tree cannot be counted either.
     if (pdfDoc.isEncrypted) throw new LocalizedError('error.pdfLocked');
-    return pdfDoc.getPageCount();
+    try {
+      // A damaged page tree loads, then fails here with a TypeError (round 4, desktop-03).
+      return pdfDoc.getPageCount();
+    } catch (error) {
+      throw unreadablePdfError(error);
+    }
   })();
 
   pageCountCache.set(file, next);
   return next;
+};
+
+/** A failure to read a PDF's structure, as the reader's problem: kept when already classified, else "could not be read". */
+const unreadablePdfError = (error: unknown): unknown => {
+  if (classifyPdfError(error)) return error;
+  const unreadable = new LocalizedError('error.pdfUnreadable');
+  unreadable.cause = error;
+  return unreadable;
 };
 
 /**
@@ -697,35 +724,6 @@ export const repairPDF = async (file: File): Promise<Uint8Array> => {
   return pdfDoc.save({ useObjectStreams: false });
 };
 
-const clearPDFMetadataAndCatalogActions = (pdfDoc: PDFDocument) => {
-  pdfDoc.setTitle('');
-  pdfDoc.setAuthor('');
-  pdfDoc.setSubject('');
-  pdfDoc.setKeywords([]);
-  pdfDoc.setCreator('');
-  pdfDoc.setProducer('');
-  const info = pdfDoc.context.lookup(pdfDoc.context.trailerInfo.Info, PDFDict);
-  info.delete(PDFName.of('CreationDate'));
-  info.delete(PDFName.of('ModDate'));
-
-  const catalog = pdfDoc.catalog;
-  catalog.delete(PDFName.of('Metadata'));
-  catalog.delete(PDFName.of('ViewerPreferences'));
-  catalog.delete(PDFName.of('OpenAction'));
-  catalog.delete(PDFName.of('AA'));
-  // XMP can belong to a page or an image/form XObject as well as the catalog.
-  // Check the target type so an ordinary resource named "Metadata" is preserved.
-  for (const [, object] of pdfDoc.context.enumerateIndirectObjects()) {
-    const dictionary = object instanceof PDFStream ? object.dict : object;
-    if (!(dictionary instanceof PDFDict)) continue;
-    const metadata = pdfDoc.context.lookup(dictionary.get(PDFName.of('Metadata')));
-    if (metadata instanceof PDFStream && (
-      metadata.dict.lookup(PDFName.of('Type')) === PDFName.of('Metadata') ||
-      metadata.dict.lookup(PDFName.of('Subtype')) === PDFName.of('XML')
-    )) dictionary.delete(PDFName.of('Metadata'));
-  }
-};
-
 const removeCommentAnnotations = (pdfDoc: PDFDocument) => {
   for (const page of pdfDoc.getPages()) {
     const annotations = page.node.Annots();
@@ -740,37 +738,8 @@ const removeCommentAnnotations = (pdfDoc: PDFDocument) => {
 };
 
 /** pdf-lib otherwise serializes detached objects, leaving removed private data recoverable. */
-const removeUnusedPdfObjects = (pdfDoc: PDFDocument) => {
-  const pending: unknown[] = Object.values(pdfDoc.context.trailerInfo);
-  const visited = new Set<unknown>();
-  const referenced = new Set<string>();
-  while (pending.length) {
-    const object = pending.pop();
-    if (!object || visited.has(object)) continue;
-    visited.add(object);
-    if (object instanceof PDFRef) {
-      referenced.add(object.toString());
-      pending.push(pdfDoc.context.lookup(object));
-    } else if (object instanceof PDFDict) {
-      pending.push(...object.values());
-    } else if (object instanceof PDFArray) {
-      pending.push(...object.asArray());
-    } else if (object instanceof PDFStream) {
-      pending.push(object.dict);
-    }
-  }
-  for (const [reference] of pdfDoc.context.enumerateIndirectObjects()) {
-    if (!referenced.has(reference.toString())) pdfDoc.context.delete(reference);
-  }
-};
-
-export const removePDFMetadata = async (file: File): Promise<Uint8Array> => {
-  const arrayBuffer = await readFileAsArrayBuffer(file);
-  const pdfDoc = await PDFDocument.load(arrayBuffer, { updateMetadata: false });
-  clearPDFMetadataAndCatalogActions(pdfDoc);
-  removeUnusedPdfObjects(pdfDoc);
-  return pdfDoc.save();
-};
+export const removePDFMetadata = async (file: File): Promise<Uint8Array> =>
+  removeHiddenInfo(await readFileAsArrayBuffer(file));
 
 export const removePDFAnnotations = async (file: File): Promise<Uint8Array> => {
   const arrayBuffer = await readFileAsArrayBuffer(file);
@@ -843,35 +812,21 @@ export const cropPDFMargins = async (file: File, options: CropBoxOptions): Promi
   return pdfDoc.save();
 };
 
-export interface HeaderFooterOptions {
-  headerText: string;
-  footerText: string;
-  fontSize: number;
-  includePageNumbers: boolean;
-}
-
-const interpolateHeaderFooterText = (value: string, pageNumber: number, totalPages: number) =>
-  value.replaceAll('{n}', String(pageNumber)).replaceAll('{total}', String(totalPages));
+export { headerFooterFontSize, headerFooterLines, interpolateHeaderFooterText, type HeaderFooterOptions } from './headerFooterText';
 
 export const addHeaderFooterToPDF = async (file: File, options: HeaderFooterOptions): Promise<Uint8Array> => {
   const arrayBuffer = await readFileAsArrayBuffer(file);
   const pdfDoc = await PDFDocument.load(arrayBuffer);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const pages = pdfDoc.getPages();
-  const fontSize = Math.max(8, Math.min(48, Number.isFinite(options.fontSize) ? options.fontSize : 10));
+  const fontSize = headerFooterFontSize(options.fontSize);
   const totalPages = pages.length;
 
   pages.forEach((page, index) => {
     const pageNumber = index + 1;
     const geometry = getPdfPageVisualGeometry(page);
     const { width, height } = getVisualPageSize(geometry);
-    const header = interpolateHeaderFooterText(options.headerText.trim(), pageNumber, totalPages);
-    const footerBase = options.footerText.trim();
-    const footer = interpolateHeaderFooterText(
-      options.includePageNumbers && !footerBase ? 'Page {n} of {total}' : footerBase,
-      pageNumber,
-      totalPages,
-    );
+    const { header, footer } = headerFooterLines(options, pageNumber, totalPages);
 
     if (header) {
       const headerWidth = font.widthOfTextAtSize(header, fontSize);
@@ -943,22 +898,44 @@ const isPageBlank = async (pdfDoc: any, pageIndex: number, threshold: number) =>
   return nonWhite / Math.max(1, pixels.length / 4) <= threshold;
 };
 
+/**
+ * The pages that look blank (1-based), so Remove blank pages can mark them before it runs (path
+ * to 9, part 2). Stops between pages when `signal` is aborted.
+ */
+export const findBlankPages = async (
+  file: File,
+  options?: { threshold?: number; onProgress?: (current: number, total: number) => void; signal?: AbortSignal },
+): Promise<number[]> => {
+  const renderedPdf = await loadPDFDocument(file);
+  const totalPages = Number(renderedPdf.numPages) || 0;
+  const threshold = Math.max(0.0001, Math.min(0.02, options?.threshold ?? DEFAULT_BLANK_INK_THRESHOLD));
+  const blankPages: number[] = [];
+  for (let pageIndex = 0; pageIndex < totalPages; pageIndex += 1) {
+    options?.signal?.throwIfAborted();
+    options?.onProgress?.(pageIndex + 1, totalPages);
+    if (await isPageBlank(renderedPdf, pageIndex, threshold)) blankPages.push(pageIndex + 1);
+  }
+  return blankPages;
+};
+
 export const removeBlankPagesFromPDF = async (
   file: File,
-  options?: { threshold?: number; onProgress?: (current: number, total: number) => void },
+  options?: {
+    threshold?: number;
+    onProgress?: (current: number, total: number) => void;
+    /** The pages to drop (1-based), as marked on the page grid; found again when left out. */
+    pages?: readonly number[];
+  },
 ): Promise<{ bytes: Uint8Array; removedPages: number[] }> => {
   const sourceBuffer = await readFileAsArrayBuffer(file);
   const sourcePdf = await PDFDocument.load(sourceBuffer);
-  const renderedPdf = await loadPDFDocument(file);
   const totalPages = sourcePdf.getPageCount();
-  const threshold = Math.max(0.0001, Math.min(0.02, options?.threshold ?? DEFAULT_BLANK_INK_THRESHOLD));
+  const drop = new Set(options?.pages ?? await findBlankPages(file, options));
   const keptIndices: number[] = [];
   const removedPages: number[] = [];
 
   for (let pageIndex = 0; pageIndex < totalPages; pageIndex += 1) {
-    options?.onProgress?.(pageIndex + 1, totalPages);
-    const blank = await isPageBlank(renderedPdf, pageIndex, threshold);
-    if (blank) {
+    if (drop.has(pageIndex + 1)) {
       removedPages.push(pageIndex + 1);
     } else {
       keptIndices.push(pageIndex);
@@ -1644,6 +1621,9 @@ const parseHexColor = (hex: string) => {
   );
 };
 
+/** The face a Devanagari watermark is drawn in: the bold sans that matches Helvetica Bold. */
+export { WATERMARK_DEVANAGARI_FONT };
+
 export interface WatermarkOptions {
   text: string;
   size: number;
@@ -1672,7 +1652,17 @@ export const addWatermarkToPDF = async (file: File, options: WatermarkOptions): 
     throw new LocalizedError("android-parity.selected.pdf.has.no.pages.3882f9");
   }
 
-  const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  // Devanagari (Hindi, Marathi) cannot be written with a standard font: it is shaped with the same
+  // bundled bold face Edit PDF and Invoice use, and written as real text (research r2, mobile-01).
+  const devanagari = hasDevanagari(sanitizeWatermarkText(options.text));
+  if (devanagari) {
+    await loadDevanagariFonts();
+    if (!canShapeDevanagari(sanitizeWatermarkText(options.text), WATERMARK_DEVANAGARI_FONT)) {
+      throw new LocalizedError("watermark-pdf.failed.to.add.watermark.dade5d");
+    }
+  }
+  const writer = devanagari ? new DevanagariPdfWriter(pdfDoc) : null;
+  const font = devanagari ? null : await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const opacity = Math.max(0.05, Math.min(1, Number.isFinite(options.opacity) ? options.opacity : 0.3));
   const rotation = Math.max(
     WATERMARK_MIN_ROTATION_DEGREES,
@@ -1682,7 +1672,9 @@ export const addWatermarkToPDF = async (file: File, options: WatermarkOptions): 
     ),
   );
   const color = parseHexColor(options.color || DEFAULT_WATERMARK_COLOR_HEX);
-  const measureTextWidth = (text: string, fontSize: number) => font.widthOfTextAtSize(text, fontSize);
+  const measureTextWidth = (text: string, fontSize: number) => (font
+    ? font.widthOfTextAtSize(text, fontSize)
+    : measureDevanagariText(text, WATERMARK_DEVANAGARI_FONT, fontSize));
 
   for (const page of pages) {
     const geometry = getPdfPageVisualGeometry(page);
@@ -1703,17 +1695,24 @@ export const addWatermarkToPDF = async (file: File, options: WatermarkOptions): 
 
     const visualOrigin = rotatedTextOrigin(layout);
     const origin = visualPointToPdf(geometry, visualOrigin.x, height - visualOrigin.y);
+    if (writer) {
+      await writer.drawLine(page, [{
+        text: layout.text, fontId: WATERMARK_DEVANAGARI_FONT, x: origin.x, y: origin.y, width: layout.textWidth,
+      }], layout.fontSize, color, geometry.rotation + layout.rotationDegrees, opacity);
+      continue;
+    }
     page.drawText(layout.text, {
       x: origin.x,
       y: origin.y,
       size: layout.fontSize,
-      font,
+      font: font!,
       color,
       opacity,
       rotate: degrees(geometry.rotation + layout.rotationDegrees),
     });
   }
 
+  writer?.finish();
   return pdfDoc.save();
 };
 

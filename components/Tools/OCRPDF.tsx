@@ -4,25 +4,33 @@ import english from '../../services/i18n/en-US.ts';
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ErrorText } from '../UI/ErrorText';
 import { Link, useLocation } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Copy, Download, Loader2 } from 'lucide-react';
-import { createWorker, OEM } from 'tesseract.js';
+import { motion } from 'framer-motion';
+import { Copy, Download } from 'lucide-react';
+import type { createWorker } from 'tesseract.js';
 import { FileUpload } from '../UI/FileUpload';
 import { SegmentedControl } from '../UI/Primitives';
-import { ToolHeader, ToolShell } from '../UI/ToolLayout';
+import { ToolScreen } from '../Tool/ToolScreen';
+import { ChangeFile } from '../Tool/ToolTop';
+import { ToggleValue } from '../Tool/ToggleValue';
+import { Sentence, type SlotDef } from '../Tool/Sentence';
+import { Notice, ProgressLine, Stepper } from '../Tool/parts';
+import { EnterCloses } from '../Tool/Popover';
 import { SelectablePagePreview, type SelectableTextLine } from '../UI/SelectablePagePreview';
+import { usePagePreview } from '../Tool/PagePeek';
 import { PDFFile, ProcessingStatus } from '../../types';
-import { getPageSelectableTextLines, loadPDFDocument, loadProtectedPDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
+import { getPageSelectableTextLines, loadPDFDocument, loadProtectedPDFDocument, renderPageAsImage } from '../../services/pdfLazy';
 import { downloadBlob, isPdfFile, revokeObjectUrl } from '../../services/pdfShared';
-import { NO_EXTRACTABLE_TEXT_MESSAGE } from '../../services/docxExport';
 import { textFromSelectionTargets } from '../../services/pdfToolResults';
-import { shouldWarnForFiles } from '../../services/workspace';
+import { useHeavyJobCheck } from '../../hooks/useHeavyJobCheck';
 import { useOpenedPdf, type OpenedPdfRouteState } from '../../hooks/useOpenedPdf';
 import { useMonetization, type JobAccessGrant } from '../../hooks/useMonetization';
 import { useReleasePdfDocument } from '../../hooks/useReleasePdfDocument';
 import { toolOutputName } from '../UI/format';
+import { useWide } from '../../hooks/useMediaQuery';
+import { useRemembered } from '../Tool/useRemembered';
 
 /**
  * Written by a page that found nothing. It is a placeholder for the on-screen preview only and
@@ -162,18 +170,23 @@ const buildOcrSelectionLines = (
 
 export const OCRPDF: React.FC = () => {
   useI18n();
+  const heavy = useHeavyJobCheck();
+  const wide = useWide();
   const location = useLocation();
   const { openedPdf, takeProtectedPdfPassword } = useOpenedPdf();
   const [file, setFile] = useState<PDFFile | null>(null);
+  // Each page card's page large (pass 5): its eye, or two fingers on it.
+  const pagePreview = usePagePreview(file?.file, file?.name);
   useReleasePdfDocument(file?.file);
   const [pageResults, setPageResults] = useState<OCRPageResult[]>([]);
   const [resultMeta, setResultMeta] = useState<OCRResultMeta | null>(null);
   const extractionOperationIdRef = useRef<string | null>(null);
+  const modeGroupRef = useRef<HTMLDivElement>(null);
   const extractionGrantRef = useRef<JobAccessGrant | null>(null);
   const { completeJob, runWithExportAccess } = useMonetization();
   const [pageFilter, setPageFilter] = useState('all');
-  const [mode, setMode] = useState<ExtractionMode>('text-layer');
-  const [ocrMaxPages, setOcrMaxPages] = useState('5');
+  const [mode, setMode] = useRemembered<ExtractionMode>('mode', 'text-layer', (value) => value === 'text-layer' || value === 'ocr');
+  const [ocrMaxPages, setOcrMaxPages] = useRemembered<string>('pagesToRead', '5');
   const [status, setStatus] = useState<ProcessingStatus & { noticeKind?: 'cancelled' | 'copied' }>({ isProcessing: false, progress: 0, message: '' });
   const pageResultsRef = useRef<OCRPageResult[]>([]);
   const activeRunRef = useRef(0);
@@ -305,6 +318,7 @@ export const OCRPDF: React.FC = () => {
     const totalPages = pdfDoc.numPages || 0;
     if (totalPages < 1) throw new Error(t("ocrpdf.selected.pdf.has.no.pages.3882f9"));
     const limit = Math.max(1, Math.min(totalPages, Number(ocrMaxPages) || 1));
+    const { createWorker, OEM } = await import('tesseract.js');
     const worker = await createWorker('eng', OEM.LSTM_ONLY, {
       workerPath: `${LOCAL_OCR_ROOT}/worker.min.js`,
       corePath: `${LOCAL_OCR_ROOT}/core`,
@@ -425,7 +439,7 @@ export const OCRPDF: React.FC = () => {
     }
   };
 
-  const handleFilesSelected = (files: File[]) => {
+  const handleFilesSelected = async (files: File[]) => {
     if (files.length === 0) return;
     const selected = files[0];
     if (!isPdfFile(selected)) {
@@ -443,10 +457,8 @@ export const OCRPDF: React.FC = () => {
       ? takeProtectedPdfPassword(openedPdf.id)
       : null;
 
-    if (
-      shouldWarnForFiles([selected]) &&
-      !window.confirm(t("ocrpdf.this.is.a.large.pdf.and.may.848eab"))
-    ) {
+    // Reading starts as soon as the file is chosen, so the heavy-job question comes here (fix round 2, item 7).
+    if (!(await heavy.confirm(selected.size, t("ocrpdf.this.is.a.large.pdf.and.may.848eab")))) {
       protectedPasswordRef.current = null;
       return;
     }
@@ -546,264 +558,275 @@ export const OCRPDF: React.FC = () => {
       : t("ocrpdf.showing.page.c19f4d", { count: resultMeta.processedPages })
     : '';
 
-  return (
-    <ToolShell width="full" centered={!file}>
-      {/* The mode strip below names both paths and says what each one costs, so
-          the title needs no gloss. */}
-      <ToolHeader title={t("ocrpdf.extract.text.9ab592")} />
+  const title = t("ocrpdf.extract.text.9ab592");
+  const modeLabel = mode === 'ocr' ? t("ocrpdf.scanned.pages.5e7ba2") : t("ocrpdf.normal.pdf.d68bc0");
 
-      <AnimatePresence mode="wait">
-        {!file ? (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="space-y-3"
-          >
-            {/* Source first, then options, then status — the order every other
-                tool route keeps. The mode panel had been standing above the
-                drop zone, so this was the one screen that asked for a setting
-                before it asked for a file. */}
+  if (!file) {
+    const modeText = mode === 'ocr' ? t('sentence.ocr.mode.scanned') : t('sentence.ocr.mode.normal');
+    const limitCount = Number(ocrMaxPages);
+    const limitValid = ocrMaxPages !== '' && Number.isSafeInteger(limitCount) && limitCount >= 1;
+    const limitLabel = t("ocrpdf.how.many.pages.to.read.36331f");
+    const stepLimit = (delta: 1 | -1) => setOcrMaxPages((current) => String(Math.max(1, (Number(current) || 0) + delta)));
+
+    // Settings exist before a file is chosen, so the sentence shows above the picker (plan 2.15).
+    // The two modes are on the screen under the sentence (one tap, owner decision 1, B-016);
+    // the slot reads the mode and moves focus to it, and the mode's caution is the notice line.
+    const modeQuestion = t("ocrpdf.how.should.we.read.this.pdf.593a93");
+    const modeChoice = (
+      <div ref={modeGroupRef} className="tk-choice-seg">
+        {/* The product's one segmented control: a raised chip on a sunken track. */}
+        <SegmentedControl
+          fit
+          className="tk-seg"
+          label={modeQuestion}
+          value={mode}
+          options={[
+            { value: 'text-layer', label: t("ocrpdf.normal.pdf.d68bc0") },
+            { value: 'ocr', label: t("ocrpdf.scanned.pages.5e7ba2") },
+          ]}
+          onChange={setMode}
+        />
+      </div>
+    );
+    // Phone: the words are the two modes, and a tap switches them (polish 2026-11-15, item 3), so
+    // the mode shows once and needs no card.
+    const modeSlot: SlotDef = {
+      label: modeQuestion,
+      text: modeText,
+      ...(wide
+        ? { focusTarget: () => modeGroupRef.current?.querySelector<HTMLElement>('[aria-checked="true"]') ?? null }
+        : {
+          inline: (
+            <ToggleValue
+              label={modeQuestion}
+              value={mode}
+              onChange={setMode}
+              options={[
+                { value: 'text-layer', label: t("ocrpdf.normal.pdf.d68bc0"), text: t('sentence.ocr.mode.normal') },
+                { value: 'ocr', label: t("ocrpdf.scanned.pages.5e7ba2"), text: t('sentence.ocr.mode.scanned') },
+              ]}
+            />
+          ),
+        }),
+    };
+    const limitStepper = (
+        <Stepper
+          label={limitLabel}
+          field={(
+            <label htmlFor="ocr-page-limit" className="tk-field">
+              <span className="sr-only">{limitLabel}</span>
+              <input
+                id="ocr-page-limit"
+                value={ocrMaxPages}
+                onChange={(event) => setOcrMaxPages(event.target.value.replace(/[^\d]/g, ''))}
+                inputMode="numeric"
+                min={1}
+                className="chef-field tk-num"
+              />
+            </label>
+          )}
+          onStep={stepLimit}
+          decreaseDisabled={!limitValid || limitCount <= 1}
+        />
+    );
+    // The page count's − / + are in the slot's card at every width (owner decision 2026-11-15,
+    // item 1: on a phone a setting shows once).
+    const limitSlot: SlotDef = {
+      label: limitLabel,
+      text: limitValid ? t('sentence.ocr.limit', { count: limitCount }) : t('sentence.ocr.limit.unset'),
+      tone: limitValid ? undefined : 'error' as const,
+      editor: <EnterCloses valid={limitValid}>{limitStepper}</EnterCloses>,
+    };
+
+    return (
+      <ToolScreen
+        title={title}
+        kind="file"
+        extra={heavy.sheet}
+        body={(
+          <div className="tk-empty">
             <FileUpload
-              onFilesSelected={handleFilesSelected}
+              onFilesSelected={(files) => void handleFilesSelected(files)}
               accept=".pdf,application/pdf"
               label={mode === 'ocr' ? t("ocrpdf.choose.a.scanned.pdf.cf38d5") : t("ocrpdf.choose.a.pdf.3ba70f")}
+              error={status.error}
             />
-            <div className="rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-secondary)]">{t("ocrpdf.how.should.we.read.this.pdf.593a93")}</div>
-              {/* The product's one segmented control: a raised chip on a sunken
-                  track, with arrow-key radiogroup semantics. The pair of flat
-                  accent-filled buttons this replaced read as a status block
-                  rather than as a choice. */}
-              <SegmentedControl
-                label={t("ocrpdf.how.should.we.read.this.pdf.593a93")}
-                value={mode}
-                options={[
-                  { value: 'text-layer', label: t("ocrpdf.normal.pdf.d68bc0") },
-                  { value: 'ocr', label: t("ocrpdf.scanned.pages.5e7ba2") },
-                ]}
-                onChange={setMode}
-              />
+          </div>
+        )}
+        sentence={(
+          <Sentence
+            template={mode === 'ocr' ? 'sentence.ocr.scan' : 'sentence.ocr.textLayer'}
+            groupLabel={t('sentence.groupLabel', { tool: title })}
+            slots={mode === 'ocr' ? { limit: limitSlot, mode: modeSlot } : { mode: modeSlot }}
+          />
+        )}
+        chips={wide ? modeChoice : undefined}
+        // Kept at rest (M-18): each mode fails in a way the label does not show. A file that did
+        // not open says why inside the drop zone (T-09).
+        notice={<Notice tone="caution">{mode === 'text-layer'
+            ? t("ocrpdf.fast.works.when.the.pdf.already.carries.030add")
+            : t("ocrpdf.slower.reads.the.words.off.a.picture.9cb859")}</Notice>}
+      />
+    );
+  }
 
-              {/* Kept: each mode fails in a way the label does not show. */}
-              <p className="type-footnote mt-2 text-[var(--text-secondary)]">
-                {mode === 'text-layer'
-                  ? t("ocrpdf.fast.works.when.the.pdf.already.carries.030add")
-                  : t("ocrpdf.slower.reads.the.words.off.a.picture.9cb859")}
-              </p>
+  const body = (
+    <div className="tk-ocr">
+      <h2 id="ocr-results-heading" className="sr-only">{title}</h2>
+      {status.isProcessing ? null : (
+        <div className="flex flex-col gap-3">
+          {pageResults.length === 0 && (status.error || status.noticeKind === 'cancelled') && (
+            <div
+              role={status.error ? 'alert' : 'status'}
+              className={`rounded-[var(--radius-panel)] border p-3 text-sm ${
+                status.error
+                  ? 'border-[var(--status-danger-text)] bg-[var(--status-danger-quiet)] text-[var(--status-danger-text)]'
+                  : 'border-[var(--border-hairline)] bg-[var(--surface-sunken)] text-[var(--text-body)]'
+              }`}
+            >
+              <p className="font-bold">{status.error ? t("ocrpdf.extraction.failed.ed874a") : t("ocrpdf.extraction.cancelled.ea6842")}</p>
+              <p className="mt-1 leading-relaxed">{status.error ? <ErrorText text={status.error} /> : status.message}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button type="button" onClick={() => void runExtraction(file)} className="tk-primary tk-primary-inline chef-pressable">{t("ocrpdf.try.again.d8b839")}</button>
+                <button type="button" onClick={clearExtraction} className="tk-btn chef-pressable">{t("ocrpdf.choose.another.8a2bca")}</button>
+              </div>
+            </div>
+          )}
 
-              {mode === 'ocr' && (
-                <div className="mt-2.5">
-                  <label htmlFor="ocr-page-limit" className="mb-1 block type-footnote font-semibold text-[var(--text-secondary)]">{t("ocrpdf.how.many.pages.to.read.36331f")}</label>
-                  <input
-                    id="ocr-page-limit"
-                    value={ocrMaxPages}
-                    onChange={(event) => setOcrMaxPages(event.target.value.replace(/[^\d]/g, ''))}
-                    inputMode="numeric"
-                    min={1}
-                    className="chef-field w-28"
-                  />
+          {pageResults.length > 1 && (
+            <label className="tk-ocr-jump">
+              <span>{t("ocrpdf.jump.to.page.d35c8c")}</span>
+              <select value={pageFilter} onChange={(event) => setPageFilter(event.target.value)} className="chef-field">
+                <option value="all">{t("ocrpdf.all.pages.903542")}</option>
+                {pageResults.map((page) => (
+                  <option key={page.pageNumber} value={String(page.pageNumber)}>{t("ocrpdf.message.c140ba4857", { v0: page.pageNumber })}</option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {pageResults.length > 0 && !hasExtractedText && (
+            <div className="rounded-[var(--radius-field)] border border-[var(--status-caution-text)] bg-[var(--status-caution-quiet)] px-3 py-2.5 text-sm font-medium text-[var(--status-caution-text)]">
+              {mode === 'text-layer' ? (
+                <div className="flex flex-col gap-3">
+                  {/* Not PDF to Word's refusal ("Run Extract Text on it first"): this is Extract Text,
+                      and the way on is the button below (round 6, desktop-04). */}
+                  <p>{t('ocrpdf.scan.notice')}</p>
+                  <button
+                    type="button"
+                    onClick={switchToOcr}
+                    className="tk-primary tk-primary-inline chef-pressable"
+                  >{t("ocrpdf.use.ocr.on.this.pdf.ae24db")}</button>
                 </div>
+              ) : (
+                t("ocrpdf.ocr.did.not.detect.readable.english.text.03435f")
               )}
             </div>
+          )}
 
-            {status.error && (
-              <div role="alert" className="rounded-[var(--radius-field)] border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-400 dark:bg-rose-500/10 dark:text-rose-200">
-                {status.error}
-              </div>
-            )}
-
-          </motion.div>
-        ) : (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={status.isProcessing ? cancelExtraction : clearExtraction}
-                className="chef-target chef-pressable rounded-[var(--radius-control)] px-2 text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-sunken)] hover:text-[var(--text-primary)]"
+          {pagePreview.modal}
+          <div ref={pagePreview.pinchRef} className="grid gap-3">
+            {visiblePageResults.map((page) => (
+              <motion.article
+                key={page.pageNumber}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]"
               >
-                <span className="flex items-center gap-2"><ArrowLeft aria-hidden size={16} className="rtl:rotate-180" /> {status.isProcessing ? t("ocrpdf.cancel.extraction.8f2c87") : t("ocrpdf.extract.another.e104f8")}</span>
-              </button>
-              <div className="min-w-0 text-end">
-                <div className="inline-flex rounded-full bg-[var(--surface-sunken)] px-2 py-1 text-xs font-semibold text-[var(--text-secondary)]">
-                  {mode === 'ocr' ? t("ocrpdf.scanned.pages.5e7ba2") : t("ocrpdf.normal.pdf.d68bc0")}
+                <div className="tk-peekbox" data-peek-page={page.pageNumber - 1}>
+                  <SelectablePagePreview
+                    imageUrl={page.previewUrl}
+                    pageNumber={page.pageNumber}
+                    previewWidth={page.previewWidth}
+                    previewHeight={page.previewHeight}
+                    lines={page.selectionLines}
+                  />
+                  {page.previewUrl && pagePreview.peek(page.pageNumber - 1)}
                 </div>
-                <p className="mt-1 max-w-[12rem] truncate text-xs text-[var(--text-tertiary)]">{file.name}</p>
-              </div>
-            </div>
 
-            {status.isProcessing ? (
-              <div role="status" aria-live="polite" className="rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--accent-quiet)] p-3 text-blue-950 dark:border-blue-400 dark:bg-[var(--accent-quiet)] dark:text-blue-100 sm:p-4">
-                <div className="flex items-center gap-3">
-                  <Loader2 aria-hidden className="shrink-0 animate-spin" size={26} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-3 text-sm font-semibold">
-                      <span>{status.message || t("ocrpdf.extracting.text.c3e98c")}</span>
-                      <span className="tabular-nums">{formatPercent(status.progress)}</span>
-                    </div>
-                    <div
-                      role="progressbar"
-                      aria-label={t("ocrpdf.text.extraction.progress.4a7d2e")}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={status.progress}
-                      className="mt-3 h-2 overflow-hidden rounded-full bg-blue-100 dark:bg-blue-950"
-                    >
-                      <div className="h-full rounded-full bg-[var(--accent-rest)] transition-[width]" style={{ width: `${status.progress}%` }} />
-                    </div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={cancelExtraction}
-                  className="chef-target chef-pressable mt-3 w-full rounded-[var(--radius-control)] border border-current px-4 text-sm font-semibold hover:bg-[var(--surface-raised)] sm:w-auto"
-                >{t("ocrpdf.cancel.19766e")}</button>
-              </div>
-            ) : (
-              <>
-                {pageResults.length === 0 && (status.error || status.noticeKind === 'cancelled') && (
-                  <div
-                    role={status.error ? 'alert' : 'status'}
-                    className={`rounded-[var(--radius-panel)] border p-3 text-sm ${
-                      status.error
-                        ? 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-400 dark:bg-rose-500/10 dark:text-rose-200'
-                        : 'border-[var(--border-hairline)] bg-[var(--surface-sunken)] text-[var(--text-body)]'
-                    }`}
-                  >
-                    <p className="font-bold">{status.error ? t("ocrpdf.extraction.failed.ed874a") : t("ocrpdf.extraction.cancelled.ea6842")}</p>
-                    <p className="mt-1 leading-relaxed">{status.error || status.message}</p>
-                    <div className="mt-4 grid gap-2 sm:flex">
+                <div className="min-w-0">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-lg font-semibold text-[var(--text-primary)]">{t("ocrpdf.message.c140ba4857", { v0: page.pageNumber })}</h3>
+
+                    {pageHasExtractedText(page) && (
                       <button
                         type="button"
-                        onClick={() => void runExtraction(file)}
-                        className="chef-target chef-pressable rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 font-semibold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)]"
-                      >{t("ocrpdf.try.again.d8b839")}</button>
-                      <button
-                        type="button"
-                        onClick={clearExtraction}
-                        className="chef-target chef-pressable rounded-[var(--radius-control)] border border-[var(--border-strong)] px-4 font-semibold hover:border-[var(--accent-rest)]"
-                      >{t("ocrpdf.choose.another.8a2bca")}</button>
-                    </div>
-                  </div>
-                )}
-
-                {pageResults.length > 0 && (
-                  <div className="flex flex-wrap items-center justify-between gap-2.5">
-                    <div className="min-w-0">
-                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-secondary)]">{t("ocrpdf.results.219c4a")}</div>
-                      <p className="mt-0.5 text-sm text-[var(--text-secondary)]">
-                        {processedSummary}
-                      </p>
-                    </div>
-
-                    <div className="grid w-full gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
-                      {pageResults.length > 1 && (
-                        <label className="flex items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-3 py-1 text-sm text-[var(--text-secondary)]">
-                          <span>{t("ocrpdf.jump.to.page.d35c8c")}</span>
-                          <select
-                            value={pageFilter}
-                            onChange={(event) => setPageFilter(event.target.value)}
-                            className="bg-transparent font-medium outline-none"
-                          >
-                            <option value="all">{t("ocrpdf.all.pages.903542")}</option>
-                            {pageResults.map((page) => (
-                              <option key={page.pageNumber} value={String(page.pageNumber)}>{t("ocrpdf.message.c140ba4857", { v0: page.pageNumber })}</option>
-                            ))}
-                          </select>
-                        </label>
-                      )}
-
-                      {hasExtractedText && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => copyTextToClipboard(exportText, t("ocrpdf.copied.all.extracted.text.0c13a8"))}
-                            className="chef-target chef-pressable flex items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-quiet)] px-4 font-medium text-[var(--accent-on-quiet)] transition-colors"
-                          >
-                            <Copy aria-hidden size={18} />{t("ocrpdf.copy.all.64f07c")}</button>
-
-                          <button
-                            type="button"
-                            onClick={downloadExtractedText}
-                            className="chef-target chef-pressable flex items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-4 font-medium text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]"
-                          >
-                            <Download aria-hidden size={18} />{t("ocrpdf.download.txt.c300e5")}</button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {pageResults.length > 0 && !hasExtractedText && (
-                  <div className="rounded-[var(--radius-field)] border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-800 dark:border-amber-500 dark:bg-amber-500/10 dark:text-amber-200">
-                    {mode === 'text-layer' ? (
-                      <div className="flex flex-col gap-3">
-                        <p>{NO_EXTRACTABLE_TEXT_MESSAGE}</p>
-                        <button
-                          type="button"
-                          onClick={switchToOcr}
-                          className="chef-target chef-pressable inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 font-semibold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] sm:w-auto"
-                        >{t("ocrpdf.use.ocr.on.this.pdf.ae24db")}</button>
-                      </div>
-                    ) : (
-                      t("ocrpdf.ocr.did.not.detect.readable.english.text.03435f")
+                        onClick={() => copyTextToClipboard(page.text, t("ocrpdf.copied.page.text.7fbe3c", { v0: page.pageNumber }))}
+                        className="chef-target chef-pressable flex items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-3 text-sm font-medium text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]"
+                      >
+                        <Copy aria-hidden size={18} />{t("ocrpdf.copy.page.b89db0")}</button>
                     )}
                   </div>
-                )}
 
-                <div className="grid gap-3">
-                  {visiblePageResults.map((page) => (
-                    <motion.article
-                      key={page.pageNumber}
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]"
-                    >
-                      <SelectablePagePreview
-                        imageUrl={page.previewUrl}
-                        pageNumber={page.pageNumber}
-                        previewWidth={page.previewWidth}
-                        previewHeight={page.previewHeight}
-                        lines={page.selectionLines}
-                      />
-
-                      <div className="min-w-0">
-                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                          <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t("ocrpdf.message.c140ba4857", { v0: page.pageNumber })}</h2>
-
-                          {pageHasExtractedText(page) && (
-                            <button
-                              type="button"
-                              onClick={() => copyTextToClipboard(page.text, t("ocrpdf.copied.page.text.7fbe3c", { v0: page.pageNumber }))}
-                              className="chef-target chef-pressable flex items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] px-3 text-sm font-medium text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]"
-                            >
-                              <Copy aria-hidden size={18} />{t("ocrpdf.copy.page.b89db0")}</button>
-                          )}
-                        </div>
-
-                        <pre className="select-text chef-scroller max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-[var(--radius-field)] bg-[var(--surface-sunken)] p-3 text-sm text-[var(--text-body)]">
-                          {page.text === NO_TEXT_LAYER_PLACEHOLDER ? t("ocrpdf.this.page.has.no.words.stored.in.e875a3")
-                            : page.text === NO_OCR_TEXT_PLACEHOLDER ? t("ocrpdf.no.words.could.be.read.from.this.8ce507") : page.text}
-                        </pre>
-                      </div>
-                    </motion.article>
-                  ))}
+                  <pre className="select-text chef-scroller max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-[var(--radius-field)] bg-[var(--surface-sunken)] p-3 text-sm text-[var(--text-body)]">
+                    {/* No "Switch to Scanned pages above": the result screen has no such control; the
+                        scan notice above it carries "Use OCR on this PDF" (round 6, desktop-04). */}
+                    {page.text === NO_TEXT_LAYER_PLACEHOLDER ? t('ocrpdf.page.no.words')
+                      : page.text === NO_OCR_TEXT_PLACEHOLDER ? t("ocrpdf.no.words.could.be.read.from.this.8ce507") : page.text}
+                  </pre>
                 </div>
-              </>
-            )}
+              </motion.article>
+            ))}
+          </div>
+        </div>
+      )}
 
-            {status.noticeKind === 'copied' && (
-              <div
-                role="status"
-                aria-live="polite"
-                className="chef-above-tabbar fixed inset-x-3 rounded-[var(--radius-field)] bg-emerald-600 px-3 py-2 text-sm text-paper-25 shadow-[var(--elevation-panel)] sm:inset-x-auto sm:right-3"
-              >
-                {status.message}
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </ToolShell>
+    </div>
+  );
+
+  // Results (T-02): the mode as the sentence, the summary (or "Copied") as the notice line, and
+  // Copy all as the main action with Download .txt beside it, in the foot sheet on phones.
+  const modeText = mode === 'ocr' ? t('sentence.ocr.mode.scanned') : t('sentence.ocr.mode.normal');
+  const resultSentence = (
+    <Sentence
+      template={mode === 'ocr' ? 'sentence.ocr.scan' : 'sentence.ocr.textLayer'}
+      groupLabel={t('sentence.groupLabel', { tool: title })}
+      slots={mode === 'ocr'
+        ? { limit: { label: t("ocrpdf.how.many.pages.to.read.36331f"), text: t('sentence.ocr.limit', { count: resultMeta?.processedPages ?? (Number(ocrMaxPages) || 1) }), static: true }, mode: { label: t("ocrpdf.how.should.we.read.this.pdf.593a93"), text: modeText, static: true } }
+        : { mode: { label: t("ocrpdf.how.should.we.read.this.pdf.593a93"), text: modeText, static: true } }}
+    />
+  );
+  const resultNotice = status.noticeKind === 'copied'
+    ? <Notice role="status">{status.message}</Notice>
+    : processedSummary ? <Notice>{processedSummary}</Notice> : undefined;
+  const copyAll = hasExtractedText && !status.isProcessing ? (
+    <button type="button" onClick={() => copyTextToClipboard(exportText, t("ocrpdf.copied.all.extracted.text.0c13a8"))} className="tk-primary chef-pressable">
+      <Copy aria-hidden size={18} />{t("ocrpdf.copy.all.64f07c")}</button>
+  ) : undefined;
+  const downloadText = hasExtractedText && !status.isProcessing ? (
+    <button type="button" onClick={downloadExtractedText} className="tk-btn chef-pressable">
+      <Download aria-hidden size={18} />{t("ocrpdf.download.txt.c300e5")}</button>
+  ) : undefined;
+  const progress = status.isProcessing ? (
+    <ProgressLine
+      label={status.message || t("ocrpdf.extracting.text.c3e98c")}
+      percent={formatPercent(status.progress)}
+      value={status.progress}
+      cancel={(
+        <button type="button" onClick={cancelExtraction} className="tk-btn chef-pressable">{t("ocrpdf.cancel.19766e")}</button>
+      )}
+    />
+  ) : undefined;
+
+  return (
+    <ToolScreen
+      title={title}
+      file={{ name: file.name, meta: modeLabel }}
+      change={(
+        <ChangeFile
+          label={status.isProcessing ? t("ocrpdf.cancel.extraction.8f2c87") : t('tool.chooseAnotherFile')}
+          onClick={status.isProcessing ? cancelExtraction : clearExtraction}
+          cancels={status.isProcessing}
+        />
+      )}
+      kind="file"
+      bodyLabelledBy="ocr-results-heading"
+      body={body}
+      sentence={pageResults.length > 0 || status.isProcessing ? resultSentence : undefined}
+      notice={status.isProcessing ? undefined : resultNotice}
+      action={copyAll}
+      secondary={downloadText}
+      progress={progress}
+    />
   );
 };

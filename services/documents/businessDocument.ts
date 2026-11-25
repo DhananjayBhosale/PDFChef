@@ -108,6 +108,19 @@ const finiteOrZero = (value: number) => Number.isFinite(value) ? value : 0;
 
 export class BusinessDocumentValidationError extends LocalizedError {}
 
+/** Scripts the document fonts cannot draw yet (Arabic, Chinese, Japanese, Korean). */
+const UNDRAWN_SCRIPT = /[\u0600-\u06ff\u0750-\u077f\u3000-\u9fff\uac00-\ud7af\uff00-\uffef]/;
+
+/**
+ * The date a new document starts with: today in the reader's language, or 2026-11-15 where
+ * that language's letters cannot be drawn on the page, so an untouched form always draws.
+ */
+export const documentDate = (localDate: string, now: Date): string => {
+  if (!UNDRAWN_SCRIPT.test(localDate)) return localDate;
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+};
+
 /** Accept decimal amounts (including grouped thousands), never reinterpret text. */
 export const parseDocumentNumber = (value: string): number => {
   const trimmed = value.trim();

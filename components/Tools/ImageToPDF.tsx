@@ -4,30 +4,34 @@ import { useI18n } from '../../services/i18n/react';
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
 import { FileUpload } from '../UI/FileUpload';
 import { ProcessingStatus } from '../../types';
-import { createPDFFromLayout, type PDFPageLayout } from '../../services/pdfDocument';
+import { createPDFFromLayout, type PDFPageLayout } from '../../services/pdfLazy';
 import { getContainedImageSize, preparePdfImageAsset, rotatePreparedPdfImageAsset } from '../../services/imageBrowser';
 import { mapWithConcurrency } from '../../services/mapWithConcurrency';
 import { imageProblemOf, skippedImagesMessage, type SkippedImage } from '../../services/imageIntake';
 import { downloadBlob, revokeObjectUrls } from '../../services/pdfShared';
-import { AlertTriangle, X, ArrowDown, Loader2, FileImage, Plus, Trash2, Move, RotateCw, Undo2 } from 'lucide-react';
+import { AlertTriangle, X, ArrowDown, Loader2, FileImage, Plus, Trash2, Move, RotateCw, ChevronLeft, ZoomIn } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { Link } from 'react-router-dom';
 import { ZoomControls } from '../UI/ZoomControls';
 import { useZoom } from '../../hooks/useZoom';
+import { usePdfPinchZoom } from '../../hooks/usePdfPinchZoom';
 import { useDragReorder } from '../../hooks/useDragReorder';
+import { useFileDrop } from '../../hooks/useFileDrop';
 import { useConfirmDiscard } from '../../hooks/useConfirmDiscard';
+import { useWorkInput } from '../UI/workSignature';
 import { createPortal } from 'react-dom';
-import { tools } from './toolCatalog';
-import { ToolIdentity } from './ToolIdentity';
 import { StatusToast } from '../UI/StatusToast';
-import { StatusLine } from '../UI/Primitives';
-import { ToolHeader, ToolShell } from '../UI/ToolLayout';
-import { useImmersiveWorkspace } from '../Layout/AppShell';
-import { datedOutputName } from '../UI/format';
+import { ConfirmSheet, StatusLine } from '../UI/Primitives';
+import { ToolScreen } from '../Tool/ToolScreen';
+import { ResultSlot, useToolAnnounce } from '../Tool/parts';
+import { Pop, openerProps, usePop } from '../Tool/Popover';
+import { useWide } from '../../hooks/useMediaQuery';
+import { photoOutputName } from '../UI/format';
 
-const IMAGE_TO_PDF_TOOL = tools.find((tool) => tool.path === '/image-to-pdf');
 const MAX_IMAGE_TO_PDF_FILES = 100;
 const IMAGE_PREPARE_CONCURRENCY = 2;
+/** The pages zoom to 400%, as in Edit PDF (fable-2 item 20). */
+const I2P_MAX_ZOOM = 4;
 
 
 // Data Model
@@ -101,13 +105,15 @@ const DraggableResizableImage: React.FC<{
 }> = ({ element, pageId, containerRef, onUpdate, onRemove, onRotate, onDragStart, zoom, isDraggingGlobally }) => {
   useI18n();
   const [resizingHandle, setResizingHandle] = useState<string | null>(null);
-  const startRef = useRef({ x: 0, y: 0, ex: 0, ey: 0, w: 0, h: 0 });
+  const startRef = useRef({ pointerId: -1, x: 0, y: 0, ex: 0, ey: 0, w: 0, h: 0, element: { x: 0, y: 0, width: 0, height: 0 } });
 
   useLayoutEffect(() => {
     if (!resizingHandle) return;
 
+    // The resize follows the finger that started it. A second finger is a pinch: the picture goes
+    // back to its starting size and the resize ends, as the free drag does (s4-03).
     const handlePointerMove = (e: PointerEvent) => {
-      if (!containerRef.current) return;
+      if (!containerRef.current || e.pointerId !== startRef.current.pointerId) return;
       const rect = containerRef.current.getBoundingClientRect();
       const pageWidth_px = rect.width;
       const pageHeight_px = rect.height;
@@ -141,15 +147,24 @@ const DraggableResizableImage: React.FC<{
       });
     };
 
-    const handlePointerUp = () => {
+    const handlePointerUp = (e: PointerEvent) => {
+      if (e.pointerId !== startRef.current.pointerId) return;
+      setResizingHandle(null);
+    };
+
+    const handleSecondFinger = (e: PointerEvent) => {
+      if (e.pointerId === startRef.current.pointerId) return;
+      onUpdate(startRef.current.element);
       setResizingHandle(null);
     };
 
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointerdown', handleSecondFinger, true);
     return () => {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointerdown', handleSecondFinger, true);
     };
   }, [resizingHandle, onUpdate, zoom, element.aspectRatio, element.height, element.x, element.y, containerRef]);
 
@@ -166,6 +181,8 @@ const DraggableResizableImage: React.FC<{
      const pageHeight_px = rect.height;
 
      startRef.current = { 
+        pointerId: e.pointerId,
+        element: { x: element.x, y: element.y, width: element.width, height: element.height },
         x: e.clientX, y: e.clientY, 
         ex: element.x * pageWidth_px, ey: element.y * pageHeight_px,
         w: element.width * pageWidth_px, h: element.height * pageHeight_px
@@ -190,11 +207,11 @@ const DraggableResizableImage: React.FC<{
         <img src={element.previewUrl} alt={t("image-to-pdf.image.placed.on.pdf.page.74b8c9")} className="w-full h-full object-contain pointer-events-none" />
         
         {/* Controls */}
-        <div className="absolute right-1 top-1 z-20 flex gap-1 sm:-right-3 sm:-top-3 sm:hidden sm:group-hover:flex">
-           <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onRotate(); }} aria-label={t("image-to-pdf.rotate.image.clockwise.f4d156")} className="grid min-h-11 min-w-11 place-items-center rounded-full bg-[var(--accent-rest)] text-[var(--text-on-accent)] shadow-[var(--elevation-panel)] transition-colors hover:bg-[var(--accent-hover)] sm:min-h-0 sm:min-w-0 sm:p-1.5">
+        <div className="tk-i2p-imgtools absolute z-20 flex">
+           <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onRotate(); }} aria-label={t("image-to-pdf.rotate.image.clockwise.f4d156")} className="tk-i2p-imgbtn chef-pressable">
               <RotateCw size={14}/>
            </button>
-           <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onRemove(); }} aria-label={t("image-to-pdf.remove.image.da7aca")} className="grid min-h-11 min-w-11 place-items-center rounded-full bg-[var(--status-danger-text)] text-white shadow-[var(--elevation-panel)] transition-opacity hover:opacity-90 sm:min-h-0 sm:min-w-0 sm:p-1.5">
+           <button onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onRemove(); }} aria-label={t("image-to-pdf.remove.image.da7aca")} className="tk-i2p-imgbtn tk-i2p-imgbtn-danger chef-pressable">
               <X size={14}/>
            </button>
         </div>
@@ -267,15 +284,32 @@ const CanvasPage: React.FC<{
 export const ImageToPDF: React.FC = () => {
   useI18n();
   const [pages, setPages] = useState<PageData[]>([]);
+  const announce = useToolAnnounce();
   const [savedPages, setSavedPages] = useState<PageData[] | null>(null);
   const discardSheet = useConfirmDiscard(pages.length > 0 && pages !== savedPages);
+  // The pages are the input of the result strip's file (workSignature.ts).
+  useWorkInput(pages);
+  // Clear all asks first, as Create PDF's does (round 5, mobile-05): it empties the whole document.
+  const [confirmClear, setConfirmClear] = useState(false);
+  // After the first photos arrive the picker that had focus is gone: Save PDF takes it, so the next
+  // key press is not a walk through every page's buttons (round 5, desktop-06: 19 Tabs to Save).
+  const saveRef = useRef<HTMLButtonElement>(null);
+  const focusSaveOnLoad = useRef(false);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   // Decoding a handful of camera photos takes seconds on a phone; say so instead of looking stuck.
   // A count, because the empty screen and a page's own picker can each add images at once.
   const [imagesBeingAdded, setImagesBeingAdded] = useState(0);
   const addingImages = imagesBeingAdded > 0;
-  const { zoom, zoomIn, zoomOut, resetZoom } = useZoom(1.0, 0.5, 1.5, 0.25);
-  const canvasViewportRef = useRef<HTMLDivElement>(null);
+  const { zoom, zoomIn, zoomOut, resetZoom, setExactZoom } = useZoom(1.0, 0.5, I2P_MAX_ZOOM, 0.25);
+  const wide = useWide();
+  const viewPop = usePop();
+  const canvasViewportRef = useRef<HTMLDivElement | null>(null);
+  // Two fingers (or Ctrl+wheel) on the pages zoom them too, as in Read PDF; View keeps − and + (pass 5).
+  const setPinchViewport = usePdfPinchZoom({ zoom, setZoom: setExactZoom, min: 0.5, max: I2P_MAX_ZOOM });
+  const setCanvasViewport = useCallback((node: HTMLDivElement | null) => {
+    canvasViewportRef.current = node;
+    setPinchViewport(node);
+  }, [setPinchViewport]);
   const [canvasViewportWidth, setCanvasViewportWidth] = useState(0);
   
   // Reorder Engine for Pages
@@ -323,7 +357,12 @@ export const ImageToPDF: React.FC = () => {
     if (!activeImageDrag) return;
 
     const handleMove = (e: PointerEvent) => {
+      if (!e.isPrimary) return;
       setActiveImageDrag(prev => prev ? { ...prev, clientX: e.clientX, clientY: e.clientY } : null);
+    };
+    // A second finger is a pinch: the picture stays where it was.
+    const handleSecondFinger = (e: PointerEvent) => {
+      if (!e.isPrimary) setActiveImageDrag(null);
     };
 
     const handleUp = (e: PointerEvent) => {
@@ -383,9 +422,11 @@ export const ImageToPDF: React.FC = () => {
 
     window.addEventListener('pointermove', handleMove);
     window.addEventListener('pointerup', handleUp);
+    window.addEventListener('pointerdown', handleSecondFinger, true);
     return () => {
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', handleUp);
+      window.removeEventListener('pointerdown', handleSecondFinger, true);
     };
   }, [activeImageDrag ? true : false]);
 
@@ -468,7 +509,9 @@ export const ImageToPDF: React.FC = () => {
   };
 
   const removePage = (id: string) => {
+    const index = pages.findIndex(p => p.id === id);
     setPages(prev => prev.filter(p => p.id !== id));
+    if (index >= 0) announce(t('tool.removed', { v0: t('page-thumbnail.page.c140ba', { v0: index + 1 }) }));
   };
 
   const removeElement = (pageId: string, elementId: string) => {
@@ -528,7 +571,7 @@ export const ImageToPDF: React.FC = () => {
       const firstImage = pages.flatMap((page) => page.elements)[0];
       downloadBlob(
         new Blob([pdfBytes], { type: 'application/pdf' }),
-        datedOutputName(t("tool-catalog.image.to.pdf.966eba"), 'pdf'),
+        photoOutputName(firstImage?.file.name, t("tool-catalog.image.to.pdf.966eba")),
         'application/pdf',
       );
       setSavedPages(pages);
@@ -542,7 +585,6 @@ export const ImageToPDF: React.FC = () => {
   // The page builder earns the whole screen; a drop zone does not. Until the
   // first image lands this is an ordinary tool screen, with the shell's Tools
   // navigation above it and the tab bar below it.
-  useImmersiveWorkspace(pages.length > 0);
 
   const activePage = pages.find(p => p.id === activeId);
   const measuredCanvasWidth = canvasViewportWidth || (typeof window !== 'undefined' ? window.innerWidth : 794);
@@ -550,107 +592,159 @@ export const ImageToPDF: React.FC = () => {
   const basePageWidth = Math.min(794, usableCanvasWidth);
   const renderedPageWidth = basePageWidth * zoom;
 
+  const title = t("image-to-pdf.image.to.pdf.966eba");
+  const toast = <StatusToast status={status} />;
+
+  // A picture dropped on the loaded editor becomes a new page (research r3, desktop-06).
+  useFileDrop({ accept: pages.length ? 'image/*' : '', onFiles: handleFilesSelected });
+
+  const hasPages = pages.length > 0;
+  useLayoutEffect(() => {
+    if (!hasPages) {
+      focusSaveOnLoad.current = true;
+      return;
+    }
+    if (!focusSaveOnLoad.current || addingImages) return;
+    focusSaveOnLoad.current = false;
+    const active = document.activeElement as HTMLElement | null;
+    if (!active || active === document.body || !active.isConnected || active.id === 'main') saveRef.current?.focus({ preventScroll: true });
+  }, [hasPages, addingImages]);
+
   if (pages.length === 0) {
     return (
-      <ToolShell centered>
-        <ToolHeader title={t("image-to-pdf.image.to.pdf.966eba")} />
-        <FileUpload onFilesSelected={handleFilesSelected} accept="image/*" multiple label={t("image-to-pdf.choose.images.for.your.pdf.58f369")} />
-        <div role="status" aria-live="polite">
-          {addingImages && (
-            <StatusLine tone="info" icon={<Loader2 className="animate-spin" size={16} />}>
-              {t("image-to-pdf.adding.images.8a4d34")}
-            </StatusLine>
-          )}
-        </div>
-        {status.error && (
-          <StatusLine tone="danger" icon={<AlertTriangle aria-hidden size={16} />}>
-            {status.error}
-          </StatusLine>
+      <ToolScreen
+        title={title}
+        kind="file"
+        body={(
+          <div className="tk-empty">
+            <FileUpload onFilesSelected={handleFilesSelected} accept="image/*" multiple label={t("image-to-pdf.choose.images.for.your.pdf.58f369")} error={status.error} />
+            <div role="status" aria-live="polite">
+              {addingImages && (
+                <StatusLine tone="info" icon={<Loader2 className="animate-spin" size={16} />}>
+                  {t("image-to-pdf.adding.images.8a4d34")}
+                </StatusLine>
+              )}
+            </div>
+          </div>
         )}
-      </ToolShell>
+        toast={toast}
+      />
     );
   }
 
-  return (
-    <div className="chef-safe-bottom flex h-[100dvh] min-h-[100dvh] w-full flex-col overflow-hidden bg-[var(--surface-canvas)]">
+  const saveButton = (
+    <button
+      ref={saveRef}
+      type="button"
+      onClick={handleConvert}
+      disabled={status.isProcessing || pages.length === 0 || addingImages}
+      className="tk-primary tk-primary-inline chef-pressable"
+    >
+      {status.isProcessing ? <Loader2 aria-hidden className="animate-spin" size={18} /> : <ArrowDown aria-hidden size={18} />}
+      <span>{t("image-to-pdf.save.pdf.2462a8")}</span>
+    </button>
+  );
 
-       {/* Header. An immersive route gets no shell chrome, so it consumes the
-           status-bar inset itself rather than painting under the clock. */}
-       <div className="chef-safe-top z-30 flex flex-shrink-0 flex-col gap-3 border-b border-[var(--border-hairline)] bg-[var(--surface-raised)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-         <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-            <Link to="/" aria-label={t("image-to-pdf.back.to.dashboard.b59e0c")} className="chef-target grid place-items-center rounded-full text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-sunken)]">
-               <Undo2 size={20} />
-            </Link>
-            <div className="flex min-w-0 items-center gap-2">
-               {IMAGE_TO_PDF_TOOL && (
-                 <ToolIdentity tool={IMAGE_TO_PDF_TOOL} size={20} assetSize={30} assetClassName="h-[30px] w-[30px] shrink-0 object-contain" />
-               )}
-               <div className="min-w-0">
-                 <h1 className="break-words text-lg font-bold leading-none text-[var(--text-primary)]">{t("image-to-pdf.image.to.pdf.966eba")}</h1>
-                 {pages.length > 0 && (
-                   <p className="type-caption mt-1 text-[var(--text-tertiary)]">{t('format.pageCount', { count: pages.length })}</p>
-                 )}
-               </div>
+  const backToDashboard = (
+    // The kit's back chevron (T-16): the undo arrow read as "undo the last change".
+    <Link to="/" aria-label={t("image-to-pdf.back.to.dashboard.b59e0c")} title={t("image-to-pdf.back.to.dashboard.b59e0c")} className="tk-back chef-pressable">
+      <ChevronLeft aria-hidden size={22} strokeWidth={1.75} className="rtl:rotate-180" />
+    </Link>
+  );
+
+  const addPagesControl = (className: string, iconSize: number) => (
+    <label className={`${className} tk-i2p-add chef-pressable`}>
+      {addingImages ? <Loader2 aria-hidden className="animate-spin" size={iconSize}/> : <FileImage aria-hidden size={iconSize}/>}<span>{addingImages ? t("image-to-pdf.adding.images.8a4d34") : t("image-to-pdf.add.pages.6a7668")}</span><input type="file" multiple accept="image/*" aria-disabled={addingImages || undefined} aria-label={t("image-to-pdf.add.new.pages.from.images.b8c579")} className="sr-only" onClick={e => { if (addingImages) e.preventDefault(); }} onChange={e => e.target.files && handleFilesSelected(Array.from(e.target.files))} />
+    </label>
+  );
+  const clearAll = () => setConfirmClear(true);
+  const pageLabel = (i: number) => t("image-to-pdf.message.c140ba4857", { v0: i + 1 });
+  // The page's own row (its name, Add image, Remove) leads it, so a tapped page starts at the top of
+  // the canvas: centred, a page taller than the canvas had that row cut off (research r1, mobile-07).
+  const showPage = (id: string) => canvasViewportRef.current?.querySelector(`[data-page-id="${id}"]`)?.closest<HTMLElement>('.tk-i2p-pagebox')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+
+  const body = (
+    <div className={`tk-i2p${wide ? '' : ' tk-i2p-phone'}`}>
+      {wide && <ResultSlot className="tk-editor-result" />}
+      {/* Phone (T-02): first in the document so Save PDF comes before the pages, drawn at the foot
+          (verify V-01). The page tools are one row of tabs, as in Edit PDF; zoom is a foot sheet. */}
+      {!wide && (
+        <div className="tk-footbar">
+          <ResultSlot />
+          <div className="tk-foot-tabs">
+            {addPagesControl('tk-foot-tab', 20)}
+            <button type="button" onClick={addEmptyPage} className="tk-foot-tab chef-pressable"><Plus aria-hidden size={20}/><span>{t("image-to-pdf.blank.page.81bf3a")}</span></button>
+            <button {...openerProps(viewPop, 'i2p-view', 'view')} className="tk-foot-tab chef-pressable"><ZoomIn aria-hidden size={20}/><span>{t("image-to-pdf.view.dcc839")}</span></button>
+            <button type="button" onClick={clearAll} disabled={addingImages} className="tk-foot-tab tk-foot-tab-danger chef-pressable"><Trash2 aria-hidden size={20}/><span>{t("image-to-pdf.clear.all.29a390")}</span></button>
+          </div>
+          <span role="status" aria-live="polite" className="sr-only">{addingImages ? t("image-to-pdf.adding.images.8a4d34") : ''}</span>
+          <div className="tk-actions">{saveButton}</div>
+          <Pop pop={viewPop} id="i2p-view" title={t("image-to-pdf.view.dcc839")}>
+            <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={I2P_MAX_ZOOM} />
+          </Pop>
+        </div>
+      )}
+      {/* Phone: the pages as one filmstrip over the canvas; a tap shows that page. */}
+      {!wide && (
+        <div className="tk-i2p-strip chef-scroller" role="list" aria-label={t("image-to-pdf.pages.9046da")}>
+          {pages.map((p, i) => (
+            <div key={p.id} role="listitem" className="tk-i2p-film" data-active={activeId === p.id ? '' : undefined}>
+              <button type="button" onClick={() => showPage(p.id)} className="tk-i2p-film-page chef-pressable">
+                <span aria-hidden className="tk-i2p-film-thumb">
+                  {p.elements.slice(0, 4).map(el => <img key={el.id} src={el.previewUrl} alt="" style={{ left: `${el.x * 100}%`, top: `${el.y * 100}%`, width: `${el.width * 100}%`, height: `${el.height * 100}%` }} />)}
+                </span>
+                <span className="tabular">{pageLabel(i)}</span>
+              </button>
+              <button type="button" onClick={() => removePage(p.id)} aria-label={t("image-to-pdf.remove.page.0a72af", { v0: i + 1 })} className="tk-iconbtn tk-iconbtn-danger chef-pressable"><Trash2 aria-hidden size={16}/></button>
             </div>
-         </div>
-         {pages.length > 0 && (
-         <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-3">
-            <button type="button" onClick={() => { setPages([]); setStatus({ isProcessing: false, progress: 0, message: '' }); }} disabled={addingImages} className="chef-target chef-pressable flex-1 rounded-[var(--radius-control)] px-3 text-sm font-bold text-[var(--status-danger-text)] transition-colors hover:bg-[var(--status-danger-quiet)] disabled:opacity-55 sm:flex-none">{t("image-to-pdf.clear.all.29a390")}</button>
-            <button 
-               onClick={handleConvert}
-               disabled={status.isProcessing || pages.length === 0 || addingImages}
-               className="chef-target chef-pressable flex flex-1 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 font-bold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-55 sm:flex-none sm:px-6"
-            >
-               {status.isProcessing ? <Loader2 className="animate-spin" size={18}/> : <ArrowDown size={18}/>} 
-               <span>{t("image-to-pdf.save.pdf.2462a8")}</span>
-            </button>
-         </div>
-         )}
-      </div>
-
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-            {/* Sidebar Controls */}
-            <div className="chef-scroller chef-edge-fade-y z-20 flex h-auto max-h-[min(60vh,max(46vh,20rem))] w-full flex-col overflow-y-auto border-b border-[var(--border-hairline)] bg-[var(--surface-raised)] lg:h-full lg:max-h-none lg:w-72 lg:border-b-0 lg:border-r">
-               <div className="custom-scrollbar flex-1 space-y-3 overflow-y-auto p-3">
+          ))}
+        </div>
+      )}
+      <div className="tk-i2p-main">
+            {/* Desktop: today's side panel. */}
+            {wide && <div className="tk-i2p-side chef-scroller chef-edge-fade-y">
+               <div className="tk-i2p-side-inner custom-scrollbar">
                   <section>
-                     <h3 className="type-caption mb-1.5 text-[var(--text-secondary)]">{t("image-to-pdf.document.actions.97fa07")}</h3>
-                     <div className="grid grid-cols-2 gap-2">
-                        <label className="chef-target chef-pressable flex w-full cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] text-sm font-bold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--focus-ring)]">
-                           {addingImages ? <Loader2 aria-hidden className="animate-spin" size={18}/> : <FileImage aria-hidden size={18}/>}<span>{addingImages ? t("image-to-pdf.adding.images.8a4d34") : t("image-to-pdf.add.pages.6a7668")}</span><input type="file" multiple accept="image/*" aria-disabled={addingImages || undefined} aria-label={t("image-to-pdf.add.new.pages.from.images.b8c579")} className="sr-only" onClick={e => { if (addingImages) e.preventDefault(); }} onChange={e => e.target.files && handleFilesSelected(Array.from(e.target.files))} />
-                        </label>
-                        <button type="button" onClick={addEmptyPage} className="chef-target chef-pressable flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] text-sm font-bold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]">
+                     <div className="tk-i2p-sechead">
+                       <h3 className="tk-i2p-cap">{t("image-to-pdf.document.actions.97fa07")}</h3>
+                       <span className="tk-i2p-count tabular">{t('format.pageCount', { count: pages.length })}</span>
+                     </div>
+                     <div className="tk-i2p-actions">
+                        {addPagesControl('tk-btn', 18)}
+                        <button type="button" onClick={addEmptyPage} className="tk-btn chef-pressable">
                            <Plus aria-hidden size={18}/>{t("image-to-pdf.blank.page.81bf3a")}</button>
+                        <button type="button" onClick={clearAll} disabled={addingImages} className="tk-btn tk-btn-danger chef-pressable">{t("image-to-pdf.clear.all.29a390")}</button>
                      </div>
                      <span role="status" aria-live="polite" className="sr-only">{addingImages ? t("image-to-pdf.adding.images.8a4d34") : ''}</span>
                   </section>
 
                   <section>
-                     <h3 className="type-caption mb-1.5 text-[var(--text-secondary)]">{t("image-to-pdf.view.dcc839")}</h3>
-                     <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} />
+                     <h3 className="tk-i2p-cap">{t("image-to-pdf.view.dcc839")}</h3>
+                     <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={I2P_MAX_ZOOM} />
                   </section>
 
                   <section>
-                     <h3 className="type-caption mb-1.5 text-[var(--text-secondary)]">{t("image-to-pdf.pages.9046da")}</h3>
-                     <div className="space-y-2">
+                     <h3 className="tk-i2p-cap">{t("image-to-pdf.pages.9046da")}</h3>
+                     <div className="tk-i2p-pages">
                         {pages.map((p, i) => (
                            <div 
                               key={p.id} 
-                              className={`p-2 rounded-lg border text-xs font-medium flex items-center justify-between transition-colors ${activeId === p.id ? 'border-[var(--accent-rest)] bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'border-[var(--border-hairline)] bg-[var(--surface-raised)] text-[var(--text-secondary)]'}`}
+                              className="tk-i2p-pagerow"
+                              data-active={activeId === p.id ? '' : undefined}
                            >
-                              <span className="flex items-center gap-2">
-                                 <Move size={12} className="opacity-40" />{t("image-to-pdf.message.c140ba4857", { v0: i + 1 })}</span>
-                              <button onClick={() => removePage(p.id)} aria-label={t("image-to-pdf.remove.page.0a72af", { v0: i + 1 })} className="chef-target grid place-items-center text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)] rounded-[var(--radius-control)]"><Trash2 size={14}/></button>
+                              <span className="flex items-center gap-2">{pageLabel(i)}</span>
+                              <button type="button" onClick={() => removePage(p.id)} aria-label={t("image-to-pdf.remove.page.0a72af", { v0: i + 1 })} className="tk-iconbtn tk-iconbtn-danger chef-pressable"><Trash2 aria-hidden size={16}/></button>
                            </div>
                         ))}
                      </div>
                   </section>
                </div>
-            </div>
+            </div>}
 
             {/* Main Canvas Scroll Area */}
             <div
-               ref={canvasViewportRef}
-               className="chef-gesture-clear custom-scrollbar relative flex-1 overflow-auto bg-[var(--surface-sunken)] p-3 sm:p-6 lg:p-10"
+               ref={setCanvasViewport}
+               className="tk-i2p-canvas chef-gesture-clear custom-scrollbar"
             >
                <div 
                   className="mx-auto flex flex-col items-center gap-4 transition-all duration-200" 
@@ -663,19 +757,19 @@ export const ImageToPDF: React.FC = () => {
                      <div 
                         key={page.id}
                         ref={(el) => registerItem(page.id, el)}
-                        className={`group relative ${activeId === page.id ? 'opacity-0' : 'opacity-100'}`}
+                        className={`tk-i2p-pagebox group relative ${activeId === page.id ? 'opacity-0' : 'opacity-100'}`}
                         style={{ width: renderedPageWidth }}
                      >
                         <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
                            <div className="flex flex-wrap items-center gap-2">
                               <div 
-                                 className="flex cursor-grab items-center gap-2 rounded-full border border-[var(--border-strong)] bg-[var(--surface-raised)] px-3 py-1 text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--accent-text)] active:cursor-grabbing"
+                                 className="tk-i2p-pill tk-i2p-grab"
                                  onPointerDown={(e) => dragHandlers.onPointerDown(e, page.id)}
                                  style={{ touchAction: 'none' }}
                               >
                                  <Move aria-hidden size={14} />{t("image-to-pdf.message.7647bcf3a2", { v0: i + 1 })}</div>
                               <label
-                                 className="chef-target flex cursor-pointer items-center gap-2 rounded-full border border-[var(--border-strong)] bg-[var(--surface-raised)] px-3 text-xs font-bold text-[var(--text-secondary)] transition-colors hover:text-[var(--accent-text)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--focus-ring)]"
+                                 className="tk-i2p-pill tk-i2p-pill-btn chef-pressable"
                               >
                                  <Plus aria-hidden size={14} />{t("image-to-pdf.add.image.29139e")}<input
                                     type="file" 
@@ -701,7 +795,7 @@ export const ImageToPDF: React.FC = () => {
                                  />
                               </label>
                            </div>
-                           <button type="button" onClick={() => removePage(page.id)} aria-label={t("image-to-pdf.remove.page.0a72af", { v0: i + 1 })} className="chef-target grid place-items-center rounded-full border border-[var(--border-strong)] bg-[var(--surface-raised)] text-[var(--status-danger-text)] transition-colors hover:bg-[var(--status-danger-quiet)]">
+                           <button type="button" onClick={() => removePage(page.id)} aria-label={t("image-to-pdf.remove.page.0a72af", { v0: i + 1 })} className="tk-iconbtn tk-iconbtn-danger tk-i2p-pageremove chef-pressable">
                               <Trash2 size={16}/>
                            </button>
                         </div>
@@ -754,8 +848,38 @@ export const ImageToPDF: React.FC = () => {
          </div>,
          document.body
       )}
-      <StatusToast status={status} />
-      {discardSheet}
     </div>
+  );
+
+  return (
+    <ToolScreen
+      title={title}
+      kind="editor"
+      // Desktop keeps "Back to dashboard" at the start; on phones the tool's mark and name are that
+      // link, as on every tool (owner decision D-1), with the same name.
+      leading={wide ? backToDashboard : undefined}
+      homeLabel={t("image-to-pdf.back.to.dashboard.b59e0c")}
+      file={{ name: t('format.pageCount', { count: pages.length }) }}
+      change={wide ? saveButton : undefined}
+      body={body}
+      extra={(
+        <>
+          {discardSheet}
+          <ConfirmSheet
+            open={confirmClear}
+            title={t("make-pdf.remove.every.page.6c477e")}
+            description={t("make-pdf.photos.on.your.device.and.any.pdf.f3658c")}
+            confirmLabel={t("make-pdf.remove.all.ef7b7e")}
+            onCancel={() => setConfirmClear(false)}
+            onConfirm={() => {
+              setConfirmClear(false);
+              setPages([]);
+              setStatus({ isProcessing: false, progress: 0, message: '' });
+            }}
+          />
+        </>
+      )}
+      toast={toast}
+    />
   );
 };

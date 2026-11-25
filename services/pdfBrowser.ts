@@ -15,6 +15,7 @@ import {
   type CompressionSizeMeasurement,
 } from './pdfCompressionConfig';
 import { positionedTextItemsToWordTargets } from './pdfTextLineGrouping';
+import { getPdfRenderScale } from './pdfPageGeometry';
 export type { PageSelectableTextLine } from './pdfTextLineGrouping';
 import type { PageSelectableTextLine } from './pdfTextLineGrouping';
 
@@ -157,6 +158,20 @@ export const opensWithoutPassword = async (file: File): Promise<boolean> => {
     return true;
   } catch {
     return false;
+  }
+};
+
+/**
+ * Whether a PDF asks for a password before it opens: true, false, or null when it cannot be read
+ * at all. Batch Unlock says which files are locked with it (path to 9, part 2).
+ */
+export const needsOpenPassword = async (file: File): Promise<boolean | null> => {
+  try {
+    const doc = await loadOwnedPDFDocument(file);
+    await doc.destroy();
+    return false;
+  } catch (error) {
+    return classifyPdfError(error) === 'locked' ? true : null;
   }
 };
 
@@ -321,7 +336,8 @@ export const getPdfPagePreviews = async (
     for (let index = 0; index < pageLimit; index += 1) {
       options?.signal?.throwIfAborted();
       const page = await pdf.getPage(index + 1);
-      const { blob } = await renderPageToBlob(page, scale, 'image/jpeg', 0.7, options?.signal);
+      // Never above the page canvas cap: an A0 or larger page asked for more canvas than a phone has (s4-04).
+      const { blob } = await renderPageToBlob(page, getPdfRenderScale(page, scale), 'image/jpeg', 0.7, options?.signal);
       previews.push(URL.createObjectURL(blob));
       options?.onProgress?.({ completed: index + 1, total: pageLimit });
       // Paint the first completed preview, then keep the existing four-page yield cadence.
@@ -603,9 +619,12 @@ export const renderPageAsImage = async (
   pdfDoc: any,
   pageIndex: number,
   config: ImageExportConfig,
+  /** An export asks for its full size; a preview stays within the page canvas cap (s4-04). */
+  options: { fullSize?: boolean } = {},
 ): Promise<{ objectUrl: string; blob: Blob; width: number; height: number; sizeBytes: number }> => {
   const page = await pdfDoc.getPage(pageIndex + 1);
-  const rendered = await renderPdfPageToBlob(page, config);
+  const scale = options.fullSize ? config.scale : getPdfRenderScale(page, config.scale);
+  const rendered = await renderPdfPageToBlob(page, { ...config, scale });
   const objectUrl = URL.createObjectURL(rendered.blob);
 
   return {
@@ -623,15 +642,28 @@ const hashUint8 = (bytes: Uint8Array) => {
   return (hash >>> 0).toString(16);
 };
 
-const waitForPdfObject = (pool: any, objectId: string) =>
+/**
+ * Resolves a page's decoded object. PDF.js never sends an object again once a page's
+ * cleanup dropped it, so a wait without an end would spin forever (B-022): after
+ * `timeoutMs` it rejects and the caller skips that picture.
+ */
+const PDF_OBJECT_TIMEOUT_MS = 15_000;
+const waitForPdfObject = (pool: any, objectId: string, timeoutMs = PDF_OBJECT_TIMEOUT_MS) =>
   new Promise<any>((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const settle = (value: any) => {
+      if (timer !== undefined) clearTimeout(timer);
+      resolve(value);
+    };
     try {
       if (pool.has(objectId)) {
         resolve(pool.get(objectId));
         return;
       }
-      pool.get(objectId, resolve);
+      timer = setTimeout(() => reject(new Error(`PDF object ${objectId} did not arrive within ${timeoutMs} ms`)), timeoutMs);
+      pool.get(objectId, settle);
     } catch (error) {
+      if (timer !== undefined) clearTimeout(timer);
       reject(error);
     }
   });
@@ -880,10 +912,29 @@ const blobToDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
   reader.readAsDataURL(blob);
 });
 
+/** The source of a keep-text preview, parsed once per file (pdf-lib copies pages out of it without changing it). */
+const keepTextSources = new WeakMap<File, Promise<PDFDocument>>();
+const keepTextSource = (file: File) => {
+  let source = keepTextSources.get(file);
+  if (!source) {
+    source = readFileAsArrayBuffer(file).then((buffer) => PDFDocument.load(buffer));
+    source.catch(() => keepTextSources.delete(file));
+    keepTextSources.set(file, source);
+  }
+  return source;
+};
+
+/**
+ * One page in both text modes (plan 2.6). Pictures mode draws the page as export will
+ * encode it. Keep-text mode copies the page into its own one-page PDF, runs the same
+ * selectable-text compression export uses on that copy, and draws page 1 of the
+ * original copy and of the result at the same scale; text and drawings stay as they
+ * are, and only the photos change. Everything happens on this device.
+ */
 export const generatePreviewPair = async (
   file: File,
   config: AdaptiveConfig,
-  options?: { pageIndex?: number },
+  options?: { pageIndex?: number; keepText?: boolean },
 ) => {
   const pdf = await loadPDFDocument(file);
   const pageCount = Math.max(1, pdf.numPages || 1);
@@ -894,13 +945,44 @@ export const generatePreviewPair = async (
   const page = await pdf.getPage(pageIndex + 1);
 
   const original = await renderPageToBlob(page, 1.5, 'image/jpeg', 0.9);
+
+  if (options?.keepText) {
+    const source = await keepTextSource(file);
+    const single = await PDFDocument.create();
+    const [copied] = await single.copyPages(source, [pageIndex]);
+    single.addPage(copied);
+    await recompressSelectableImages(single, config, () => undefined);
+    const after = await single.save({ useObjectStreams: true });
+    const resultFile = new File([after], 'preview.pdf', { type: 'application/pdf' });
+    const result = await loadOwnedPDFDocument(resultFile);
+    try {
+      const resultPage = await result.getPage(1);
+      const compressed = await renderPageToBlob(resultPage, 1.5, 'image/jpeg', 0.9);
+      const [originalImage, compressedImage] = await Promise.all([
+        blobToDataUrl(original.blob), blobToDataUrl(compressed.blob),
+      ]);
+      // No size: how much one page's pictures shrank says little about the rest of the file
+      // (an image-heavy 14.4 MB file showed ~566 kB for a 6.8 MB result, round 5 desktop-02),
+      // and the Compress screen shows no estimate in this mode either.
+      return {
+        original: originalImage,
+        compressed: compressedImage,
+        metrics: { estimatedTotalSize: 0 },
+        pageCount,
+        pageIndex,
+      };
+    } finally {
+      await result.destroy();
+    }
+  }
+
   const compressed = await renderCompressedPage(page, config);
   const [originalImage, compressedImage] = await Promise.all([
     blobToDataUrl(original.blob), blobToDataUrl(compressed.blob),
   ]);
-  const estimatedTotalSize = projectCompressedSize({
-    bytesPerPage: compressed.blob.size, pageCount, sampledPages: 1,
-  });
+  // The same sampled measurement as the Compress screen's estimate (pages spread across the
+  // file), so the two agree; one page projected to the whole file was off by up to 3× (desktop-02).
+  const estimatedTotalSize = await measureProjectedSize(file, config, { maxSamples: 2 });
 
   return {
     original: originalImage,

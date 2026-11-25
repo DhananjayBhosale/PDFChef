@@ -1,5 +1,6 @@
 import english from './en-US.ts';
 import { direction, fallbackLocale, isLocale, resolveLocale, type Locale, type LocalePreference } from './locales.ts';
+import { pendingTranslation } from './pending.ts';
 export type TranslationKey = keyof typeof english;
 export type PluralMessage = Partial<Record<Intl.LDMLPluralRule, string>> & { other: string };
 export type Message = string | PluralMessage;
@@ -49,9 +50,23 @@ export function formatMessage(message: Message, values: Record<string, Value>, l
     return typeof value === 'number' ? numberFormats.get(language)!.format(value) : value;
   });
 }
+// An English message in a right-to-left locale would put its full stop and any trailing punctuation on the
+// wrong side of an Arabic sentence. Left-to-right isolates (U+2066 ... U+2069) keep it intact; they are
+// invisible and ignored by screen readers.
+const LRI = '\u2066';
+const PDI = '\u2069';
+/** True when `key` still shows English text in the current language. */
+export const isPendingTranslation = (key: TranslationKey) => !locale.startsWith('en-') && pendingTranslation.has(key);
+/** Attributes for an element that renders a pending message: it reads left to right, in English. */
+export const pendingTextProps = (key: TranslationKey): { lang: 'en'; dir: 'ltr' } | undefined =>
+  isPendingTranslation(key) ? { lang: 'en', dir: 'ltr' } : undefined;
 export function t<K extends TranslationKey>(key: K, ...args: Arguments<K>): string {
   if (!catalog[key]) report(`Missing ${locale}:${key}`);
-  return formatMessage(catalog[key] ?? english[key] ?? key, args[0] ?? {}, locale);
+  // A message still in English formats its numbers and plurals as English too, so a sentence
+  // never mixes English words with Arabic-Indic digits ("these ٢ files").
+  const englishText = isPendingTranslation(key);
+  const text = formatMessage(catalog[key] ?? english[key] ?? key, args[0] ?? {}, englishText ? 'en-US' : locale);
+  return direction(locale) === 'rtl' && englishText ? `${LRI}${text}${PDI}` : text;
 }
 export async function loadCatalog(target: Locale): Promise<Catalog> {
   const cached = catalogs.get(target);

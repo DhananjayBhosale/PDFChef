@@ -3,7 +3,7 @@ import english from '../../services/i18n/en-US.ts';
 import { t, getLocale, formatNumber } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { FileUpload } from '../UI/FileUpload';
 import { PDFFile, ProcessingStatus } from '../../types';
@@ -11,16 +11,11 @@ import {
   getPageTextBackgroundPatch,
   getPdfFormFields,
   loadEditablePDFDocument,
+  savePDFWithAnnotations,
   type PdfFormFieldDefinition,
   type PdfFormFieldValue,
-} from '../../services/pdfBrowser';
-import {
-  savePDFWithAnnotations,
-  PDF_EDIT_PERMISSION_MESSAGE,
-  type EditorElement,
-  type ParagraphFace,
-  type ParagraphSaveEdit,
-} from '../../services/pdfDocument';
+} from '../../services/pdfLazy';
+import type { EditorElement, ParagraphFace, ParagraphSaveEdit } from '../../services/pdfDocument';
 import { getPageTextBlocks, resolvePageFonts, type PageTextBlocks } from '../../services/pdfBlockExtraction';
 import { findRefusingItems } from '../../services/findRefusingItems';
 import { serializeEditorState } from '../../services/pdfEditorSnapshot';
@@ -92,15 +87,21 @@ import { deliverBlob } from '../../services/pdfShared';
 import { normalizeImageFileWithSize } from '../../services/imageBrowser';
 import { ArrowRight, ChevronLeft, ChevronRight, Circle, ImagePlus, Minus, Move, Redo2, Save, Search, Shapes, Square, Trash2, Type, Undo2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Badge, StatusLine } from '../UI/Primitives';
+import { StatusLine } from '../UI/Primitives';
+import { ToolLeaveGuard, ToolScreen } from '../Tool/ToolScreen';
+import { ToolTop, useRouteTool } from '../Tool/ToolTop';
+import { ResultSlot, useAnnouncer } from '../Tool/parts';
 import { v4 as uuidv4 } from 'uuid';
-import { Link, useBlocker } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { ZoomControls } from '../UI/ZoomControls';
 import { ClampedNumberInput } from '../UI/ClampedNumberInput';
 import { useZoom } from '../../hooks/useZoom';
-import { useDiscardPrompt } from '../../hooks/useConfirmDiscard';
+import { useDiscardPrompt, useLeaveGuarded } from '../../hooks/useConfirmDiscard';
+import { useWorkInput } from '../UI/workSignature';
+import { useFileDrop } from '../../hooks/useFileDrop';
 import { usePdfPinchZoom } from '../../hooks/usePdfPinchZoom';
-import { useImmersiveWorkspace } from '../Layout/AppShell';
+import { MQ_LG, useMediaQuery } from '../../hooks/useMediaQuery';
+import { useShellOwnChrome } from '../Layout/AppShell';
 import { PDF_TEXT_OVERFLOW_MESSAGE } from '../../services/pdfTextEditSafety';
 import { layoutTextBox, PdfTextBoxError, TEXT_BOX_PADDING_X, TEXT_BOX_PADDING_Y } from '../../services/pdfTextBoxLayout';
 import { pdfPageFromScrollBoundary, pdfPageFromSwipe } from '../../services/pdfZoomGesture';
@@ -108,9 +109,17 @@ import { releaseNativePdfTextDocument } from '../../services/pdfNativeTextEditor
 import { dismissOutputBanner } from '../../services/workspace';
 import { toolOutputName } from '../UI/format';
 
-const elementAction = (kind: EditorElement['type'], action: 'add' | 'place' | 'properties' | 'selected') => t(`editor.${kind}.${action}`);
+const elementAction = (kind: EditorElement['type'], action: 'add' | 'choose' | 'properties' | 'selected') => t(`editor.${kind}.${action}`);
 const elementAnnouncement = (kind: EditorElement['type'], selected: boolean, page: number) =>
   t(`editor.${kind}.${selected ? 'selectedAria' : 'aria'}`, { page });
+const elementAdded = (kind: EditorElement['type'], page: number) => t(`editor.${kind}.added`, { page });
+const MOVED_KEYS = { ArrowLeft: 'edit.moved.left', ArrowRight: 'edit.moved.right', ArrowUp: 'edit.moved.up', ArrowDown: 'edit.moved.down' } as const;
+
+/**
+ * Edit PDF's polite line, for what the page's own elements do (a box moved with the arrow keys):
+ * they are drawn inside the page, below the screen that owns the line (path to 9, part 2).
+ */
+let editAnnounce: ((words: string) => void) | null = null;
 
 const DISCARD_EDITS_MESSAGE = english["edit-pdf.discard.your.unsaved.edits.1575c6"];
 const editorCssFontFamily = (fontFamily: string | undefined) => (
@@ -212,12 +221,12 @@ const FALLBACK_RESOLVED_FONT = {
 
 const useCompactEditorViewport = () => {
   const [compact, setCompact] = useState(() => (
-    typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+    typeof window !== 'undefined' && !window.matchMedia(MQ_LG).matches
   ));
 
   useEffect(() => {
-    const media = window.matchMedia('(max-width: 767px)');
-    const update = () => setCompact(media.matches);
+    const media = window.matchMedia(MQ_LG);
+    const update = () => setCompact(!media.matches);
     update();
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
@@ -284,6 +293,10 @@ const PDFPage: React.FC<{
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
+  // A press that started on a placed element. On a touch screen the tap that selects a text box
+  // swaps its preview for the editing box under the finger, so the browser sends the click to
+  // the page, which cleared the selection again (round 6, mobile-01). Reset by every new press.
+  const elementPressRef = useRef(false);
   const [isVisible, setIsVisible] = useState(false);
   const [isRendered, setIsRendered] = useState(false);
   const [availableWidth, setAvailableWidth] = useState(600);
@@ -415,7 +428,12 @@ const PDFPage: React.FC<{
       role="group"
       className="relative mx-auto shrink-0 bg-white shadow-lg"
       style={{ width: scaledW, height: scaledH }} // Helper wrapper for layout flow
+      onPointerDownCapture={() => { elementPressRef.current = false; }}
       onClick={(event) => {
+        if (elementPressRef.current) {
+          elementPressRef.current = false;
+          return;
+        }
         const bounds = event.currentTarget.getBoundingClientRect();
         onPagePress({
           x: Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)),
@@ -467,7 +485,7 @@ const PDFPage: React.FC<{
             pageSize={{ width: dims.w / pageUserUnit, height: dims.h / pageUserUnit }}
             pageUserUnit={pageUserUnit}
             isSelected={selectedId === el.id}
-            onSelect={() => onSelect(el.id)}
+            onSelect={() => { elementPressRef.current = true; onSelect(el.id); }}
             onUpdate={onUpdate} onDelete={onDelete} onBeginChange={onBeginElementChange}
           />
         ))}
@@ -759,7 +777,7 @@ const PDFFormFieldControl: React.FC<{
 const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpdate, onDelete, onBeginChange, containerRef, displayScale, pageSize, pageUserUnit }) => {
   useI18n();
   const [editMode, setEditMode] = useState<'drag' | 'resize' | null>(null);
-  const origin = useRef({ clientX: 0, clientY: 0, x: 0, y: 0, width: 0.2, height: 0.1 });
+  const origin = useRef({ pointerId: -1, clientX: 0, clientY: 0, x: 0, y: 0, width: 0.2, height: 0.1 });
   const gestureChanged = useRef(false);
   const inlineTextEditorRef = useRef<HTMLTextAreaElement>(null);
   const inlineTextChanged = useRef(false);
@@ -800,7 +818,7 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
     onSelect();
     gestureChanged.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);
-    origin.current = { clientX: event.clientX, clientY: event.clientY, x: element.x, y: element.y, width, height };
+    origin.current = { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY, x: element.x, y: element.y, width, height };
     setEditMode('drag');
   };
 
@@ -810,7 +828,7 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
     onSelect();
     gestureChanged.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);
-    origin.current = { clientX: event.clientX, clientY: event.clientY, x: element.x, y: element.y, width, height };
+    origin.current = { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY, x: element.x, y: element.y, width, height };
     setEditMode('resize');
   };
 
@@ -836,6 +854,7 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
         x: nextX,
         y: nextY,
       });
+      editAnnounce?.(t(MOVED_KEYS[event.key as keyof typeof MOVED_KEYS]));
     }
   };
 
@@ -872,8 +891,10 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
   };
 
   useEffect(() => {
+    // The edit follows the finger that started it. A second finger is a pinch: the box goes back to
+    // where it started and the edit ends (s4-03).
     const handleMove = (e: PointerEvent) => {
-      if (!editMode || !containerRef.current) return;
+      if (!editMode || !containerRef.current || e.pointerId !== origin.current.pointerId) return;
       const cRect = containerRef.current.getBoundingClientRect();
       const dx = (e.clientX - origin.current.clientX) / cRect.width;
       const dy = (e.clientY - origin.current.clientY) / cRect.height;
@@ -911,7 +932,19 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
       }
     };
 
-    const handleEnd = () => {
+    const handleSecondFinger = (e: PointerEvent) => {
+      if (e.pointerId === origin.current.pointerId) return;
+      const start = origin.current;
+      if (gestureChanged.current) {
+        onUpdate(element.id, editMode === 'drag' ? { x: start.x, y: start.y } : { width: start.width, height: start.height });
+      }
+      pressing.current = false;
+      gestureChanged.current = false;
+      setEditMode(null);
+    };
+
+    const handleEnd = (e: PointerEvent) => {
+      if (e.pointerId !== origin.current.pointerId) return;
       const tapped = editMode === 'drag' && !gestureChanged.current && tapEdits.current;
       pressing.current = false;
       gestureChanged.current = false;
@@ -927,11 +960,13 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
        window.addEventListener('pointermove', handleMove);
        window.addEventListener('pointerup', handleEnd);
        window.addEventListener('pointercancel', handleEnd);
+       window.addEventListener('pointerdown', handleSecondFinger, true);
     }
     return () => {
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', handleEnd);
       window.removeEventListener('pointercancel', handleEnd);
+      window.removeEventListener('pointerdown', handleSecondFinger, true);
     };
   }, [editMode, containerRef, element.id, element.x, element.y, height, onBeginChange, onUpdate, width]);
 
@@ -966,6 +1001,8 @@ const ResizableElement: React.FC<any> = ({ element, isSelected, onSelect, onUpda
            placeholder={t("edit-pdf.text.71988c")}
            rows={1}
            aria-invalid={textLayout?.overflow || (!textLayout && !!element.content)}
+           // Marked on the page as soon as the text no longer fits, not only at Save (round 5, desktop-08).
+           data-overflow={textLayout?.overflow ? '' : undefined}
            spellCheck={false}
            autoCorrect="off"
            onPointerDown={(event) => event.stopPropagation()}
@@ -1139,7 +1176,64 @@ export const EditPDF: React.FC = () => {
     setPdfZoomViewport(viewport);
   }, [setPdfZoomViewport]);
   const selectedElement = elements.find((element) => element.id === selectedId) ?? null;
+  // A paragraph's formatting row sits in the page panel's top band, beside the zoom, so choosing
+  // one moves nothing on a wide screen (path to 9, part 2). A wrapped row, its status line, or an
+  // added element's panel above the page can still push the page down (and change height while
+  // open): the page area scrolls by the same distance each time, so the text that was clicked
+  // stays under the pointer; Done undoes it (r4 desktop-08). Measured from the document top, so a
+  // scrolled window is not mistaken for a move.
+  const formattingOpen = Boolean(activeBlockId) || Boolean(selectedElement);
+  const deskControlsRef = useRef<HTMLDivElement | null>(null);
+  // The page panel's top band: the zoom, and the paragraph's formatting row while one is chosen.
+  const deskBandRef = useRef<HTMLDivElement | null>(null);
+  const viewportTop = useRef<number | null>(null);
+  const holdPageInPlace = useCallback(() => {
+    const viewport = pdfZoomViewportRef.current;
+    if (!viewport) return;
+    const top = viewport.getBoundingClientRect().top + window.scrollY;
+    const moved = viewportTop.current === null ? 0 : Math.round(top - viewportTop.current);
+    if (moved !== 0) viewport.scrollTop += moved;
+    viewportTop.current = top;
+  }, []);
+  const wasFormattingOpen = useRef(false);
+  // Every render: while the row is open (and as it closes) any move is taken back; otherwise
+  // the page's place is only noted, so opening a file or the find bar moves the page as before.
+  useLayoutEffect(() => {
+    // Desktop only: the phone editor docks its row at the bottom, and its page box follows the
+    // keyboard and the visual viewport, which this must not fight.
+    if (deskControlsRef.current && (formattingOpen || wasFormattingOpen.current)) holdPageInPlace();
+    else {
+      const viewport = pdfZoomViewportRef.current;
+      viewportTop.current = viewport ? viewport.getBoundingClientRect().top + window.scrollY : null;
+    }
+    wasFormattingOpen.current = formattingOpen;
+  });
+  // A change that is not a render (a font or image arriving) is caught by its size.
+  useLayoutEffect(() => {
+    const controls = deskControlsRef.current;
+    if (!formattingOpen || !controls || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(holdPageInPlace);
+    observer.observe(controls);
+    if (deskBandRef.current) observer.observe(deskBandRef.current);
+    return () => observer.disconnect();
+  }, [formattingOpen, holdPageInPlace]);
   const pageCount = pdfDoc?.numPages || 0;
+  // Add, move, Undo, Redo, Delete and a page change are said to a screen reader (research r4,
+  // desktop-04; path to 9, part 2).
+  const [announcer, announce] = useAnnouncer();
+  useLayoutEffect(() => {
+    editAnnounce = announce;
+    return () => { if (editAnnounce === announce) editAnnounce = null; };
+  }, [announce]);
+  const announcedPage = useRef<number | null>(null);
+  useEffect(() => {
+    if (pageCount < 2) return;
+    // The first page of a newly opened file is not news.
+    if (announcedPage.current !== null && announcedPage.current !== targetPageIndex) {
+      announce(t("edit-pdf.page.of.477c22", { v0: targetPageIndex + 1, v1: pageCount }));
+    }
+    announcedPage.current = targetPageIndex;
+  }, [announce, pageCount, targetPageIndex]);
   const compactViewport = useCompactEditorViewport();
   const coarsePointer = useCoarsePointer();
 
@@ -1235,39 +1329,10 @@ export const EditPDF: React.FC = () => {
     setExactZoom(next);
     return true;
   }, [dockEditing, setExactZoom, zoom]);
-  // Found on a phone: a form's text field, and an added text box, took the keyboard at about 9 px
-  // text. Both zoom up to 16 px text but never past the screen's width, and the zoom is put back
-  // once the caret leaves every field, so the keyboard's next-field key keeps it.
-  useEffect(() => {
-    const viewport = pdfZoomViewportRef.current;
-    if (!viewport || !dockEditing) return undefined;
-    const isField = (node: EventTarget | null): node is HTMLElement => node instanceof HTMLElement
-      && node.matches('[data-field-name]:is(textarea, input:not([type="checkbox"], [type="radio"])), [data-testid="inline-text-editor"]');
-    let timer = 0;
-    const focused = (event: FocusEvent) => {
-      if (!isField(event.target)) return;
-      window.clearTimeout(timer);
-      autoZoomTo(event.target, true);
-    };
-    const left = (event: FocusEvent) => {
-      if (!isField(event.target) || isField(event.relatedTarget)) return;
-      timer = window.setTimeout(() => {
-        // A paragraph taken up meanwhile owns the zoom now.
-        if (isField(document.activeElement) || !autoZoomRef.current
-          || document.activeElement?.closest('[data-block-id], [data-field-for]')) return;
-        const { from } = autoZoomRef.current;
-        autoZoomRef.current = null;
-        setExactZoom(from);
-      }, 250);
-    };
-    viewport.addEventListener('focusin', focused);
-    viewport.addEventListener('focusout', left);
-    return () => {
-      window.clearTimeout(timer);
-      viewport.removeEventListener('focusin', focused);
-      viewport.removeEventListener('focusout', left);
-    };
-  }, [autoZoomTo, dockEditing, pdfDoc, setExactZoom]);
+  // A phone (dock editing) keeps the reader's zoom when editing starts (mobile RS-MOBILE-04, final
+  // fix item 12): a paragraph tap went 358 → 397 px and a new text box 358 → 596 px. The dock field
+  // shows the paragraph being typed; pinch and the zoom buttons change the zoom. Find still brings
+  // a match up, since nothing else shows it.
   const handleActivateBlock = useCallback((blockId: string | null) => {
     setActiveBlockId(blockId);
     if (blockId) setSelectedId(null);
@@ -1275,8 +1340,8 @@ export const EditPDF: React.FC = () => {
     const element = document.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(blockId)}"]`);
     if (!element || !pdfZoomViewportRef.current) return;
     captureFocusAnchor(element);
-    autoZoomTo(element);
-  }, [autoZoomTo, captureFocusAnchor, coarsePointer]);
+    if (!dockEditing) autoZoomTo(element);
+  }, [autoZoomTo, captureFocusAnchor, coarsePointer, dockEditing]);
 
   /**
    * A tap on a paragraph on the page hands the caret to the dock field, at the letter tapped. The
@@ -1330,6 +1395,8 @@ export const EditPDF: React.FC = () => {
     [blockEdits, elements, formValues],
   );
   const hasUnsavedEdits = Boolean(file) && currentSnapshot !== savedSnapshot;
+  // The edits are the input of the result strip's file: a later edit makes it an earlier result.
+  useWorkInput(currentSnapshot);
   // A finished save's message describes that file. The next change makes it out of date.
   const savedMessageAt = useRef<string | null>(null);
   useEffect(() => {
@@ -1350,9 +1417,10 @@ export const EditPDF: React.FC = () => {
   useEffect(() => {
     if (findOpen || activeBlockId || selectedId) dismissOutputBanner();
   }, [activeBlockId, findOpen, selectedId]);
-  const navigationBlocker = useBlocker(hasUnsavedEdits);
 
-  useImmersiveWorkspace(isImmersiveEditor);
+  useShellOwnChrome(isImmersiveEditor);
+  const routeTool = useRouteTool();
+  const narrowHeader = useMediaQuery('(max-width: 439.98px)');
 
   useEffect(() => {
     if (!isImmersiveEditor || !immersiveBottomBarRef.current) return undefined;
@@ -1622,6 +1690,7 @@ export const EditPDF: React.FC = () => {
     restoreSnapshot(previous);
     setSelectedId(null);
     setHistoryVersion((value) => value + 1);
+    announce(t('edit.undone'));
   };
 
   /** Undo and Redo leave the caret and the keyboard where they are, like the zoom buttons. */
@@ -1639,6 +1708,7 @@ export const EditPDF: React.FC = () => {
     restoreSnapshot(next);
     setSelectedId(null);
     setHistoryVersion((value) => value + 1);
+    announce(t('edit.redone'));
   };
 
   /** The middle of the part of the page on screen, so something added appears where the reader is looking. */
@@ -1693,6 +1763,7 @@ export const EditPDF: React.FC = () => {
     setSelectedId(newEl.id);
     revealElementRef.current = newEl.id;
     setInsertMode(null);
+    announce(elementAdded(newEl.type, newEl.pageIndex + 1));
   };
 
   const addShape = (x?: number, y?: number) => {
@@ -1717,6 +1788,7 @@ export const EditPDF: React.FC = () => {
     setSelectedId(newEl.id);
     revealElementRef.current = newEl.id;
     setInsertMode(null);
+    announce(elementAdded(newEl.type, newEl.pageIndex + 1));
   };
 
   const toggleInsertMode = (mode: 'text' | 'shape') => {
@@ -2189,6 +2261,7 @@ export const EditPDF: React.FC = () => {
       revealElementRef.current = newEl.id;
       setInsertMode(null);
       setStatus({ isProcessing: false, progress: 0, message: '' });
+      announce(elementAdded('image', newEl.pageIndex + 1));
     } catch (error) {
       if (generation !== documentGeneration.current) return;
       setStatus({ isProcessing: false, progress: 0, message: '', error: error instanceof Error ? error.message : t("edit-pdf.this.picture.could.not.be.read.try.65070d") });
@@ -2208,6 +2281,7 @@ export const EditPDF: React.FC = () => {
   const deleteElement = (id: string) => {
     commitElements((current) => current.filter((element) => element.id !== id));
     setSelectedId(null);
+    announce(t('edit.deleted'));
   };
   const updateFormValue = (fieldName: string, value: PdfFormFieldValue) => {
     // Typing into one field is one Undo step, like typing into a paragraph. A tick or a choice is
@@ -2233,6 +2307,8 @@ export const EditPDF: React.FC = () => {
     title: t('edit-pdf.save.your.edits'),
     save: async () => Boolean(await saveRef.current()) && savedEverything.current,
   });
+  // Back, a link or the system Back with unsaved edits asks this question (the tool screen's blocker).
+  useLeaveGuarded(hasUnsavedEdits, askToDiscard);
 
   const discardAndClose = useCallback(() => {
     if (file?.file) {
@@ -2269,6 +2345,15 @@ export const EditPDF: React.FC = () => {
     if (hasUnsavedEdits) askToDiscard(discardAndClose);
     else discardAndClose();
   }, [askToDiscard, discardAndClose, hasUnsavedEdits]);
+
+  // A PDF dropped on the open editor replaces its document, after the same question closing asks
+  // (research r3, desktop-01).
+  useFileDrop({ accept: file ? '.pdf,application/pdf' : '', onFiles: (files) => {
+    if (status.isProcessing) return;
+    const open = () => { discardAndClose(); void handleFilesSelected(files.slice(0, 1)); };
+    if (hasUnsavedEdits) askToDiscard(open);
+    else open();
+  } });
 
   // The editor's history is one stack over paragraphs, annotations and shapes, so the keyboard
   // shortcut has to drive that rather than whatever a focused paragraph's own undo would do.
@@ -2317,20 +2402,6 @@ export const EditPDF: React.FC = () => {
     return () => document.removeEventListener('keydown', handleFindShortcut, true);
   }, [file]);
 
-  useEffect(() => {
-    if (!hasUnsavedEdits) return undefined;
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [hasUnsavedEdits]);
-
-  useEffect(() => {
-    if (navigationBlocker.state !== 'blocked') return;
-    askToDiscard(() => navigationBlocker.proceed(), () => navigationBlocker.reset());
-  }, [askToDiscard, navigationBlocker]);
 
   useEffect(() => {
     if (!isImmersiveEditor && !insertMode) return undefined;
@@ -3082,7 +3153,7 @@ export const EditPDF: React.FC = () => {
       const message = error instanceof Error ? error.message : '';
       const chosen = error instanceof Error && error.name === 'PdfChefRefusal';
       // A refusal we chose to make is an answer, not a fault, so it does not go to the console.
-      if (!chosen && message !== PDF_EDIT_PERMISSION_MESSAGE) {
+      if (!chosen && message !== english['error.pdfEditPermission']) {
         console.error(error);
       }
       setStatus({
@@ -3091,7 +3162,7 @@ export const EditPDF: React.FC = () => {
         message: '',
         error: chosen
           || message === PDF_TEXT_OVERFLOW_MESSAGE
-          || message === PDF_EDIT_PERMISSION_MESSAGE
+          || message === english['error.pdfEditPermission']
           || message.startsWith('Visual fallback is unavailable')
           ? error instanceof Error ? localizeError(error) : message
           : message.startsWith('Direct text edit failed:')
@@ -3277,48 +3348,56 @@ export const EditPDF: React.FC = () => {
       // A box with a minimum height made the document taller than a window shrunk by the keyboard,
       // and the browser then scrolled the whole page to reveal the caret, sliding the paragraph
       // under the fixed header and the new text box under the bottom bar.
+      // It draws its own screen, so it holds a tool screen's leave guards itself (s4-02).
+      <ToolLeaveGuard holdsWork={hasUnsavedEdits}>
+      {/* A sticky bar pins to the layout viewport, but iOS scrolls the *visual* viewport to
+          reveal a focused paragraph — which slid this bar up under the status bar and clipped
+          the Save button. Sitting on the measured offset, like the bottom bar does, keeps the
+          title and Save against the top of what the reader can actually see. */}
       <div
+        ref={immersiveHeaderRef}
+        style={{ top: 'var(--chef-viewport-offset-top, 0px)' }}
+        className="tk-edit-top chef-chrome chef-safe-x fixed inset-x-0 z-40 border-b border-[var(--border-hairline)]"
+      >
+        {/* The tool header (plan 2.23) in one row (A-018): Back when needed, Close editor, the name
+            (its icon alone on a narrow phone), today's Find, Undo, Redo and Save, then Tools.
+            The page gets the second row's height back; no control is removed. */}
+        <ToolTop
+          title={t("edit-pdf.edit.pdf.0e484d")}
+          tool={routeTool}
+          // Under 440 px the name is not drawn (only its heading is kept), so it is no link.
+          nameLink={!narrowHeader}
+          // Close editor stays at the start edge, where it is today (upgrade review M-3), so a
+          // habit tap there still closes and the row ends with Save, then Tools.
+          leading={(
+            <button
+              type="button"
+              onClick={closeEditor}
+              aria-label={t("edit-pdf.close.editor.bd0b7b")}
+              className="tk-iconbtn chef-pressable"
+            >
+              <X aria-hidden size={21} />
+            </button>
+          )}
+          trailing={(
+            <div className="tk-edit-tools">
+              <button type="button" onClick={toggleFind} aria-pressed={findOpen} aria-label={t("edit-pdf.find.and.replace.9898ad")} className={`chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] ${findOpen ? 'bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'text-[var(--text-secondary)]'}`}><Search aria-hidden size={19} /></button>
+              <button type="button" onClick={undo} onPointerDown={holdEditingFocus} disabled={undoStack.current.length === 0} aria-label={t("edit-pdf.undo")} className="chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><Undo2 aria-hidden size={19} /></button>
+              <button type="button" onClick={redo} onPointerDown={holdEditingFocus} disabled={redoStack.current.length === 0} aria-label={t("edit-pdf.redo")} className="chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><Redo2 aria-hidden size={19} /></button>
+              <button type="button" data-main-action="" onClick={saveFromButton} disabled={status.isProcessing || !hasUnsavedEdits} aria-label={t("edit-pdf.save.1509f5")} className="tk-edit-save chef-pressable chef-target inline-flex shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-3 text-sm font-bold text-[var(--text-on-accent)] disabled:opacity-55"><Save aria-hidden size={17} />{/* Spelled out wherever the row has room for it next to Tools' word
+                  (tool.css, Edit PDF levels): a lone disk glyph is exactly the icon a reader who did
+                  not grow up with it has to guess at. */}<span>{t("edit-pdf.save.1509f5")}</span></button>
+            </div>
+          )}
+        />
+      </div>
+      <main
         className="flex h-[100dvh] flex-col bg-[var(--surface-canvas)]"
         style={{
           paddingTop: `calc(${immersiveHeaderHeight}px + var(--chef-viewport-offset-top, 0px))`,
           paddingBottom: `calc(${immersiveBottomBarHeight}px + var(--chef-keyboard-inset, 0px))`,
         }}
       >
-        {/* A sticky bar pins to the layout viewport, but iOS scrolls the *visual* viewport to
-            reveal a focused paragraph — which slid this bar up under the status bar and clipped
-            the Save button. Sitting on the measured offset, like the bottom bar does, keeps the
-            title and Save against the top of what the reader can actually see. */}
-        <header
-          ref={immersiveHeaderRef}
-          style={{ top: 'var(--chef-viewport-offset-top, 0px)' }}
-          className="chef-chrome chef-safe-top chef-safe-x fixed inset-x-0 z-40 border-b border-[var(--border-hairline)]"
-        >
-          <div className="mx-auto flex min-h-14 max-w-4xl items-center gap-0.5 px-1.5 py-1.5">
-            <button
-              type="button"
-              onClick={closeEditor}
-              aria-label={t("edit-pdf.close.editor.bd0b7b")}
-              className="chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)]"
-            >
-              <X aria-hidden size={21} />
-            </button>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <h1 className="truncate text-base font-bold text-[var(--text-primary)]">{t("edit-pdf.edit.pdf.0e484d")}</h1>
-                {/* The badge is the first thing to go when the bar runs out of room. It tells the
-                    reader something useful but nothing urgent, and the width it frees is what keeps
-                    the word "Save" on the one control they must be able to find. */}
-                <Badge tone="caution" className="shrink-0 max-[440px]:hidden">{t("edit-pdf.beta.703390")}</Badge>
-              </div>
-            </div>
-            <button type="button" onClick={toggleFind} aria-pressed={findOpen} aria-label={t("edit-pdf.find.and.replace.9898ad")} className={`chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] ${findOpen ? 'bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]' : 'text-[var(--text-secondary)]'}`}><Search aria-hidden size={19} /></button>
-            <button type="button" onClick={undo} onPointerDown={holdEditingFocus} disabled={undoStack.current.length === 0} aria-label={t("edit-pdf.undo")} className="chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><Undo2 aria-hidden size={19} /></button>
-            <button type="button" onClick={redo} onPointerDown={holdEditingFocus} disabled={redoStack.current.length === 0} aria-label={t("edit-pdf.redo")} className="chef-pressable chef-target grid shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><Redo2 aria-hidden size={19} /></button>
-            <button type="button" onClick={saveFromButton} disabled={status.isProcessing || !hasUnsavedEdits} aria-label={t("edit-pdf.save.1509f5")} className="chef-pressable chef-target inline-flex shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-3 text-sm font-bold text-[var(--text-on-accent)] disabled:opacity-55"><Save aria-hidden size={17} />{/* Always spelled out. This is the one action in the editor that
-                cannot be discovered by trying it, and a lone disk glyph is exactly the icon a reader
-                who did not grow up with it has to guess at. The title beside it truncates instead. */}<span>{t("edit-pdf.save.1509f5")}</span></button>
-          </div>
-        </header>
 
         <div className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col px-2 py-2 sm:px-4">
           {(status.error || (status.message && !(saveKind === 'complete' && status.progress === 100))) && (
@@ -3384,7 +3463,7 @@ export const EditPDF: React.FC = () => {
                 onBlockChange={handleBlockChange}
                 onBeginBlockChange={handleBeginBlockChange}
                 insertMode={insertMode}
-                placementLabel={elementAction(insertMode === 'text' ? 'text' : shapeKind, 'place')}
+                placementLabel={elementAction(insertMode === 'text' ? 'text' : shapeKind, 'choose')}
                 zoom={zoom}
               />
             </div>
@@ -3398,8 +3477,9 @@ export const EditPDF: React.FC = () => {
         <div
           ref={immersiveBottomBarRef}
           style={{ bottom: 'var(--chef-keyboard-inset, 0px)' }}
-          className={`chef-chrome chef-safe-bottom chef-keyboard-flush chef-safe-x fixed inset-x-0 z-40 border-t border-[var(--border-hairline)] px-2 pb-2 pt-2${activeBlock ? ' chef-paragraph-bar' : ''}`}
+          className={`tk-edit-bottom chef-chrome chef-safe-bottom chef-keyboard-flush chef-safe-x fixed inset-x-0 z-40 border-t border-[var(--border-hairline)] px-2 pb-2 pt-2${activeBlock ? ' chef-paragraph-bar' : ''}`}
         >
+          <ResultSlot className="tk-edit-result" />
           {findBar}
           {scannedNotice}
           {blockedNotice}
@@ -3419,7 +3499,7 @@ export const EditPDF: React.FC = () => {
             </div>
           )}
           {insertMode && (
-            <div aria-live="polite" className="mx-auto mb-1 max-w-md text-center text-xs font-semibold text-[var(--accent-text)]">{elementAction(insertMode === 'text' ? 'text' : shapeKind, 'place')}</div>
+            <div aria-live="polite" className="mx-auto mb-1 max-w-md text-center text-xs font-semibold text-[var(--accent-text)]">{elementAction(insertMode === 'text' ? 'text' : shapeKind, 'choose')}</div>
           )}
           {/* Text, Image and Shape give their row to the page while the keyboard is up, and to a
               paragraph's or an added item's own controls while one is chosen. Done brings them back. */}
@@ -3447,18 +3527,34 @@ export const EditPDF: React.FC = () => {
           <input ref={imageInputRef} type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" className="hidden" onChange={(event) => { void addImage(event.target.files?.[0]); event.currentTarget.value = ''; }} />
         </div>
         {discardSheet}
-      </div>
+        {announcer}
+      </main>
+      </ToolLeaveGuard>
     );
   }
 
-  return (
-    <div className={`mx-auto w-full max-w-6xl px-4 py-4 sm:py-6 ${file ? '' : 'chef-tool-landing-centered'}`}>
-       <div className="mb-3 flex flex-col gap-2">
-          <div>
-            <h1 className="text-2xl font-bold">{t("edit-pdf.edit.pdf.e089a9")}<Badge tone="caution" className="align-middle">{t("edit-pdf.beta.703390")}</Badge></h1>
-            {/* Kept: this is a beta editor and the export is what gets shared. */}
-            <p className="mt-1 text-sm font-medium text-[var(--status-caution-text)]">{t("edit-pdf.review.the.result.before.sharing.83dca8")}</p>
+  if (!file) {
+    return (
+      <ToolScreen
+        title={t("edit-pdf.edit.pdf.e089a9")}
+        kind="file"
+        body={(
+          <div className="tk-empty">
+            {/* A file that would not open leaves no document, so its reason is said in the zone (T-09). */}
+            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("edit-pdf.choose.a.pdf.to.edit.8d2720")} error={status.error} />
           </div>
+        )}
+        extra={discardSheet}
+      />
+    );
+  }
+
+  const desktopEditor = (
+    <div className="tk-edit-desk mx-auto w-full max-w-6xl px-4 py-4">
+       <div ref={deskControlsRef} className="mb-3 flex flex-col gap-2">
+          {/* This is a beta editor and the export is what gets shared: the caution is Save's
+              description and tooltip (T-14), not a line under the header. */}
+          <span id="edit-desk-review" className="sr-only">{t("edit-pdf.review.the.result.before.sharing.83dca8")}</span>
           {file && (
              <div role="toolbar" aria-label={t("edit-pdf.pdf.editor.tools.f127be")} className="flex flex-wrap items-center gap-2 rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-2">
                 <button type="button" onClick={() => goToPage(targetPageIndex - 1)} disabled={targetPageIndex === 0} aria-label={t("edit-pdf.previous.page.1208ec")} className="chef-hit-y chef-pressable flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border-strong)] text-[var(--text-secondary)] disabled:opacity-55"><ChevronLeft size={20} className="rtl:rotate-180" /></button>
@@ -3480,16 +3576,16 @@ export const EditPDF: React.FC = () => {
                   </select>
                   <button type="button" onClick={() => addShape()} aria-label={elementAction(shapeKind, 'add')} className="chef-hit-y chef-pressable flex min-h-11 items-center gap-1 border-l border-[var(--border-strong)] px-3 font-bold text-[var(--text-primary)]"><Shapes size={18}/>{t("edit-pdf.add.0d40dd")}</button>
                 </div>
-                <button type="button" onClick={saveFromButton} disabled={status.isProcessing || !hasUnsavedEdits} className="chef-hit-y chef-pressable flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-6 font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] disabled:opacity-55"><Save size={18}/>{t("edit-pdf.save.52453d")}</button>
+                <button type="button" data-main-action="" onClick={saveFromButton} disabled={status.isProcessing || !hasUnsavedEdits} aria-describedby="edit-desk-review" title={t("edit-pdf.review.the.result.before.sharing.83dca8")} className="chef-hit-y chef-pressable flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-6 font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] disabled:opacity-55"><Save size={18}/>{t("edit-pdf.save.52453d")}</button>
+                <ResultSlot className="tk-editor-result" />
              </div>
           )}
           {insertMode && (
-            <p role="status" className="px-2 py-1 text-sm font-semibold text-[var(--accent-text)]">{elementAction(insertMode === 'text' ? 'text' : shapeKind, 'place')}</p>
+            <p role="status" className="px-2 py-1 text-sm font-semibold text-[var(--accent-text)]">{elementAction(insertMode === 'text' ? 'text' : shapeKind, 'choose')}</p>
           )}
           {findBar}
           {scannedNotice}
           {blockedNotice}
-          {paragraphInspector(false)}
           {selectedElement && (
             <div role="region" aria-label={elementAction(selectedElement.type, 'properties')} className="rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] px-3 py-2">
               <div className="flex flex-wrap items-end gap-2">
@@ -3516,21 +3612,13 @@ export const EditPDF: React.FC = () => {
           )}
        </div>
 
-       <AnimatePresence mode="wait">
-          {!file ? (
-             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mx-auto w-full max-w-xl">
-                <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("edit-pdf.choose.a.pdf.to.edit.8d2720")} />
-                {/* A file that would not open leaves no document, so its reason is said here. */}
-                {status.error && (
-                  <div className="mt-3" role="alert">
-                    <StatusLine tone="danger">{status.error}</StatusLine>
-                  </div>
-                )}
-             </motion.div>
-          ) : (
+       {(
              <div className="relative overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)]">
-                <div className="flex justify-end border-b border-[var(--border-hairline)] bg-[var(--surface-raised)] px-2 py-1.5 [&_button]:h-11 [&_button]:w-11 [&_button]:p-0">
-                  <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={EDITOR_MAX_ZOOM} keepFocus />
+                <div ref={deskBandRef} className="flex items-start gap-2 border-b border-[var(--border-hairline)] bg-[var(--surface-raised)] px-2 py-1.5">
+                  {paragraphInspector(false)}
+                  <div className="ms-auto shrink-0 [&_button]:h-11 [&_button]:w-11 [&_button]:p-0">
+                    <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={EDITOR_MAX_ZOOM} keepFocus />
+                  </div>
                 </div>
                 <div
                   ref={bindPdfZoomViewport}
@@ -3558,14 +3646,23 @@ export const EditPDF: React.FC = () => {
                           onBlockChange={handleBlockChange}
                           onBeginBlockChange={handleBeginBlockChange}
                           insertMode={insertMode}
-                          placementLabel={elementAction(insertMode === 'text' ? 'text' : shapeKind, 'place')}
+                          placementLabel={elementAction(insertMode === 'text' ? 'text' : shapeKind, 'choose')}
                           zoom={zoom}
                       />
                 </div>
              </div>
           )}
-       </AnimatePresence>
-       {discardSheet}
     </div>
+  );
+
+  return (
+    <ToolScreen
+      title={t("edit-pdf.edit.pdf.e089a9")}
+      kind="editor"
+      holdsWork={hasUnsavedEdits}
+      file={{ name: file.name }}
+      body={desktopEditor}
+      extra={<>{discardSheet}{announcer}</>}
+    />
   );
 };

@@ -65,11 +65,12 @@ test('the catalog stays one divided list, not a card grid', () => {
   assert.match(appCss, /margin-inline-start: 64px;/);
 });
 
-test('the categories stay on one row and scroll sideways when they do not fit', () => {
+test('the categories wrap to a second row instead of scrolling out of reach', () => {
   const strip = dashboard.slice(dashboard.indexOf('categoryOrder.map'));
-  // A second line held a lone category; the strip scrolls instead, the page never does.
-  assert.match(dashboard, /flex w-full flex-nowrap items-stretch gap-x-\[2px\] overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-\[20px\]/);
-  assert.doesNotMatch(dashboard, /flex-wrap items-stretch gap-x-\[2px\]/);
+  // T-11: a sideways-scrolling strip hid the last category ("Sc…") in German and at Largest
+  // text. The strip wraps; its row gap is wider than the 48px hit extension of the segments.
+  assert.match(dashboard, /flex w-full flex-wrap items-stretch gap-x-\[2px\] gap-y-\[12px\] rounded-\[20px\]/);
+  assert.doesNotMatch(dashboard, /flex-nowrap items-stretch gap-x-\[2px\] overflow-x-auto/);
   assert.match(strip, /shrink-0 basis-auto items-center justify-center whitespace-nowrap/);
   // 46px shell, 3px inset plus the 1px border, 38px segments inside a 48x48
   // practical target. The width floor is on the box itself, and the height

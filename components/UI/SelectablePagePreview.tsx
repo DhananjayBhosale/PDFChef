@@ -86,7 +86,8 @@ export const SelectablePagePreview: React.FC<SelectablePagePreviewProps> = ({
 
   return (
     <div className="w-full">
-      <div className="mb-1.5 text-xs font-medium text-[var(--text-secondary)]">{t("selectable-page-preview.message.a09e9f528e", { v0: pageNumber })}</div>
+      {/* Said, not shown (T-02, T-14): the line repeated on every page card. */}
+      <div className="sr-only">{t("selectable-page-preview.message.a09e9f528e", { v0: pageNumber })}</div>
       <div
         ref={containerRef}
         data-selectable-preview="true"

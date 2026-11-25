@@ -3,17 +3,10 @@ import { t } from './i18n/core.ts';
 import JSZip from 'jszip';
 import { loadPDFDocument } from './pdfBrowser';
 
-/**
- * Mirrors `NO_EXTRACTABLE_TEXT_MESSAGE` in the Android app
- * (`data/repository/processors/OcrTextToolProcessor.kt`).
- *
- * A .docx whose only content is "no text found" is not a conversion, so both platforms
- * fail instead of handing back a junk file.
- */
-export const NO_EXTRACTABLE_TEXT_MESSAGE =
-  'This PDF is a scan, so its pages are pictures rather than words. Run Extract Text on it first to make the words readable, then try again.';
+import { DOCX_MIME_TYPE, NO_EXTRACTABLE_TEXT_MESSAGE } from './docxConstants';
 
-const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+export { DOCX_MIME_TYPE, NO_EXTRACTABLE_TEXT_MESSAGE };
+
 
 const CONTENT_TYPES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -125,4 +118,3 @@ export const convertPDFToDocx = async (
 
 export const docxFileNameFor = (pdfName: string): string => `${pdfName.replace(/\.pdf$/i, '')}.docx`;
 
-export { DOCX_MIME_TYPE };

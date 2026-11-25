@@ -1074,23 +1074,24 @@ try {
     await page.getByTestId('pdf-paragraph-inspector').waitFor({ timeout: 10_000 });
     await page.waitForTimeout(500);
 
-    const { after, fits } = await page.evaluate(() => {
+    const { after, field } = await page.evaluate(() => {
       const element = document.querySelectorAll('[data-testid="pdf-text-block"]')[1];
       const scale = element.getBoundingClientRect().height / element.offsetHeight;
-      const viewport = document.querySelector('[data-testid="pdf-zoom-viewport"]').getBoundingClientRect();
-      const rect = element.getBoundingClientRect();
+      const dock = document.querySelector('[data-testid="pdf-paragraph-field"]');
       return {
         after: Number.parseFloat(getComputedStyle(element).fontSize) * scale,
-        fits: rect.width <= viewport.width,
+        field: dock ? { size: Number.parseFloat(getComputedStyle(dock).fontSize), text: dock.value } : null,
       };
     });
-    // The paragraph is magnified to fit the screen's width: never below 10 px text, never past
-    // 16 px, so a whole line stays in view while typing (decided on a phone, where 16 px cut
-    // every line in half).
-    assert.ok(after > before && after >= 9.9 && after <= 16.5,
-      `focusing a paragraph must raise it to a usable size, got ${after.toFixed(1)}px from ${before.toFixed(1)}px`);
-    assert.ok(fits || after <= 10.1, 'the magnified paragraph must fit the screen width unless that would go below 10 px');
-    console.log(`PASS focusing a paragraph raises it from ${before.toFixed(1)}px to ${after.toFixed(1)}px and fits the width`);
+    // A phone keeps the reader's zoom when editing starts (mobile RS-MOBILE-04, final fix item 12):
+    // the page used to grow 358 -> 397 px on this tap. The paragraph is read and typed in the field
+    // at the bottom instead, at a size a thumb can edit.
+    assert.ok(Math.abs(after - before) < 0.05,
+      `a paragraph tap on a phone must keep the page's zoom, got ${after.toFixed(1)}px from ${before.toFixed(1)}px`);
+    assert.ok(field, 'the paragraph field at the bottom was not found');
+    assert.ok(field.size >= 16, `the paragraph field must show readable text, got ${field.size}px`);
+    assert.ok(field.text.trim().length > 0, 'the paragraph field must hold the tapped paragraph');
+    console.log(`PASS a paragraph tap keeps the page at ${before.toFixed(1)}px text and edits it in a ${field.size}px field`);
 
     // A fixed bar resolves against the layout viewport, which grows when the browser rescales the
     // page around the focused paragraph. Both controls have to stay on screen regardless.

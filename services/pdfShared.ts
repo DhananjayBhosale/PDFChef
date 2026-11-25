@@ -1,5 +1,4 @@
 import { LocalizedError } from './i18n/errors.ts';
-import { t } from './i18n/core.ts';
 import type { OutputDeliveryHandler, SavedCopy } from './platform/contracts.ts';
 import type { RecentRecord } from './domain/workspaceModels.ts';
 import { Capacitor } from '@capacitor/core';
@@ -37,6 +36,16 @@ export interface OutputReadyRecord extends OutputRecord {
   accessLocked?: boolean;
   /** Native scanner results already live in Recent; load bytes only for an action that needs them. */
   recentRecord?: RecentRecord;
+  /**
+   * The result (a Split ZIP) was not saved automatically: its parts are saved one by one instead
+   * (the result strip runs "Save N files separately"). `folder` is the folder already picked at
+   * the tap that started the job (desktop Chrome and Edge).
+   */
+  separateSave?: SeparateSaveRequest;
+}
+
+export interface SeparateSaveRequest {
+  readonly folder?: FileSystemDirectoryHandle;
 }
 
 export interface OutputAccessRequest {
@@ -62,6 +71,8 @@ export interface OutputDeliveryOptions {
   readonly operationId?: string;
   /** Unchanged source files are not processing jobs and never consume the iOS allowance. */
   readonly accessScope?: 'generated' | 'source';
+  /** Keep and announce the result without saving it; its parts are saved separately (Split). */
+  readonly separateSave?: SeparateSaveRequest;
 }
 
 let outputAccessHandler: OutputAccessHandler | null = null;
@@ -228,13 +239,21 @@ const browserResultAnnouncer = (
   mimeType: string,
   toolPath: string,
   keepLocalHistory: boolean,
+  separateSave?: SeparateSaveRequest,
 ) => {
   const kept = keepInHistory(blob, filename, mimeType, toolPath, keepLocalHistory);
-  return async (deliveryError?: unknown) => {
+  // `downloaded` is what this delivery did: true only after it started the download. The result
+  // sheet must not infer it from a setting read later (s2-07).
+  return async (deliveryError?: unknown, downloaded = false) => {
     const { record, retained } = await kept;
     if (deliveryError !== undefined) announceRetryableOutput(record, deliveryError, retained);
     else {
-      const ready: OutputReadyRecord = { ...record, historyRetained: retained };
+      const ready: OutputReadyRecord = {
+        ...record,
+        historyRetained: retained,
+        externallyExported: downloaded,
+        ...(separateSave ? { separateSave } : {}),
+      };
       announceOutput(ready);
     }
   };
@@ -275,6 +294,7 @@ const deliverWithInstalledHandler = async (
   filename: string,
   mimeType: string,
   toolPath: string,
+  separateSave?: SeparateSaveRequest,
 ): Promise<void> => {
   const settings = getWorkspaceSettings();
   const record = createOutputRecord(blob, filename, mimeType, toolPath);
@@ -285,11 +305,13 @@ const deliverWithInstalledHandler = async (
       mimeType,
       toolPath,
       keepLocalHistory: settings.keepLocalHistory,
-      autoDownload: settings.autoDownload,
+      // Parts saved separately: the result itself is kept (Recent) but not exported.
+      autoDownload: settings.autoDownload && !separateSave,
     });
     const ready: OutputReadyRecord = {
       ...record,
       historyRetained: settings.keepLocalHistory,
+      ...(separateSave ? { separateSave, externallyExported: false } : {}),
       ...(outcome && outcome.exportIssue ? { deliveryIssue: outcome.exportIssue } : {}),
       ...(outcome && typeof outcome.externallyExported === 'boolean'
         ? { externallyExported: outcome.externallyExported }
@@ -316,24 +338,26 @@ export const downloadBlob = (
   const toolPath = typeof window !== 'undefined' ? window.location.pathname : '';
   const installation = outputDeliveryHandler;
   assertOutputSize(blob.size, installation?.maximumBytes);
+  const separateSave = options?.separateSave;
   const access = options?.accessScope === 'source' ? null : outputAccessHandler;
   if (access) {
     void checkOutputAccess(blob, filename, resolvedMimeType, toolPath, options)
       .then(result => {
         if (result.disposition.status === 'preview') {
-          announceOutput(result.preview!);
+          // The parts are saved through the result strip's access check (OutputCenter's guard).
+          announceOutput(separateSave ? { ...result.preview!, separateSave } : result.preview!);
           return;
         }
         if (installation) {
-          return deliverWithInstalledHandler(installation, blob, filename, resolvedMimeType, toolPath);
+          return deliverWithInstalledHandler(installation, blob, filename, resolvedMimeType, toolPath, separateSave);
         }
-        void downloadBlobWithoutAccess(blob, filename, resolvedMimeType, toolPath);
+        void downloadBlobWithoutAccess(blob, filename, resolvedMimeType, toolPath, separateSave);
       })
       .catch(error => console.warn('Unable to check output access.', error));
     return null;
   }
   if (installation) {
-    void deliverWithInstalledHandler(installation, blob, filename, resolvedMimeType, toolPath)
+    void deliverWithInstalledHandler(installation, blob, filename, resolvedMimeType, toolPath, separateSave)
       .catch((error) => {
         if (!(error instanceof Error && error.name === 'AbortError')) {
           console.warn('Unable to deliver output.', error);
@@ -341,57 +365,7 @@ export const downloadBlob = (
       });
     return null;
   }
-
-  const settings = getWorkspaceSettings();
-  const announceResult = browserResultAnnouncer(blob, filename, resolvedMimeType, toolPath, settings.keepLocalHistory);
-
-  if (!settings.autoDownload) {
-    void announceResult();
-    return null;
-  }
-
-  if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
-    void (async () => {
-      try {
-        const handle = await (window as any).showSaveFilePicker({
-          suggestedName: filename,
-          types: mimeType
-            ? [
-                {
-                  description: t("pdf-shared.document.export.5cf1c6"),
-                  accept: { [mimeType]: [`.${filename.split('.').pop() || ''}`] },
-                },
-              ]
-            : undefined,
-        });
-        const writable = await handle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        await announceResult();
-      } catch (error: any) {
-        if (error?.name === 'AbortError') {
-          await announceResult(error);
-          return;
-        }
-        try {
-          triggerBrowserDownload(blob, filename);
-          await announceResult();
-        } catch (downloadError) {
-          await announceResult(downloadError);
-        }
-      }
-    })();
-    return null;
-  }
-
-  try {
-    const url = triggerBrowserDownload(blob, filename);
-    void announceResult();
-    return url;
-  } catch (error) {
-    void announceResult(error);
-    throw error;
-  }
+  return downloadBlobWithoutAccess(blob, filename, resolvedMimeType, toolPath, separateSave);
 };
 
 const downloadBlobWithoutAccess = (
@@ -399,16 +373,24 @@ const downloadBlobWithoutAccess = (
   filename: string,
   resolvedMimeType: string,
   toolPath: string,
+  separateSave?: SeparateSaveRequest,
 ) => {
   const settings = getWorkspaceSettings();
-  const announceResult = browserResultAnnouncer(blob, filename, resolvedMimeType, toolPath, settings.keepLocalHistory);
-  if (!settings.autoDownload) {
+  const announceResult = browserResultAnnouncer(
+    blob, filename, resolvedMimeType, toolPath, settings.keepLocalHistory, separateSave);
+
+  // With automatic saving off nothing is saved; with separate parts the strip saves them.
+  if (!settings.autoDownload || separateSave) {
     void announceResult();
     return null;
   }
+
+  // An automatic save is a plain download. The save picker needs a user gesture, and the job
+  // finishes long after the tap that started it, so the picker would fail or wait for a click
+  // (h3 F1). The picker was used only on the automatic paths (here and in deliverBlob); the result sheet's Download is unchanged.
   try {
     const url = triggerBrowserDownload(blob, filename);
-    void announceResult();
+    void announceResult(undefined, true);
     return url;
   } catch (error) {
     void announceResult(error);
@@ -446,14 +428,15 @@ export const deliverBlob = async (
   const settings = getWorkspaceSettings();
   const { record: recoverable, retained: historyRetained } = await keepInHistory(
     blob, filename, resolvedMimeType, toolPath, settings.keepLocalHistory);
-  const announceSuccess = () => {
-    const ready: OutputReadyRecord = { ...recoverable, historyRetained };
+  // Whether this delivery downloaded the result, said by the delivery itself (s2-07).
+  const announceSuccess = (downloaded: boolean) => {
+    const ready: OutputReadyRecord = { ...recoverable, historyRetained, externallyExported: downloaded };
     announceOutput(ready);
   };
   const download = () => {
     try {
       triggerBrowserDownload(blob, filename);
-      announceSuccess();
+      announceSuccess(true);
     } catch (error) {
       announceRetryableOutput(recoverable, error, historyRetained);
       throw error;
@@ -461,39 +444,11 @@ export const deliverBlob = async (
   };
 
   if (!settings.autoDownload) {
-    announceSuccess();
+    announceSuccess(false);
     return { status: 'delivered' };
   }
 
-  if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
-    try {
-      const handle = await (window as any).showSaveFilePicker({
-        suggestedName: filename,
-        types: resolvedMimeType
-          ? [
-              {
-                description: t("pdf-shared.document.export.5cf1c6"),
-                accept: { [resolvedMimeType]: [`.${filename.split('.').pop() || ''}`] },
-              },
-            ]
-          : undefined,
-      });
-      const writable = await handle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      announceSuccess();
-      return { status: 'delivered' };
-    } catch (error: any) {
-      if (error?.name === 'AbortError') {
-        announceRetryableOutput(recoverable, error, historyRetained);
-        if (historyRetained) return { status: 'delivered' };
-        throw error;
-      }
-      download();
-      return { status: 'delivered' };
-    }
-  }
-
+  // A plain download, never the save picker (see downloadBlob).
   download();
   return { status: 'delivered' };
 };

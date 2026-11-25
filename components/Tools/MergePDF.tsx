@@ -1,25 +1,77 @@
-import { formatPercent, formatNumber } from '../../services/i18n/core.ts';
-import { localizeError } from '../../services/i18n/errors.ts';
+import { formatNumber, formatPercent } from '../../services/i18n/core.ts';
+import { classifyPdfError, localizeError } from '../../services/i18n/errors.ts';
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useRef, useState } from 'react';
 import { FileUpload } from '../UI/FileUpload';
 import { PDFFile, ProcessingStatus } from '../../types';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
-import { Plus, ArrowDown, ArrowUp, Download, GripVertical, Loader2, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, Download } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import { createPortal } from 'react-dom';
 import { useDragReorder } from '../../hooks/useDragReorder';
+import { useFileDrop } from '../../hooks/useFileDrop';
 import { StatusToast } from '../UI/StatusToast';
-import { ToolHeader, ToolShell } from '../UI/ToolLayout';
+import { ToolScreen } from '../Tool/ToolScreen';
+import { Sentence } from '../Tool/Sentence';
+import { useCloseEditor } from '../Tool/Popover';
+import { Notice, ProgressLine } from '../Tool/parts';
+import { QueueGhost, QueueRow } from '../Tool/QueueRow';
+import { useCanvasScroller } from '../Tool/useCanvasScroller';
 import { formatBytes, datedOutputName } from '../UI/format';
 
 const idleStatus = (): ProcessingStatus => ({ isProcessing: false, progress: 0, message: '' });
 
+/**
+ * The files slot's card (owner decision 2026-11-24, Merge option 1): the files in merge order, each
+ * with Up, Down and Remove in words. The list on the screen stays as it is.
+ */
+const MergeOrder: React.FC<{
+  files: Array<{ id: string; name: string }>;
+  busy: boolean;
+  onMove: (index: number, direction: -1 | 1) => void;
+  onRemove: (id: string) => void;
+}> = ({ files, busy, onMove, onRemove }) => {
+  const close = useCloseEditor();
+  // A move to the first or last place disables the button just pressed: focus goes to the other one.
+  const move = (event: React.MouseEvent<HTMLButtonElement>, index: number, direction: -1 | 1) => {
+    const row = event.currentTarget.closest('li');
+    const edge = direction < 0 ? index - 1 === 0 : index + 1 === files.length - 1;
+    onMove(index, direction);
+    if (edge) requestAnimationFrame(() => row?.querySelector<HTMLButtonElement>(`[data-move="${direction < 0 ? 'down' : 'up'}"]`)?.focus());
+  };
+  return (
+    <ol className="tk-order" aria-label={t("merge-pdf.pdf.merge.order.a4787c")}>
+      {files.map((file, index) => (
+        <li key={file.id} className="tk-order-row">
+          <span aria-hidden className="tk-order-pos tabular">{formatNumber(index + 1)}</span>
+          <bdi className="tk-order-name" title={file.name}>{file.name}</bdi>
+          <span className="tk-order-btns">
+            <button type="button" data-move="up" onClick={(event) => move(event, index, -1)} disabled={busy || index === 0} aria-label={t("merge-pdf.move.up.6cabe2", { v0: file.name })} className="tk-btn chef-pressable">{t("merge-pdf.up.7358d1").trim()}</button>
+            <button type="button" data-move="down" onClick={(event) => move(event, index, 1)} disabled={busy || index === files.length - 1} aria-label={t("merge-pdf.move.down.ab5f2b", { v0: file.name })} className="tk-btn chef-pressable">{t("merge-pdf.down.c7d31c").trim()}</button>
+            <button
+              type="button"
+              onClick={() => {
+                // Down to one file the sentence has no files slot: the card closes first.
+                if (files.length <= 2) close?.();
+                onRemove(file.id);
+              }}
+              disabled={busy}
+              aria-label={t("merge-pdf.remove.from.merge.e82fdf", { v0: file.name })}
+              className="tk-btn tk-btn-danger chef-pressable"
+            >{t("merge-pdf.remove.caa0ce").trim()}</button>
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+};
+
+/** A queued PDF; `locked` when it needs a password, found as it is added (pass 5, item 9). */
+type MergeFile = PDFFile & { locked?: boolean };
+
 export const MergePDF: React.FC = () => {
   useI18n();
-  const [files, setFiles] = useState<PDFFile[]>([]);
+  const [files, setFiles] = useState<MergeFile[]>([]);
   const [status, setStatus] = useState<ProcessingStatus>(idleStatus);
   const [isPreflighting, setIsPreflighting] = useState(false);
   const activeMergeRef = useRef<AbortController | null>(null);
@@ -31,7 +83,9 @@ export const MergePDF: React.FC = () => {
     preflightGenerationRef.current += 1;
   }, []);
 
-  const { activeId, dragHandlers, registerItem, overlayStyle } = useDragReorder<PDFFile>({
+  const scroller = useCanvasScroller();
+  const { activeId, dragHandlers, registerItem, overlayStyle } = useDragReorder<MergeFile>({
+    scrollContainerRef: scroller.ref,
     items: files,
     onReorder: setFiles,
     keyExtractor: (file) => file.id,
@@ -52,16 +106,19 @@ export const MergePDF: React.FC = () => {
     setIsPreflighting(true);
     try {
       const { getPDFPageCount } = await import('../../services/pdfDocument');
-      const mappedFiles: PDFFile[] = [];
+      const mappedFiles: MergeFile[] = [];
       for (let start = 0; start < pdfs.length; start += 2) {
         if (preflightGenerationRef.current !== generation) break;
         const batch = await Promise.all(
           pdfs.slice(start, start + 2).map(async (file) => {
             let pageCount: number | undefined;
+            let locked = false;
             try {
               pageCount = await getPDFPageCount(file);
-            } catch {
-              // The merge processor will surface the useful document error. The queue can still show the file.
+            } catch (error) {
+              // A locked file is said on its row and in the notice line now, not only after Merge is
+              // pressed. Other problems: the merge surfaces the useful document error.
+              locked = classifyPdfError(error) === 'locked';
             }
             return {
               id: uuidv4(),
@@ -69,6 +126,7 @@ export const MergePDF: React.FC = () => {
               name: file.name,
               size: file.size,
               pageCount,
+              locked,
             };
           }),
         );
@@ -175,185 +233,168 @@ export const MergePDF: React.FC = () => {
   };
 
   const activeItem = files.find((file) => file.id === activeId);
-  const remainingCount = Math.max(0, 2 - files.length);
+  const lockedFile = files.find((file) => file.locked);
+  const title = t("merge-pdf.merge.pdf.566bfc");
+  const toast = <StatusToast status={status} />;
+
+  // A file dropped on the loaded list joins it (research r3, desktop-01).
+  useFileDrop({ accept: files.length ? '.pdf' : '', onFiles: handleFilesSelected });
+
+  if (files.length === 0) {
+    return (
+      <ToolScreen
+        title={title}
+        kind="file"
+        body={(
+          <div className="tk-empty">
+            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" multiple label={t("merge-pdf.choose.pdfs.to.merge.4f5354")} />
+          </div>
+        )}
+        toast={toast}
+      />
+    );
+  }
+
+  // "N files" is a slot whose card lists the files in order (owner decision 2026-11-24). With a
+  // locked file the sentence says what must happen first (review 2, item 8); the notice stays.
+  const orderLabel = t("merge-pdf.pdf.merge.order.a4787c");
+  const sentence = files.length < 2 ? (
+    <Sentence template="sentence.merge.needMore" groupLabel={t('sentence.groupLabel', { tool: title })} />
+  ) : (
+    <Sentence
+      template={lockedFile ? 'sentence.merge.locked' : 'sentence.merge.order'}
+      values={{ count: files.length, ...(lockedFile ? { name: lockedFile.name } : {}) }}
+      groupLabel={t('sentence.groupLabel', { tool: title })}
+      disabled={status.isProcessing}
+      slots={{
+        files: {
+          label: orderLabel,
+          text: t('sentence.merge.files', { count: files.length }),
+          editor: <MergeOrder files={files} busy={status.isProcessing} onMove={moveFile} onRemove={removeFile} />,
+        },
+      }}
+    />
+  );
+
+  const action = (
+    <button
+      type="button"
+      onClick={handleMerge}
+      disabled={files.length < 2 || status.isProcessing || isPreflighting || Boolean(lockedFile)}
+      className="tk-primary chef-pressable"
+    >
+      <Download aria-hidden size={18} />
+      <span>{t("merge-pdf.save.the.combined.pdf.b53124")}</span>
+    </button>
+  );
+
+  const progress = status.isProcessing ? (
+    <ProgressLine
+      label={t("merge-pdf.processing.your.pdf.b14adc")}
+      detail={status.message}
+      percent={formatPercent(status.progress)}
+      value={status.progress}
+      cancel={(
+        <button
+          type="button"
+          onClick={cancelMerge}
+          disabled={activeMergeRef.current?.signal.aborted}
+          className="tk-btn chef-pressable"
+        >
+          {activeMergeRef.current?.signal.aborted ? t("merge-pdf.cancelling.7b2613") : t("merge-pdf.cancel.19766e")}
+        </button>
+      )}
+    />
+  ) : undefined;
+
+  const body = (
+    <div ref={scroller.attach} className="tk-list select-none">
+      <h2 id="merge-queue-heading" className="sr-only">{title}</h2>
+      <div className="tk-listhead">
+        {/* This count is a live region. It is the count only, so it shares one row with the two
+            buttons (review 2, item 9): the order is the sentence's, which is spoken too (pass 5, item 9). */}
+        <p role="status" aria-live="polite" className="min-w-0">
+          {t('format.pdfCount', { count: files.length })}
+        </p>
+        <div className="tk-listhead-actions">
+          {/* The one "Add PDFs": the head row stays at the top however long the list is (B-004, T-12). */}
+          {!status.isProcessing && (
+            <label className="tk-btn tk-add-btn chef-pressable cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--focus-ring)]">
+              <Plus aria-hidden size={16} />{t("merge-pdf.add.pdfs.e2f591")}<input
+                type="file"
+                accept=".pdf"
+                multiple
+                disabled={isPreflighting}
+                aria-label={t("merge-pdf.add.more.pdfs.to.merge.1b5087")}
+                className="sr-only"
+                onChange={(event) => {
+                  const picked = Array.from(event.target.files ?? []) as File[];
+                  if (picked.length) handleFilesSelected(picked);
+                  event.target.value = '';
+                }}
+              />
+            </label>
+          )}
+          <button
+            type="button"
+            onClick={clearFiles}
+            disabled={status.isProcessing}
+            className="tk-btn tk-btn-danger chef-pressable"
+          >{t("merge-pdf.clear.all.29a390")}</button>
+        </div>
+      </div>
+
+      <ol className="tk-queue" aria-label={t("merge-pdf.pdf.merge.order.a4787c")}>
+        {files.map((file, index) => (
+          <QueueRow
+            key={file.id}
+            roomy={files.length <= 3}
+            file={file.file}
+            name={file.name}
+            index={index}
+            total={files.length}
+            // One line, never "3 pages ·" over "1.5 kB" (review 2, item 9).
+            meta={<span>{file.locked ? t('batch.unlock.locked') : file.pageCount == null ? t("merge-pdf.pages.unavailable.7909b1") : t("merge-pdf..24a420", { count: file.pageCount })} · {formatBytes(file.size)}</span>}
+            busy={status.isProcessing}
+            dragging={activeId === file.id}
+            rowRef={(element) => registerItem(file.id, element)}
+            onGrab={(event) => dragHandlers.onPointerDown(event, file.id)}
+            onMove={(direction) => moveFile(index, direction)}
+            onRemove={() => removeFile(file.id)}
+            labels={{
+              drag: t("merge-pdf.drag.to.reorder.781049", { v0: file.name }),
+              up: t("merge-pdf.move.up.6cabe2", { v0: file.name }),
+              down: t("merge-pdf.move.down.ab5f2b", { v0: file.name }),
+              remove: t("merge-pdf.remove.from.merge.e82fdf", { v0: file.name }),
+              upTip: t("merge-pdf.up.7358d1").trim(),
+              downTip: t("merge-pdf.down.c7d31c").trim(),
+              removeTip: t("merge-pdf.remove.caa0ce").trim(),
+            }}
+          />
+        ))}
+      </ol>
+    </div>
+  );
 
   return (
-    <ToolShell width="list" centered={files.length === 0} className="select-none">
+    <>
+      <ToolScreen
+        title={title}
+        kind="list"
+        heavyJob={{ bytes: files.reduce((sum, item) => sum + item.size, 0), files: files.length }}
+        bodyLabelledBy="merge-queue-heading"
+        body={body}
+        sentence={sentence}
+        // The reason the button is off, before it is pressed: the message the merge gave after.
+        notice={lockedFile && !status.isProcessing
+          ? <Notice tone="error" role="alert">{t('error.pdfLockedNamed', { v0: lockedFile.name })}</Notice>
+          : undefined}
+        action={action}
+        progress={progress}
+        toast={toast}
+      />
 
-      {/* The queue header and the action row both state the merge order; the
-          title does not need to be the third place that says it. */}
-      <ToolHeader title={t("merge-pdf.merge.pdf.566bfc")} />
-
-      {!status.isProcessing && (
-        files.length > 0 ? (
-          <label className="chef-target chef-pressable flex w-full cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-field)] border border-dashed border-[var(--border-strong)] px-4 text-sm font-semibold text-[var(--accent-text)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--focus-ring)]">
-            <Plus aria-hidden size={18} />{t("merge-pdf.add.pdfs.e2f591")}<input
-              type="file"
-              accept=".pdf"
-              multiple
-              disabled={isPreflighting}
-              aria-label={t("merge-pdf.add.more.pdfs.to.merge.1b5087")}
-              className="sr-only"
-              onChange={(event) => {
-                const picked = Array.from(event.target.files ?? []) as File[];
-                if (picked.length) handleFilesSelected(picked);
-                event.target.value = '';
-              }}
-            />
-          </label>
-        ) : (
-          <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" multiple label={t("merge-pdf.choose.pdfs.to.merge.4f5354")} />
-        )
-      )}
-
-      <AnimatePresence>
-        {files.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="mt-3 space-y-2.5"
-          >
-            {/* The "add one more file" card is gone: this count is the live
-                region that states what is still required, and the export
-                button under it is disabled until the count is met. */}
-            <div className="flex items-center justify-between gap-3 px-1 text-sm text-[var(--text-secondary)]">
-              <p role="status" aria-live="polite" className="min-w-0">
-                {remainingCount > 0
-                  ? t("merge-pdf.of.2.required.more.5d8410", { v0: files.length, count: remainingCount })
-                  : t("merge-pdf.files.in.merge.order.be289e", { v0: files.length })}
-              </p>
-              <button
-                type="button"
-                onClick={clearFiles}
-                disabled={status.isProcessing}
-                className="chef-hit-y min-h-11 shrink-0 rounded-[var(--radius-control)] px-3 font-medium text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-55 dark:hover:bg-rose-950/30"
-              >{t("merge-pdf.clear.all.29a390")}</button>
-            </div>
-
-            {/* In flow, above the queue it acts on. A sticky bar here covered
-                the last file card and fought the tab bar for the same strip. */}
-            <button
-              type="button"
-              onClick={handleMerge}
-              disabled={files.length < 2 || status.isProcessing || isPreflighting}
-              className="chef-target chef-pressable flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-5 font-semibold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-55"
-            >
-              {status.isProcessing ? <Loader2 aria-hidden className="animate-spin" size={18} /> : <Download aria-hidden size={18} />}
-              <span>{t("merge-pdf.save.the.combined.pdf.b53124")}</span>
-            </button>
-
-            <div className="relative space-y-2" aria-label={t("merge-pdf.pdf.merge.order.a4787c")}>
-              {files.map((file, index) => (
-                <div
-                  key={file.id}
-                  ref={(element) => registerItem(file.id, element)}
-                  className={`rounded-[var(--radius-row)] border bg-[var(--surface-raised)] p-2.5 transition-colors ${
-                    activeId === file.id
-                      ? 'border-[var(--accent-rest)] opacity-30'
-                      : 'border-[var(--border-hairline)]'
-                  }`}
-                >
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    {/* The badge is the position; the duplicate file glyph beside
-                        it carried no information the row did not already have. */}
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-50 text-sm font-bold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
-                      {formatNumber(index + 1)}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="chef-filename text-sm font-semibold text-[var(--text-body)]">{file.name}</p>
-                      <p className="type-caption text-[var(--text-tertiary)]">
-                        {file.pageCount == null ? t("merge-pdf.pages.unavailable.7909b1") : t("merge-pdf..24a420", { count: file.pageCount })} · {formatBytes(file.size)}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onPointerDown={(event) => dragHandlers.onPointerDown(event, file.id)}
-                      disabled={status.isProcessing}
-                      aria-label={t("merge-pdf.drag.to.reorder.781049", { v0: file.name })}
-                      className="chef-hit-y grid h-11 w-11 shrink-0 touch-none place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:cursor-not-allowed disabled:opacity-55"
-                    >
-                      <GripVertical aria-hidden size={18} />
-                    </button>
-                  </div>
-
-                  <div className="mt-2 grid grid-cols-3 gap-2 border-t border-[var(--border-hairline)] pt-2">
-                    <button
-                      type="button"
-                      onClick={() => moveFile(index, -1)}
-                      disabled={status.isProcessing || index === 0}
-                      aria-label={t("merge-pdf.move.up.6cabe2", { v0: file.name })}
-                      className="chef-hit-y flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-2 text-sm font-medium text-[var(--text-primary)] hover:border-[var(--accent-rest)] disabled:cursor-not-allowed disabled:opacity-55"
-                    >
-                      <ArrowUp aria-hidden size={18} />{t("merge-pdf.up.7358d1")}</button>
-                    <button
-                      type="button"
-                      onClick={() => moveFile(index, 1)}
-                      disabled={status.isProcessing || index === files.length - 1}
-                      aria-label={t("merge-pdf.move.down.ab5f2b", { v0: file.name })}
-                      className="chef-hit-y flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-2 text-sm font-medium text-[var(--text-primary)] hover:border-[var(--accent-rest)] disabled:cursor-not-allowed disabled:opacity-55"
-                    >
-                      <ArrowDown aria-hidden size={18} />{t("merge-pdf.down.c7d31c")}</button>
-                    <button
-                      type="button"
-                      onClick={() => removeFile(file.id)}
-                      disabled={status.isProcessing}
-                      aria-label={t("merge-pdf.remove.from.merge.e82fdf", { v0: file.name })}
-                      className="chef-hit-y flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--status-danger-text)] px-2 text-sm font-medium text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)] disabled:cursor-not-allowed disabled:opacity-55"
-                    >
-                      <X aria-hidden size={18} />{t("merge-pdf.remove.caa0ce")}</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {status.isProcessing && (
-              <div role="status" aria-live="polite" className="rounded-[var(--radius-field)] border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/30">
-                <div className="flex items-center gap-3 text-blue-950 dark:text-blue-100">
-                  <Loader2 aria-hidden className="animate-spin" size={22} />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold">{t("merge-pdf.processing.your.pdf.b14adc")}</p>
-                    <p className="truncate text-sm opacity-80">{status.message}</p>
-                  </div>
-                  <span className="text-sm font-semibold tabular-nums">{formatPercent(status.progress)}</span>
-                </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-blue-100 dark:bg-blue-950">
-                  <div className="h-full rounded-full bg-blue-600 transition-[width]" style={{ width: `${status.progress}%` }} />
-                </div>
-                <button
-                  type="button"
-                  onClick={cancelMerge}
-                  disabled={activeMergeRef.current?.signal.aborted}
-                  className="mt-3 min-h-11 w-full rounded-lg border border-blue-300 px-4 text-sm font-semibold text-blue-800 hover:bg-blue-100 dark:border-blue-800 dark:text-blue-200 dark:hover:bg-blue-950"
-                >
-                  {activeMergeRef.current?.signal.aborted ? t("merge-pdf.cancelling.7b2613") : t("merge-pdf.cancel.19766e")}
-                </button>
-              </div>
-            )}
-
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-
-      {activeId && activeItem && createPortal(
-        <div
-          className="pointer-events-none fixed z-50 flex items-center gap-3 rounded-[var(--radius-row)] border-2 border-[var(--accent-rest)] bg-[var(--surface-raised)] p-3 shadow-[var(--elevation-sheet)]"
-          style={{
-            top: overlayStyle.top,
-            left: overlayStyle.left,
-            width: overlayStyle.width,
-            height: overlayStyle.height,
-            transform: 'scale(1.02)',
-          }}
-        >
-          <GripVertical aria-hidden className="text-[var(--text-tertiary)]" />
-          <span className="truncate font-medium text-[var(--text-body)]">{activeItem.name}</span>
-        </div>,
-        document.body,
-      )}
-
-      <StatusToast status={status} />
-    </ToolShell>
+      {activeId && activeItem && <QueueGhost name={activeItem.name} style={overlayStyle} />}
+    </>
   );
 };

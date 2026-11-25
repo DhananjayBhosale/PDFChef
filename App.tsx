@@ -21,7 +21,7 @@ import { ProPaywall } from './components/UI/ProPaywall';
 import { SupportPrompt } from './components/UI/SupportPDFChef';
 import { Onboarding } from './components/UI/Onboarding';
 import { MobileAppWelcome } from './components/UI/MobileAppWelcome';
-import { isMobileAppWelcomeRoute, mobileAppWelcomeDismissedKey, smartphonePlatform } from './services/mobileAppWelcome';
+import { isMobileAppWelcomeRoute, mobileAppWelcomeDismissedKey, smartphonePlatform, welcomeThisSession } from './services/mobileAppWelcome';
 import { getWorkspaceSettings, rememberToolUse } from './services/workspace';
 
 const MergePDF = React.lazy(() => import('./components/Tools/MergePDF').then((module) => ({ default: module.MergePDF })));
@@ -163,10 +163,10 @@ const AppContent = () => {
   useI18n();
   const location = useLocation();
   const [welcomePlatform, setWelcomePlatform] = useState(() => {
-    try {
-      if (window.sessionStorage.getItem(mobileAppWelcomeDismissedKey) === 'true') return null;
-    } catch { /* Continuing still works when browser storage is unavailable. */ }
-    return smartphonePlatform(navigator.userAgent, Capacitor.getPlatform(), `${window.location.protocol}//${window.location.host}`);
+    const platform = smartphonePlatform(navigator.userAgent, Capacitor.getPlatform(), `${window.location.protocol}//${window.location.host}`);
+    if (!platform) return null;
+    const store = (name: 'sessionStorage' | 'localStorage') => { try { return window[name]; } catch { return null; } };
+    return welcomeThisSession(store('sessionStorage'), store('localStorage')) ? platform : null;
   });
   const showMobileAppWelcome = welcomePlatform && isMobileAppWelcomeRoute(location.pathname);
   const continueToWebsite = () => {
@@ -177,6 +177,14 @@ const AppContent = () => {
   useEffect(() => {
     if (!showMobileAppWelcome) rememberToolUse(location.pathname);
   }, [location.pathname, showMobileAppWelcome]);
+
+  // "Before you start" on the website waits for Home, and never stacks on another dialog: a visitor
+  // who came to a tool gets the tool (overnight 2026-11-24, Q6). The apps show it as before.
+  const [onboardingHere, setOnboardingHere] = useState(() => Capacitor.isNativePlatform());
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) return;
+    setOnboardingHere(location.pathname === '/' && !document.querySelector('[role="dialog"]'));
+  }, [location.pathname]);
 
   useEffect(() => {
     const applyFont = () => {
@@ -201,6 +209,14 @@ const AppContent = () => {
           <IosIncomingPdfHandler />
           <a
             href="#main"
+            // A tool screen marks where its content starts (the sentence and settings once a file
+            // is loaded, the picker before): land there, past the header (research r2, desktop-02).
+            onClick={(event) => {
+              const target = document.querySelector<HTMLElement>('#main [data-skip-target]');
+              if (!target) return;
+              event.preventDefault();
+              target.focus();
+            }}
             className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[200] focus:rounded-[var(--radius-control)] focus:bg-[var(--surface-raised)] focus:px-4 focus:py-2 focus:font-semibold"
           >{t("app.skip.to.content.ac576a")}</a>
           <AppShell>
@@ -209,7 +225,7 @@ const AppContent = () => {
           <OutputCenter />
           <ProPaywall />
           <SupportPrompt />
-          <Onboarding />
+          {onboardingHere && <Onboarding />}
         </>
       )}
     </>

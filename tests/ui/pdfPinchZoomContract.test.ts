@@ -98,3 +98,12 @@ test('Extract Pages exposes one selection control per page', () => {
   assert.match(thumbnail, /aria-disabled=\{disabled \|\| undefined\}/);
   assert.doesNotMatch(extract, /<button[\s\S]{0,500}<PageThumbnail/);
 });
+
+test('a plain scroll or one-finger pan after a zoom stops the zoom anchor chasing its offset', () => {
+  // An anchor the page cannot reach is retried for several frames; without this the reader's
+  // first scroll after zooming in near the far edge was undone.
+  const hook = read('hooks/usePdfPinchZoom.ts');
+  assert.match(hook, /if \(!event\.ctrlKey\) \{\n        releaseAnchor\(\);\n        return;\n      \}/);
+  assert.match(hook, /if \(event\.touches\.length === 1\) releaseAnchor\(\);/);
+  assert.match(hook, /const releaseAnchor = \(\) => \{\n      pendingScrollRef\.current = null;/);
+});

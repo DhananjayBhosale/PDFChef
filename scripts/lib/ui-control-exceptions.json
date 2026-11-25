@@ -1,0 +1,259 @@
+{
+  "note": "Allowed differences for scripts/verify-ui-controls.mjs. Do not add a rule without the owner seeing it. Rules are inactive until the new tool header ships (phase 3).",
+  "rules": [
+    {
+      "type": "absent",
+      "kind": "tool",
+      "role": "link",
+      "names": [
+        "Recent",
+        "Settings"
+      ],
+      "reason": "Owner's decision (R14): tool routes show no Recent and no Settings link."
+    },
+    {
+      "type": "sameControl",
+      "names": [
+        "Tools"
+      ],
+      "roles": [
+        "link",
+        "button"
+      ],
+      "reason": "Today's nav bar button 'Tools' and the Tools tab count as the one Tools link in the new header."
+    },
+    {
+      "type": "caseOnly",
+      "screens": [
+        "crop"
+      ],
+      "reason": "Crop's four field names differ only in letter case."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "watermark"
+      ],
+      "role": "textbox",
+      "from": "",
+      "to": "Color",
+      "reason": "Watermark's colour input had no accessible name; the plan (2.12) names it \"Color\"."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "watermark"
+      ],
+      "role": "textbox",
+      "from": "CONFIDENTIAL",
+      "to": "Watermark text",
+      "reason": "The watermark text box was named by its placeholder; it now carries its label (Android sync, 2026-11-15)."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "powerpoint-to-pdf"
+      ],
+      "role": "radio",
+      "from": "Keep A 16:9 slide stays a 16:9 PDF page.",
+      "to": "Keep",
+      "reason": "The two hint lines under the PowerPoint to PDF radios became each radio's aria-describedby text (plan 2.17, D8), so the name is the label alone."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "powerpoint-to-pdf"
+      ],
+      "role": "radio",
+      "from": "Rotate Turn pages without stretching or cropping.",
+      "to": "Rotate",
+      "reason": "The two hint lines under the PowerPoint to PDF radios became each radio's aria-describedby text (plan 2.17, D8), so the name is the label alone."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "invoice",
+        "receipt",
+        "quote"
+      ],
+      "role": "textbox",
+      "from": "Address One line each, as you would write it on an envelope",
+      "to": "Address",
+      "reason": "Business documents: each field's hint line became its placeholder or aria-describedby text (plan 2.21, D8), so the name is the label alone."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "invoice"
+      ],
+      "role": "textbox",
+      "from": "Invoice number Anything you like, as long as you do not reuse it",
+      "to": "Invoice number",
+      "reason": "Business documents: each field's hint line became its placeholder or aria-describedby text (plan 2.21, D8), so the name is the label alone."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "receipt"
+      ],
+      "role": "textbox",
+      "from": "Receipt number Anything you like, as long as you do not reuse it",
+      "to": "Receipt number",
+      "reason": "Business documents: each field's hint line became its placeholder or aria-describedby text (plan 2.21, D8), so the name is the label alone."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "quote"
+      ],
+      "role": "textbox",
+      "from": "Quote number Anything you like, as long as you do not reuse it",
+      "to": "Quote number",
+      "reason": "Business documents: each field's hint line became its placeholder or aria-describedby text (plan 2.21, D8), so the name is the label alone."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "invoice",
+        "receipt",
+        "quote"
+      ],
+      "role": "textbox",
+      "from": "Money symbol A symbol like $ or £, or a code like USD",
+      "to": "Money symbol",
+      "reason": "Business documents: each field's hint line became its placeholder or aria-describedby text (plan 2.21, D8), so the name is the label alone."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "invoice",
+        "receipt",
+        "quote"
+      ],
+      "role": "textbox",
+      "from": "Notes Payment terms, a thank you, anything else worth saying",
+      "to": "Notes",
+      "reason": "Business documents: each field's hint line became its placeholder or aria-describedby text (plan 2.21, D8), so the name is the label alone."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "invoice",
+        "receipt",
+        "quote"
+      ],
+      "role": "textbox",
+      "from": "Tax % Leave blank for no tax",
+      "to": "Tax %",
+      "reason": "Business documents: each field's hint line became its placeholder or aria-describedby text (plan 2.21, D8), so the name is the label alone."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "invoice",
+        "receipt",
+        "quote"
+      ],
+      "role": "textbox",
+      "from": "Tax name VAT, GST, Sales tax — or leave it blank",
+      "to": "Tax name",
+      "reason": "Business documents: each field's hint line became its placeholder or aria-describedby text (plan 2.21, D8), so the name is the label alone."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "receipt"
+      ],
+      "role": "textbox",
+      "from": "Paid by Card, cash, bank transfer",
+      "to": "Paid by",
+      "reason": "Business documents: each field's hint line became its placeholder or aria-describedby text (plan 2.21, D8), so the name is the label alone."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "sign"
+      ],
+      "role": "button",
+      "from": "Reset zoom to 100%",
+      "to": "Fit page",
+      "reason": "owner decision 2026-11-15"
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "delete-pages",
+        "reorder",
+        "rotate",
+        "flatten",
+        "extract",
+        "make-fillable"
+      ],
+      "role": "button",
+      "from": "Choose another PDF",
+      "to": "Choose another file",
+      "reason": "Review 2, item 17: one name for changing the file across one-file tools (pass 6b, 2026-11-24). The same control, same handler; only its name changed."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "split",
+        "metadata",
+        "repair",
+        "crop",
+        "header-footer",
+        "extract-images",
+        "remove-metadata",
+        "remove-annotations",
+        "sanitize",
+        "remove-blank-pages"
+      ],
+      "role": "button",
+      "from": "Change",
+      "to": "Choose another file",
+      "reason": "Review 2, item 17: one name for changing the file across one-file tools (pass 6b, 2026-11-24). The same control, same handler; only its name changed."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "pdf-to-jpg"
+      ],
+      "role": "button",
+      "from": "Start over",
+      "to": "Choose another file",
+      "reason": "Review 2, item 17: one name for changing the file across one-file tools (pass 6b, 2026-11-24). The same control, same handler; only its name changed."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "pdf-to-word",
+        "word-to-pdf",
+        "powerpoint-to-pdf"
+      ],
+      "role": "button",
+      "from": "Choose another",
+      "to": "Choose another file",
+      "reason": "Review 2, item 17: one name for changing the file across one-file tools (pass 6b, 2026-11-24). The same control, same handler; only its name changed."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "ocr"
+      ],
+      "role": "button",
+      "from": "Extract another",
+      "to": "Choose another file",
+      "reason": "Review 2, item 17: one name for changing the file across one-file tools (pass 6b, 2026-11-24). The same control, same handler; only its name changed."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "extract"
+      ],
+      "role": "button",
+      "from": "Export 0 selected pages",
+      "to": "Choose pages to export",
+      "reason": "Review 2, item 17: with no page chosen, Extract's main action says what to do (pass 6b, 2026-11-24). The same button, still off until a page is chosen."
+    }
+  ]
+}

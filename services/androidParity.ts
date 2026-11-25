@@ -221,6 +221,24 @@ export const watermarkLayout = (options: {
 };
 
 /**
+ * Whether a point on the page (PDF units, measured from the bottom) falls on the stamped text's
+ * rotated box, with a margin of a third of the text size so a finger finds it easily (C4).
+ */
+export const isOnWatermark = (
+  layout: Pick<NonNullable<ReturnType<typeof watermarkLayout>>, 'centerX' | 'centerY' | 'textWidth' | 'fontSize' | 'rotationDegrees'>,
+  x: number,
+  y: number,
+): boolean => {
+  const angle = (layout.rotationDegrees * Math.PI) / 180;
+  const dx = x - layout.centerX;
+  const dy = y - layout.centerY;
+  const along = dx * Math.cos(angle) + dy * Math.sin(angle);
+  const across = -dx * Math.sin(angle) + dy * Math.cos(angle);
+  const margin = layout.fontSize / 3;
+  return Math.abs(along) <= layout.textWidth / 2 + margin && Math.abs(across) <= layout.fontSize / 2 + margin;
+};
+
+/**
  * The glyph origin that reproduces PDFBox's `Matrix.getRotateInstance(theta, centerX, centerY)`
  * followed by `newLineAtOffset(offsetX, offsetY)`.
  *
@@ -243,6 +261,12 @@ export const rotatedTextOrigin = (layout: WatermarkLayout): { x: number; y: numb
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_PAGE_NUMBER_FORMAT = 'Page {n}';
+/**
+ * Formats a person picks instead of typing braces (Page Numbers' format, Header & Footer's footer),
+ * shown as they read on page 1 ("Page 1 of 3"). The PDF's font draws Latin text, so the words stay
+ * English, as the default "Page {n}" always has.
+ */
+export const PAGE_NUMBER_FORMAT_PRESETS = ['{n}', 'Page {n}', 'Page {n} of {total}', '{n} / {total}'] as const;
 export const DEFAULT_PAGE_NUMBER_FONT_SIZE = 10;
 export const MIN_PAGE_NUMBER_FONT_SIZE = 6;
 export const MAX_PAGE_NUMBER_FONT_SIZE = 36;

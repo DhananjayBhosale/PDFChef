@@ -1,0 +1,2215 @@
+/* The tool kit (plan 2.1, 2.2, 3.2): the tool header, the sentence and its editors,
+   the tool screen layout and the result slot. Colours, radii and type come from the
+   tokens in assets/design-tokens.css; this file only places and sizes. Logical
+   properties only, so right-to-left needs no second set of rules. */
+
+.tk-spacer { flex: 1 1 auto; }
+.tk-tool [hidden],
+.tk-scrim[hidden] { display: none !important; }
+
+/* ------------------------------------------------------------ Header --- */
+
+.tk-top { flex: none; background: var(--surface-canvas); }
+.tk-top-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  border-bottom: 1px solid var(--border-hairline);
+}
+/* A page behind Settings at rest (T-16): its heading is in view, so the bar is only Tools or
+   "‹ Settings" on the page, with no hairline drawing an empty bar. The line comes back with the
+   title once the heading scrolls away (the large-title pattern). */
+.tk-top-bare:not(:has(.tk-top-name)) { border-bottom-color: transparent; }
+.tk-top-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding-inline: 12px 8px;
+}
+.tk-top-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tk-top-mark { color: var(--accent-text); flex: none; }
+.tk-top-mark-img { width: 24px; height: 24px; object-fit: contain; flex: none; }
+/* Dark theme (research r2, mobile-12): the tool marks are drawn for paper, so they sit on a small
+   paper tile, as the Tools list sets them on a tinted one; a dark mark stays visible. */
+.dark .tk-top-mark-img { padding: 2px; border-radius: 6px; background: var(--paper-100); }
+.tk-top-title {
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.1875rem;
+  line-height: 1.5rem;
+  font-weight: var(--font-display-weight);
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tk-top-beta { flex: none; margin-inline-start: -2px; }
+.tk-top-brand { display: flex; border-radius: 999px; }
+.tk-top-sep { width: 1px; height: 24px; flex: none; background: var(--border-hairline); }
+.tk-top-file { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin-inline-start: 6px; font-size: 0.8125rem; }
+
+.tk-logo {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--surface-raised);
+  box-shadow: 0 0 0 1px var(--border-hairline), 0 0 0 4px var(--surface-canvas), 0 0 0 5px var(--border-hairline);
+}
+.tk-logo img { width: 22px; height: 22px; object-fit: contain; }
+
+.tk-tools {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  flex: none;
+  padding-inline: 12px 14px;
+  border: 1.5px solid var(--text-primary);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+@media (hover: hover) { .tk-tools:hover { background: var(--text-primary); color: var(--surface-canvas); } }
+
+/* Desktop: Recent and Settings before Tools (research r1), quiet links beside the Tools pill. */
+.tk-topnav { display: flex; align-items: center; gap: 4px; flex: none; }
+.tk-navlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding-inline: 10px;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tk-navlink + .tk-tools { margin-inline-start: 6px; }
+/* Still too long with the links' icons alone: Tools shows only its icon too, as on a phone. */
+.tk-topnav[data-fit="2"] .tk-tools > span { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.tk-topnav[data-fit="2"] .tk-tools { padding-inline: 12px; min-width: 48px; justify-content: center; }
+@media (hover: hover) { .tk-navlink:hover { background: var(--surface-sunken); color: var(--text-primary); } }
+
+.tk-back {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 48px;
+  flex: none;
+  margin-inline-start: -8px;
+  border-radius: 999px;
+  color: var(--text-primary);
+}
+@media (hover: hover) { .tk-back:hover { background: var(--surface-sunken); } }
+
+.tk-change {
+  position: relative;
+  min-height: 40px;
+  padding-inline: 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent-text);
+  font-size: 0.875rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+@media (hover: hover) { .tk-change:hover { background: var(--accent-quiet); } }
+.tk-change:disabled { opacity: 0.5; cursor: not-allowed; }
+.tk-change-icon { display: inline-grid; place-items: center; flex: none; width: 48px; min-height: 48px; padding: 0; }
+.tk-change-word { display: inline-flex; align-items: center; gap: 4px; flex: none; min-height: 48px; padding-inline: 10px 12px; }
+.tk-change-text { display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.tk-change-text > .tk-change-compact { display: none; }
+/* Phones (owner decision D-1): the tool's mark and name are a link to Tools home. Same look. */
+.tk-top-home { position: relative; color: inherit; text-decoration: none; border-radius: 6px; -webkit-tap-highlight-color: transparent; }
+
+/* -------------------------------------------------------- Tool screen --- */
+
+/* The header, then the tool's <main>, which takes the rest of the screen. */
+.tk-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+}
+.tk-tool {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+}
+.tk-fileline {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  padding: 0 16px 8px;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+.tk-fname { min-width: 0; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tk-fmeta { color: var(--text-tertiary); white-space: nowrap; }
+/* The phone file line, and the desktop header's name (research r2, mobile-04): a long name wraps
+   to two lines before it is cut (MASTER "Long filenames wrap", T-16). The full name is its tooltip. */
+.tk-fileline .tk-fname,
+.tk-top-file .tk-fname { white-space: normal; overflow-wrap: anywhere; hyphens: manual; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.tk-top-file .tk-fname { line-height: 1.125rem; }
+.tk-top-file { align-items: center; }
+
+/* Where focus starts in a tool (Skip to content, a route change, a file arriving): a region, not a
+   control, so like <main> it draws no ring; the next Tab reaches its first control. */
+[data-skip-target]:focus { outline: none; }
+
+/* Positioned, so a visually hidden hint deep in a long form (Invoice's tax hint) is placed and
+   clipped inside the canvas, not against the page, where it made the whole document scroll (pass 3). */
+.tk-canvas {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 16px 16px;
+  scrollbar-width: thin;
+}
+.tk-tool[data-kind="preview"] .tk-canvas { display: flex; flex-direction: column; overflow: hidden; }
+
+/* Empty state: today's picker, centred in the space under the header. */
+.tk-empty {
+  display: grid;
+  align-content: safe center;
+  min-height: 100%;
+  width: 100%;
+  max-width: 48rem;
+  margin: 0 auto;
+  padding-block: 16px 48px;
+}
+.tk-empty [data-file-upload] { min-height: 260px; display: flex; flex-direction: column; justify-content: center; }
+
+.tk-cap {
+  display: block;
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-secondary);
+}
+:lang(ar) .tk-cap,
+:lang(hi) .tk-cap,
+:lang(ja) .tk-cap,
+:lang(zh) .tk-cap,
+:lang(ko) .tk-cap { font-style: normal; }
+
+.tk-grid-state { padding: 24px 8px; text-align: center; font-size: 0.875rem; color: var(--text-secondary); }
+
+/* Phone foot sheet (D3): result, sentence, chips, one line, action. */
+.tk-sheet {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 16px calc(12px + env(safe-area-inset-bottom, 0px) + var(--chef-keyboard-inset, 0px));
+  background: var(--surface-raised);
+  border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+  box-shadow: 0 -1px 0 var(--border-hairline), 0 -14px 34px -18px rgba(60, 40, 20, 0.28);
+}
+/* Very large text (research r3, mobile-03: 320 px at 200 %): a sheet taller than most of the screen
+   scrolls inside itself, and its main action stays at its foot. Not while a keyboard is up: the
+   sheet's padding then stands in for the keyboard. */
+:root:not([data-chef-keyboard]) .tk-sheet { max-height: 80%; overflow-y: auto; }
+/* Phone (owner decision 2026-11-15, item 2): the foot sheet takes at most 40% of the screen, so the
+   page or pages fill the rest. Each setting is one value in the sentence (its control is in the
+   value's card), so a result strip, the sentence and the main action fit. At Large and Largest text
+   the 80% cap above stays: what does not fit then scrolls inside the sheet. */
+/* On a short screen (a phone in landscape, 200% zoom) 40% is too little for the strip, the sentence
+   and the action together, so the cap never goes under 17.5rem; the 80% cap still holds (fix
+   review, finding 8). */
+/* A caution or error in the sheet is read in full without scrolling: the 80% cap holds then
+   (iOS sync, 2026-11-15: Compress's "To make it smaller…" ran under the Compress button). */
+:root:not([data-chef-keyboard]):not([data-text-scale="large"]):not([data-text-scale="larger"]) .tk-tool:not([data-wide]) > .tk-sheet:not(:has(> .tk-notice :is([data-tone="error"], [data-tone="caution"], [role="alert"]))) { max-height: min(80%, max(40vh, 17.5rem)); max-height: min(80%, max(40dvh, 17.5rem)); }
+/* With a result in the sheet, its outcome line ("3 PDFs download together in one ZIP") has been
+   said by the result itself: the settings collapse to the sentence and the strip. */
+.tk-sheet:has(> .tk-result > *) > .tk-notice:not(:has([data-tone="error"], [data-tone="pending"], [data-tone="caution"], [role="alert"])) { display: none; }
+.tk-sheet > .tk-actions,
+.tk-sheet > .tk-progress-block { position: sticky; bottom: 0; z-index: 1; background: var(--surface-raised); box-shadow: 0 -8px 0 var(--surface-raised); }
+.tk-sheet > .tk-sentence-group + .tk-chips { margin-top: -6px; }
+/* A chip row whose chips are all hidden takes no room (Split with every page chosen). */
+.tk-chips:empty { display: none; }
+/* A setting's control in its value's card on a phone (owner decision 2026-11-15, item 1): each
+   takes the card's width, so a field or a strip never squeezes beside another. */
+:is(.tk-sheet, .tk-pop) .tk-makepdf-namefield,
+:is(.tk-sheet, .tk-pop) .tk-ocr-limit { flex: 1 1 100%; min-width: 0; }
+:is(.tk-sheet, .tk-pop) .tk-split-size { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; flex: 1 1 100%; min-width: 0; }
+:is(.tk-sheet, .tk-pop) .tk-split-size .tk-stepper { align-items: center; flex: 1 1 9rem; }
+:is(.tk-sheet, .tk-pop) .tk-split-size .tk-stepper-field,
+:is(.tk-sheet, .tk-pop) .tk-ocr-limit .tk-stepper-field { flex: 0 1 6rem; }
+.tk-pop .tk-batch-settings[data-option] { grid-template-columns: minmax(0, 1fr); }
+.tk-sheet > .tk-notice { margin-top: -4px; }
+/* The sheet comes before the body in the document (Tab and screen-reader order, verify V-01)
+   and is drawn at the foot; whatever followed the body before still follows the sheet. */
+.tk-tool:not([data-wide]) > .tk-sheet { order: 1; }
+.tk-tool:not([data-wide]) > .tk-canvas ~ :not(.tk-sheet) { order: 2; }
+
+/* Phone top band for live-preview tools (D3), and the foot bar. */
+.tk-band-top {
+  flex: none;
+  padding: 16px 16px 18px;
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border-hairline);
+}
+.tk-band-top .tk-notice { margin-top: 10px; }
+.tk-footbar {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface-raised);
+  border-top: 1px solid var(--border-hairline);
+}
+
+/* A file or form screen's two columns (desktop); stacked on a phone. */
+.tk-split { display: flex; flex-direction: column; gap: 16px; }
+
+/* ---------------------------------------------------------- Actions --- */
+
+.tk-actions { display: flex; align-items: center; gap: 10px; }
+.tk-actions > .tk-primary { flex: 1 1 auto; width: auto; }
+.tk-actions > .tk-btn { flex: none; }
+
+.tk-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  padding-inline: 20px;
+  border-radius: var(--radius-control);
+  background: var(--accent-rest);
+  color: var(--text-on-accent);
+  font-size: 0.9375rem;
+  font-weight: 650;
+  letter-spacing: 0.005em;
+  white-space: nowrap;
+}
+/* Hover colours only where a pointer hovers: a tap on a phone leaves :hover behind (T-16). */
+@media (hover: hover) { .tk-primary:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--accent-hover); } }
+/* Disabled: today's sunken neutral look, its words at 4.5:1 or more (B-030), not a faded accent. */
+.tk-primary:disabled, .tk-primary[aria-disabled="true"] { background: var(--surface-sunken); color: var(--text-secondary); box-shadow: inset 0 0 0 1px var(--border-hairline); opacity: 1; cursor: not-allowed; }
+
+.tk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 48px;
+  padding-inline: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tk-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.tk-btn-quiet { border-color: transparent; background: transparent; color: var(--text-secondary); padding-inline: 12px; }
+.tk-btn-quiet:hover { background: var(--surface-sunken); color: var(--text-primary); }
+.tk-btn-outline { border: 1.5px solid var(--text-primary); background: transparent; color: var(--text-primary); }
+
+.tk-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.tk-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding-inline: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.tk-chip svg { width: 15px; height: 15px; }
+.tk-chip:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.tk-notice-line,
+.tk-notice > p { margin: 0; font-size: 0.8125rem; line-height: 1.25rem; color: var(--text-secondary); }
+.tk-notice-line[data-tone="pending"] { color: var(--accent-text); font-weight: 600; }
+.tk-notice-line[data-tone="error"],
+.tk-notice [role="alert"] { color: var(--status-danger-text); font-weight: 600; }
+.tk-notice-line[data-tone="caution"] { color: var(--status-caution-text); }
+/* A notice's own small action on its heading line (Compress's Discard), 48 px to touch. */
+.tk-notice-action {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding-inline: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+/* 11 px, not 10: the extension starts inside the 1 px border, so 10 reached 46 px (pass 3). */
+.tk-notice-action::after { content: ""; position: absolute; inset: -11px -4px; }
+
+.tk-progress-block { display: flex; flex-direction: column; gap: 6px; }
+.tk-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.tk-progress-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.tk-progress-detail { overflow: hidden; font-size: 0.8125rem; font-weight: 500; color: var(--text-secondary); white-space: nowrap; text-overflow: ellipsis; }
+.tk-progress-pct { color: var(--text-secondary); }
+.tk-progress-track { height: 4px; overflow: hidden; border-radius: 999px; background: var(--surface-sunken); }
+.tk-progress-fill { height: 100%; border-radius: 999px; background: var(--accent-rest); transition: width 200ms ease; }
+.tk-spinner {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border: 2px solid var(--accent-quiet);
+  border-top-color: var(--accent-rest);
+  border-radius: 999px;
+  animation: tk-spin 800ms linear infinite;
+}
+@keyframes tk-spin { to { transform: rotate(360deg); } }
+
+/* Fields inside tools and editors. */
+.tk-pop .chef-field,
+.tk-num {
+  height: 48px;
+  min-height: 48px;
+  padding-inline: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-field);
+  background: var(--surface-raised);
+  font-size: 1rem;
+  box-shadow: none;
+}
+.tk-num { width: 100%; font-variant-numeric: tabular-nums; }
+.tk-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary); }
+.tk-caution { margin: 0; font-size: 0.75rem; line-height: 1.1rem; color: var(--text-tertiary); }
+
+.tk-stepper { display: flex; align-items: flex-end; gap: 8px; }
+.tk-stepper-field { flex: 1 1 auto; min-width: 0; }
+/* A phone card: the number is a few digits, so the field stays a field and the − / + sit beside it
+   instead of a box that stretches across the card (Crop's "5"). */
+@media (max-width: 767.98px), (max-height: 479.98px) {
+  .tk-pop .tk-stepper { justify-content: flex-start; }
+  .tk-pop .tk-stepper-field { flex: 0 1 5.5rem; }
+}
+.tk-step {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+}
+.tk-step:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* A typed field at rest beside the sentence (Delete, Extract and Split, owner decision 1):
+   one row of field and its button. A full row on phones; beside the chips on desktop. */
+.tk-inline-field,
+.tk-range-inline { display: flex; align-items: center; gap: 8px; flex: 1 1 100%; min-width: 0; }
+.tk-inline-field > .tk-field { flex: 1 1 auto; }
+.tk-inline-field .chef-field,
+.tk-range-inline .chef-field {
+  height: 48px;
+  min-height: 48px;
+  margin-top: 0;
+  padding-inline: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-field);
+  background: var(--surface-raised);
+  font-size: 1rem;
+  box-shadow: none;
+}
+.tk-inline-field > .tk-btn,
+.tk-range-inline button[type="submit"] { flex: none; height: 48px; min-height: 48px; padding-inline: 16px; }
+.tk-range-inline { flex-direction: column; align-items: stretch; gap: 4px; }
+.tk-range-inline > div:first-child { align-items: center; }
+
+.tk-pop [data-page-range-selector] .chef-field { height: 48px; min-height: 48px; font-size: 1rem; }
+.tk-pop [data-page-range-selector] button[type="submit"] { height: 48px; min-height: 48px; padding-inline: 16px; }
+
+/* ----------------------------------------------------------- Editors --- */
+
+.tk-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px) + var(--chef-keyboard-inset, 0px));
+  background: var(--surface-scrim);
+}
+.tk-scrim[data-wide] { display: block; padding: 0; background: transparent; }
+/* Phone (owner decision 2026-11-15, item 5): every card is the same light layer. No dim scrim; a
+   tap outside closes the card and reaches what it landed on, as on desktop. */
+.tk-scrim:not([data-wide]) { background: transparent; }
+.tk-scrim:not([data-wide]) .tk-pop { box-shadow: 0 0 0 1px var(--border-hairline), 0 -10px 30px -12px rgba(60, 40, 20, 0.32); }
+.tk-scrim[data-above-action]:not([data-wide]) { padding-bottom: 8px; }
+.tk-scrim[data-above-action]:not([data-wide]) .tk-pop { max-height: 100%; }
+/* A light layer lets taps through to the page; the editor itself still takes them (Popover passThrough). */
+.tk-scrim[data-pass] { pointer-events: none; }
+.tk-scrim[data-pass] > .tk-pop { pointer-events: auto; }
+
+/* The card's head (title and its one close control) stays in view; only the body scrolls, with a
+   shadow at whichever edge has more to show (polish 2026-11-15, item 1). */
+.tk-pop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 440px;
+  max-height: min(72dvh, 560px);
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  box-shadow: var(--elevation-sheet);
+  animation: tk-pop-in 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.tk-scrim[data-wide] .tk-pop { border-radius: var(--radius-pop); }
+.tk-pop-head { display: flex; align-items: center; gap: 8px; padding-block: 4px 0; padding-inline: 16px 4px; }
+.tk-pop-head h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: var(--font-display-weight);
+  color: var(--text-primary);
+}
+.tk-pop-head[data-hidden-title] { position: absolute; top: 0; inset-inline-end: 0; z-index: 1; padding: 4px; }
+.tk-pop-close {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: 999px;
+  color: var(--text-secondary);
+}
+.tk-pop-close:hover { background: var(--surface-sunken); }
+.tk-pop-head, .tk-pop-notice { flex: none; }
+/* The value whose card is open is filled, so it is clear which setting the card changes (judge A). */
+.tk-row[aria-expanded="true"],
+.tk-chip-editor[aria-expanded="true"] { background: var(--slot-tint); box-shadow: inset 0 0 0 1.5px var(--accent-rest); border-radius: var(--radius-slot); }
+.tk-pop-body {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  gap: 14px;
+  padding: 4px 16px 16px;
+  /* Scroll cue: covers that travel with the content hide the shadows at the ends it has reached. */
+  background:
+    linear-gradient(var(--surface-raised) 30%, transparent) top / 100% 24px no-repeat local,
+    linear-gradient(transparent, var(--surface-raised) 70%) bottom / 100% 24px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgba(60, 40, 20, 0.22), transparent) top / 100% 10px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgba(60, 40, 20, 0.22), transparent) bottom / 100% 10px no-repeat scroll;
+}
+.tk-pop > .tk-pop-body > * { flex-shrink: 0; }
+.tk-pop-head[data-hidden-title] + .tk-pop-body { padding-top: 12px; padding-inline-end: 56px; }
+.tk-enter-closes { display: contents; }
+
+/* Batch's Operation select and its option, on the screen at rest (B-013). */
+.tk-batch-settings { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; flex: 1 1 100%; min-width: 0; }
+.tk-batch-settings[data-option] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tk-batch-setting { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tk-batch-setting .chef-field { height: 48px; min-height: 48px; }
+
+/* The tool's notice line, repeated in the open editor that covers it (M-05). */
+.tk-pop-notice { margin-top: -6px; padding: 0 16px 16px; }
+.tk-pop-notice .tk-notice-line,
+.tk-pop-notice > p { margin: 0; font-size: 0.8125rem; line-height: 1.25rem; color: var(--text-secondary); }
+.tk-pop-notice .tk-notice-line[data-tone="pending"] { color: var(--accent-text); font-weight: 600; }
+.tk-pop-notice .tk-notice-line[data-tone="error"],
+.tk-pop-notice [role="alert"] { color: var(--status-danger-text); font-weight: 600; }
+@keyframes tk-pop-in { from { opacity: 0; transform: translateY(6px) scale(0.985); } }
+
+/* Tap choices under a slider or − / + (path to 9, item 1): one compact row of equal chips. */
+.tk-taps { display: grid; grid-template-columns: repeat(auto-fit, minmax(3.5rem, 1fr)); gap: 10px 6px; margin-top: 10px; }
+.tk-tap {
+  position: relative;
+  min-height: 38px;
+  padding-inline: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.tk-tap::after { content: ""; position: absolute; inset: -5px 0; }
+.tk-tap[aria-pressed="true"] { border-color: var(--accent-rest); background: var(--accent-quiet); color: var(--accent-on-quiet); box-shadow: inset 0 0 0 1px var(--accent-rest); }
+.tk-tap:disabled { opacity: 0.55; }
+.tk-taps[data-dense] .tk-tap { padding-inline: 4px; line-height: 1.1rem; }
+/* Without a fixed grid, dense choices share one row by the length of their words (Page Numbers'
+   formats: "Page 1 of 3" is wider than "1"), wrapping only when they cannot fit. */
+.tk-taps[data-dense]:not([style]) { display: flex; flex-wrap: wrap; }
+.tk-taps[data-dense]:not([style]) > .tk-tap { flex: 1 1 auto; padding-inline: 10px; white-space: nowrap; }
+
+/* A segmented strip inside an editor: chips with today's selected style (D2). */
+.tk-seg { gap: 6px; }
+
+/* ---------------------------------------------------------- Sentence --- */
+
+.tk-sentence-group { position: relative; min-width: 0; }
+.tk-sentence {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.1875rem;
+  line-height: 2.25rem;
+  font-weight: 500;
+  letter-spacing: -0.003em;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+:lang(ar) .tk-sentence,
+:lang(hi) .tk-sentence { font-weight: 600; }
+.tk-sentence-group[lang="en"] .tk-sentence { font-weight: 500; }
+.tk-sentence-group[data-compact] .tk-sentence { font-size: 1rem; }
+/* A statement (no slots) has no pills to make room for: one serif size and a reading line
+   height, short or long, so Remove Blank Pages and Remove comments look alike (T-15). */
+.tk-sentence-group[data-form="statement"] .tk-sentence:not(.tk-measure) { font-size: 1.0625rem; line-height: 1.6rem; }
+/* Clipped: a long value measured on one line (Create PDF's Russian file name) must not widen the
+   page, or a phone zooms out and Tools ends up past the screen's edge (polish item 19). */
+.tk-measure { position: absolute; top: 0; inset-inline: 0; visibility: hidden; pointer-events: none; overflow: hidden; }
+
+.tk-slot,
+.tk-inline {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 2rem;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.tk-slot {
+  min-width: 48px;
+  margin-inline: 1px;
+  padding-inline: 8px 6px;
+  border-radius: var(--radius-slot) var(--radius-slot) 3px 3px;
+  background: var(--slot-tint);
+  box-shadow: inset 0 -2px 0 var(--accent-rest);
+  color: var(--accent-text);
+  font: inherit;
+  font-weight: 650;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.tk-slot::after { content: ""; position: absolute; inset: 0; }
+.tk-slot:hover:not([aria-disabled]),
+.tk-slot[aria-expanded="true"] { background: var(--accent-rest); color: var(--text-on-accent); box-shadow: none; }
+.tk-slot[data-tone="pending"] {
+  box-shadow: none;
+  background-color: var(--slot-tint);
+  background-image: linear-gradient(90deg, var(--border-strong) 60%, transparent 0);
+  background-size: 6px 1.5px;
+  background-repeat: repeat-x;
+  background-position: 0 100%;
+}
+.tk-slot[data-tone="error"] { background: transparent; box-shadow: inset 0 -2px 0 var(--status-danger-text); color: var(--status-danger-text); }
+.tk-slot[aria-disabled] { background: transparent; box-shadow: none; color: var(--text-primary); cursor: default; }
+.tk-slot[aria-disabled] .tk-slot-caret { display: none; }
+.tk-slot-caret { flex: none; opacity: 0.75; }
+.tk-measure-caret { display: inline-block; width: 14px; height: 14px; }
+.tk-slot-icon { display: inline-flex; flex: none; width: 15px; height: 15px; opacity: 0.85; }
+.tk-slot-alert { flex: none; }
+.tk-slot-text { unicode-bidi: isolate; }
+/* A value and the closing punctuation right after it ("[14 pt].") break as one piece, so a full stop
+   never starts a line alone (Sentence `TRAILING`; iOS sync, overnight 2026-11-24). */
+.tk-glue { white-space: nowrap; }
+.tk-static { display: inline; font: inherit; vertical-align: baseline; white-space: normal; }
+/* Desktop (T-10): a value whose control sits beside the sentence, drawn as plain bold text. */
+.tk-value { display: inline; font: inherit; font-weight: 650; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.tk-value[data-tone="error"] { color: var(--status-danger-text); }
+.tk-value { margin-inline: 2px; }
+.tk-value .tk-slot-alert { display: inline; vertical-align: -2px; margin-inline-end: 3px; }
+.tk-value .tk-slot-icon { vertical-align: -2px; margin-inline-end: 3px; }
+.tk-inline { min-width: 48px; margin-inline: 1px; }
+.tk-measure-inline { display: inline-block; width: 48px; height: 1px; }
+
+/* A word that acts at once (Rotate's left / right): an outlined pill, not a tinted slot. */
+.tk-word {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 2rem;
+  padding: 0 12px;
+  border: 1.5px solid var(--text-primary);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-ui, inherit);
+  font-size: 0.9375rem;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tk-word:hover:not(:disabled) { background: var(--surface-sunken); }
+.tk-word:disabled { opacity: 0.45; cursor: not-allowed; }
+/* At least 8 px each way, and always 48 px in all: the pill is 30 px at the default text size. */
+.tk-word::after { content: ""; position: absolute; inset-block: min(-8px, calc(50% - 24px)); inset-inline: 0; }
+.tk-measure-word { visibility: hidden; }
+/* A two-choice value that switches on a tap (ToggleValue, polish item 3): the same pill, wraps when long. */
+.tk-toggle { display: inline; }
+.tk-word-toggle { white-space: normal; text-align: start; line-height: 1.2; max-width: 100%; padding-block: 4px; padding-inline-start: 8px; }
+.tk-toggle[data-disabled] .tk-word-toggle { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+.tk-toggle:has(input:focus-visible) .tk-word-toggle { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.tk-row-inline .tk-word-toggle { min-width: 0; flex-shrink: 1; }
+/* A word that is a switch (Compress text mode): the same pill, wraps when long, icon shows on/off. */
+.tk-word-switch { white-space: normal; text-align: start; line-height: 1.2; max-width: 100%; padding-block: 4px; padding-inline-start: 6px; gap: 8px; }
+/* A real switch inside the pill: a track and a knob that moves to the end when on. */
+.tk-switch-track {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  transition: background-color 160ms ease;
+}
+.tk-switch-knob {
+  position: absolute;
+  top: 2px;
+  inset-inline-start: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--surface-raised);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: inset-inline-start 160ms ease;
+}
+.tk-word-switch[data-on='true'] .tk-switch-track { background: var(--accent-rest); }
+.tk-word-switch[data-on='true'] .tk-switch-knob { inset-inline-start: 16px; }
+@media (prefers-reduced-motion: reduce) { .tk-switch-track, .tk-switch-knob { transition: none; } }
+/* Rows form (Larger text): the row already names the setting, so the switch shows only its track
+   instead of saying it a second time. Its name stays the setting's name. */
+/* A word in a settings row may take two lines rather than run past the sheet's edge (research r3,
+   mobile-03: Rotate's "right 90°" at 320 px with 200 % text). */
+.tk-row-inline .tk-word:not(.tk-word-switch) { min-width: 0; flex-shrink: 1; white-space: normal; text-align: start; line-height: 1.2; padding-block: 4px; }
+.tk-row-inline .tk-word-switch { min-width: 48px; min-height: 48px; justify-content: center; padding-inline: 6px; border-color: transparent; }
+.tk-row-inline .tk-word-switch-text { display: none; }
+.tk-row-inline .tk-word-switch .tk-switch-track { width: 44px; height: 26px; }
+.tk-row-inline .tk-word-switch .tk-switch-knob { width: 22px; height: 22px; }
+.tk-row-inline .tk-word-switch[data-on='true'] .tk-switch-knob { inset-inline-start: 20px; }
+
+/* Phone, four or more values (owner decision 2026-11-15, item 3): labelled rows, two to a line in a
+   live-preview tool's band, so the page keeps its room while a card is open (item 4). Each cell
+   reads label over value, at every text size. */
+/* Rows carry their own hairlines, so a band of rows needs less padding (item 4). */
+.tk-band-top:has(> .tk-sentence-group .tk-rows) { padding-block: 8px 10px; }
+.tk-band-top .tk-rows[data-many] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  border-top: 0;
+}
+.tk-band-top .tk-rows[data-many] > .tk-row {
+  position: relative;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0;
+  min-height: 48px;
+  padding: 0 2px;
+}
+/* A control drawn in the cell (Watermark's colour well) sits beside its label. */
+.tk-band-top .tk-rows[data-many] > .tk-row-inline { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; }
+.tk-band-top .tk-rows[data-many] > .tk-row-inline .tk-swatch { margin-block: -4px; }
+.tk-band-top .tk-rows[data-many] .tk-row-label { flex: none; font-size: 0.75rem; line-height: 1rem; }
+.tk-band-top .tk-rows[data-many] .tk-row-value { max-width: 100%; text-align: start; line-height: 1.25rem; }
+.tk-band-top .tk-rows[data-many] .tk-row-value .tk-slot-text { min-width: 0; white-space: normal; overflow-wrap: break-word; }
+.tk-band-top .tk-rows[data-many] > .tk-row:has(> .tk-slot-caret) { padding-inline-end: 22px; }
+.tk-band-top .tk-rows[data-many] > .tk-row > .tk-slot-caret { position: absolute; inset-inline-end: 2px; top: 50%; translate: 0 -50%; }
+/* Largest text keeps the two columns too (one column left the page under 30% with a card open);
+   a long label or value wraps to a second line, never cut with "…" (s8-02, owner 25 Nov 2026). */
+.tk-band-top .tk-rows[data-many] .tk-row-label { overflow-wrap: anywhere; }
+
+/* Rows form: each slot as a full-width row, the setting name at the start. */
+.tk-rows { display: flex; flex-direction: column; border-top: 1px solid var(--border-hairline); }
+.tk-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--border-hairline);
+  font-size: 0.9375rem;
+  text-align: start;
+}
+.tk-row-label { flex: 1 1 auto; min-width: 0; font-weight: 500; color: var(--text-secondary); }
+/* A long single word (German "Wasserzeichentext" at Largest text) breaks inside its own column
+   instead of running under the value (round 6, found while checking mobile-03 in German). */
+.tk-row-label { overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; }
+.tk-row-value { display: inline-flex; align-items: center; gap: 4px; min-width: 0; font-weight: 650; text-align: end; color: var(--accent-text); }
+.tk-row[data-tone="error"] .tk-row-value { color: var(--status-danger-text); }
+.tk-row[data-tone="pending"] .tk-row-value { text-decoration: underline dashed var(--border-strong); text-underline-offset: 4px; }
+.tk-row-static .tk-row-value { color: var(--text-primary); }
+
+.tk-chip-editor {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding-inline: 16px;
+  border-radius: 999px;
+  background: var(--slot-tint);
+  color: var(--accent-text);
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+.tk-chip-editor[aria-expanded="true"] { background: var(--accent-rest); color: var(--text-on-accent); }
+
+/* --------------------------------------------------------- Page grid --- */
+
+.tk-pagegrid-box { width: 100%; }
+.tk-pagegrid {
+  display: grid;
+  grid-template-columns: repeat(var(--grid-cols, 3), var(--tile-w, minmax(0, 1fr)));
+  gap: var(--grid-gap, 12px);
+  /* Every page grid starts at the canvas edge, so sibling tools share one inset (T-15). */
+  justify-content: start;
+}
+.tk-pagegrid:not([style]) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.tk-pagegrid [role="button"] {
+  border-width: 1px;
+  border-color: var(--border-hairline);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  box-shadow: none;
+  --tw-ring-shadow: 0 0 #0000;
+}
+.tk-pagegrid [role="button"][aria-pressed="true"] { border-color: var(--accent-rest); box-shadow: 0 0 0 1px var(--accent-rest); }
+/* Unselected stays a quiet grey, also while hovered: on touch a tap leaves :hover behind, and the
+   thumbnail's own hover colour (the accent) made a page that was not chosen look chosen. */
+.tk-pagegrid [role="button"][aria-pressed="false"]:hover,
+.tk-pagegrid [role="button"][aria-pressed="false"]:active,
+.tk-pagegrid [role="button"][aria-pressed="false"]:focus { border-color: var(--border-strong); }
+.tk-pagegrid [role="button"]:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.tk-pagegrid [role="button"] > div:first-child { background: var(--surface-sunken); }
+.tk-pagegrid [role="button"] > div:last-child {
+  justify-content: center;
+  min-height: 28px;
+  padding: 4px 8px;
+  border-top: 1px solid var(--border-hairline);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.tk-pagegrid [role="button"][aria-pressed="true"] > div:last-child { background: var(--surface-raised); color: var(--accent-text); }
+.tk-pagegrid [role="button"] > div:first-child > div.absolute.inset-0.flex { align-items: flex-start; justify-content: flex-end; padding: 6px; background: transparent; }
+.tk-pagegrid [role="button"] > div:first-child > div.absolute.inset-0.flex > div { padding: 3px; border-radius: 999px; box-shadow: none; }
+.tk-pagegrid [role="button"] > div:first-child > div.absolute.inset-0.flex svg { width: 12px; height: 12px; }
+
+/* ------------------------------------------------------ File preview --- */
+
+.tk-filepreview { display: flex; flex-direction: column; align-items: center; gap: 10px; height: 100%; min-height: 16rem; margin: 0; }
+.tk-filepreview-page {
+  display: grid;
+  place-items: center;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  padding: 16px;
+  border-radius: var(--radius-panel);
+  background: var(--surface-sunken);
+}
+.tk-filepreview-page img { max-width: 100%; max-height: 100%; object-fit: contain; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18); }
+.tk-filepreview-loading { font-size: 0.8125rem; color: var(--text-secondary); }
+/* The page is a button that opens it large (pass 5); its eye sits on the page's bottom corner. */
+.tk-filepreview-open { position: relative; cursor: zoom-in; }
+.tk-filepreview-open:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.tk-peek-badge { position: absolute; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; background: var(--surface-raised); color: var(--text-secondary); box-shadow: 0 0 0 1px var(--border-hairline); pointer-events: none; }
+/* Reorder's eye on any small page: grid tiles, queue rows, page cards (pass 5). 36 px, 48 px to touch. */
+.tk-peekbox { position: relative; min-width: 0; }
+.tk-peek { position: absolute; z-index: 2; inset-block-end: 4px; inset-inline-start: 4px; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; background: var(--surface-raised); color: var(--text-secondary); box-shadow: 0 0 0 1px var(--border-hairline); }
+.tk-peek::after { content: ""; position: absolute; inset: -6px; }
+.tk-peek:hover:not(:disabled) { color: var(--text-primary); }
+.tk-peek:disabled { opacity: 0.55; }
+/* On a grid tile the eye sits on the page's bottom corner, above the tile's label. */
+.tk-pagegrid .tk-peekbox > .tk-peek { inset-block-end: 34px; inset-inline-start: 5px; }
+.tk-peekbox > .tk-tile { width: 100%; height: 100%; }
+.tk-filestand { display: grid; place-items: center; height: min(100%, 24rem); max-width: 100%; aspect-ratio: 210 / 297; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18); color: var(--accent-text); }
+.tk-filestand svg { width: 44px; height: 44px; }
+.tk-filepreview-caption { display: flex; gap: 8px; align-items: baseline; max-width: 100%; font-size: 0.8125rem; }
+.tk-filecard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 640px;
+  margin: 8px auto 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-panel);
+  background: var(--surface-raised);
+}
+.tk-filecard-icon { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 999px; background: var(--surface-sunken); color: var(--accent-text); }
+.tk-filecard-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+
+/* --------------------------------------------------------- Result slot --- */
+
+.tk-result:empty { display: none; }
+.tk-result > * { margin: 0 !important; }
+.tk-result .chef-result-card { border-color: var(--border-hairline); border-radius: 12px; background: var(--surface-canvas); box-shadow: none; }
+.tk-result .chef-result-more,
+.tk-result .chef-result-dismiss { width: 48px; height: 48px; }
+.tk-result .chef-result-download { min-width: 48px; height: 48px; }
+
+.tk-separate-row { display: flex; flex-wrap: wrap; align-items: center; column-gap: 12px; margin-top: 4px; padding-top: 2px; border-top: 1px solid var(--border-hairline); }
+.tk-separate-row[data-variant="sheet"] { flex-direction: column; align-items: stretch; margin-top: 0; padding-top: 0; border-top: 0; }
+.tk-separate {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding-inline: 4px;
+  color: var(--accent-text);
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+.tk-separate-row[data-variant="sheet"] .tk-separate {
+  justify-content: center;
+  width: 100%;
+  padding-inline: 16px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+}
+.tk-separate[aria-busy="true"] { opacity: 0.7; cursor: progress; }
+.tk-separate-status { margin: 0; font-size: 0.8125rem; color: var(--text-secondary); }
+.tk-separate-row[data-variant="sheet"] .tk-separate-status { padding: 6px 2px 0; }
+.tk-separate-status[data-tone="outcome"] { color: var(--status-success-text); }
+.tk-separate-status[data-tone="error"] { color: var(--status-danger-text); }
+/* Split saved as separate PDFs: where the parts went leads the sheet, above its buttons. */
+.tk-separate-row[data-status-first] .tk-separate-status { order: -1; padding: 0 2px 10px; font-size: 0.9375rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-pop { animation: none; }
+  .tk-spinner { animation-duration: 2s; }
+}
+
+/* ------------------------------------------------------------ Compress --- */
+.tk-compress-files { display: flex; flex-direction: column; gap: 12px; }
+.tk-tool[data-wide] .tk-compress-files,
+.tk-tool[data-kind="file"] .tk-canvas > .tk-compress-files { height: 100%; }
+/* The slider sits half a thumb in from each side, so the thumb at Low or High is never cut by the
+   scrolling side column (desktop). */
+.tk-compress-quality .chef-slider { width: auto; margin-inline: 12px; }
+.tk-compress-qhead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 48px; margin-bottom: 8px; }
+/* Low, Medium, High: three across, fewer when a word would not fit (research r3, mobile-03). */
+/* The three choices share the row equally, never "High" alone under the others at 360 px (review 2, item 13). */
+.tk-compress-presets { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+.tk-compress-mark { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 999px; background: var(--accent-quiet); color: var(--accent-on-quiet); }
+.tk-compress-page { display: flex; flex: 1 1 auto; min-height: 0; }
+.tk-compress-page > * { flex: 1 1 auto; min-height: 0; }
+/* The page fits the panel: a 0-based row lets the image's max-height resolve against it. */
+.tk-compress-page .tk-filepreview-page { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
+.tk-compress-result { width: 100%; }
+.tk-band .tk-compress-result { max-width: 640px; }
+
+/* ---------------------------------------------------------------- Crop --- */
+/* The page stays white in both themes, so the dim outside the frame is fixed ink, not a token. */
+.tk-crop { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; gap: 10px; }
+.tk-crop-stage { position: relative; display: flex; align-items: center; justify-content: center; flex: 1 1 auto; min-height: 220px; padding: 24px; }
+/* Pass 5: two fingers on a live preview (Crop, Header & Footer) open it large; Crop's page then fills the large preview's page box. */
+.tk-pinchbox { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.tk-largecrop { position: absolute; inset: 0; display: flex; }
+.tk-largecrop > .tk-crop-stage { min-height: 0; padding: 0; }
+.tk-crop-page { position: relative; flex: none; background: #fff; box-shadow: 0 0 0 1px var(--border-hairline), 0 10px 26px -14px rgba(60, 40, 20, 0.35); touch-action: none; user-select: none; -webkit-user-select: none; }
+.tk-crop-img { display: block; width: 100%; height: 100%; object-fit: fill; pointer-events: none; }
+.tk-crop-clip { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.tk-crop-shade { position: absolute; box-shadow: 0 0 0 9999px rgba(20, 18, 15, 0.45); }
+.tk-crop-frame { position: absolute; outline: 2px solid var(--accent-rest); outline-offset: 0; }
+.tk-crop-handle { position: absolute; z-index: 1; display: grid; place-items: center; width: 48px; height: 48px; touch-action: none; cursor: grab; }
+.tk-crop-handle:focus-visible { outline: none; }
+.tk-crop-handle:focus-visible .tk-crop-pill { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--focus-ring); }
+.tk-crop-page[data-dragging] .tk-crop-handle { cursor: grabbing; }
+.tk-crop-edge[data-crop-handle="top"] { top: -24px; left: calc(50% - 24px); cursor: ns-resize; }
+.tk-crop-edge[data-crop-handle="bottom"] { bottom: -24px; left: calc(50% - 24px); cursor: ns-resize; }
+.tk-crop-edge[data-crop-handle="left"] { left: -24px; top: calc(50% - 24px); cursor: ew-resize; }
+.tk-crop-edge[data-crop-handle="right"] { right: -24px; top: calc(50% - 24px); cursor: ew-resize; }
+.tk-crop-pill { display: block; width: 28px; height: 6px; border-radius: 999px; background: var(--accent-rest); box-shadow: 0 0 0 1.5px #fff; }
+.tk-crop-edge[data-crop-handle="left"] .tk-crop-pill,
+.tk-crop-edge[data-crop-handle="right"] .tk-crop-pill { width: 6px; height: 28px; }
+.tk-crop-corner[data-crop-handle="topLeft"] { top: -24px; left: -24px; cursor: nwse-resize; }
+.tk-crop-corner[data-crop-handle="topRight"] { top: -24px; right: -24px; cursor: nesw-resize; }
+.tk-crop-corner[data-crop-handle="bottomRight"] { bottom: -24px; right: -24px; cursor: nwse-resize; }
+.tk-crop-corner[data-crop-handle="bottomLeft"] { bottom: -24px; left: -24px; cursor: nesw-resize; }
+/* An L of two 16 px strokes, drawn on the frame's corner. */
+.tk-crop-l { position: relative; display: block; width: 16px; height: 16px; filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 0.5px #fff); }
+.tk-crop-l::before,
+.tk-crop-l::after { content: ""; position: absolute; border-radius: 1px; background: var(--accent-rest); }
+.tk-crop-l::before { width: 16px; height: 4px; }
+.tk-crop-l::after { width: 4px; height: 16px; }
+.tk-crop-corner[data-crop-handle="topLeft"] .tk-crop-l { transform: translate(5px, 5px); }
+.tk-crop-corner[data-crop-handle="topLeft"] .tk-crop-l::before,
+.tk-crop-corner[data-crop-handle="topLeft"] .tk-crop-l::after { top: 0; left: 0; }
+.tk-crop-corner[data-crop-handle="topRight"] .tk-crop-l { transform: translate(-5px, 5px); }
+.tk-crop-corner[data-crop-handle="topRight"] .tk-crop-l::before,
+.tk-crop-corner[data-crop-handle="topRight"] .tk-crop-l::after { top: 0; right: 0; }
+.tk-crop-corner[data-crop-handle="bottomRight"] .tk-crop-l { transform: translate(-5px, -5px); }
+.tk-crop-corner[data-crop-handle="bottomRight"] .tk-crop-l::before,
+.tk-crop-corner[data-crop-handle="bottomRight"] .tk-crop-l::after { bottom: 0; right: 0; }
+.tk-crop-corner[data-crop-handle="bottomLeft"] .tk-crop-l { transform: translate(5px, -5px); }
+.tk-crop-corner[data-crop-handle="bottomLeft"] .tk-crop-l::before,
+.tk-crop-corner[data-crop-handle="bottomLeft"] .tk-crop-l::after { bottom: 0; left: 0; }
+/* The preview frame (T-13, components/Tool/PreviewFrame.tsx): tools at the top end, outside
+   the page; the page; the pager at the bottom centre; the position pill under it. */
+.tk-pframe { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; gap: 6px; }
+/* Set by an open quiet editor on a phone (Popover.tsx): the page fits above it (round 6, mobile-03). */
+.tk-tool .tk-pframe { padding-bottom: var(--tk-editor-cover, 0px); }
+/* While a phone editor covers the preview: the pager is under it anyway, and the Crop stage gives up
+   its floor so the whole page and frame fit above the editor (round 6, mobile-03). */
+.tk-tool[data-editor-cover] .tk-pframe > .tk-pager,
+/* The expand and zoom tools too, so the page itself keeps the room (owner decision 2026-11-15, item 4). */
+.tk-tool[data-editor-cover] .tk-pframe .tk-pframe-tools { display: none; }
+/* The pill row under the page too (Position, X · Y): it comes back when the card closes, so the
+   page keeps about 40 px more while a card is open (pass 4, 360 x 800). */
+.tk-tool[data-editor-cover] .tk-pframe > .tk-stagefoot { display: none; }
+.tk-tool[data-editor-cover] .tk-crop-stage { min-height: 0; padding: 16px; }
+.tk-pframe-tools { display: flex; flex: none; align-items: center; justify-content: flex-end; gap: 4px; min-height: 48px; }
+.tk-pager { display: flex; align-items: center; justify-content: center; gap: 4px; flex: none; font-size: 0.875rem; font-weight: 600; color: var(--text-secondary); }
+.tk-pager button { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 999px; color: var(--text-secondary); }
+.tk-pager button:hover:not(:disabled) { background: var(--surface-sunken); }
+.tk-pager button:disabled { opacity: 0.4; cursor: not-allowed; }
+.tk-crop-state { display: grid; place-items: center; flex: 1 1 auto; padding: 24px; text-align: center; font-size: 0.875rem; color: var(--text-secondary); }
+.tk-crop-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+/* A unit drawn inside its field, at the end (Crop's "% of page", T-14). */
+.tk-unitfield { position: relative; display: block; }
+.tk-unitfield > input { padding-inline-end: calc(var(--unit-len, 4) * 0.42em + 18px); }
+.tk-unitfield-unit { position: absolute; inset-block: 0; inset-inline-end: 12px; display: flex; align-items: center; pointer-events: none; font-size: 0.8125rem; font-weight: 500; color: var(--text-tertiary); }
+/* A hint drawn inside its field's box, under the text (Page Numbers' tokens, T-14): the box is
+   the field's edge, the input inside it has none, and the hint wraps in any language. */
+.tk-hintfield { display: flex; flex-direction: column; border: 1px solid var(--border-strong); border-radius: var(--radius-field); background: var(--surface-canvas); cursor: text; }
+.tk-hintfield:focus-within { border-color: var(--accent-rest); box-shadow: inset 0 0 0 1px var(--accent-rest); }
+.tk-hintfield:has(> input:focus-visible) { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.tk-hintfield:has(> input[aria-invalid="true"]) { border-color: var(--status-danger-text); }
+.tk-hintfield > input.chef-field, .tk-hintfield > input.chef-field:focus { border: 0; box-shadow: none; outline: none; background: transparent; padding-bottom: 2px; }
+.tk-hintfield-hint { padding: 0 0.875rem 8px; font-size: 0.75rem; line-height: 1.1rem; color: var(--text-tertiary); }
+.tk-hintfield-hint code { font-weight: 650; color: var(--text-secondary); }
+.tk-hintfield-hint[data-invalid] { color: var(--status-danger-text); }
+/* Protect's password field (research r1): the eye button keeps its place on the text line, and the
+   rule sits inside the same box under it. */
+.tk-form .tk-pwhint { background: var(--surface-raised); cursor: auto; }
+.tk-pwhint:has(input[aria-invalid="true"]) { border-color: var(--status-danger-text); }
+.tk-pwhint:has(input:focus-visible) { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.tk-form .tk-pwhint .tk-pw > .chef-field,
+.tk-form .tk-pwhint .tk-pw > .chef-field:focus { border: 0; box-shadow: none; outline: none; background: transparent; }
+.tk-crop-inline { grid-template-columns: repeat(4, minmax(0, 8.5rem)); width: 100%; }
+.tk-crop-inline .tk-field { gap: 4px; }
+
+/* ------------------------------------------------------------- Read PDF --- */
+.tk-reader { display: flex; flex-direction: column; height: 100dvh; min-height: 100dvh; background: var(--surface-sunken); color: var(--text-primary); }
+.tk-rtop { position: relative; z-index: 20; flex: none; background: var(--surface-canvas); border-bottom: 1px solid var(--border-hairline); }
+.tk-rtop-row { display: flex; align-items: center; gap: 4px; min-height: 56px; padding-inline: 6px 10px; }
+.tk-rbrand { display: grid; place-items: center; flex: none; min-width: 48px; min-height: 48px; border-radius: 999px; }
+.tk-rbrand img { width: 26px; height: 26px; object-fit: contain; }
+.tk-rtitle { min-width: 0; flex: 0 1 auto; }
+.tk-rtitle-name { margin: 0; overflow: hidden; font-family: var(--font-display); font-size: 1rem; line-height: 1.3rem; font-weight: var(--font-display-weight, 600); white-space: nowrap; text-overflow: ellipsis; }
+/* The name keeps one line at its size, cut in the middle so its end and extension show (pass 5,
+   item 8: "qa-" / "sample.pdf" wrapped at 360 px); its tooltip is the full name. When even that
+   end does not fit beside the buttons on a phone or tablet, the name and its page line take a line
+   of their own under them (data-long, research r2, mobile-04). */
+.tk-rtitle-name { min-width: 0; }
+@media (max-width: 767.98px), (max-height: 479.98px) {
+  .tk-rtop-row[data-long] { flex-wrap: wrap; }
+  .tk-rtop-row[data-long] > .tk-rtitle { order: 1; flex: 1 1 100%; padding: 0 8px 8px; }
+}
+.tk-rtitle-page { margin: 0; overflow: hidden; font-size: 0.75rem; line-height: 1rem; color: var(--text-tertiary); white-space: nowrap; text-overflow: ellipsis; }
+.tk-ractions { display: flex; align-items: center; gap: 8px; flex: none; }
+.tk-rkey { display: grid; place-items: center; width: 40px; height: 48px; border-radius: 999px; color: var(--text-secondary); }
+.tk-rkey:hover { background: var(--surface-sunken); color: var(--text-primary); }
+.tk-rkey:disabled { opacity: 0.55; }
+.tk-rsep { width: 1px; height: 22px; margin-inline: 6px; background: var(--border-hairline); }
+.tk-rtools { margin-inline-start: 4px; }
+.tk-rsearch { padding: 0 12px 10px; }
+.tk-rpages { flex: 1 1 auto; min-height: 0; padding: 12px 12px calc(88px + env(safe-area-inset-bottom, 0px)); }
+.tk-rzoom { display: flex; align-items: center; gap: 4px; }
+.tk-rfloat {
+  position: fixed;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  padding: 4px 6px;
+  border-radius: 999px;
+  background: var(--text-primary);
+  color: var(--surface-canvas);
+  box-shadow: 0 14px 30px -12px rgba(30, 20, 10, 0.5);
+  transform: translateX(-50%);
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+.tk-rfloat[data-hidden] { transform: translate(-50%, calc(100% + 28px)); opacity: 0; pointer-events: none; }
+.tk-rfloat .tk-rzoom button { min-width: 48px; height: 48px; border-radius: 999px; color: var(--surface-canvas); }
+.tk-rfloat .tk-rzoom button:hover:not(:disabled) { background: rgba(127, 127, 127, 0.22); }
+.tk-rfloat .tk-rzoom span { color: var(--surface-canvas); }
+.tk-rfloat .tk-rzoom span[aria-hidden] { background: rgba(127, 127, 127, 0.4); }
+.tk-rmenu-scrim { position: fixed; inset: 0; z-index: 100; display: flex; align-items: flex-end; justify-content: center; background: var(--surface-scrim); }
+.tk-rmenu {
+  position: relative;
+  width: 100%;
+  max-width: 32rem;
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 2rem);
+  overflow-y: auto;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+  background: var(--surface-raised);
+  box-shadow: var(--elevation-sheet);
+}
+.tk-rmenu-scrim[data-wide] { align-items: flex-start; justify-content: flex-end; padding: 60px 16px 16px; }
+.tk-rmenu-scrim[data-wide] .tk-rmenu { max-width: 360px; max-height: calc(100dvh - 80px); border-radius: var(--radius-pop); }
+@media (prefers-reduced-motion: reduce) {
+  .tk-rfloat { transition: opacity 120ms linear; }
+  .tk-rfloat[data-hidden] { transform: translateX(-50%); }
+}
+
+/* ------------------------------------------------ Touch (48 px floor) --- */
+/* Tablets (research r3, mobile-06): the desktop layout's 44 px icon buttons and back link are 48 px
+   wide under a finger; their height already reaches 48 through the hit area. */
+@media (pointer: coarse) and (min-width: 768px) and (min-height: 480px) {
+  .chef-hit-y,
+  .tk-back { min-width: var(--size-touch-target); }
+}
+/* A slot box is 32 px on a 36 px pitch; its touch area grows away from the other line
+   (first line up 16, last line down 16, a one-line sentence 8 each way) to 48 px. */
+
+@media (pointer: coarse), (max-width: 767.98px), (max-height: 479.98px) {
+  .tk-slot[data-line="only"]::after { inset: -8px 0; }
+  .tk-slot[data-line="first"]::after { inset: -16px 0 0; }
+  .tk-slot[data-line="last"]::after { inset: 0 0 -16px; }
+  /* A middle line (a sentence the measure judged two lines that wraps to three) has only
+     4 px to either neighbour; 8 px each way still reaches 48 px. */
+  .tk-slot[data-line="mid"]::after { inset: -8px 0; }
+  /* 17 px, not 16: the pill sits on a fractional baseline, and 16 px left 47 px of touch area. */
+  .tk-inline[data-line="first"] .tk-word::after { inset: -17px 0 0; }
+  .tk-inline[data-line="last"] .tk-word::after { inset: 0 0 -17px; }
+  /* Measured from the padding box, inside the 1 px border: 7 px makes 36 + 2 × 6 = 48. */
+  .tk-chip::after { content: ""; position: absolute; inset: -7px 0; }
+  .tk-chips { row-gap: 12px; }
+  /* A control on the sentence's last line reaches 17 px down, and a chip 6 px up: leave room
+     for both, or the chip takes the taps meant for the control. */
+  .tk-sheet > .tk-sentence-group:has([data-line="last"]) + .tk-chips { margin-top: 10px; }
+  .tk-tools::after { content: ""; position: absolute; inset: -7px -2px; }
+  .tk-navlink { position: relative; }
+  .tk-navlink::after { content: ""; position: absolute; inset: -6px 0; }
+  .tk-change::after { content: ""; position: absolute; inset: -4px 0; }
+  .tk-btn-small { position: relative; }
+  .tk-btn-small::after { content: ""; position: absolute; inset: -5px 0; }
+  .tk-brand { display: grid; place-items: center; min-width: 48px; min-height: 48px; }
+}
+
+/* ------------------------------------------------------ Desktop (≥1024) --- */
+
+@media (min-width: 768px) and (min-height: 480px) {
+  .tk-rtop-row { min-height: 52px; gap: 6px; padding-inline: 16px; }
+  .tk-ractions { gap: 2px; }
+  .tk-rkey { width: 36px; height: 36px; }
+  .tk-rzoom button { min-width: 36px; height: 36px; }
+  .tk-rpages { padding: 32px; }
+  .tk-top { border-bottom: 1px solid var(--border-hairline); }
+  .tk-top-row { min-height: 52px; gap: 12px; padding-inline: 16px; }
+  .tk-top-title { font-size: 1.125rem; line-height: 1.5rem; }
+
+  /* The band (D4): the sentence, chips and line, with the action at its end. */
+  .tk-band {
+    flex: none;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px 28px;
+    padding: 14px 32px;
+    background: var(--surface-raised);
+    border-bottom: 1px solid var(--border-hairline);
+  }
+  .tk-band { flex-wrap: wrap; }
+  .tk-band-main { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; flex: 1 1 0; min-width: 0; min-height: 40px; }
+  /* The result strip: a row of its own under the sentence and the action, the band's width (T-07). */
+  .tk-band-result { flex: 1 1 100%; }
+  .tk-band-main > .tk-sentence-group { flex: 0 1 auto; min-width: min(100%, 20rem); }
+  .tk-band-main > .tk-notice { flex-basis: 100%; }
+  .tk-band-end { display: flex; flex-direction: column; align-items: stretch; gap: 10px; flex: none; width: 320px; }
+  .tk-band .tk-sentence { font-size: 1.125rem; line-height: 2.5rem; }
+  .tk-band .tk-sentence-group[data-compact] .tk-sentence { font-size: 1.0625rem; }
+  .tk-band .tk-sentence-group[data-form="statement"] .tk-sentence:not(.tk-measure) { font-size: 1.0625rem; line-height: 1.75rem; }
+  .tk-band .tk-primary,
+  .tk-band .tk-actions .tk-btn { min-height: 44px; }
+  .tk-band .tk-progress { min-height: 44px; }
+  .tk-slot { height: 1.875rem; min-width: 0; }
+  .tk-chip { min-height: 34px; }
+  .tk-band .tk-inline-field,
+  .tk-band .tk-range-inline { flex: 0 1 26rem; }
+  /* Create PDF's labelled name field takes its own row, so Camera, Gallery and Clear all
+     line up as chips under it instead of stretching to the field's height. */
+  .tk-band .tk-makepdf-namefield { flex: 1 1 100%; }
+  /* Split (owner decision D-3 (b)): the method and its number beside the range field. */
+  .tk-band .tk-split-size { display: flex; align-items: center; gap: 12px; flex: 0 1 auto; min-width: 0; }
+  /* The chip row takes the band's width, so the range field and the method share one row. */
+  .tk-band .tk-chips:has(> .tk-split-size) { flex-basis: 100%; }
+  .tk-band .tk-chips:has(> .tk-split-size) > .tk-range-inline { flex-basis: 24rem; }
+  .tk-band .tk-split-size .tk-stepper { align-items: center; }
+  .tk-band .tk-split-size .tk-stepper-field { flex: none; width: 5.5rem; }
+  .tk-band .tk-makepdf-namefield > .tk-field { flex: 0 1 26rem; }
+  .tk-band .tk-inline-field .chef-field,
+  .tk-band .tk-range-inline .chef-field,
+  .tk-band .tk-inline-field > .tk-btn,
+  .tk-band .tk-range-inline button[type="submit"] { height: 44px; min-height: 44px; }
+  .tk-canvas { padding: 24px; }
+  .tk-tool[data-kind="preview"] .tk-canvas { padding: 16px 32px 20px; }
+  .tk-result .chef-result-card { background: var(--surface-raised); }
+  .tk-pop .chef-field,
+  .tk-num,
+  .tk-pop [data-page-range-selector] .chef-field,
+  .tk-pop [data-page-range-selector] button[type="submit"] { height: 44px; min-height: 44px; font-size: 1rem; }
+  /* 44 px and 16 px: touch-screen laptops and iPads in landscape use these too (page-range checks). */
+  .tk-step { width: 44px; height: 44px; }
+
+  .tk-split { flex-direction: row; align-items: stretch; justify-content: center; gap: 24px; max-width: 1040px; height: 100%; margin: 0 auto; }
+  .tk-split-main { flex: 1 1 auto; min-width: 0; }
+  .tk-split-side { flex: none; width: 400px; overflow: auto; }
+  .tk-tool[data-kind="list"] .tk-canvas > * { max-width: 720px; margin-inline: auto; }
+  /* A preview tool's settings beside the page (Watermark, Page Numbers, Header & Footer). */
+  .tk-tool[data-kind="preview"] .tk-split { flex: 1 1 auto; width: 100%; max-width: 1240px; min-height: 0; }
+  .tk-tool[data-kind="preview"] .tk-split-main { display: flex; flex-direction: column; min-height: 0; }
+  .tk-tool[data-kind="preview"] .tk-split-side { width: 320px; padding-inline-end: 4px; }
+}
+
+/* A narrower desktop: the action may wrap under the sentence. */
+@media (min-width: 768px) and (min-height: 480px) and (max-width: 1279.98px) {
+  .tk-band { flex-wrap: wrap; }
+  .tk-band-end { width: 100%; flex-direction: row; align-items: center; }
+  .tk-band-end .tk-actions,
+  .tk-band-end .tk-progress-block { flex: 0 1 360px; }
+}
+
+/* Desktop with a settings column (research r2, desktop-04): in the document the column comes
+   before the action, so Tab goes sentence, settings, action; on screen the page stays at the
+   start and the action and result strip stay in the band's row. One raised backdrop behind the
+   band's cells keeps it one band. */
+@media (min-width: 768px) and (min-height: 480px) {
+  .tk-split-side { order: 1; }
+}
+@media (min-width: 768px) and (min-height: 480px) {
+  .tk-tool[data-tail] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  }
+  .tk-tool[data-tail]::before {
+    content: "";
+    grid-column: 1 / -1;
+    grid-row: 2 / 5;
+    background: var(--surface-raised);
+    border-bottom: 1px solid var(--border-hairline);
+  }
+  .tk-tool[data-tail] > .tk-band { grid-column: 1; grid-row: 2; padding-inline-end: 0; background: transparent; border-bottom: 0; }
+  .tk-tool[data-tail] > .tk-band-tail { display: contents; }
+  .tk-tool[data-tail] > .tk-band-tail > .tk-band-end { grid-column: 2; grid-row: 2; align-self: start; margin: 14px 32px 14px 28px; }
+  .tk-tool[data-tail] > .tk-band-tail > .tk-band-result { grid-column: 1 / -1; grid-row: 4; padding: 0 32px 14px; }
+  .tk-tool[data-tail] > .tk-canvas { grid-column: 1 / -1; grid-row: 5; }
+  /* A wide screen (research r3, desktop-09): the band's content keeps to a 1240 px column in the
+     middle, so the main action stays near the sentence and the page. Tool routes have no rail, so
+     the viewport is the tool's width. */
+  .tk-band { padding-inline: max(32px, calc((100vw - 1240px) / 2)); }
+  .tk-tool[data-tail] > .tk-band-tail > .tk-band-end { margin-inline-end: max(32px, calc((100vw - 1240px) / 2)); }
+  .tk-tool[data-tail] > .tk-band-tail > .tk-band-result { padding-inline: max(32px, calc((100vw - 1240px) / 2)); }
+}
+@media (min-width: 768px) and (min-height: 480px) and (max-width: 1279.98px) {
+  .tk-tool[data-tail] > .tk-band { grid-column: 1 / -1; padding-inline-end: 32px; padding-bottom: 0; }
+  .tk-tool[data-tail] > .tk-band-tail > .tk-band-end { grid-column: 1 / -1; grid-row: 3; width: auto; margin: 16px 32px 14px; }
+}
+
+
+/* ============================================ Phase 5a-7a: shared bits === */
+
+.tk-fieldrow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.tk-fieldrow > .tk-field { flex: 1 1 7rem; }
+.tk-fieldcol { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+/* A two-way choice on the screen under the sentence (PowerPoint orientation, Extract Text mode). */
+.tk-choice-row { margin: 0; padding: 0; border: 0; min-width: 0; align-items: center; gap: 0 20px; }
+.tk-choice-row:disabled .tk-check { opacity: 0.55; cursor: not-allowed; }
+.tk-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.tk-check input { width: 20px; height: 20px; flex: none; accent-color: var(--accent-rest); }
+.tk-notice-line .tk-check { display: flex; margin-top: 2px; }
+.tk-notice-action { margin-inline-start: 6px; vertical-align: middle; }
+.tk-btn-danger { border-color: var(--status-danger-text); background: transparent; color: var(--status-danger-text); }
+.tk-btn-danger:hover:not(:disabled) { background: var(--status-danger-quiet); }
+.tk-btn-small { min-height: 40px; padding-inline: 12px; font-size: 0.8125rem; }
+.tk-primary-inline { display: inline-flex; width: auto; min-height: 48px; }
+.tk-grid-error { color: var(--status-danger-text); }
+.tk-chipgroup { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.tk-sliders { display: grid; gap: 14px; }
+.tk-iconbtn {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: 999px;
+  color: var(--text-secondary);
+}
+.tk-iconbtn:hover:not(:disabled) { background: var(--surface-sunken); color: var(--text-primary); }
+.tk-iconbtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* A colour well in a sentence: a 48 px target around a 32 px round swatch. */
+.tk-swatch {
+  width: 48px;
+  height: 48px;
+  padding: 8px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.tk-swatch::-webkit-color-swatch-wrapper { padding: 0; }
+.tk-swatch::-webkit-color-swatch { border: 1.5px solid var(--border-strong); border-radius: 999px; }
+.tk-swatch::-moz-color-swatch { border: 1.5px solid var(--border-strong); border-radius: 999px; }
+.tk-swatch:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Preview stages (Watermark, Page numbers, Large preview). */
+.tk-stagefoot { display: flex; flex: none; justify-content: center; padding-top: 2px; }
+/* The pill stays centred; the expand button sits at the row's end (pass 3). */
+.tk-stagefoot[data-tools] { display: grid; grid-template-columns: minmax(48px, 1fr) auto minmax(48px, 1fr); align-items: center; gap: 4px; }
+.tk-stagefoot[data-tools] > :first-child { grid-column: 2; }
+.tk-stagefoot[data-tools] > .tk-pframe-tools { grid-column: 3; justify-self: end; min-height: 0; }
+.tk-side-settings { display: flex; flex-direction: column; gap: 16px; padding-block: 4px 12px; }
+.tk-side-setting { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tk-side-label { font-size: 0.8125rem; font-weight: 650; color: var(--text-secondary); }
+.tk-fit-stage { display: grid; place-items: center; flex: 1 1 auto; min-height: 0; padding: 4px 0; }
+.tk-fit-page { position: relative; flex: none; background: #fff; box-shadow: 0 0 0 1px var(--border-hairline), 0 10px 26px -14px rgba(60, 40, 20, 0.35); }
+.tk-wm-surface { touch-action: none; user-select: none; -webkit-user-select: none; }
+/* The header (desktop) or the file line (phone) already names the file; the page fits its stage. */
+.tk-tool .tk-filepreview-caption { display: none; }
+.tk-canvas > .tk-filepreview { height: 100%; }
+/* Phone: the page fits the space above the foot sheet at any text size (Repair at Larger text on a
+   short phone), rather than holding 16rem and sliding under the sheet. */
+@media (max-width: 767.98px), (max-height: 479.98px) { .tk-canvas > .tk-filepreview { min-height: 0; } }
+.tk-canvas > .tk-filepreview .tk-filepreview-page { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
+
+/* Delete pages: a tile is one button; a marked page is struck in the danger colour. */
+.tk-tile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-hairline);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  text-align: center;
+  cursor: pointer;
+}
+.tk-tile:hover { border-color: var(--border-strong); }
+.tk-tile:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.tk-tile[data-marked] { border-color: var(--status-danger-text); box-shadow: 0 0 0 1px var(--status-danger-text); }
+.tk-tile-page { position: relative; display: block; aspect-ratio: 3 / 4; overflow: hidden; background: var(--surface-sunken); }
+.tk-tile-page img { display: block; width: 100%; height: 100%; padding: 8px; object-fit: contain; }
+.tk-tile[data-marked] .tk-tile-page img { opacity: 0.45; }
+.tk-tile-mark {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--status-danger-text);
+  background: color-mix(in srgb, var(--status-danger-quiet) 55%, transparent);
+}
+.tk-tile-label {
+  display: block;
+  min-height: 28px;
+  padding: 4px 8px;
+  border-top: 1px solid var(--border-hairline);
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  color: var(--text-secondary);
+}
+.tk-tile[data-marked] .tk-tile-label { color: var(--status-danger-text); }
+
+/* Reorder pages (desktop grid). */
+.tk-rtile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-hairline);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+.tk-rtile[data-dragging] { opacity: 0.35; border-color: var(--accent-rest); }
+.tk-rtile-page { position: relative; aspect-ratio: 3 / 4; background: var(--surface-sunken); }
+.tk-rtile-open { display: block; width: 100%; height: 100%; }
+.tk-rtile-open img { display: block; width: 100%; height: 100%; padding: 8px; object-fit: contain; }
+.tk-rtile-eye {
+  position: absolute;
+  inset-block-end: 6px;
+  inset-inline-start: 6px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  box-shadow: 0 0 0 1px var(--border-hairline);
+}
+.tk-drag {
+  position: absolute;
+  inset-block-start: 4px;
+  inset-inline-end: 4px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-raised) 88%, transparent);
+  color: var(--text-secondary);
+  cursor: grab;
+}
+.tk-drag:hover { color: var(--text-primary); }
+.tk-rtile-foot { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-hairline); }
+.tk-rtile-label { flex: 1 1 auto; text-align: center; font-family: var(--font-display); font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary); }
+.tk-move { display: grid; place-items: center; width: 44px; height: 44px; flex: none; color: var(--text-secondary); }
+.tk-move:hover:not(:disabled) { background: var(--surface-sunken); color: var(--text-primary); }
+.tk-move:disabled { opacity: 0.35; cursor: not-allowed; }
+.tk-reorder-grid .tk-pagegrid { align-items: start; }
+/* Reorder on phones (T-03): three columns of tiles; the selected tile carries its arrows. Under
+   360 px two columns, so each tile's Move up and Move down keep 48 px (research r2, mobile-09). */
+.tk-rgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 359.98px) { .tk-rgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* A file whose pages all fit above the foot sheet: the grid fit's columns and tile width (pass 4). */
+.tk-rgrid[data-fit="fill"] { grid-template-columns: repeat(var(--grid-cols), var(--tile-w)); gap: var(--grid-gap); justify-content: center; }
+/* The page box stays 3:4 whatever the page's shape (an A4 picture made it taller), so the grid fit's
+   tile height is the real one (pass 4). */
+.tk-rgrid .tk-rtile-page { min-height: 0; cursor: pointer; }
+.tk-rgrid .tk-rtile-img { display: block; width: 100%; height: 100%; padding: 6px; object-fit: contain; pointer-events: none; }
+.tk-rgrid .tk-rtile-label { padding: 6px 4px; }
+.tk-rgrid .tk-rtile[data-selected] { border-color: var(--accent-rest); box-shadow: 0 0 0 1px var(--accent-rest); }
+.tk-rgrid .tk-rtile[data-selected] .tk-rtile-label { color: var(--accent-text); }
+/* The grid's drag handle sits in the thumbnail's bottom corner, across from the eye, so it no
+   longer hides the top of the page, where its title is ("Page 10" read "Page 1(", round 5,
+   mobile-08), and the page's name below keeps the tile's full width in every language. */
+.tk-rgrid .tk-drag { inset-block-start: auto; inset-block-end: 4px; inset-inline-end: 4px; width: 36px; height: 36px; }
+.tk-rgrid .tk-drag::after,
+.tk-rgrid .tk-rtile-eyebtn::after { content: ""; position: absolute; inset: -6px; }
+.tk-rtile-eyebtn { position: absolute; inset-block-end: 4px; inset-inline-start: 4px; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; background: var(--surface-raised); color: var(--text-secondary); box-shadow: 0 0 0 1px var(--border-hairline); }
+/* Every tile shows Move up and Move down at rest (research r1, H2-01): two halves of a 48 px row
+   under the label, the Merge tile's pattern, so a thumb reaches them with no tap first. */
+.tk-rtile-moves { display: flex; border-top: 1px solid var(--border-hairline); }
+.tk-tool .tk-rgrid .tk-rtile-moves > .tk-move { flex: 1 1 0; width: auto; height: 48px; border: 0; border-radius: 0; background: transparent; color: var(--text-primary); }
+.tk-tool .tk-rgrid .tk-rtile-moves > .tk-move + .tk-move { border-inline-start: 1px solid var(--border-hairline); }
+.tk-rgrid .tk-rtile[data-selected] .tk-rtile-moves { border-top-color: var(--accent-rest); }
+.tk-rtile-overlay {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 2px solid var(--accent-rest);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  box-shadow: var(--elevation-sheet);
+}
+.tk-rtile-overlay img { flex: 1 1 auto; min-height: 0; padding: 8px; object-fit: contain; background: var(--surface-sunken); }
+.tk-rtile-overlay .tk-rtile-label { padding: 4px; }
+/* Phone move buttons in the one-column list. */
+.tk-tool:not([data-wide]) .tk-move { width: 48px; height: 48px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface-raised); }
+
+/* Merge and Batch: the queue. */
+.tk-list { display: flex; flex-direction: column; gap: 12px; }
+.tk-listhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 0.875rem; font-weight: 600; color: var(--text-secondary); }
+/* The head row stays at the top of the scrolling list, with "Add PDFs" in it (M-08). */
+.tk-listhead { position: sticky; top: -6px; z-index: 2; margin-top: -6px; padding-block: 6px; background: var(--surface-canvas); }
+.tk-listhead-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+/* Too narrow for both (a phone): the count keeps one line and the buttons move under it as one
+   row at the end edge, instead of the count wrapping beside two stacked buttons. */
+.tk-listhead { flex-wrap: wrap; row-gap: 8px; }
+.tk-listhead > p { flex: 1 1 max-content; }
+.tk-listhead-actions { flex: 0 1 auto; max-width: 100%; margin-inline-start: auto; }
+.tk-add-btn { color: var(--accent-text); }
+/* Merge's files card: the files in order, each with Up, Down and Remove in words. */
+.tk-order { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.tk-order-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tk-order-pos { flex: none; min-width: 1.25rem; font-size: 0.875rem; font-weight: 600; color: var(--text-tertiary); }
+.tk-order-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.875rem; color: var(--text-primary); }
+.tk-order-btns { flex: none; display: flex; gap: 6px; }
+.tk-order-btns > .tk-btn { padding-inline: 12px; }
+
+/* Merge and Batch queue rows (T-12): one compact row each. The first page is the drag
+   handle; Up, Down and Remove are 48 px icon buttons at the end. */
+.tk-queue { display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border-hairline); border-radius: var(--radius-panel); background: var(--surface-raised); }
+.tk-qrow + .tk-qrow { border-top: 1px solid var(--border-hairline); }
+.tk-qrow { padding: 4px 4px 4px 2px; transition: opacity 120ms; }
+.tk-qrow[data-dragging] { opacity: 0.3; }
+.tk-qrow-main { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.tk-qrow-grab {
+  display: flex; align-items: center; gap: 1px; flex: none;
+  min-height: 56px; padding-inline: 0 4px;
+  border-radius: var(--radius-control);
+  color: var(--text-tertiary);
+  touch-action: none; cursor: grab;
+}
+.tk-qrow-grab:hover:not(:disabled) { background: var(--surface-sunken); color: var(--text-secondary); }
+.tk-qrow-grab:disabled { cursor: not-allowed; opacity: 0.55; }
+.tk-qrow-pic { position: relative; display: block; }
+.tk-qthumb {
+  display: grid; place-items: center;
+  width: 36px; height: 48px; overflow: hidden;
+  border: 1px solid var(--border-hairline); border-radius: 4px;
+  background: var(--surface-sunken); color: var(--text-tertiary);
+}
+.tk-qthumb img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+/* A short queue: the first page is large enough to tell the files apart, instead of a small mark
+   over an empty canvas (pass 3). */
+.tk-qrow[data-roomy] .tk-qthumb { width: 72px; height: 96px; }
+.tk-qrow-pos {
+  position: absolute; inset-block-end: -4px; inset-inline-start: -6px;
+  min-width: 18px; height: 18px; padding-inline: 4px;
+  display: grid; place-items: center;
+  border-radius: 999px; background: var(--accent-quiet); color: var(--accent-on-quiet);
+  font-size: 0.6875rem; font-weight: 700; line-height: 1;
+  box-shadow: 0 0 0 2px var(--surface-raised);
+}
+.tk-qrow-text { flex: 1 1 auto; min-width: 0; }
+.tk-qrow-name {
+  font-size: 0.875rem; font-weight: 600; color: var(--text-body);
+  overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.tk-qrow-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; font-size: 0.75rem; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.tk-qrow-meta > span { white-space: nowrap; }
+.tk-qrow-phase { border-radius: 999px; padding: 1px 8px; font-size: 0.75rem; font-weight: 700; margin-inline-start: 4px; }
+.tk-qrow-btns { display: flex; flex: none; }
+.tk-qrow-below { margin-block: 2px 4px; margin-inline: 60px 4px; }
+/* A name too long for two lines beside the buttons (research r2, mobile-04), or a meta line too wide
+   for its column (review 2, item 9): the name and the meta take the row's whole width, one line each
+   under the other, and the buttons go to a line of their own at the end. */
+.tk-qrow-main[data-long] { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 6px; align-items: center; }
+.tk-qrow-main[data-long] > .tk-qrow-grab { grid-row: 1 / 4; }
+.tk-qrow-main[data-long] > .tk-qrow-handle { grid-row: 1 / 4; }
+/* Pass 5: the first page's eye, on the thumbnail's bottom-end corner (the number sits at the other). */
+.tk-qrow-handle { position: relative; display: flex; flex: none; }
+.tk-qrow-handle > .tk-qrow-peek { inset-block-end: 2px; inset-inline-start: auto; inset-inline-end: -8px; width: 24px; height: 24px; }
+.tk-qrow-handle > .tk-qrow-peek::after { inset: -12px; }
+.tk-qrow-main[data-long] > .tk-qrow-text { display: contents; }
+.tk-qrow-main[data-long] .tk-qrow-name { grid-column: 2 / 4; grid-row: 1; padding-block-start: 6px; }
+.tk-qrow-main[data-long] .tk-qrow-meta { grid-column: 2 / 4; grid-row: 2; }
+.tk-qrow-main[data-long] > .tk-qrow-btns { grid-column: 3; grid-row: 3; }
+.tk-qghost {
+  position: fixed; z-index: 50; pointer-events: none;
+  display: flex; align-items: center; gap: 12px; padding: 12px;
+  border: 2px solid var(--accent-rest); border-radius: var(--radius-row);
+  background: var(--surface-raised); box-shadow: var(--elevation-sheet);
+  color: var(--text-body); font-weight: 500; transform: scale(1.02);
+}
+.tk-qghost svg { flex: none; color: var(--text-tertiary); }
+
+/* Extract text results. */
+.tk-ocr { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+@media (min-width: 768px) and (min-height: 480px) { .tk-ocr { max-width: 820px; margin-inline: auto; } }
+
+/* PDF to image: the page preview stage and the stored-pictures grid. */
+.tk-imgstage-view { position: relative; display: flex; flex: 1 1 auto; min-height: 16rem; align-items: center; justify-content: center; overflow: hidden; }
+.tk-imgstage-busy { position: absolute; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--surface-raised) 70%, transparent); backdrop-filter: blur(2px); }
+.tk-embedded { display: flex; flex-direction: column; gap: 12px; }
+.tk-embedded-title { display: flex; align-items: center; gap: 8px; margin: 0; font-family: var(--font-display); font-size: 1rem; font-weight: var(--font-display-weight); color: var(--text-primary); }
+.tk-embedded-title svg { color: var(--accent-text); }
+.tk-embedded-count { margin-inline-start: auto; font-family: var(--font-ui, inherit); font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary); }
+.tk-embgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: 12px; }
+.tk-embcard { display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border-hairline); border-radius: 10px; background: var(--surface-raised); }
+.tk-embcard[data-selected] { border-color: var(--accent-rest); box-shadow: 0 0 0 1px var(--accent-rest); }
+.tk-embcard-pic { display: grid; place-items: center; aspect-ratio: 4 / 3; padding: 12px; background: var(--surface-sunken); }
+.tk-embcard-pic img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.tk-embcard-info { display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+.tk-embcard-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.tk-embcard-name { font-size: 0.875rem; font-weight: 700; color: var(--text-primary); }
+.tk-embcard-meta { font-size: 0.75rem; color: var(--text-secondary); }
+.tk-embcard-state { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); }
+.tk-embcard[data-selected] .tk-embcard-state { color: var(--accent-text); }
+
+/* Watermark's compact sentence at 360 px: slots keep their own lines instead of overflowing. */
+@media (max-width: 400px) {
+  .tk-sentence-group[data-compact] .tk-slot { min-width: 40px; padding-inline: 6px 4px; }
+}
+.tk-chip[aria-pressed="true"] { border-color: var(--accent-rest); background: var(--accent-quiet); color: var(--accent-on-quiet); box-shadow: 0 0 0 1px var(--accent-rest); }
+.tk-choice { min-width: 64px; justify-content: center; }
+
+/* The foot bar's two actions share a row when they fit; otherwise the main action goes on top. */
+.tk-footbar .tk-actions,
+.tk-sheet .tk-actions { flex-wrap: wrap-reverse; }
+.tk-footbar .tk-actions > .tk-primary,
+.tk-sheet .tk-actions > .tk-primary { flex: 1 1 auto; min-width: 0; }
+.tk-footbar .tk-actions > .tk-btn,
+.tk-sheet .tk-actions > .tk-btn { flex: 1 1 auto; }
+
+/* ======================================== Phase 9: file and form tools === */
+
+.tk-notice-title { display: block; font-weight: 700; }
+.tk-chip-danger { border-color: var(--status-danger-text); color: var(--status-danger-text); }
+.tk-chip-danger:hover:not(:disabled) { background: var(--status-danger-quiet); }
+
+/* A file that cannot be drawn (Word, PowerPoint, a locked PDF): its card, centred in the canvas. */
+.tk-cardstage { display: grid; align-content: center; min-height: 100%; padding-block: 16px; }
+.tk-cardstage .tk-filecard { width: 100%; margin-top: 0; }
+/* A form tool's card with no fields beside it (Unlock with a PDF that has no password): at the
+   top, where the fields would start, not floating mid-screen. */
+.tk-tool[data-kind="form"] .tk-canvas > .tk-cardstage { align-content: start; min-height: 0; }
+
+/* Forms (Protect, Unlock, Document Info). */
+.tk-form { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 560px; min-width: 0; margin-inline: auto; }
+.tk-form-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+/* Document Info on a phone: its two chips and their note, above the six boxes (verify V-05). */
+.tk-info-lead { display: flex; flex-direction: column; gap: 10px; }
+.tk-form .tk-field > label { font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary); }
+.tk-form .tk-field > label .tk-optional { font-weight: 400; color: var(--text-tertiary); }
+.tk-form .chef-field { height: 48px; min-height: 48px; padding-inline: 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-field); background: var(--surface-raised); font-size: 1rem; box-shadow: none; }
+/* Document Info: a value longer than its box ends in "…" instead of stopping mid-letter (pass 4). */
+.tk-tool.tk-info .tk-form .chef-field { text-overflow: ellipsis; }
+.tk-pw { position: relative; }
+.tk-pw .chef-field { padding-inline-end: 52px; }
+.tk-pw > button {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  border-radius: var(--radius-field);
+  color: var(--text-secondary);
+}
+.tk-pw > button:hover { color: var(--text-primary); }
+.tk-pw > button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+@media (min-width: 768px) and (min-height: 480px) {
+  .tk-tool[data-kind="form"] .tk-split-side { width: 400px; }
+  /* One column, so each of the six boxes is the panel's full width and a long title fits (upgrade review S-3). */
+  .tk-tool.tk-info .tk-split-side { width: 560px; }
+  .tk-tool.tk-info .tk-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .tk-tool[data-kind="form"] .tk-split-main > .tk-filepreview { height: 100%; }
+}
+
+/* Remove hidden info: what the file holds, then what the saved file no longer has (path to 9, part 2). */
+.tk-hidinfo { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.tk-hidinfo-list { display: flex; flex-direction: column; margin: 0; border: 1px solid var(--border-hairline); border-radius: var(--radius-panel); background: var(--surface-raised); }
+.tk-hidinfo-row { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 10px 12px; }
+.tk-hidinfo-row + .tk-hidinfo-row { border-top: 1px solid var(--border-hairline); }
+.tk-hidinfo-row dt { font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); }
+.tk-hidinfo-row dd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0; font-size: 0.875rem; color: var(--text-primary); overflow-wrap: anywhere; }
+.tk-hidinfo-row[data-removed] .tk-hidinfo-value { color: var(--text-secondary); text-decoration: line-through; }
+.tk-hidinfo-gone { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; font-weight: 650; color: var(--status-success-text); }
+.tk-hidinfo-state { margin: 0; font-size: 0.875rem; color: var(--text-secondary); }
+@media (min-width: 768px) and (min-height: 480px) {
+  .tk-hidinfo-tool .tk-split-main > .tk-filepreview { height: 100%; }
+}
+
+/* Extract images: the pictures found. */
+.tk-pics { display: flex; flex-direction: column; gap: 12px; }
+.tk-tile-pic { display: flex; flex-direction: column; padding: 0; font: inherit; }
+.tk-tile-pic .tk-tile-page img { padding: 8px; }
+
+/* A long action label next to a secondary one (Flatten): the band's action block wraps, the main action on top. */
+@media (min-width: 768px) and (min-height: 480px) {
+  .tk-band .tk-actions { flex-wrap: wrap-reverse; }
+  .tk-band .tk-actions > .tk-primary { flex: 1 1 auto; }
+}
+/* Touch tablets in the desktop layout (B-025): every band control reaches 48 px, as today. */
+@media (min-width: 768px) and (min-height: 480px) and (pointer: coarse) {
+  .tk-band .tk-primary,
+  .tk-band .tk-actions .tk-btn,
+  .tk-band .tk-progress { min-height: 48px; }
+  /* A 30 px slot on a 40 px line: 9 px each way (one line), 18 px away from the other line. */
+  .tk-slot[data-line="only"]::after,
+  .tk-slot[data-line="mid"]::after { inset: -9px 0; }
+  .tk-slot[data-line="first"]::after { inset: -18px 0 0; }
+  .tk-slot[data-line="last"]::after { inset: 0 0 -18px; }
+  /* 34 px chip, 32 px inside its border: 8 px each way. */
+  .tk-chip::after { inset: -8px 0; }
+  .tk-move, .tk-drag { width: 48px; height: 48px; }
+  .tk-rzoom button { min-width: 48px; height: 48px; }
+  .tk-step { width: 48px; height: 48px; }
+  .tk-sign-actions > .tk-btn,
+  .tk-sign-actions > .tk-primary { min-height: 48px; }
+  .tk-band .tk-inline-field .chef-field,
+  .tk-band .tk-range-inline .chef-field,
+  .tk-band .tk-inline-field > .tk-btn,
+  .tk-band .tk-range-inline button[type="submit"],
+  .tk-pop .chef-field,
+  .tk-num,
+  .tk-pop [data-page-range-selector] .chef-field,
+  .tk-pop [data-page-range-selector] button[type="submit"] { height: 48px; min-height: 48px; }
+}
+/* The main action never wraps beside its secondary (T-08): ActionRow measures both labels and,
+   when they do not fit side by side, stacks the row with the main action on top. Only a label
+   longer than the whole row wraps its own words. */
+.tk-actions[data-measure] > * { flex: none !important; width: max-content !important; min-width: 0 !important; white-space: nowrap !important; }
+.tk-actions[data-stacked] { flex-direction: column-reverse; flex-wrap: nowrap; align-items: stretch; }
+.tk-tool .tk-actions[data-stacked] > * { flex: none; width: 100%; }
+.tk-footbar .tk-actions > .tk-primary,
+.tk-sheet .tk-actions > .tk-primary,
+.tk-band .tk-actions > .tk-primary { min-width: 0; white-space: normal; text-align: center; }
+/* One height for both actions in the row (T-08). */
+.tk-footbar .tk-actions > .tk-btn,
+.tk-sheet .tk-actions > .tk-btn { min-height: 52px; white-space: normal; text-align: center; }
+
+/* A long tool name ("Remove comments", "Remove blank pages") wraps to a second line on a phone instead of being cut off. */
+/* It is never cut mid-word (A-022): at Larger text or 200 % the row wraps and the Tools button moves under the title. */
+@media (max-width: 767.98px), (max-height: 479.98px) {
+  .tk-top-title { display: block; overflow: visible; white-space: normal; line-height: 1.25rem; text-overflow: clip; overflow-wrap: break-word; }
+  /* One height (T-04): a 48 px row whose controls are 40 px boxes reaching 48 px through their
+     hit areas, and a name whose lines are 20 px, so even a two-line name keeps the row at 48. */
+  .tk-top-row { flex-wrap: wrap; row-gap: 0; padding-block: 4px; }
+  /* No strut of its own: each line is the title's 20 px line, whatever the body font is. */
+  .tk-top-name { line-height: 0; }
+  .tk-top-row[data-compact] .tk-top-title { font-size: 1.0625rem; }
+  .tk-change-word { min-height: 40px; }
+  .tk-change-word::after,
+  .tk-top-row[data-compact] .tk-change-text::after,
+  .tk-back::after { content: ""; position: absolute; inset: -4px 0; }
+  .tk-back { position: relative; height: 40px; }
+  /* Edit PDF's header controls too (Close, Undo, Redo, Save): 40 px boxes, 48 px targets. */
+  .tk-top-row .tk-iconbtn,
+  .tk-top-row .tk-edit-tools > button { position: relative; height: 40px; min-height: 40px; }
+  .tk-top-row .tk-iconbtn::after,
+  .tk-top-row .tk-edit-tools > button::after { content: ""; position: absolute; inset: -4px 0; }
+  /* Takes the free space first, up to its own width, and the spacer takes the rest: a name that
+     fits stays on one line ("Clean Up PDF", "Protect PDF" beside Change and Tools) instead of
+     sharing the free space with the spacer and wrapping. */
+  .tk-top-name { flex: 9999 1 min-content; min-width: min(100%, min-content); max-width: max-content; }
+  /* The name link's touch area reaches the row's 48 px. */
+  .tk-top-home::after { content: ""; position: absolute; inset: -14px 0; }
+  /* The name flows like text (upgrade review M-2): the BETA badge wraps under the title as one
+     word, so the name needs only its longest word and Tools stays on the first row at 360 px. The
+     icon hangs at the start, so a second title line lines up with the first. */
+  .tk-top-name:has(> .tk-top-mark, > .tk-top-mark-img) { display: block; position: relative; padding-inline-start: 32px; }
+  .tk-top-name > .tk-top-mark,
+  .tk-top-name > .tk-top-mark-img { position: absolute; inset-inline-start: 0; top: 0; }
+  .tk-top-name > .tk-top-mark { margin: 1px 3px; }
+  .tk-top-name > .tk-top-title { display: inline; }
+  .tk-top-name > .tk-top-beta,
+  .tk-top-glue .tk-top-beta { display: inline-flex; vertical-align: 0.15em; margin-inline-start: 6px; }
+  .tk-top-glue { white-space: nowrap; }
+  /* Still too long (German, large text): the change control shows only its icon (level 2); Tools
+     keeps its word until level 4 (research r2, mobile-03). */
+  .tk-top-row:not([data-compact="1"])[data-compact] .tk-change-word > span { display: none; }
+  .tk-top-row:not([data-compact="1"])[data-compact] .tk-change-word { min-width: 48px; justify-content: center; }
+  .tk-top-row:not([data-compact="1"])[data-compact] .tk-change-text > span { display: none; }
+  .tk-top-row:not([data-compact="1"])[data-compact] .tk-change-text > .tk-change-compact { display: block; }
+  .tk-top-row:not([data-compact="1"])[data-compact] .tk-change-text { min-width: 48px; min-height: 40px; padding-inline: 12px; }
+  /* A tablet's Recent and Settings (research r2, mobile-05) give their words up with it; each
+     keeps its word as its name. */
+  .tk-top-row:not([data-compact="1"])[data-compact] .tk-navlink > span { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  /* Edit PDF (owner decision D-2 (a)): Close at the start, then Save, then Tools. Save gives its
+     word way to its icon only when the row is too long; its name stays "Save". */
+  /* Round 6 (mobile-05): the word is what says Save, so the disk glyph goes first. Tools keeps
+     its word before Save does (research r2 decision), so Save is the icon at levels 2 and 3; once
+     Tools is an icon (level 4) Save has the room for its word again, until level 5. */
+  .tk-edit-top .tk-top-row[data-compact] .tk-edit-save > svg { display: none; }
+  .tk-edit-top .tk-top-row[data-compact] .tk-edit-save { min-width: 48px; justify-content: center; padding-inline: 10px; }
+  .tk-edit-top .tk-top-row:is([data-compact="2"], [data-compact="3"], [data-compact="5"]) .tk-edit-save > svg { display: block; }
+  .tk-edit-top .tk-top-row:is([data-compact="2"], [data-compact="3"], [data-compact="5"]) .tk-edit-save > span { display: none; }
+  /* Still too long: a single word wider than the row (German "Dokumentinformationen") is
+     hyphenated in the page's language (verify V-02). Where the browser has no hyphenation for
+     that language, the row wraps as before, so no word is ever cut. */
+  .tk-top-row[data-compact="5"] .tk-top-title { -webkit-hyphens: auto; hyphens: auto; }
+  /* The name takes all the free space, so only the word that does not fit is broken. Not in
+     Edit PDF's header, whose title is hidden on a phone: its tools keep to the end edge. */
+  .tk-top-row[data-compact="5"] > .tk-spacer { flex-grow: 0; }
+  .tk-edit-top .tk-top-row[data-compact="5"] > .tk-spacer { flex-grow: 1; }
+  /* A wrapped title, a name of three lines, or Tools pushed under it: the tool's mark goes
+     (level 3). If the title is still wrapped, Tools shows only its icon and the mark stays off
+     (level 4, its name stays "Tools"). The mark returns with hyphenation (level 5). */
+  .tk-top-row:is([data-compact="3"], [data-compact="4"]) .tk-top-name { padding-inline-start: 0; }
+  .tk-top-row:is([data-compact="3"], [data-compact="4"]) .tk-top-name > :is(.tk-top-mark, .tk-top-mark-img) { display: none; }
+  .tk-top-row:is([data-compact="4"], [data-compact="5"]) .tk-tools > span { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  .tk-top-row:is([data-compact="4"], [data-compact="5"]) .tk-tools { padding-inline: 12px; min-width: 48px; justify-content: center; }
+}
+
+/* Keyboard up while a field in the body has focus (Document Info, Protect, Unlock): the foot sheet
+   keeps only the main action, and a line that is about the field (an error, or what is still
+   needed), so the field being typed in stays in view. It comes back when the keyboard goes. */
+@media (max-width: 767.98px), (max-height: 479.98px) {
+  :root[data-chef-keyboard] .tk-tool:has(> .tk-canvas:focus-within) > .tk-sheet > :not(.tk-actions, .tk-progress-block, .tk-notice) { display: none; }
+  :root[data-chef-keyboard] .tk-tool:has(> .tk-canvas:focus-within) > .tk-sheet > .tk-notice:not(:has([data-tone="error"], [data-tone="pending"])) { display: none; }
+  /* A form's page picture (Protect, Unlock's lock box) steps aside too, so every field and its hint
+     stay above the sheet; it returns when the keyboard goes (pass 4). */
+  :root[data-chef-keyboard] .tk-tool[data-kind="form"]:has(> .tk-canvas:focus-within) .tk-split { display: flex; height: auto; }
+  :root[data-chef-keyboard] .tk-tool[data-kind="form"]:has(> .tk-canvas:focus-within) .tk-split-main:has(.tk-filepreview, .tk-filestand) { display: none; }
+}
+
+/* A form screen on a phone (and Remove hidden info): the page sits above its fields and hugs its
+   own shape, so a portrait page is not a small sheet in a wide beige box. It is at least 11rem, so
+   the first field is in view, and takes whatever room the fields leave above the sheet (pass 3). */
+@media (max-width: 767.98px), (max-height: 479.98px) {
+  .tk-tool:is([data-kind="form"], .tk-hidinfo-tool) .tk-split:has(> .tk-split-main:first-child > .tk-filepreview > .tk-filepreview-page > img) { display: grid; grid-template-rows: minmax(11rem, 1fr) auto; height: 100%; }
+  .tk-tool:is([data-kind="form"], .tk-hidinfo-tool) .tk-split-main > .tk-filepreview { height: 100%; min-height: 0; width: fit-content; max-width: 100%; margin-inline: auto; }
+  .tk-tool:is([data-kind="form"], .tk-hidinfo-tool) .tk-split-main > .tk-filepreview .tk-filepreview-page { width: auto; height: 100%; padding: 0; background: transparent; overflow: hidden; grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
+  .tk-tool:is([data-kind="form"], .tk-hidinfo-tool) .tk-split-main > .tk-filepreview .tk-filepreview-page :is(img, .tk-filestand) { height: 100%; width: auto; max-width: 100%; }
+  /* A file that cannot be drawn (a locked PDF) is a blank stand: it stays a short strip. */
+  .tk-tool:is([data-kind="form"], .tk-hidinfo-tool) .tk-split-main > .tk-filepreview .tk-filestand { max-height: 11rem; }
+  .tk-tool:is([data-kind="form"], .tk-hidinfo-tool) .tk-split-main > .tk-filepreview:has(.tk-filestand) { height: 11rem; }
+  .tk-tool[data-kind="form"] .tk-split-side { padding-bottom: 8px; }
+  /* A one-file screen: the page itself takes the room, not a padded beige well around it, so it
+     is as large as the canvas allows (pass 3). */
+  .tk-tool[data-kind="file"]:not(.tk-hidinfo-tool) .tk-canvas .tk-filepreview-page { padding: 0; border-radius: 0; background: transparent; }
+}
+.tk-tool[data-kind="form"] .tk-split-main > .tk-cardstage { align-content: start; min-height: 0; padding-block: 0; }
+.tk-tool[data-kind="form"] .tk-split-main > .tk-filepreview .tk-filepreview-page { overflow: hidden; grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
+
+/* =========================== Phase 10–11: makers, editors and Compare === */
+
+/* An editor keeps its own inner layout; the canvas only gives it the room under the header. */
+.tk-tool[data-kind="editor"] .tk-canvas { display: flex; flex-direction: column; padding: 0; }
+.tk-editor { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; gap: 8px; padding: 8px 12px 12px; }
+.tk-editor-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tk-editor-bar > .tk-btn,
+.tk-editor-bar > .tk-primary { flex: 1 1 10rem; }
+.tk-editor-result:empty { display: none; }
+.tk-editor-bar > .tk-editor-result { flex: 1 1 100%; }
+.tk-editor-bar:has(> .tk-editor-result:only-child:empty) { display: none; }
+.tk-sign-phone { gap: 0; padding: 0; }
+.tk-sign-phone > .tk-footbar { order: 1; }
+.tk-sign-toolbar { padding: 8px 12px; border-bottom: 1px solid var(--border-hairline); background: var(--surface-raised); }
+.tk-sign-toolbar [role="radio"] { min-width: 0; }
+.tk-sign-doc { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; background: var(--surface-sunken); }
+.tk-sign-doc > .chef-pdf-zoom-viewport { padding: 60px 12px 72px; }
+.tk-sign-doc > .tk-sign-zoom { position: absolute; inset-block-start: 8px; inset-inline-end: 12px; box-shadow: var(--elevation-panel); }
+/* The page's pager: one pill at the bottom centre of the page frame. */
+.tk-sign-pagebar { position: absolute; inset-block-end: 10px; inset-inline-start: 50%; transform: translateX(-50%); padding: 2px 4px; border: 1px solid var(--border-hairline); border-radius: 999px; background: var(--surface-raised); box-shadow: var(--elevation-panel); white-space: nowrap; }
+[dir="rtl"] .tk-sign-pagebar { transform: translateX(50%); }
+.tk-sign-pagebar .tabular { background: transparent; padding-inline: 4px; }
+.tk-sign-actions { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; }
+/* A stamp's remove and resize handles: never under 48 px on screen, however small the page is drawn (B-027). */
+.tk-sign-handle { transform: scale(max(1, 1 / var(--sign-zoom, 1))); }
+.tk-sign-remove { transform-origin: 100% 100%; }
+/* :where keeps this below the touch-tablet rule above, which raises both buttons to 48 px (B-025). */
+.tk-sign-actions > :where(.tk-btn, .tk-primary) { min-height: 44px; }
+.tk-iconbtn-danger { color: var(--status-danger-text); }
+.tk-iconbtn-danger:hover:not(:disabled) { background: var(--status-danger-quiet); color: var(--status-danger-text); }
+@media (min-width: 768px) and (min-height: 480px) {
+  .tk-editor { padding: 16px 24px 20px; }
+  .tk-editor-bar > .tk-btn,
+  .tk-editor-bar > .tk-primary { flex: 0 0 auto; }
+  .tk-editor-bar > .tk-editor-result { flex: 1 1 18rem; max-width: 520px; margin-inline-start: auto; }
+}
+
+/* Create PDF: the start choices, the page tiles and the add tile. */
+.tk-makepdf-start { display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 30rem; margin-inline: auto; }
+.tk-makepdf-starts { display: grid; gap: 12px; }
+.tk-makepdf-big { min-height: 64px; font-size: 1rem; }
+.tk-makepdf-big svg { width: 22px; height: 22px; }
+.tk-makepdf-scanner { display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }
+.tk-makepdf-start .tk-makepdf-scanner { margin-bottom: 0; }
+.tk-makepdf-scan { display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid var(--border-hairline); border-radius: var(--radius-panel); background: var(--surface-raised); }
+.tk-makepdf-scan-head { display: flex; align-items: flex-start; gap: 8px; }
+.tk-makepdf-scan-mark { flex: none; margin-top: 2px; color: var(--status-success-text); }
+.tk-makepdf-scan-title { margin: 0; font-size: 1.0625rem; font-weight: 600; color: var(--text-primary); }
+.tk-makepdf-scan-meta { margin: 0; font-size: 0.8125rem; color: var(--text-secondary); }
+.tk-makepdf-scan-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.tk-makepdf-scan-notice { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.tk-makepdf-skipped {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-field);
+  background: var(--status-caution-quiet);
+  color: var(--status-caution-text);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.tk-makepdf-name { display: flex; align-items: center; gap: 6px; }
+.tk-makepdf-name .chef-field { flex: 1 1 auto; min-width: 0; height: 48px; min-height: 48px; font-size: 1rem; }
+.tk-makepdf-ext { flex: none; font-size: 1rem; font-weight: 600; color: var(--text-secondary); }
+
+.tk-mtile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-hairline);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+/* Positioned for the photo's eye (fable-2 item 2). */
+.tk-mtile-page { position: relative; aspect-ratio: 3 / 4; overflow: hidden; background: var(--surface-sunken); }
+.tk-mtile-page img { display: block; width: 100%; height: 100%; padding: 8px; object-fit: contain; }
+.tk-mtile .tk-tile-label { overflow: hidden; text-align: center; white-space: nowrap; text-overflow: ellipsis; }
+.tk-mtile-name { display: block; overflow: hidden; padding: 6px 8px 0; font-size: 0.8125rem; font-weight: 600; text-align: center; white-space: nowrap; text-overflow: ellipsis; color: var(--text-primary); }
+.tk-makepdf-namefield { flex: 0 1 24rem; }
+.tk-makepdf-namefield .tk-field { flex: 1 1 auto; }
+.tk-mtile-actions { display: flex; border-top: 1px solid var(--border-hairline); }
+/* The tile's own button row: flat cells divided by hairlines, never the phone's bordered move pills (T-16). */
+.tk-tool .tk-mtile-actions > .tk-move { flex: 1 1 0; width: auto; height: 48px; border: 0; border-radius: 0; background: transparent; }
+.tk-tool .tk-mtile-actions > .tk-move + .tk-move { border-inline-start: 1px solid var(--border-hairline); }
+.tk-move-danger { color: var(--status-danger-text); }
+.tk-move-danger:hover:not(:disabled) { background: var(--status-danger-quiet); color: var(--status-danger-text); }
+/* Up and down are the page order, which reads top to bottom in every language. */
+
+/* Image to PDF: today's sidebar and canvas under the tool header. */
+.tk-i2p { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+/* Phone: Save PDF comes first in the document, as on desktop, and is drawn at the foot (verify V-01). */
+.tk-i2p > .tk-footbar { order: 1; }
+.tk-i2p-main { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.tk-i2p-side {
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: min(60vh, max(40vh, 18rem));
+  /* The canvas must not squeeze the panel: zoom and the page list stay in view (upgrade review M-1). */
+  flex-shrink: 0;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--border-hairline);
+  background: var(--surface-raised);
+}
+.tk-i2p-side-inner { display: flex; flex-direction: column; gap: 14px; padding: 12px 16px; }
+.tk-i2p-sechead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.tk-i2p-cap { margin: 0 0 8px; font-family: var(--font-display); font-size: 0.9375rem; font-weight: var(--font-display-weight); color: var(--text-secondary); }
+.tk-i2p-count { font-size: 0.8125rem; color: var(--text-tertiary); }
+.tk-i2p-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 8px; }
+/* Phone: two columns at any text size, so at Largest text the three buttons take two rows, not
+   three, and the first page row stays in view above the fade (verify V-04). A long label wraps. */
+@media (max-width: 767.98px), (max-height: 479.98px) {
+  .tk-i2p-actions { grid-template-columns: repeat(auto-fit, minmax(min(8.5rem, calc(50% - 4px)), 1fr)); }
+  .tk-i2p-actions > .tk-btn { white-space: normal; text-align: center; }
+}
+.tk-i2p-add { cursor: pointer; }
+.tk-i2p-add:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.tk-i2p-pages { display: flex; flex-direction: column; gap: 6px; }
+.tk-i2p-pagerow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-inline: 12px 0;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-field);
+  background: var(--surface-raised);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.tk-i2p-pagerow > span { display: flex; align-items: center; gap: 8px; }
+.tk-i2p-pagerow[data-active] { border-color: var(--accent-rest); background: var(--accent-quiet); color: var(--accent-on-quiet); }
+.tk-i2p-canvas { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; padding: 12px 16px; background: var(--surface-sunken); }
+.tk-i2p-pagebox { scroll-margin-top: 12px; }
+.tk-i2p-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding-inline: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: var(--text-secondary);
+}
+.tk-i2p-grab { cursor: grab; }
+.tk-i2p-grab:active { cursor: grabbing; }
+.tk-i2p-pill-btn { cursor: pointer; }
+.tk-i2p-pill-btn:hover,
+.tk-i2p-grab:hover { color: var(--accent-text); }
+.tk-i2p-pill-btn:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.tk-i2p-pageremove { border: 1px solid var(--border-strong); background: var(--surface-raised); }
+/* Phone (T-02): the pages as one filmstrip over the canvas. */
+.tk-i2p-strip { display: flex; gap: 8px; padding: 8px 12px; overflow-x: auto; flex: none; border-bottom: 1px solid var(--border-hairline); background: var(--surface-raised); scrollbar-width: none; }
+.tk-i2p-film { display: flex; align-items: center; flex: none; border: 1px solid var(--border-hairline); border-radius: var(--radius-field); background: var(--surface-raised); }
+.tk-i2p-film[data-active] { border-color: var(--accent-rest); }
+.tk-i2p-film-page { display: flex; align-items: center; gap: 8px; min-height: 48px; padding-inline: 6px 2px; font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+.tk-i2p-film-thumb { position: relative; display: block; width: 26px; aspect-ratio: 210 / 297; overflow: hidden; background: #fff; box-shadow: 0 0 0 1px var(--border-hairline); }
+.tk-i2p-film-thumb > img { position: absolute; object-fit: contain; }
+/* The picture's own Rotate and Remove: small quiet buttons at its top end with a 48 px reach. They stay
+   drawn at every width, so a keyboard, a touch screen or a mouse that has not hovered can reach them. */
+.tk-i2p-imgtools { inset-block-start: 10px; inset-inline-end: 10px; gap: 18px; }
+.tk-i2p-imgbtn { position: relative; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface-raised); color: var(--text-primary); box-shadow: var(--elevation-panel); }
+.tk-i2p-imgbtn::after { content: ""; position: absolute; inset: -9px; } /* from the padding box: 30 + 18 = 48 */
+.tk-i2p-imgbtn-danger { color: var(--status-danger-text); }
+@media (min-width: 640px) and (pointer: fine) {
+  .tk-i2p-imgtools { inset-block-start: -12px; inset-inline-end: -12px; gap: 4px; }
+  .tk-i2p-imgbtn { width: 28px; height: 28px; }
+  .tk-i2p-imgbtn::after { inset: 0; }
+}
+@media (min-width: 640px) { .tk-i2p-canvas { padding: 24px 48px; } }
+@media (min-width: 768px) and (min-height: 480px) {
+  .tk-i2p { position: relative; }
+  .tk-i2p > .tk-editor-result { position: absolute; z-index: 30; inset-block-start: 12px; inset-inline-end: 24px; width: min(480px, 40%); }
+  .tk-i2p-main { flex-direction: row; }
+  .tk-i2p-side { width: 18rem; max-height: none; height: 100%; border-bottom: 0; border-inline-end: 1px solid var(--border-hairline); }
+  .tk-i2p-canvas { padding: 40px 48px; }
+}
+
+/* Invoice, receipt, quote: the form, and the live document beside it on desktop. */
+.tk-bizform { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 560px; margin-inline: auto; padding-bottom: 8px; }
+.tk-bizsec { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--border-hairline); border-radius: var(--radius-panel); background: var(--surface-raised); }
+.tk-bizhead { margin: 0; font-family: var(--font-display); font-size: 1rem; line-height: 1.4rem; font-weight: var(--font-display-weight); color: var(--text-primary); }
+.tk-bizfields { display: flex; flex-direction: column; gap: 12px; }
+.tk-bizsec-note { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 0.8125rem; line-height: 1.25rem; color: var(--text-secondary); }
+.tk-bizsec-note > svg { flex: none; margin-top: 3px; color: var(--text-tertiary); }
+.tk-bizfield { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tk-bizfield .chef-field { height: 48px; min-height: 48px; padding-inline: 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-field); background: var(--surface-raised); font-size: 1rem; box-shadow: none; }
+.tk-bizfield textarea.chef-field.tk-bizarea { height: auto; min-height: 88px; padding-block: 10px; resize: vertical; }
+.tk-bizfield-hint { font-weight: 400; }
+/* A label with its hint may take two lines: the pair's fields still line up. */
+.tk-bizpair { display: grid; grid-template-columns: minmax(0, 1fr); align-items: end; gap: 12px; }
+@media (min-width: 560px) { .tk-bizpair { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tk-bizcolour { display: flex; align-items: center; gap: 8px; }
+.tk-bizcolour .tk-swatch { flex: none; }
+.tk-bizlogo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tk-bizlogo-name { flex: 1 1 8rem; min-width: 0; font-size: 0.8125rem; color: var(--text-secondary); }
+.tk-bizline { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--border-hairline); border-radius: var(--radius-field); background: var(--surface-sunken); }
+.tk-bizline-nums { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 8px; }
+.tk-bizline-amount { margin: 0; text-align: end; font-size: 0.8125rem; color: var(--text-secondary); }
+.tk-bizadd { width: 100%; }
+.tk-biztotals { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 12px; border-radius: var(--radius-field); background: var(--surface-sunken); font-size: 0.875rem; }
+.tk-biztotals > div { display: flex; justify-content: space-between; gap: 12px; }
+.tk-biztotals dt { color: var(--text-secondary); }
+.tk-biztotals dd { margin: 0; font-weight: 500; }
+.tk-biztotals-sum { padding-top: 4px; border-top: 1px solid var(--border-hairline); }
+.tk-biztotals-sum dt,
+.tk-biztotals-sum dd { font-weight: 700; color: var(--text-primary); }
+.tk-biztotal { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0; font-size: 0.9375rem; font-weight: 600; color: var(--text-secondary); }
+.tk-biztotal bdi { font-family: var(--font-display); font-size: 1.25rem; font-weight: var(--font-display-weight); color: var(--text-primary); }
+.tk-livedoc .tk-filepreview-page { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
+@media (min-width: 768px) and (min-height: 480px) {
+  .tk-tool.tk-biz .tk-split { max-width: 1240px; }
+  .tk-tool.tk-biz .tk-split-side { width: 560px; padding-inline-end: 4px; }
+  .tk-tool.tk-biz .tk-split-main > .tk-livedoc { height: 100%; min-height: 0; }
+  .tk-tool.tk-biz .tk-band-main { flex-wrap: nowrap; }
+  .tk-biztotal { justify-content: flex-start; }
+}
+
+/* Compare Summary: two pickers, then two pages and the pager. */
+.tk-compare-empty { max-width: 64rem; }
+.tk-compare-pickers { display: grid; gap: 16px; }
+@media (min-width: 768px) and (min-height: 480px) { .tk-compare-pickers { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tk-compare-cap { margin: 0 0 8px; font-family: var(--font-display); font-size: 1rem; font-weight: var(--font-display-weight); color: var(--text-secondary); }
+.tk-compare-opening { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 12px 0 0; font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); }
+.tk-compare { display: flex; flex-direction: column; gap: 8px; min-height: 100%; }
+.tk-compare-pagelabel { min-width: 7.5rem; text-align: center; font-size: 0.875rem; font-weight: 600; color: var(--text-primary); }
+.tk-compare-error { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: var(--radius-field); background: var(--status-danger-quiet); color: var(--status-danger-text); }
+/* Side by side at every width, as today (B-001): Document B stays on screen on a phone. */
+.tk-compare-panes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.tk-compare-pane { display: flex; flex-direction: column; gap: 6px; min-width: 0; margin: 0; }
+/* A long name wraps to three lines at most; the full name is its title (B-002). */
+.tk-compare-name { flex: none; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 0.8125rem; font-weight: 600; text-align: center; color: var(--text-primary); }
+.tk-compare-page { position: relative; display: flex; align-items: center; justify-content: center; aspect-ratio: 210 / 297; overflow: hidden; border: 1px solid var(--border-hairline); border-radius: var(--radius-panel); background: var(--surface-sunken); }
+.tk-compare-page img { max-width: 100%; max-height: 100%; object-fit: contain; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18); }
+.tk-compare-synced { position: absolute; inset-block-start: 8px; inset-inline-start: 8px; display: flex; align-items: center; gap: 4px; padding: 4px 8px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface-raised); font-size: 0.75rem; font-weight: 600; color: var(--text-primary); }
+.tk-compare-summary { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px solid var(--status-success-text); border-radius: var(--radius-panel); background: var(--status-success-quiet); color: var(--status-success-text); }
+.tk-compare-summary-head { display: flex; align-items: flex-start; gap: 8px; }
+.tk-compare-summary-title { margin: 0; font-size: 0.9375rem; font-weight: 650; }
+.tk-compare-summary-name { margin: 2px 0 0; font-size: 0.8125rem; overflow-wrap: anywhere; }
+.tk-compare-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin: 0; padding-top: 10px; border-top: 1px solid color-mix(in srgb, currentColor 20%, transparent); }
+.tk-compare-facts dt { font-size: 0.75rem; font-weight: 500; }
+.tk-compare-facts dd { margin: 2px 0 0; font-weight: 650; }
+.tk-compare-summary-lines { margin: 0; font-size: 0.8125rem; line-height: 1.25rem; }
+@media (min-width: 768px) and (min-height: 480px) {
+  .tk-compare { height: 100%; min-height: 0; }
+  .tk-compare-panes { flex: 1 1 auto; min-height: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tk-compare-pane { min-height: 0; }
+  .tk-compare-page { flex: 1 1 auto; min-height: 0; aspect-ratio: auto; }
+  .tk-compare-facts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .tk-tool.tk-comparetool .tk-band .tk-notice { flex-basis: 100%; }
+}
+
+/* Extract Text: "Jump to page" as a plain labelled field (T-02). */
+.tk-ocr-jump { display: flex; align-items: center; gap: 10px; font-size: 0.875rem; font-weight: 600; color: var(--text-secondary); }
+.tk-ocr-jump > select { flex: 0 1 14rem; min-width: 0; }
+
+/* A file that did not open: the reason inside the drop zone, under its label; the next tool as a link (T-09). */
+.tk-drop-error { display: flex; align-items: flex-start; justify-content: center; gap: 8px; max-width: 34rem; margin: 10px auto 0; font-size: 0.9375rem; line-height: 1.375rem; font-weight: 500; color: var(--status-danger-text); text-align: start; overflow-wrap: anywhere; }
+.tk-drop-error-link { font-weight: 700; text-decoration: underline; text-underline-offset: 2px; color: inherit; }
+
+/* Foot tabs (T-02): an editor's page tools as one row of icon-over-label buttons, as in Edit PDF's foot bar. */
+/* One row; with very large text the tabs take a second row rather than break a word (research r3,
+   mobile-03). */
+.tk-foot-tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 3.5rem), 1fr)); gap: 4px; }
+/* Compact: icon over one short word, 48 px tall (the touch minimum), a light highlight when on. */
+.tk-foot-tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 48px; padding: 4px; border-radius: var(--radius-control); color: var(--text-primary); font-size: 0.75rem; line-height: 1rem; font-weight: 600; text-align: center; overflow-wrap: break-word; cursor: pointer; }
+.tk-foot-tab:disabled { opacity: 0.55; cursor: default; }
+.tk-foot-tab:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.tk-foot-tab[aria-pressed="true"], .tk-foot-tab[aria-expanded="true"] { background: var(--accent-quiet); color: var(--accent-on-quiet); }
+.tk-foot-tab[aria-pressed="true"] { box-shadow: inset 0 0 0 1.5px var(--accent-rest); }
+.tk-foot-tab-danger { color: var(--status-danger-text); }
+
+/* Make Fillable: the statement band (desktop) or foot bar (phone), and today's three-part workspace. */
+.tk-editor-band { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 28px; padding: 14px 16px; border: 1px solid var(--border-hairline); border-radius: var(--radius-panel); background: var(--surface-raised); }
+.tk-editor-band-main { display: flex; flex-direction: column; gap: 4px; flex: 1 1 20rem; min-width: 0; }
+.tk-editor-band-end { display: flex; flex-direction: column; gap: 10px; flex: 0 1 26rem; }
+.tk-editor-band-end .tk-actions > .tk-btn,
+.tk-editor-band-end .tk-actions > .tk-primary { flex: 1 1 auto; min-height: 44px; }
+/* Touch tablets (B-025, verify V-03): 48 px, like the band's actions. */
+@media (min-width: 768px) and (min-height: 480px) and (pointer: coarse) {
+  .tk-editor-band-end .tk-actions > .tk-btn,
+  .tk-editor-band-end .tk-actions > .tk-primary { min-height: 48px; }
+}
+.tk-fill-scroll { display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; min-height: 0; overflow: auto; }
+.tk-fill-summary { overflow-wrap: anywhere; }
+.tk-fill-foot { gap: 8px; }
+/* Phone: Detect fields and Create fillable PDF come first in the document, as on desktop, and are drawn at the foot (verify V-01). */
+.tk-fill > .tk-fill-foot { order: 1; }
+.tk-fill-foot .tk-sentence { font-size: 1rem; line-height: 1.5rem; }
+/* Phone (T-02): one toolbar over the page, the page fills the stage, the creation tools and the
+   main action at the foot; the field form and the field list are foot sheets. */
+.tk-fill-phone { gap: 0; padding: 0; min-height: 0; flex: 1 1 auto; }
+.tk-fill-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 4px 8px; padding: 4px 8px; border-bottom: 1px solid var(--border-hairline); }
+.tk-fill-toolbar .tk-chip { white-space: nowrap; min-width: 0; flex: 0 1 auto; overflow: hidden; }
+.tk-fill-pager { flex: none; }
+.tk-fill-pager { display: flex; align-items: center; justify-content: center; gap: 2px; }
+.tk-fill .tk-fill-grid .tk-fill-pager { margin-top: 12px; gap: 8px; }
+.tk-fill-stage { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 12px; background: var(--surface-sunken); }
+.tk-fill-grid .tk-fill-img { max-height: 72vh; }
+/* Phone, with New field open (h1-03, final fix item 10): the page fits in the room above the
+   card, so a drag anywhere on the page draws a field. */
+.tk-tool[data-editor-cover] .tk-fill-stage { container-type: size; padding-bottom: calc(12px + var(--tk-editor-cover, 0px)); }
+.tk-tool[data-editor-cover] .tk-fill-stage .tk-fill-img { max-height: 100cqh; }
+/* Wide (round 6, desktop-07): the three columns take the height left under the band and the
+   review card (never less than 420 px; the area scrolls below that), and the page is as tall as
+   its column allows, so the pager under it is on the screen. */
+@media (min-width: 768px) and (min-height: 480px) {
+  .tk-fill-scroll > .tk-fill-grid { flex: 1 1 0; min-height: 420px; grid-template-rows: minmax(0, 1fr); }
+  .tk-fill-grid > aside:last-child { max-height: 100%; }
+  .tk-fill-pagecol { display: flex; flex-direction: column; min-height: 0; }
+  .tk-fill-pagebox { flex: 1 1 0; min-height: 0; container-type: size; }
+  .tk-fill-grid .tk-fill-pagebox .tk-fill-img { max-height: 100cqh; }
+}
+.tk-fill-foot > .tk-actions > .tk-primary { flex: 1 1 auto; }
+/* Make Fillable zoom (pass 5): Sign's − % + at the top end of the page frame on a phone, beside the
+   pager on wide screens; the page scrolls in its frame when zoomed. On a phone the whole page fits
+   under the cluster at 100%. */
+.tk-fill-stagebox { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.tk-fill-stagebox > .tk-fill-stage { padding-top: 60px; container-type: size; }
+.tk-fill-stagebox .tk-fill-img { max-height: 100cqh; }
+.tk-fill-stagebox > .tk-fill-zoom { position: absolute; inset-block-start: 8px; inset-inline-end: 12px; box-shadow: var(--elevation-panel); }
+.tk-tool[data-editor-cover] .tk-fill-stagebox > .tk-fill-zoom { display: none; }
+.tk-tool[data-editor-cover] .tk-fill-stagebox > .tk-fill-stage { padding-top: 12px; }
+.tk-fill-pagebox { overflow: auto; }
+.tk-fill-navrow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
+.tk-fill .tk-fill-grid .tk-fill-navrow > .tk-fill-pager { flex: 1 1 auto; margin-top: 0; }
+
+/* Edit PDF: the tool header on top of today's fixed bar; the result strip above the bottom bar. */
+.tk-edit-top .tk-top { background: transparent; }
+@media (max-width: 439.98px) { .tk-edit-top .tk-top-beta { display: none; } }
+.tk-edit-tools { display: flex; align-items: center; gap: 0; flex: none; }
+/* One header row on a phone (A-018): the name becomes its icon below 440 px and keeps its name
+   for assistive technology. Tools keeps its word while the row has room: Save gives its word up
+   first, and Tools only at the row's last level (research r2, mobile-03). */
+@media (max-width: 439.98px) {
+  .tk-edit-top .tk-top-row { gap: 4px; padding-inline: 8px 4px; }
+  .tk-edit-top .tk-top-title { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  .tk-edit-top .tk-top-name { flex: none; min-width: 0; display: flex; padding-inline-start: 0; }
+  .tk-edit-top .tk-top-name > .tk-top-mark,
+  .tk-edit-top .tk-top-name > .tk-top-mark-img { position: static; margin: 0; }
+}
+/* Close editor now leads the row (upgrade review M-3), so the name's icon and the divider go under
+   440 px; the title stays the page's heading for assistive technology. */
+@media (max-width: 439.98px) {
+  .tk-edit-top .tk-top-sep,
+  .tk-edit-top .tk-top-mark,
+  .tk-edit-top .tk-top-mark-img { display: none; }
+}
+.tk-edit-result:empty { display: none; }
+.tk-edit-result { margin-bottom: 8px; }
+.tk-edit-desk .tk-editor-result { flex: 1 1 100%; }
+.tk-tool[data-kind="editor"] .tk-canvas > .tk-edit-desk { flex: none; }
+
+/* A very short window: 400% zoom on a laptop (320 × 200 CSS px) or a small phone on its side.
+   The header and the action area scroll with the page instead of staying put and leaving a
+   sliver for the content (WCAG 1.4.10, research r4 desktop-09). Not while the keyboard is up:
+   then the editor bar must stay on the keyboard. */
+@media (max-height: 320px) {
+  :root:not([data-chef-keyboard]) .tk-screen { height: auto; min-height: 100dvh; }
+  :root:not([data-chef-keyboard]) .tk-top-sticky { position: static; }
+  :root:not([data-chef-keyboard]) .tk-tool { flex: none; }
+  :root:not([data-chef-keyboard]) .tk-canvas,
+  :root:not([data-chef-keyboard]) .tk-tool[data-kind="preview"] .tk-canvas { flex: none; overflow: visible; }
+  :root:not([data-chef-keyboard]) .tk-edit-top,
+  :root:not([data-chef-keyboard]) .tk-edit-bottom { position: static; }
+  :root:not([data-chef-keyboard]) .tk-edit-top + main { height: auto; min-height: 100dvh; padding-block: 0 !important; }
+  :root:not([data-chef-keyboard]) .tk-edit-top + main .chef-pdf-zoom-viewport { flex: none; height: 100dvh; }
+}
+
+/* Edit PDF: a text box whose text no longer fits shows it at once, in the danger tone, instead of
+   only at Save (round 5, desktop-08). The Save message says what to do. */
+[data-testid="inline-text-editor"][data-overflow] { box-shadow: inset 0 0 0 2px var(--status-danger-text); }
+
+/* A tap on a slot that leads to a field on the screen marks the field for a moment instead of
+   focusing it, so no keyboard rises over the page grid (round 6, mobile-06). */
+[data-pointed] { animation: tk-pointed 1.2s ease-out; }
+@keyframes tk-pointed {
+  0%, 60% { box-shadow: 0 0 0 3px var(--focus-ring); }
+  100% { box-shadow: 0 0 0 3px transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-pointed] { animation: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+}
+
+/* A page preview on the whole screen (LargePagePreview): Page Numbers' full-screen view. */
+.tk-largepreview { position: fixed; inset: 0; z-index: 100; display: flex; padding: calc(0.75rem + env(safe-area-inset-top)) 0.75rem 0.75rem; }
+.tk-largepreview-dim { position: absolute; inset: 0; background: rgb(0 0 0 / 0.7); }
+.tk-largepreview-box { position: relative; display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 72rem; margin-inline: auto; padding: 8px; border-radius: var(--radius-panel); background: var(--surface-raised); }
+.tk-largepreview-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* A panel radius, not the control's pill: the pill's round ends cut the page's corners away (pass 3).
+   The page sits in the middle of the view until it is zoomed past it. */
+.tk-largepreview-view { display: grid; flex: 1 1 auto; min-height: 0; overflow: auto; touch-action: pan-x pan-y; border-radius: var(--radius-field); background: var(--surface-sunken); }
+.tk-largepreview-page { position: relative; margin: auto; background: #fff; }
+.tk-largepreview-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin: 0; padding-inline: 4px; font-size: 0.75rem; color: var(--text-secondary); }
+/* The handle that resizes the page number, on the corner of its box. */
+.tk-pn-resize { position: absolute; inset-inline-end: -11px; bottom: -11px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 999px; background: var(--accent-rest); color: var(--text-on-accent); touch-action: none; cursor: nwse-resize; }
+.tk-pn-resize::after { content: ""; position: absolute; inset: -13px; }

@@ -9,8 +9,10 @@ import {
   IOS_MAXIMUM_SIGNATURE_VERIFICATION_BYTES,
   IOSSignatureVerificationSizeError,
 } from '../../services/platform/capacitor/iosPdfReader';
-import { Button, EmptyState, StatusLine } from '../UI/Primitives';
-import { ToolHeader, ToolPanel, ToolShell } from '../UI/ToolLayout';
+import { Button, EmptyState } from '../UI/Primitives';
+import { ToolScreen } from '../Tool/ToolScreen';
+import { Notice } from '../Tool/parts';
+import { Sentence } from '../Tool/Sentence';
 
 /** The native iOS and Android verifier, exposed as a first-class Tools entry. */
 export const VerifySignaturesPDF: React.FC = () => {
@@ -59,35 +61,41 @@ export const VerifySignaturesPDF: React.FC = () => {
   };
 
   return (
-    <ToolShell centered width="measure">
-      <ToolHeader title={t("view-pdf.verify.pdf.signatures.93bd01")} />
-      <ToolPanel>
-        <EmptyState
-          icon={<ShieldCheck size={32} />}
-          title={available
-            ? t("file-upload.choose.a.pdf.3ba70f")
-            : t("dashboard.not.available.67a926")}
-          action={available ? (
-            <Button
-              tone="primary"
-              busy={busy}
-              icon={<ShieldCheck aria-hidden size={18} />}
-              onClick={() => void chooseAndVerify()}
-            >
-              {t("file-upload.choose.a.pdf.3ba70f")}
-            </Button>
-          ) : undefined}
-        />
-        {failure && (
-          <div role="alert">
-            <StatusLine tone="danger">
+    <ToolScreen
+      title={t("view-pdf.verify.pdf.signatures.93bd01")}
+      kind="file"
+      holdsWork={false}
+      // The web cannot check signatures: the statement says where it works (review 2, item 5).
+      sentence={available ? undefined : (
+        <Sentence template="verify-signatures.appOnly" groupLabel={t("view-pdf.verify.pdf.signatures.93bd01")} />
+      )}
+      body={(
+        <div className="tk-empty">
+          <EmptyState
+            icon={<ShieldCheck size={32} />}
+            title={available
+              ? t("file-upload.choose.a.pdf.3ba70f")
+              : t("dashboard.not.available.67a926")}
+            action={available ? (
+              <Button
+                tone="primary"
+                busy={busy}
+                icon={<ShieldCheck aria-hidden size={18} />}
+                onClick={() => void chooseAndVerify()}
+              >
+                {t("file-upload.choose.a.pdf.3ba70f")}
+              </Button>
+            ) : undefined}
+          />
+          {failure && (
+            <Notice tone="error" role="alert">
               {failure === 'too-large'
                 ? `PDF > ${IOS_MAXIMUM_SIGNATURE_VERIFICATION_BYTES / (1024 * 1024)} MB`
                 : t("view-pdf.signature.details.could.not.be.opened.for.2e56bb")}
-            </StatusLine>
-          </div>
-        )}
-      </ToolPanel>
-    </ToolShell>
+            </Notice>
+          )}
+        </div>
+      )}
+    />
   );
 };

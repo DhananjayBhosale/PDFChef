@@ -206,6 +206,9 @@ export const createFillablePdf = async (file: File, placements: FillableFieldPla
       field.addOptions(options.length ? options : ['Choose…']);
       if (placement.required) field.enableRequired();
       field.addToPage(page, appearance);
+      // The same size rule as a text field: without one a filled value was drawn to the box's
+      // full height, about 24 pt beside 10 pt text (round 6, desktop-09).
+      field.setFontSize(Math.max(8, Math.min(16, height * 0.45)));
       field.updateAppearances(font);
       return;
     }

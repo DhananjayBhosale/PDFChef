@@ -179,7 +179,6 @@ try {
     };
   });
   await page.touchscreen.tap(focusBefore.x, focusBefore.y);
-  await page.waitForFunction(previous => Number(document.querySelector('[data-testid="pdf-zoom-viewport"]').dataset.pdfZoom) > previous, focusBefore.zoom);
   // A phone types into the dock's field; the tap's letter becomes the field's caret.
   const field = page.getByTestId('pdf-paragraph-field');
   await field.waitFor();
@@ -198,8 +197,9 @@ try {
       pageFocused: document.activeElement === element,
     };
   }, focusBefore);
-  // The page fits the paragraph's whole width and centres it, so the tapped point no longer
-  // stays put sideways. It stays put vertically.
+  // The page keeps the reader's zoom (final fix item 12): the dock field shows the paragraph.
+  const zoomAfterTap = Number(await page.getByTestId('pdf-zoom-viewport').getAttribute('data-pdf-zoom'));
+  assert.ok(Math.abs(zoomAfterTap - focusBefore.zoom) < 0.001, `a paragraph tap changed the zoom: ${focusBefore.zoom} → ${zoomAfterTap}`);
   assert.ok(focusAfter.block.left >= focusAfter.viewport.left - 1 && focusAfter.block.right <= focusAfter.viewport.right + 1,
     `the paragraph is not fully within the PDF viewport horizontally: ${JSON.stringify(focusAfter)}`);
   assert.ok(Math.abs(focusAfter.y - focusBefore.y) < 2, `focus zoom moved the selected page point vertically: ${JSON.stringify({ focusBefore, focusAfter })}`);
@@ -319,7 +319,7 @@ try {
     true,
     'selecting placed text did not focus its inline editor',
   );
-  // A new text box starts empty (placeholder "Text") and zooms to 16 px text on focus.
+  // A new text box starts empty (placeholder "Text"); the page keeps its zoom (final fix item 12).
   assert.equal(await inlineTextEditor.inputValue(), '', 'a new text box should start empty');
   await inlineTextEditor.pressSequentially('Dhananajay');
   assert.equal(await inlineTextEditor.inputValue(), 'Dhananajay');
@@ -419,7 +419,8 @@ try {
   // Keeping the file in Recent failed, but the file was made: the editor and the result agree.
   // A complete save shows no banner of its own: the result sheet says it.
   await page.getByRole('dialog').filter({ hasText: 'Result ready' }).waitFor({ timeout: 60_000 });
-  await page.locator('aside[role="status"]').getByText(/available until dismissed/).waitFor();
+  // T-07: a result kept nowhere shows its name and size only, with no "available until dismissed".
+  assert.equal(await page.getByRole('dialog').filter({ hasText: 'Result ready' }).getByText(/available until dismissed/).count(), 0);
   assert.equal(await page.getByText(/Unable to save the edited PDF|Saving did not complete/).count(), 0,
     'a failed history write was reported as a failed save');
   await closeResultSheet();
@@ -460,7 +461,7 @@ try {
     checked: [
       'touchscreen pinch-in and pinch-out inside the PDF viewport',
       'one-finger vertical scrolling stays inside the zoomed PDF box',
-      'touch focus zoom fits the whole paragraph in the viewport, keeps its vertical point, and puts the caret in the dock field',
+      'a paragraph tap keeps the zoom and the paragraph in the viewport, and puts the caret in the dock field',
       'keyboard and inspector leave the paragraph and dock field visible without changing PDF-relative position',
       'wrapped text raises no "longer than the original line" caution',
       'Done retains existing-text changes and Undo restores them',

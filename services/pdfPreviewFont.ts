@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, type PDFFont } from 'pdf-lib';
+import type { PDFFont } from 'pdf-lib';
 
 const fonts = new Map<boolean, Promise<PDFFont>>();
 
@@ -6,7 +6,9 @@ const fonts = new Map<boolean, Promise<PDFFont>>();
 export const getPdfPreviewFont = (bold = false): Promise<PDFFont> => {
   let font = fonts.get(bold);
   if (!font) {
-    font = PDFDocument.create().then((pdf) => pdf.embedFont(bold ? StandardFonts.HelveticaBold : StandardFonts.Helvetica));
+    // pdf-lib loads with the first preview that measures text, not with the tool's first screen.
+    font = import('pdf-lib').then(async ({ PDFDocument, StandardFonts }) =>
+      (await PDFDocument.create()).embedFont(bold ? StandardFonts.HelveticaBold : StandardFonts.Helvetica));
     fonts.set(bold, font);
   }
   return font;

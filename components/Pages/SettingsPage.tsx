@@ -2,13 +2,14 @@ import { localizeError } from '../../services/i18n/errors.ts';
 import { t, getLocale, setLocalePreference } from '../../services/i18n/core.ts';
 import { locales, type LocalePreference } from '../../services/i18n/locales.ts';
 import { useI18n } from '../../services/i18n/react';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, ChevronRight, ExternalLink } from 'lucide-react';
 import { announceRecordsChanged, getWorkspaceSettings, updateWorkspaceSettings, type WorkspaceSettings } from '../../services/workspace';
 import { TabHeader } from '../Layout/AppShell';
 import { Button, ConfirmSheet, SegmentedControl, StatusLine, Switch, cx } from '../UI/Primitives';
 import { formatBytes } from '../UI/format';
+import { ClampedNumberInput } from '../UI/ClampedNumberInput';
 import { useMonetization } from '../../hooks/useMonetization';
 import { useSupport } from '../../hooks/useSupport';
 import { SupportChoices, SupporterBadge } from '../UI/SupportPDFChef';
@@ -27,6 +28,8 @@ import {
   useStorageInformation,
   useWorkspacePlatform,
 } from '../../hooks/useWorkspaceRuntime';
+import { forgetToolSettings } from '../../services/toolSettings';
+import { siteVersionSwitchAvailable, siteVersionUrl, type SiteVersion } from '../../services/siteVersion';
 
 /* -------------------------------------------------------------- Group --- */
 
@@ -126,6 +129,12 @@ export const SettingsPage: React.FC = () => {
   const save = useCallback((patch: Partial<WorkspaceSettings>) => {
     setSettings(updateWorkspaceSettings(patch));
   }, []);
+  // A change made in another tab of the app shows here too (round 5, desktop-11).
+  useEffect(() => {
+    const follow = () => setSettings(getWorkspaceSettings());
+    window.addEventListener('pdfchef:settings-changed', follow);
+    return () => window.removeEventListener('pdfchef:settings-changed', follow);
+  }, []);
 
   const records = recentState.status === 'ready' ? recentState.value : [];
   const savings = useMemo(() => knownSpaceSaved(records), [records]);
@@ -144,6 +153,19 @@ export const SettingsPage: React.FC = () => {
           <div role="status" aria-live="polite" className="mb-2">
             <StatusLine tone={problem ? 'danger' : 'success'}>{problem || notice}</StatusLine>
           </div>
+        )}
+
+        {siteVersionSwitchAvailable() && (
+          <Group title={t('siteVersion.title')}>
+            <Row stacked>
+              <SegmentedControl<SiteVersion>
+                label={t('siteVersion.title')}
+                value="new"
+                options={[{ value: 'old', label: t('siteVersion.old') }, { value: 'new', label: t('siteVersion.new') }]}
+                onChange={(next) => { if (next === 'old') window.location.assign(siteVersionUrl('old', '/')); }}
+              />
+            </Row>
+          </Group>
         )}
 
         <Group title={t('settings.language')}>
@@ -337,18 +359,17 @@ export const SettingsPage: React.FC = () => {
           <Row label={t("settings-page.warn.above.0f9d77")} stacked={false}>
             <span className="flex items-center gap-2">
               <label htmlFor="large-threshold" className="sr-only">{t("settings-page.large.document.warning.threshold.in.megabytes.79cc16")}</label>
-              <input
+              {/* Typed values apply when in range and are clamped when the box is left,
+                  so 0 becomes 20 instead of jumping back to 80 (r4 mobile-12d). */}
+              <ClampedNumberInput
                 id="large-threshold"
-                type="number"
                 inputMode="numeric"
                 min={20}
                 max={500}
                 step={10}
                 disabled={!settings.confirmLargeJobs}
                 value={settings.largeFileWarningMb}
-                onChange={(event) =>
-                  save({ largeFileWarningMb: Math.max(20, Math.min(500, Number(event.target.value) || 80)) })
-                }
+                onCommit={(largeFileWarningMb) => save({ largeFileWarningMb })}
                 className="chef-field tabular w-24 disabled:opacity-55"
               />
               <span className="text-[var(--text-secondary)]">{t("settings-page.mb.1d09f6")}</span>
@@ -483,6 +504,8 @@ export const SettingsPage: React.FC = () => {
         onConfirm={() => {
           setProblem('');
           resetAppearance();
+          // Each tool's last settings go back to their starting values too (path to 9, item 5).
+          forgetToolSettings();
           setSettings(
             updateWorkspaceSettings({
               autoDownload: true,

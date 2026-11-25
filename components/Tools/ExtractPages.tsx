@@ -1,29 +1,57 @@
-import { t } from '../../services/i18n/core.ts';
-import { localizeError, pdfFailureMessage, pdfProblemMessage } from '../../services/i18n/errors.ts';
+import { formatPercent, t } from '../../services/i18n/core.ts';
+import { useWide } from '../../hooks/useMediaQuery';
+import { pdfFailureMessage, pdfProblemMessage } from '../../services/i18n/errors.ts';
 import { useI18n } from '../../services/i18n/react';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ErrorText } from '../UI/ErrorText';
 import { v4 as uuidv4 } from 'uuid';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Download } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { PDFLoadingProgress } from '../UI/PDFLoadingProgress';
 import { FileUpload } from '../UI/FileUpload';
 import { PageThumbnail } from '../UI/PageThumbnail';
 import { PageRangeSelector } from '../UI/PageRangeSelector';
 import { StatusToast } from '../UI/StatusToast';
-import { Button } from '../UI/Primitives';
-import { ToolHeader, ToolPanel, ToolSelectionBar, ToolShell } from '../UI/ToolLayout';
+import { ToolScreen } from '../Tool/ToolScreen';
+import { ChangeFile } from '../Tool/ToolTop';
+import { Sentence } from '../Tool/Sentence';
+import { ChipActions, Notice, ProgressLine } from '../Tool/parts';
+import { PageGrid, type GridFit } from '../Tool/PageGrid';
+import { usePagePreview } from '../Tool/PagePeek';
+import { pagesPhrase, type PageKeys } from '../Tool/values';
 import { PDFFile, ProcessingStatus } from '../../types';
-import { loadDisposablePDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
-import { extractPages, getPDFPageCount } from '../../services/pdfDocument';
+import { extractPages, getPDFPageCount, loadDisposablePDFDocument, renderPageAsImage } from '../../services/pdfLazy';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
-import { toolOutputName } from '../UI/format';
+import { formatBytes, toolOutputName } from '../UI/format';
+
+/** The page phrases this sentence owns (plan 2.1); literal keys for the localization check. */
+const EXTRACT_PAGE_KEYS: PageKeys = {
+  all: 'sentence.extract.pages.all',
+  single: 'sentence.extract.pages.single',
+  range: 'sentence.extract.pages.range',
+  list: 'sentence.extract.pages.list',
+  selected: 'sentence.extract.pages.selected',
+  none: 'sentence.extract.pages.none',
+};
+
+/** Thumbnails are drawn at the scale the grid's tiles ask for (plan 2.4); small PDFs only. */
+const DEFAULT_SCALE = 0.35;
+const SHARP_PREVIEW_LIMIT = 24;
+const NOMINAL_PAGE_WIDTH = 612;
 
 export const ExtractPages: React.FC = () => {
   useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
+  // Two fingers on a page, or its eye, open it large (pass 5).
+  const preview = usePagePreview(file?.file, file?.name);
   const [pdfDoc, setPdfDoc] = useState<any | null>(null);
   const [selectedPages, setSelectedPages] = useState<number[]>([]);
   const [rangePending, setRangePending] = useState(false);
+  // A rejected typed range: the slot shows it in the error tone until the field changes.
+  const [rangeRejected, setRangeRejected] = useState(false);
+  const rangeRef = useRef<HTMLInputElement>(null);
+  // Phone (owner decision 2026-11-15, item 1): a setting appears once, as a value in the sentence
+  // whose card holds its control. Desktop keeps the control on the screen beside the sentence.
+  const wide = useWide();
   const [selectionRevision, setSelectionRevision] = useState(0);
   const [loadingPreviews, setLoadingPreviews] = useState(false);
   const [inspectingFile, setInspectingFile] = useState(false);
@@ -33,6 +61,8 @@ export const ExtractPages: React.FC = () => {
   const fileInspectionRef = useRef(false);
   const activeJobControllerRef = useRef<AbortController | null>(null);
   const totalPages = file?.pageCount ?? 0;
+  // Read when a thumbnail loads: the grid has measured its tiles by then.
+  const thumbScaleRef = useRef(DEFAULT_SCALE);
   const selectedPageSet = useMemo(() => new Set(selectedPages), [selectedPages]);
   const canExtract = Boolean(file && totalPages > 0 && selectedPages.length > 0 && !rangePending && !status.isProcessing);
 
@@ -90,7 +120,8 @@ export const ExtractPages: React.FC = () => {
       setPdfDoc(null);
       setFile({ id: uuidv4(), file: selected, name: selected.name, size: selected.size, pageCount });
     } catch (error) {
-      setStatus({ isProcessing: false, progress: 0, message: '', error: localizeError(error) });
+      // A damaged file gets the friendly line, not the engine's text (M-33).
+      setStatus({ isProcessing: false, progress: 0, message: '', error: pdfFailureMessage(error, t('error.pdfUnreadable')) });
     } finally {
       fileInspectionRef.current = false;
       setInspectingFile(false);
@@ -109,7 +140,7 @@ export const ExtractPages: React.FC = () => {
     if (!pdfDoc) throw new Error(t("extract-pages.pdf.is.not.ready.fb76b6"));
     setThumbnailProgress(current => current?.document === pdfDoc ? { ...current, total: current.total + 1, active: current.active + 1 } : current);
     try {
-      const rendered = await renderPageAsImage(pdfDoc, pageIndex, { format: 'image/jpeg', quality: 0.72, scale: 0.35 });
+      const rendered = await renderPageAsImage(pdfDoc, pageIndex, { format: 'image/jpeg', quality: 0.72, scale: thumbScaleRef.current });
       setThumbnailProgress(current => current?.document === pdfDoc ? { ...current, completed: current.completed + 1 } : current);
       return rendered.objectUrl;
     } finally {
@@ -117,8 +148,15 @@ export const ExtractPages: React.FC = () => {
     }
   }), [pdfDoc, totalPages]);
 
+  const onGridFit = useCallback((fit: GridFit) => {
+    if (totalPages > SHARP_PREVIEW_LIMIT) return;
+    const needed = (fit.tile * (window.devicePixelRatio || 1)) / NOMINAL_PAGE_WIDTH;
+    thumbScaleRef.current = Math.min(1.5, Math.max(DEFAULT_SCALE, needed));
+  }, [totalPages]);
+
   const resetRangeDraft = () => {
     setRangePending(false);
+    setRangeRejected(false);
     setSelectionRevision((current) => current + 1);
   };
 
@@ -176,95 +214,155 @@ export const ExtractPages: React.FC = () => {
     }
   };
 
-  return (
-    <ToolShell width="full" centered={!file}>
-      <ToolHeader title={t("extract-pages.extract.pages.1ea574")} />
+  const title = t("extract-pages.extract.pages.1ea574");
+  const toast = <StatusToast status={status} />;
 
-      <AnimatePresence mode="wait">
-        {!file ? (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mx-auto w-full max-w-3xl">
+  if (!file) {
+    return (
+      <ToolScreen
+        title={title}
+        kind="file"
+        body={(
+          <div className="tk-empty">
             <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("extract-pages.choose.a.pdf.to.extract.pages.e82bf1")} />
             {inspectingFile && <PDFLoadingProgress />}
-          </motion.div>
-        ) : (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-3">
-            <ToolPanel className="flex flex-col gap-2.5">
-              <div className="flex min-w-0 items-center gap-2">
-                <button
-                  onClick={reset}
-                  disabled={status.isProcessing}
-                  aria-label={t("extract-pages.choose.another.pdf.9434e3")}
-                  className="chef-pressable chef-target -ml-1 grid shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:opacity-55"
-                >
-                  <ArrowLeft aria-hidden size={18} className="rtl:rotate-180" />
-                </button>
-                <h2 className="chef-filename min-w-0 flex-1 text-sm font-semibold text-[var(--text-primary)]">{file.name}</h2>
-              </div>
-
-              <PageRangeSelector
-                key={`${file.id}-${selectionRevision}`}
-                totalPages={totalPages}
-                disabled={status.isProcessing}
-                onApply={applyPageRange}
-                onPendingChange={setRangePending}
-              />
-              <ToolSelectionBar
-                summary={t("extract-pages.of.selected.2d057c", { v0: selectedPages.length, v1: totalPages })}
-                actions={[
-                  {
-                    key: 'select-all',
-                    label: t("extract-pages.select.all.1fc9a3"),
-                    disabled: status.isProcessing || totalPages === 0 || selectedPages.length === totalPages,
-                    onClick: selectAll,
-                  },
-                  {
-                    key: 'clear',
-                    label: t("extract-pages.clear.83b12c"),
-                    hidden: selectedPages.length === 0,
-                    disabled: status.isProcessing,
-                    onClick: clearSelection,
-                  },
-                ]}
-              />
-            </ToolPanel>
-
-            <Button
-              tone="primary"
-              block
-              busy={status.isProcessing}
-              disabled={!canExtract}
-              icon={<Download aria-hidden size={18} />}
-              onClick={() => void handleExtract()}
-            >{t("extract-pages.message.2f2b9d8bc2", { count: selectedPages.length })}</Button>
-
-            {thumbnailProgress?.document === pdfDoc && thumbnailProgress.active > 0 && <PDFLoadingProgress progress={thumbnailProgress} lazy />}
-            {loadingPreviews ? (
-              <PDFLoadingProgress />
-            ) : previewError ? (
-              <div role="alert" className="px-4 py-4 text-center text-sm font-medium text-[var(--status-danger-text)]">
-                {previewError}
-              </div>
-            ) : totalPages === 0 ? (
-              <p className="px-4 py-4 text-center text-sm text-[var(--text-secondary)]">{t("extract-pages.this.pdf.has.no.pages.in.it.8c754b")}</p>
-            ) : (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
-                {Array.from({ length: totalPages }, (_, index) => (
-                  <PageThumbnail
-                    key={index}
-                    pageIndex={index}
-                    loadPreview={pagePreviewLoaders[index]}
-                    isSelected={selectedPageSet.has(index)}
-                    onToggle={() => togglePage(index)}
-                    disabled={status.isProcessing}
-                  />
-                ))}
-              </div>
-            )}
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+        toast={toast}
+      />
+    );
+  }
 
-      <StatusToast status={status} />
-    </ToolShell>
+  const pages = pagesPhrase(EXTRACT_PAGE_KEYS, selectedPages, totalPages);
+  const noticeId = `extract-notice-${file.id}`;
+
+  // Today's typed field and Select: on the screen at rest on desktop (owner decision 1), in the
+  // slot's card on a phone, so the setting shows once (owner decision 2026-11-15).
+  const rangeField = (
+    <PageRangeSelector
+      key={`${file.id}-${selectionRevision}`}
+      totalPages={totalPages}
+      disabled={status.isProcessing}
+      onApply={applyPageRange}
+      onPendingChange={setRangePending}
+      onDraftChange={(_draft, invalid) => setRangeRejected(invalid)}
+      // A valid range enables Export as it is typed (research r2, H2-02).
+      live
+      inputRef={rangeRef}
+      hideLabel
+      compact
+    />
+  );
+
+  const sentence = (
+    <Sentence
+      template={selectedPages.length ? 'sentence.extract.someExport' : 'sentence.extract.noneExport'}
+      groupLabel={t('sentence.groupLabel', { tool: title })}
+      disabled={status.isProcessing}
+      slots={{
+        pages: {
+          label: t('page-range-selector.label'),
+          text: pages.text,
+          bidi: pages.ltr ? 'ltr' : undefined,
+          // Only the chosen pages: a rejected range stays in the field with its error line.
+          ...(rangePending ? { tone: 'pending' as const } : {}),
+          ...(wide ? { focusTarget: () => rangeRef.current } : { editor: rangeField }),
+        },
+      }}
+    />
+  );
+
+  const chips = (
+    <>
+    {wide && rangeField}
+    <ChipActions
+      actions={[
+        {
+          key: 'select-all',
+          label: t("extract-pages.select.all.1fc9a3"),
+          disabled: status.isProcessing || totalPages === 0 || selectedPages.length === totalPages,
+          onClick: selectAll,
+        },
+        {
+          key: 'clear',
+          label: t("extract-pages.clear.83b12c"),
+          hidden: selectedPages.length === 0,
+          disabled: status.isProcessing,
+          onClick: clearSelection,
+        },
+      ]}
+    />
+    </>
+  );
+
+  // A rejected range: the field's own error line says what is wrong, so no "Press Select" here.
+  const notice = rangePending && !rangeRejected ? <Notice tone="pending" id={noticeId}>{t('page-range-selector.pending.select')}</Notice> : null;
+
+  const action = (
+    <button
+      type="button"
+      onClick={() => void handleExtract()}
+      disabled={!canExtract}
+      aria-describedby={notice ? noticeId : undefined}
+      className="tk-primary chef-pressable"
+    >
+      <Download aria-hidden size={18} />
+      {/* Nothing chosen: what to do, not "Export 0 selected pages" (review 2, item 17). */}
+      <span>{selectedPages.length ? t("extract-pages.message.2f2b9d8bc2", { count: selectedPages.length }) : t('extract-pages.chooseToExport')}</span>
+    </button>
+  );
+
+  const progress = status.isProcessing ? (
+    <ProgressLine label={status.message} percent={formatPercent(status.progress)} value={status.progress} />
+  ) : undefined;
+
+  const body = (
+    <>
+      {preview.modal}
+      <h2 id="extract-pages-heading" className="sr-only">{title}</h2>
+      {/* The slot shows the choice; this line speaks today's count when it changes. */}
+      <p className="sr-only" role="status" aria-live="polite">{t("extract-pages.of.selected.2d057c", { v0: selectedPages.length, v1: totalPages })}</p>
+      {thumbnailProgress?.document === pdfDoc && thumbnailProgress.active > 0 && <PDFLoadingProgress progress={thumbnailProgress} lazy />}
+      {loadingPreviews ? (
+        <PDFLoadingProgress />
+      ) : previewError ? (
+        <div role="alert" className="tk-grid-state tk-grid-error"><ErrorText text={previewError} file={file?.file} /></div>
+      ) : totalPages === 0 ? (
+        <p className="tk-grid-state">{t("extract-pages.this.pdf.has.no.pages.in.it.8c754b")}</p>
+      ) : (
+        <PageGrid count={totalPages} onFit={onGridFit} gestureRef={preview.pinchRef}>
+          {Array.from({ length: totalPages }, (_, index) => (
+            <div key={index} className="tk-peekbox" data-peek-page={index}>
+              <PageThumbnail
+                pageIndex={index}
+                loadPreview={pagePreviewLoaders[index]}
+                isSelected={selectedPageSet.has(index)}
+                onToggle={() => togglePage(index)}
+                disabled={status.isProcessing}
+              />
+              {preview.peek(index)}
+            </div>
+          ))}
+        </PageGrid>
+      )}
+    </>
+  );
+
+  return (
+    <ToolScreen
+      title={title}
+      file={{ name: file.name, meta: <>{t('format.pageCount', { count: totalPages })} · {formatBytes(file.size)}</> }}
+      heavyJob={{ bytes: file.size }}
+      change={<ChangeFile label={t('tool.chooseAnotherFile')} onClick={reset} disabled={status.isProcessing} />}
+      kind="grid"
+      bodyLabelledBy="extract-pages-heading"
+      body={body}
+      sentence={sentence}
+      chips={chips}
+      notice={notice}
+      action={action}
+      progress={progress}
+      toast={toast}
+    />
   );
 };

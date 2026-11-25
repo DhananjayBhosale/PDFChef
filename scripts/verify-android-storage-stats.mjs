@@ -39,7 +39,7 @@ assert(plugin.includes('request.length() != 0'), 'request must be exactly empty'
 assert(count(plugin, /output\.put\("(?:retainedBytes|availableBytes|capacityBytes|memoryBytes)"/g) === 4, 'exact four-field DTO missing');
 assert(!/getMessage\s*\(|printStackTrace\s*\(|\bLog\.|System\.out/.test(plugin), 'plugin detail leak');
 assert(!/addListener|stat\s*\(|exists\s*\(|list\s*\(/.test(plugin), 'unaccepted storage method exposed');
-assert(!/AndroidStorageStatsPlugin/.test(mainActivity), 'registration must remain gated');
+assert((mainActivity.match(/registerPlugin\(AndroidStorageStatsPlugin\.class\)/g) ?? []).length === 1, 'MainActivity must register the plugin exactly once');
 
 assert(/getStorageStats\(\):\s*Promise<unknown>/.test(client), 'strict no-argument native shape missing');
 assert(client.includes("registerPlugin<AndroidStorageStatsNativePlugin>('AndroidStorageStats')"), 'native proxy drift');

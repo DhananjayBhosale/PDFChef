@@ -1,12 +1,15 @@
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FileText, FolderOpen, Upload } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { AlertTriangle, FileText, FolderOpen, Upload } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { getDropZoneError, registerDropZone, rememberPickedFile, subscribeDropZoneError } from './dropZone';
+import { ErrorText } from './ErrorText';
 import { useOpenedPdf, type OpenedPdfRouteState } from '../../hooks/useOpenedPdf';
 import { Button, cx } from './Primitives';
 import { useHaptics } from '../../hooks/useWorkspaceRuntime';
-import { useFileDrop } from '../../hooks/useFileDrop';
+import { takeHandedDrop, useFileDrop } from '../../hooks/useFileDrop';
+import { preloadPdfEngine } from '../../services/pdfLazy';
 
 interface FileUploadProps {
   onFilesSelected: (files: File[]) => void;
@@ -19,6 +22,10 @@ interface FileUploadProps {
    * itself.
    */
   allowOpenedPdf?: boolean;
+  /** Why the last file did not open; shown inside the zone, under its label (T-09). */
+  error?: string;
+  /** A drop hands on every file even when the picker takes one (Compare: A, then B). */
+  dropsAll?: boolean;
 }
 
 /**
@@ -32,8 +39,22 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   multiple = false,
   label = t("file-upload.choose.a.pdf.3ba70f"),
   allowOpenedPdf = true,
+  error,
+  dropsAll = false,
 }) => {
   useI18n();
+  // An empty file is refused at the door (T-09): it can only fail later, after a main action looked ready.
+  const [emptyError, setEmptyError] = useState('');
+  const handedError = useSyncExternalStore(subscribeDropZoneError, getDropZoneError, () => '');
+  useEffect(() => registerDropZone(accept), [accept]);
+  const intake = (files: File[]) => {
+    const empty = files.filter((file) => file.size === 0);
+    setEmptyError(empty.length ? t('file-upload.empty.file', { v0: empty[0].name }) : '');
+    const usable = files.filter((file) => file.size > 0);
+    rememberPickedFile(window.location.pathname, usable);
+    if (usable.length) onFilesSelected(usable);
+  };
+  const shownError = emptyError || error || handedError;
   const [isDragging, setIsDragging] = useState(false);
   const usedOpenedPdf = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -42,10 +63,17 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   const navigate = useNavigate();
   const { openedPdf } = useOpenedPdf();
   const haptic = useHaptics();
-  useFileDrop({ accept, element: dropRef, onFiles: (files) => {
+  const takeDrop = (files: File[]) => {
     haptic('commit');
-    onFilesSelected(multiple ? files : files.slice(0, 1));
-  } });
+    intake(multiple || dropsAll ? files : files.slice(0, 1));
+  };
+  useFileDrop({ accept, element: dropRef, onFiles: takeDrop });
+  // A file dropped on the loaded tool: its Change brought this zone back, and the file comes in here.
+  useEffect(() => {
+    const handed = takeHandedDrop(window.location.pathname);
+    if (handed) takeDrop(handed);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as the zone appears
+  }, []);
 
   const acceptsPdf = accept.toLowerCase().includes('.pdf') || accept.toLowerCase().includes('application/pdf');
   const routeState = location.state as OpenedPdfRouteState | null;
@@ -70,10 +98,15 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         replace: true,
         state: { ...routeState, useOpenedPdf: false },
       });
+      rememberPickedFile(location.pathname, [openedPdf.file]);
       onFilesSelected([openedPdf.file]);
     });
     return () => { cancelled = true; };
   }, [canUseOpenedPdf, location.pathname, location.search, location.hash, navigate, onFilesSelected, openedPdf, routeState]);
+
+  // PDF.js is not part of a tool's first screen: it starts loading once a person reaches for the
+  // zone, so it is usually ready by the time the picker closes.
+  const preload = acceptsPdf ? preloadPdfEngine : undefined;
 
   const openPicker = useCallback(() => {
     haptic('selection');
@@ -84,6 +117,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     <div
       ref={dropRef}
       data-file-upload
+      onPointerDownCapture={preload}
+      onFocusCapture={preload}
+      onDragEnter={preload}
       onDragOver={(event) => {
         event.preventDefault();
         if (!isDragging) setIsDragging(true);
@@ -117,7 +153,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           const picked = Array.from(event.target.files ?? []);
           if (picked.length > 0) {
             haptic('commit');
-            onFilesSelected(picked);
+            intake(picked as File[]);
           }
           event.target.value = '';
         }}
@@ -131,6 +167,12 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       </span>
 
       <h2 className="type-title3 font-semibold text-[var(--text-primary)]">{label}</h2>
+      {shownError && (
+        <p role="alert" className="tk-drop-error">
+          <AlertTriangle aria-hidden size={16} className="mt-0.5 shrink-0" />
+          <span><ErrorText text={shownError} /></span>
+        </p>
+      )}
 
       <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
         <Button tone="primary" icon={<FolderOpen aria-hidden size={16} />} onClick={openPicker}>

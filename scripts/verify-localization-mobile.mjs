@@ -116,10 +116,14 @@ try {
       // Field identifiers remain literal, but their UI types must be localized.
       await check('/make-fillable');
       await page.locator('input[type="file"]').first().setInputFiles({ name: 'localization-control.pdf', mimeType: 'application/pdf', buffer: fixture });
-      const type = page.locator('aside select').first();
+      // On phones the new-field form is a foot sheet opened by "New field" (T-02).
+      await page.locator('[aria-controls="fillable-new-field"]').click();
+      const sheet = page.locator('#fillable-new-field');
+      const type = sheet.locator('select').first();
       await type.selectOption('checkbox');
       const typeLabel = await type.locator('option:checked').textContent();
-      await page.locator('aside input[placeholder]').first().fill('regression_field');
+      await sheet.locator('input[placeholder]').first().fill('regression_field');
+      await page.keyboard.press('Escape');
       const preview = page.locator('main img[draggable="false"]').first();
       await preview.scrollIntoViewIfNeeded();
       const box = await preview.boundingBox();

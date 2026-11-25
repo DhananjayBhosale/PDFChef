@@ -1,19 +1,18 @@
-import { t } from '../../services/i18n/core.ts';
+import { t, formatPercent } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { Eye, EyeOff, Unlock, UnlockKeyhole } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import { UNLOCK_FAILED_MESSAGE } from '../../services/androidParity';
-import { opensWithoutPassword } from '../../services/pdfBrowser';
-import { unlockPDF } from '../../services/pdfDocument';
+import { opensWithoutPassword, unlockPDF } from '../../services/pdfLazy';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
 import { PDFFile, ProcessingStatus } from '../../types';
-import { Button, StatusLine } from '../UI/Primitives';
 import { FileUpload } from '../UI/FileUpload';
-import { StatusToast } from '../UI/StatusToast';
-import { ToolHeader, ToolPanel, ToolShell } from '../UI/ToolLayout';
-import { toolOutputName } from '../UI/format';
+import { formatBytes, toolOutputName } from '../UI/format';
+import { ToolScreen, pressMainAction } from '../Tool/ToolScreen';
+import { ChangeFile } from '../Tool/ToolTop';
+import { Sentence } from '../Tool/Sentence';
+import { FileStand, Notice, ProgressLine } from '../Tool/parts';
+import { isConfirmEnter } from '../UI/keys';
 
 const EMPTY_STATUS: ProcessingStatus = { isProcessing: false, progress: 0, message: '' };
 
@@ -79,88 +78,106 @@ export const UnlockPDF: React.FC = () => {
     }
   };
 
-  return (
-    <ToolShell centered={!file}>
-      <ToolHeader title={t("unlock-pdf.unlock.pdf.893947")} />
+  const title = t("unlock-pdf.unlock.pdf.893947");
 
-      <AnimatePresence mode="wait">
-        {!file ? (
-          <motion.div
-            key="upload"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-          >
-            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("unlock-pdf.choose.a.locked.pdf.a2cdfa")} />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="unlock"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mx-auto flex max-w-md flex-col gap-3"
-          >
-            <ToolPanel className="flex items-start gap-2.5">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius-control)] bg-[var(--surface-sunken)] text-[var(--text-secondary)]">
-                <UnlockKeyhole aria-hidden size={18} />
-              </span>
-              <div className="min-w-0">
-                <h2 className="chef-filename text-sm font-semibold text-[var(--text-primary)]">{file.name}</h2>
-              </div>
-            </ToolPanel>
-
-            {/* Kept: the export loses permission restrictions too, which the
-                button label does not say. */}
-            <StatusLine tone="info">{t("unlock-pdf.the.exported.copy.loses.its.password.and.3b2f40")}</StatusLine>
-
-            {needsPassword && <div>
-              <label htmlFor="unlock-password" className="mb-1 block type-footnote font-semibold text-[var(--text-secondary)]">{t("unlock-pdf.enter.password.7014af")}</label>
-              <div className="relative">
-                <input
-                  id="unlock-password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(event) => {
-                    setPassword(event.target.value);
-                    if (!status.isProcessing && (status.error || status.message)) setStatus(EMPTY_STATUS);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && password.length > 0) void handleUnlock();
-                  }}
-                  placeholder={t("unlock-pdf.current.password.72ed2b")}
-                  autoComplete="current-password"
-                  spellCheck={false}
-                  aria-describedby="unlock-password-help"
-                  className="chef-field pr-12"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((visible) => !visible)}
-                  aria-label={showPassword ? t("unlock-pdf.hide.password.a60a56") : t("unlock-pdf.show.password.6aeaa6")}
-                  className="absolute inset-y-0 right-0 grid w-12 place-items-center rounded-r-[var(--radius-field)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--focus-ring)]"
-                >
-                  {showPassword ? <EyeOff aria-hidden size={19} /> : <Eye aria-hidden size={19} />}
-                </button>
-              </div>
-              <p id="unlock-password-help" className="type-caption mt-1 font-normal normal-case tracking-normal text-[var(--text-tertiary)]">{t("unlock-pdf.leading.trailing.and.whitespace.only.passwords.are.f7b1c0")}</p>
-            </div>}
-
-            <div className="flex flex-col gap-2">
-              <Button
-                tone="primary"
-                block
-                busy={status.isProcessing || needsPassword === null}
-                disabled={needsPassword !== false && password.length === 0}
-                icon={<Unlock aria-hidden size={18} />}
-                onClick={() => void handleUnlock()}
-              >{t("unlock-pdf.unlock.pdf.893947")}</Button>
-              <Button tone="quiet" block onClick={reset} disabled={status.isProcessing}>{t("unlock-pdf.choose.another.file.26eac8")}</Button>
-            </div>
-          </motion.div>
+  if (!file) {
+    return (
+      <ToolScreen
+        title={title}
+        kind="form"
+        body={(
+          <div className="tk-empty">
+            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("unlock-pdf.choose.a.locked.pdf.a2cdfa")} error={status.error} />
+          </div>
         )}
-      </AnimatePresence>
+      />
+    );
+  }
 
-      <StatusToast status={status} />
-    </ToolShell>
+  const notice = status.error
+    ? <Notice tone="error" role="alert">{status.error}</Notice>
+    : !status.isProcessing && status.progress === 100 && status.message
+      ? <Notice role="status">{status.message}</Notice>
+      : null;
+
+  const form = needsPassword ? (
+    <div className="tk-form">
+      <div className="tk-field">
+        <label htmlFor="unlock-password">{t("unlock-pdf.enter.password.7014af")}</label>
+        {/* Why Unlock waits, inside the field's box as on Protect (research r2, H2-03). */}
+        <div className="tk-hintfield tk-pwhint">
+        <div className="tk-pw">
+          <input
+            id="unlock-password"
+            type={showPassword ? 'text' : 'password'}
+            value={password}
+            onChange={(event) => {
+              setPassword(event.target.value);
+              if (!status.isProcessing && (status.error || status.message)) setStatus(EMPTY_STATUS);
+            }}
+            onKeyDown={(event) => {
+              // The same Enter must not also press the question's first button.
+              if (isConfirmEnter(event) && password.length > 0 && pressMainAction(event.currentTarget)) event.preventDefault();
+            }}
+            placeholder={t("unlock-pdf.current.password.72ed2b")}
+            autoComplete="current-password"
+            spellCheck={false}
+            disabled={status.isProcessing}
+            aria-describedby="unlock-password-required unlock-password-help"
+            className="chef-field"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((visible) => !visible)}
+            aria-label={showPassword ? t("unlock-pdf.hide.password.a60a56") : t("unlock-pdf.show.password.6aeaa6")}
+            className="chef-pressable"
+          >
+            {showPassword ? <EyeOff aria-hidden size={19} /> : <Eye aria-hidden size={19} />}
+          </button>
+        </div>
+        {/* A wrong password's error replaces the hint, which would contradict it (research r3, H2-02). */}
+        {!status.error && <span id="unlock-password-required" className="tk-hintfield-hint">{t("android-parity.password.is.required.to.unlock.the.pdf.be2e2e")}</span>}
+        </div>
+        <span id="unlock-password-help" className="sr-only">{t("unlock-pdf.leading.trailing.and.whitespace.only.passwords.are.f7b1c0")}</span>
+      </div>
+    </div>
+  ) : undefined;
+
+  return (
+    <ToolScreen
+      title={title}
+      file={{ name: file.name, meta: formatBytes(file.size) }}
+      heavyJob={{ bytes: file.size }}
+      change={<ChangeFile label={t('tool.chooseAnotherFile')} onClick={reset} disabled={status.isProcessing} />}
+      kind="form"
+      bodyLabel={title}
+      // A locked file cannot be drawn: its card stands in for the preview.
+      body={<FileStand icon={<UnlockKeyhole aria-hidden />} />}
+      side={form}
+      // Kept: the export loses permission restrictions too, which the button label does not say.
+      sentence={(
+        <Sentence
+          template="unlock-pdf.the.exported.copy.loses.its.password.and.3b2f40"
+          groupLabel={t('sentence.groupLabel', { tool: title })}
+          disabled={status.isProcessing}
+        />
+      )}
+      notice={notice}
+      action={(
+        <button
+          type="button"
+          disabled={status.isProcessing || needsPassword === null || (needsPassword !== false && password.length === 0)}
+          aria-describedby={needsPassword && password.length === 0 ? 'unlock-password-required' : undefined}
+          onClick={() => void handleUnlock()}
+          className="tk-primary chef-pressable"
+        >
+          <Unlock aria-hidden size={18} />
+          <span>{title}</span>
+        </button>
+      )}
+      progress={status.isProcessing ? (
+        <ProgressLine label={status.message} percent={formatPercent(Math.max(0, Math.min(100, status.progress)))} value={status.progress} />
+      ) : undefined}
+    />
   );
 };

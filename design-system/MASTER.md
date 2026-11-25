@@ -17,36 +17,34 @@ in `docs/brand-guidelines.md`; values live in `assets/design-tokens.json` and
 
 Five hues. Restrained strategy: neutrals plus one accent, three status hues.
 
-- `paper` — warm neutral ground, hue 82. The page, panels, borders, all text.
-  Never `#fff`, never `#000`.
-- `ink` — the single accent, Android logo red at hue 24-28. The token name is
-  retained for compatibility. `#E42121` is the exact light logo anchor;
-  `#DC2020` is the AA light semantic accent; `#FF4D52` is the exact dark
-  semantic accent. Primary action, current tab, selection, focus ring. Not
-  decoration.
+- `paper` — warm neutral ground with a faint yellow-brown cast. Canvas is
+  `paper-50` (`#faf7f2`), the raised card is `paper-25` (`#ffffff`), the sunken
+  track is `paper-100`. Never `#000`.
+- `ink` — the single accent, one tomato red. The token name is retained for
+  compatibility. `--accent-rest` is `#c23a22` light and `#c9402a` dark. Primary
+  action, current tab, selection, slots. Not decoration.
 - `success` (145) finished and actually smaller · `caution` (75) beta, memory
   pressure, review-first · `danger` (22) delete, clear, failed.
 
 Semantic aliases (`--surface-*`, `--text-*`, `--border-*`, `--accent-*`,
 `--status-*`) resolve per theme. Components read the aliases, never a raw step.
+The full ramps and semantic values are in `docs/brand-guidelines.md`.
 
 Tailwind's stock family names are re-pointed at these ramps in
 `tailwind.config.cjs`, so the pre-existing tool components inherit the palette
 without being edited. New code uses `paper-*`, `ink-*`, `success-*`, `caution-*`,
 `danger-*`, or the `surface` / `content` / `edge` aliases.
 
-The canonical `#E42121` logo red reaches 4.25:1 on light paper, below the 4.5:1
-AA threshold for normal text. Light semantic accent uses the smallest uniformly
-darker derivative that clears it: `#DC2020` at 4.52:1. Dark semantic accent uses
-`#FF4D52` at 5.64:1 on `#16140F`. Keep action red and danger clay semantically
-separate and pair status with words or an icon. The original Android app logo
-keeps its supplied colours.
+`--accent-rest` is the accent as a *fill, border and focus-ring tint*, where
+3:1 is what is owed. As a label or a glyph on a neutral surface it is one step
+too light on the sunken surface, so accent-coloured text reads `--accent-text`
+instead: `#a93119` light, `#ff8a70` dark. The focus ring is not the accent: it is
+`#1d1a16` light and `#f4eee4` dark, so it stays visible on an accent fill. The
+Android app logo keeps its supplied colours.
 
-`--accent-rest` is the accent as a *fill, border and focus ring*, where 3:1 is
-what is owed. As a label or a glyph on a neutral surface it misses 4.5:1 on the
-sunken surface, so accent-coloured text reads `--accent-text` instead: `ink-700`
-light, `ink-300` dark. Nothing else changes; the button, the ring and the
-selected edge stay the brand step.
+New tokens: `--slot-tint` (the tint of a slot, a value in a sentence that opens an
+editor), `--radius-slot` 6px, `--radius-pop` 10px, `--elevation-chip` (the lift of
+a selected chip), `--font-display` and `--font-display-weight`.
 
 ## Contrast and edges
 
@@ -54,14 +52,44 @@ Every semantic value is chosen against all three surfaces of its own theme —
 canvas, raised, sunken — not against the lightest one. A value that passes on
 `raised` and fails on `sunken` has not passed.
 
-Text is four steps, and each one clears 4.5:1 on all three:
+Text is four steps, and each one clears 4.5:1 on all three. The ratios below
+are computed by `node scripts/check-token-contrast.mjs` (which also fails if
+`assets/design-tokens.json` and `assets/design-tokens.css` disagree); re-run it
+with `--markdown` after any token change and paste the table here.
 
-| token | light | dark | worst ratio |
-| --- | --- | --- | --- |
-| `--text-primary` | `#24211d` | `paper-50` | 13.6 |
-| `--text-body` | `#4a443c` | `paper-200` | 8.2 |
-| `--text-secondary` | `#615a50` | `#c9c1b3` | 5.8 |
-| `--text-tertiary` | `#6e675c` | `#ada395` | 4.8 |
+| Pair | Theme | Against | Canvas | Raised | Sunken | Needs |
+|---|---|---|---|---|---|---|
+| `--text-primary` | light | canvas / raised / sunken | 16.22 | 17.33 | 14.87 | 4.5 |
+| `--text-body` | light | canvas / raised / sunken | 12.26 | 13.11 | 11.25 | 4.5 |
+| `--text-secondary` | light | canvas / raised / sunken | 7.41 | 7.92 | 6.80 | 4.5 |
+| `--text-tertiary` | light | canvas / raised / sunken | 5.27 | 5.63 | 4.83 | 4.5 |
+| `--accent-text` | light | canvas / raised / sunken | 6.26 | 6.69 | 5.74 | 4.5 |
+| `--border-strong` | light | canvas / raised / sunken | 3.94 | 4.21 | 3.61 | 3 |
+| `--text-on-accent` | light | --accent-rest | 5.35 |  |  | 4.5 |
+| `--accent-text` | light | --accent-quiet | 5.69 | 5.69 | 5.69 | 4.5 |
+| `--accent-on-quiet` | light | --accent-quiet | 7.46 | 7.46 | 7.46 | 4.5 |
+| `--status-success-text` | light | canvas / raised / sunken | 6.08 | 6.49 | 5.57 | 4.5 |
+| `--status-success-text` | light | --status-success-quiet | 5.62 | 5.62 | 5.62 | 4.5 |
+| `--status-caution-text` | light | canvas / raised / sunken | 5.93 | 6.34 | 5.44 | 4.5 |
+| `--status-caution-text` | light | --status-caution-quiet | 5.49 | 5.49 | 5.49 | 4.5 |
+| `--status-danger-text` | light | canvas / raised / sunken | 6.56 | 7.01 | 6.01 | 4.5 |
+| `--status-danger-text` | light | --status-danger-quiet | 5.82 | 5.82 | 5.82 | 4.5 |
+| `--text-primary` | dark | canvas / raised / sunken | 16.20 | 15.17 | 14.03 | 4.5 |
+| `--text-body` | dark | canvas / raised / sunken | 13.48 | 12.63 | 11.67 | 4.5 |
+| `--text-secondary` | dark | canvas / raised / sunken | 9.16 | 8.58 | 7.93 | 4.5 |
+| `--text-tertiary` | dark | canvas / raised / sunken | 6.20 | 5.81 | 5.37 | 4.5 |
+| `--accent-text` | dark | canvas / raised / sunken | 8.12 | 7.61 | 7.03 | 4.5 |
+| `--border-strong` | dark | canvas / raised / sunken | 4.44 | 4.16 | 3.85 | 3 |
+| `--text-on-accent` | dark | --accent-rest | 4.94 |  |  | 4.5 |
+| `--accent-text` | dark | --accent-quiet | 6.52 | 6.52 | 6.52 | 4.5 |
+| `--accent-on-quiet` | dark | --accent-quiet | 9.72 | 9.72 | 9.72 | 4.5 |
+| `--status-success-text` | dark | canvas / raised / sunken | 10.29 | 9.64 | 8.91 | 4.5 |
+| `--status-success-text` | dark | --status-success-quiet | 7.89 | 7.24 | 6.54 | 4.5 |
+| `--status-caution-text` | dark | canvas / raised / sunken | 10.41 | 9.75 | 9.01 | 4.5 |
+| `--status-caution-text` | dark | --status-caution-quiet | 7.89 | 7.26 | 6.62 | 4.5 |
+| `--status-danger-text` | dark | canvas / raised / sunken | 9.41 | 8.81 | 8.14 | 4.5 |
+| `--status-danger-text` | dark | --status-danger-quiet | 7.29 | 6.69 | 6.11 | 4.5 |
+PASS: 30 contrast pairs and the JSON mirror
 
 Edges are two, and the difference between them is a rule rather than a shade:
 
@@ -132,7 +160,14 @@ a button drawn only that way is a label floating on the panel.
 
 `Inter` is bundled and is the default interface and numeric family. `Manrope`
 and `System` (SF Pro on Apple devices) remain selectable in Settings, alongside
-the existing accessibility-oriented alternatives. No separate display face.
+the existing accessibility-oriented alternatives. The one exception is the title
+serif: `--font-display` (a system serif chosen per script with `:lang()`, weight
+600: Iowan Old Style / Charter / Noto Serif for Latin and Cyrillic, Hiragino
+Mincho for Japanese, Songti for Chinese, AppleMyungjo for Korean, and the
+interface font for Arabic and Hindi) is used for tab-root titles, tool titles,
+the brand name in the rail and on the home header, and the tool sentence.
+Nothing else. Nothing is downloaded, and the interface font a person picks in
+Settings still sets everything else.
 
 **The Android app is the size authority.** Both shells ship the same typeface at
 the same density and a WebView CSS pixel is an Android dp, so the product
@@ -181,17 +216,24 @@ text.
   before. The existing capability flag answers the question — no surface sniffs
   a user agent — and where a boundary is already stated at the press that
   decides it, the screen header does not repeat it.
-- **An open tool's copy budget is what would cost the user work.** A tool page
-  gets a title and, at most, one line under it, and it gets that line only for
-  something the controls cannot say: a lossy or destructive consequence, a
-  password rule, a beta fidelity limit, an accepted-format constraint, an output
-  format. A sentence that restates the title, the upload label, the export
-  button, or the next obvious gesture is deleted, not shortened. Most tools pass
-  no line at all.
+- **A tool screen has no line under its title.** The catalog description stays
+  on the Tools home row only. Before a file is chosen the screen is the title and
+  the picker label, which names the task. Once a file is loaded, what the tool
+  will do is said once, in the sentence above the main action (a statement or a
+  sentence with slots), and the one notice line under it carries an error, a
+  pending value, a caution or the outcome, in that order. Honesty limits that
+  `PRODUCT.md` requires (Office converters, passwords) stay as that caution line.
+- A hint under a label becomes the field's placeholder; when the field already
+  has one, the hint becomes its `aria-describedby` text, visually hidden. Error
+  and caution lines stay visible.
 - The same explanation never appears above and below the control it describes.
-  When a limit belongs to a decision, it lives beside the button that makes it,
-  not under the page title as well. `ToolHeader`'s `note` is the single slot for
-  the exception.
+  When a limit belongs to a decision, it lives at the decision.
+- **English first.** A new string is added to `services/i18n/en-US.ts` and to
+  `services/i18n/pending.ts`; `node scripts/sync-locale-fallbacks.mjs` then writes
+  the English text into the other 21 locale files and drafts. Nothing is missing at
+  runtime and the list says exactly what a translator still has to do. Strings that
+  already exist stay in the person's language: labels, button names, errors and the
+  statements of one-action tools reuse today's keys.
 - Instructions for gestures the interface already offers by other means are
   copy, not help: "select pages, then turn them left or right" beside a Left and
   a Right button, "drag to place" above a position slider, "tap a thumbnail to
@@ -200,7 +242,7 @@ text.
 
 ## Spacing and shape
 
-- Radii step with surface size: control 12, field 14, row 16, panel 22, sheet 28.
+- Radii: control is a pill (999), field 10, row 16, panel 10, sheet 18, slot 6, popover 10. Surfaces are flat (`--elevation-raised: none`) and bounded by a hairline; only popovers and sheets lift, and the selected chip of a segmented strip keeps `--elevation-chip`.
 - Spacing varies by role. Do not apply one padding value everywhere.
 - Reading measure 68ch for prose. Data may run denser.
 - **One touch floor: 48px, `--size-touch-target`.** The product ships a WebView
@@ -238,33 +280,49 @@ text.
 
 ### Active-tool rhythm
 
-- A tool that already has a document is spending screen on the document. The
-  frame is `ToolShell`: 16px gutter, 16px of page padding on a phone, the airier
-  padding only from `sm:` up. Vertical gaps inside a live workflow are 8, 10, 12
-  or 16px by role. 24 and 32 are for a genuine change of section, not for the
-  space between a control and the thing it controls.
-- Option surfaces hug their content: `ToolPanel` is 12px of padding on a phone.
-  A two- or three-way choice is a strip (`ToolChoiceRow`, `SegmentedControl`, a
-  `grid-cols-3` of 40px chips), never a column of large padded cards, and never
-  a card carrying a second line that restates its own label.
-- Visual boxes inside an active tool sit at 38–44px and reach the 48px floor
-  through `chef-hit-y`, exactly as the shell's own controls do. The touch floor
-  is never lowered to buy density.
+Every tool route is one `ToolScreen` (`components/Tool/ToolScreen.tsx`), drawn
+full-viewport: no side rail, no tab bar, no navigation bar of the shell's own.
+
+- **Header (`ToolTop`)**: 48px plus the top safe area on a phone, 52px from
+  768px. In order: Back (only when the screen behind is known and is not Tools
+  home, and the page was not opened from Settings), the brand link (desktop), the
+  tool's mark and its name as the page `h1` (serif) with the small BETA badge on
+  beta tools, the file name and meta (desktop), the tool's "change the file"
+  control (`ChangeFile`: words on desktop and for short labels, otherwise an icon
+  with the words as its name), and **Tools** at the end (start edge in RTL). A page
+  opened from Settings shows "‹ Settings" there. No Recent, no Settings.
+- **Phone, grid / list / file / form bodies**: header, the file line, the body
+  (scrolls), then a foot sheet (raised surface, 18px top radius, hairline, safe-area
+  padding) holding the result strip, the sentence, chips, the notice and the main
+  action row. While running the action row is the progress line with Cancel. The
+  sheet takes at most 40% of the screen at default text (Large and Largest keep the
+  80% cap and scroll inside); with a result in it, the outcome line gives way.
+  A setting appears once on a phone: as a value in the sentence whose card holds its
+  control, never also as a control under the sentence (owner decision 2026-11-15).
+- **Phone, preview bodies**: header, the sentence as a slim band on top, the preview
+  as tall as the space allows, and a foot bar with the result strip and the actions
+  (secondary outlined, main filled). While a card is open the preview keeps at least
+  40% of the screen, or 30% when the card's controls need more room: the card's
+  height is capped there, its body scrolls under its fixed title and close control,
+  and the preview's own tools step aside.
+- **Desktop (768px and up, tablets included)**: header, then one full-width band
+  with the sentence, chips and notice at its start and the secondary and main
+  action at its end with the result strip under them; then the canvas, which fills
+  the rest of the viewport (own scroll, 24px padding). No right panel.
+- **Editors** (Edit PDF, Sign, Make Fillable, Image to PDF's page editor) keep
+  their own toolbar and main action. The result strip is drawn in a slot they
+  provide above the toolbar (`components/UI/resultSlot.ts`).
+- Vertical gaps inside a live workflow are 8, 10, 12 or 16px by role. 24 and 32
+  are for a genuine change of section.
+- Visual boxes sit at 38–44px and reach the 48px floor through `chef-hit-y`, as
+  the shell's own controls do. The touch floor is never lowered to buy density.
+  `scripts/verify-ui-controls.mjs --touch` measures it for every control.
 - No tool reserves space for a control that is not live. A chip with nothing to
-  do — Reset before the first change — is removed from the row rather than
-  greyed out in a row of its own. `ToolChipAction.hidden` is that switch.
-- **The primary action is in normal document flow**, directly under the options
-  or the selection summary it acts on, and before the page list or queue it
-  produces. A phone export bar pinned above the tab bar covers the last item and
-  then needs a spacer under the content to uncover it. Only a genuine immersive
-  editor — one whose route takes the whole viewport and draws its own chrome —
-  keeps a persistent action, and it keeps it in that chrome, never over the page.
-- **No tool adds its own bottom spacer.** The shell already reserves the tab bar
-  with `chef-tab-inset`; an `h-24`, a `pb-28` or a `pb-64` under the content is a
-  second inset nobody asked for and reads as an unexplained gap between the
-  document and the action.
-- Control order in an open tool is fixed: source, essential options, primary
-  action, live status and result, then preview or queue.
+  do is removed from the row, not greyed out.
+- **No tool adds its own bottom spacer.** The foot sheet already clears the safe
+  area, the keyboard (`--chef-keyboard-inset`) and the result strip.
+- Control order in an open tool is fixed: source, the sentence with its settings,
+  the primary action, live status and result, then the preview or queue.
 
 ## Components
 
@@ -273,19 +331,54 @@ one field shape, one switch, one segmented control, one sheet, one confirmation,
 one empty state, one status line, one skeleton. If a control looks different on
 two screens, one of them is wrong.
 
-A tool page's own frame lives beside it in `components/UI/ToolLayout.tsx`:
-`ToolShell` (gutter and page padding), `ToolHeader` (title and the single
-optional note), `ToolPanel` (an option surface that hugs its content),
-`OptionRows` / `InlineOptionRow` (divided rows instead of stacked cards),
-`ToolChoiceRow` (two or three labelled actions shoulder to shoulder at 40px with
-18px icons) and `ToolSelectionBar` (a live count and its chips on one line, with
-chips that are absent rather than dead). A tool that reaches for a raw padded
-card, a bespoke page wrapper or a hand-rolled action pair is reintroducing the
-density these replace.
+A tool page is built from the tool kit in `components/Tool/` (class prefix `tk-`,
+styles in `components/Tool/tool.css`). `ToolShell`, `ToolHeader`, `ToolPanel`,
+`OptionRows`, `ToolChoiceRow` and `ToolSelectionBar` no longer exist; a tool that
+reaches for a raw padded card, a bespoke page wrapper or a hand-rolled action pair
+is reintroducing the density the kit replaced.
+
+- **ToolScreen**: the one layout (see Active-tool rhythm). Props: `title`, `beta`,
+  `file`, `change`, `leading`, `kind` (`grid`, `list`, `file`, `preview`, `form`,
+  `editor`), `body`, `side`, `lead`, `sentence`, `chips`, `notice`, `action`,
+  `secondary`, `progress`, `toast`, `extra`. A tool with no file yet renders
+  `kind="file"` with today's `FileUpload` as its body and nothing else.
+- **ToolTop**: the header, with `BackIfNeeded`, `ToolsLink`, `BrandLink`,
+  `ChangeFile`, `LogoTile`.
+- **Sentence**: the tool's settings as one translated sentence. The template is one
+  whole message with named placeholders; slots are filled by position so word order
+  is the translator's. A value that opens an editor is a **Slot**: a button named
+  "{setting}, {visible value}", tinted `--slot-tint`, radius `--radius-slot`. A
+  sentence with no slots is a statement. When a sentence needs a third line (a long
+  language, large text, a narrow phone), or a phone sentence holds four or more
+  values, it is drawn as labelled rows with the same buttons and names (two to a line,
+  label over value, in a live-preview band, at every text size); a statement is drawn at one serif statement size, short or long
+  (`data-form="statement"`).
+  Page phrases are exact: "page 4", "pages 2–5", "pages 1 and 3", "the 5 selected
+  pages", "all 12 pages", "the only page" (`pagesPhrase` in `values.ts`).
+- **Editor popover** (`Popover.tsx`): what a slot opens. A popover anchored to the
+  slot on desktop, a card at the foot on phones. It holds today's control with
+  today's accessible name and handler, stays mounted while closed (a typed draft
+  survives), traps focus and returns focus to the slot. Every card closes the same
+  way: its one close button (✕, "Close"), Escape, or a tap outside it, which closes
+  the card and reaches what it landed on. No dim scrim on a phone.
+- **Notice**: the one line under the sentence, tone `error`, `pending`, `caution` or
+  `outcome`; an error is `role="alert"`.
+- **Stepper**: − and + around a number field.
+- **PageGrid**: page tiles sized by `usePageGridFit` so that every page is visible
+  and as large as the canvas allows (132–420px tiles on desktop, three columns on a
+  phone); beyond what fits it scrolls.
+- **FilePreview**: the first page of the loaded PDF in the canvas of file tools.
+- **CropFrame**: the live crop frame on a rendered page. Four edge handles
+  (`role="slider"`, 0–40, arrow keys 1, Shift 5) and four corner handles, fixed
+  ink dimming outside the frame, kept in step with the sentence.
+- **BetaBadge** (`Primitives.tsx`): the small BETA badge, on the home row and beside a
+  beta tool's title.
+- **ZoomControls** (`bare`, `dense`) and the reader's zoom pill that hides on
+  scroll (`hooks/useHideOnScroll.ts`, phone only).
 
 - App shell: `components/Layout/AppShell.tsx`. Bottom tab bar below `md`, side
-  rail at `md` and above, tool nav bar on non-root routes, large title header on
-  each tab root. A tab root may supply compact leading brand artwork on phones;
+  rail at `md` and above, large title header on each tab root. Non-root routes
+  carry no shell chrome: each draws its own `ToolTop`. A tab root may supply compact leading brand artwork on phones;
   desktop must not repeat artwork already present in the side rail.
 - Tool identity: the generated Android mark is authoritative for the 25 tools
   shared with Android. Reader, web-only tools, and shell controls use their
@@ -303,22 +396,17 @@ density these replace.
 - Selection in a segmented control is a raised chip on a sunken track — the
   native shape — with the accent on the label. A flat accent-filled segment
   reads as a status block, not as a choice.
-- The 34 tool routes share one shell, not 34 sets of density edits. `AppShell`
-  marks every non-root route `.chef-tool-surface`, and the phone rules for that
-  scope live in `index.css`: the 16px leading edge, the in-page title at the
-  Heading step with no top margin, and a 16px gap under the title block. They
-  are scoped to `max-width: 767px` because they are the phone's rhythm, not a
-  redesign of the wide layouts. Only structural, unambiguous properties belong
-  there; a rule that reached for arbitrary utility classes would be guessing at
-  a tool's intent.
-- A tool's in-page title is the Heading step, not Display. The nav bar already
-  names the tool, so a Display title above it is the same word twice at the
-  largest size the product has.
-- An immersive route is handed no shell chrome, so it consumes the platform
-  insets itself. `/view`, `/image-to-pdf` and `/pdf-to-jpg` each carry
-  `chef-safe-top` on their own header; without it the header, and the action in
-  it, paint underneath the status bar and the camera cutout on a phone that
-  reports a real top inset.
+- The tool routes share one layout, `ToolScreen`, not a set of density edits each.
+  The only shell-drawn header left is the one `AppShell` gives pages that are not
+  tool screens (Help, Privacy, Terms, Licenses, a tool still loading); those marked
+  `.chef-tool-surface` keep the phone rules in `index.css`, scoped to
+  `max-width: 767px`.
+- A tool's title is the page's `h1` in `--font-display`, in the header, at
+  19/24. The body repeats no title.
+- A route that draws its own header consumes the platform insets itself:
+  `ToolTop` and the reader's header carry `chef-safe-top`. Without it the header,
+  and the action in it, paint underneath the status bar and the camera cutout on a
+  phone that reports a real top inset.
 - The reader's zoom cluster is a 40px strip: 36px visual controls whose
   pressable region is extended on the vertical axis only, with the width held at
   the touch floor. They sit shoulder to shoulder, so a horizontal extension
@@ -328,9 +416,9 @@ density these replace.
   when grouping materially improves navigation.
 - Segmented controls wrap onto further rows at large readable-text sizes. Their
   option width is set in rem, so the labels reflow instead of overlapping.
-- One navigation per route. `AppShell` supplies the tool nav bar and the way
-  back, so a tool must not also draw its own back link. Immersive routes get no
-  nav bar and therefore carry one named, full-size exit of their own.
+- One navigation per route. `ToolTop` supplies Tools and the conditional Back, so
+  a tool must not also draw its own back link. PDF to Image keeps "Back to tools"
+  in the brand position through `ToolScreen`'s `leading`.
 - A bounded scroll panel caps its height with both a viewport and a rem term, so
   the cap grows with the readable-text size instead of landing through a control,
   and it carries `chef-edge-fade-y` so any remaining boundary reads as more
@@ -451,11 +539,10 @@ density these replace.
 
 ## Materials
 
-Translucent chrome on the tab bar and tool nav bar only, both with content
-scrolling beneath. Solid everywhere else. Both go solid under
+Translucent chrome on the tab bar only, with content scrolling beneath. Solid
+everywhere else, tool headers included. It goes solid under
 `prefers-reduced-transparency` and `prefers-contrast: more`, and the tab bar's
-island also at the large readable-text sizes. Scroll edges fade in
-only where chrome actually overlaps content.
+island also at the large readable-text sizes.
 
 ## Motion
 

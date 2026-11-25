@@ -26,6 +26,8 @@ interface Props {
   isTextHeavy: boolean;
   onClose: () => void;
   onConfirm: (config: AdaptiveConfig) => void;
+  /** Keep-text mode: the preview shows the photos recompressed and the text untouched (plan 2.6). */
+  keepText?: boolean;
 }
 
 type TouchGesture =
@@ -41,7 +43,7 @@ type TouchGesture =
       currentPan: { x: number; y: number };
     };
 
-export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initialConfig, isTextHeavy, onClose, onConfirm }) => {
+export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initialConfig, isTextHeavy, onClose, onConfirm, keepText = false }) => {
   useI18n();
   const [images, setImages] = useState<{ original: string; compressed: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -151,16 +153,17 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
       setLoading(true);
 
       try {
-        const result = await generatePreviewPair(sourceFile, cfg, { pageIndex: requestedPageIndex });
+        const result = await generatePreviewPair(sourceFile, cfg, { pageIndex: requestedPageIndex, keepText });
         if (requestId !== requestIdRef.current) return;
 
         setImages({ original: result.original, compressed: result.compressed });
         setPageCount(result.pageCount);
         setPageIndex(result.pageIndex);
-        setSizeEstimate({
+        // 0 means no estimate the measurement can back up (desktop-02): show none.
+        setSizeEstimate(result.metrics.estimatedTotalSize > 0 ? {
           estimatedSize: result.metrics.estimatedTotalSize,
           ratio: result.metrics.estimatedTotalSize / sourceFile.size,
-        });
+        } : null);
       } catch (error) {
         console.error(error);
       } finally {
@@ -169,7 +172,7 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
         }
       }
     },
-    [],
+    [keepText],
   );
 
   useEffect(() => {

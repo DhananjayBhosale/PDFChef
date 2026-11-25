@@ -112,7 +112,7 @@ const HelpRow: React.FC<{ entry: HelpEntry }> = ({ entry }) => {
       <button
         type="button"
         aria-expanded={open}
-        aria-controls={id}
+        aria-controls={open ? id : undefined}
         onClick={() => setOpen((current) => !current)}
         className="chef-target chef-pressable-row flex w-full items-center justify-between gap-3 px-4 text-start"
       >

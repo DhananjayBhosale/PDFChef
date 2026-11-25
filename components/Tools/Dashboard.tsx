@@ -1,16 +1,18 @@
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Check, ChevronRight, Search, X } from 'lucide-react';
 import { categoryOrder, tools } from './toolCatalog';
 import type { ToolCardData, ToolCategory } from './toolCatalog';
 import { matchesToolSearchQuery, toolSearchScore } from '../../services/toolSearch';
 import { TabHeader } from '../Layout/AppShell';
-import { Badge, Button, EmptyState, cx } from '../UI/Primitives';
+import { Badge, BetaBadge, Button, EmptyState, cx } from '../UI/Primitives';
 import { useHaptics, useWorkspacePlatform } from '../../hooks/useWorkspaceRuntime';
 import { useMonetization } from '../../hooks/useMonetization';
 import { ToolIdentity } from './ToolIdentity';
+import { isConfirmEnter } from '../UI/keys';
+import { getRecentTools, getWorkspaceSettings } from '../../services/workspace';
 
 type CategoryFilter = 'All' | ToolCategory;
 
@@ -175,7 +177,7 @@ const ToolRow: React.FC<{
             {displayName}
           </span>
           {tool.beta && (
-            <Badge tone="caution" className="!px-1.5 !text-[0.75rem] !tracking-[0.06em]">{t("dashboard.beta.703390")}</Badge>
+            <BetaBadge>{t("dashboard.beta.703390")}</BetaBadge>
           )}
           {tool.availability === 'native-only' && !availableOnDevice && (
             <Badge tone="neutral" className="!px-1.5 !text-[0.75rem] !tracking-[0.06em]">{t("dashboard.not.available.67a926")}</Badge>
@@ -197,6 +199,62 @@ const ToolRow: React.FC<{
   );
 };
 
+/** How many recently used tools Home offers above the list. */
+const RECENT_TOOL_COUNT = 4;
+
+/**
+ * The tools last opened on this device, newest first (path to 9, part 2): read once when Home
+ * opens, from the local list the app keeps. None while "Keep results in Recent" is off.
+ */
+const readRecentTools = (): ToolCardData[] => {
+  try {
+    if (!getWorkspaceSettings().keepLocalHistory) return [];
+    return getRecentTools()
+      .map((record) => tools.find((tool) => tool.path === record.path))
+      .filter((tool): tool is ToolCardData => Boolean(tool))
+      .slice(0, RECENT_TOOL_COUNT);
+  } catch {
+    return [];
+  }
+};
+
+/** One recently used tool: its mark and name, one tap to open it. */
+const RecentToolLink: React.FC<{ tool: ToolCardData }> = ({ tool }) => {
+  useI18n();
+  const haptic = useHaptics();
+  return (
+    <Link
+      to={tool.path}
+      state={tool.path === '/view' ? { readAnother: true } : undefined}
+      onPointerDown={() => haptic('selection')}
+      className="chef-pressable inline-flex min-h-touch max-w-full items-center gap-2 rounded-[var(--radius-pill)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] py-1 pe-3.5 ps-1.5 text-[0.875rem] font-semibold leading-[1.3] text-[var(--text-primary)] outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
+    >
+      <span
+        aria-hidden
+        style={{ backgroundColor: `rgb(${tintFor(tool)} / 0.13)` }}
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-full"
+      >
+        <ToolIdentity tool={tool} size={16} assetSize={22} className="text-[var(--accent-on-quiet)]" assetClassName="h-[22px] w-[22px] object-contain" />
+      </span>
+      <span className="chef-wrap-words min-w-0">{tool.path === '/view' ? t("dashboard.read.pdf.b00d88") : tool.name}</span>
+    </Link>
+  );
+};
+
+/** The rows for a query and a category: today's list order at rest, best match first while searching. */
+const rankTools = (trimmed: string, category: CategoryFilter) => {
+  const searching = trimmed.length > 0;
+  const matches = (searching ? tools : homeTools).filter(
+    (tool) => (category === 'All' || tool.category === category) && matchesToolSearchQuery(tool, trimmed),
+  );
+  if (!searching) return matches;
+  return matches.sort((left, right) => {
+    const scoreDelta = toolSearchScore(right, trimmed) - toolSearchScore(left, trimmed);
+    if (scoreDelta !== 0) return scoreDelta;
+    return tools.indexOf(left) - tools.indexOf(right);
+  });
+};
+
 export const Dashboard: React.FC = () => {
   const { revision } = useI18n();
   const platform = useWorkspacePlatform();
@@ -205,6 +263,7 @@ export const Dashboard: React.FC = () => {
   const [category, setCategory] = useState<CategoryFilter>(toolsHome.category);
   const deferredQuery = useDeferredValue(query);
   const searchRef = useRef<HTMLInputElement>(null);
+  const [recentTools] = useState(readRecentTools);
 
   useEffect(() => {
     toolsHome.query = query;
@@ -230,20 +289,18 @@ export const Dashboard: React.FC = () => {
   const trimmed = deferredQuery.trim();
   const searching = trimmed.length > 0;
 
-  const filteredTools = useMemo(() => {
-    const source = searching ? tools : homeTools;
-    const matches = source.filter(
-      (tool) => (category === 'All' || tool.category === category) && matchesToolSearchQuery(tool, trimmed),
-    );
+  const filteredTools = useMemo(() => rankTools(trimmed, category), [category, trimmed, revision]);
 
-    if (!searching) return matches;
-
-    return matches.sort((left, right) => {
-      const scoreDelta = toolSearchScore(right, trimmed) - toolSearchScore(left, trimmed);
-      if (scoreDelta !== 0) return scoreDelta;
-      return tools.indexOf(left) - tools.indexOf(right);
-    });
-  }, [category, searching, trimmed, revision]);
+  // Enter in the search opens the first match, the row a keyboard user would otherwise Tab eight
+  // times to reach (research r1, desktop-06). The live query, not the deferred one.
+  const navigate = useNavigate();
+  const openFirstMatch = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isConfirmEnter(event) || !query.trim()) return;
+    const first = rankTools(query.trim(), category)[0];
+    if (!first) return;
+    event.preventDefault();
+    navigate(first.path, { state: first.path === '/view' ? { readAnother: true } : undefined });
+  };
 
   const reset = useCallback(() => {
     setQuery('');
@@ -373,6 +430,7 @@ export const Dashboard: React.FC = () => {
               autoComplete="off"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={openFirstMatch}
               placeholder={t("dashboard.search.49c266")}
               aria-label={t("dashboard.search.2fba3d", { count: tools.length })}
               aria-describedby="tool-search-status"
@@ -417,11 +475,12 @@ export const Dashboard: React.FC = () => {
             {resultSummary}
           </p>
 
-          {/* 46px shell, 3px inset, 38px segments, always one row. Where the six
-              don't fit (a narrow phone, large text) the strip scrolls sideways
-              rather than leaving a lone category on a second line. The page
-              itself never scrolls sideways. The 2px side padding is what lets
-              them fit a 360px phone, since the segments grow to fill the row anyway.
+          {/* 46px shell, 3px inset, 38px segments. Where the six don't fit one row (German,
+              a narrow phone, large text) the strip wraps to a second row instead of scrolling
+              a category out of reach (T-11, DESIGN.md); the row gap is wider than the 48px
+              hit extension so two rows never share a target. The segments grow to fill each row.
+              On desktop the segments keep their own width with the same padding, so the
+              labels sit evenly apart (T-16).
 
               Selection is a raised chip on a sunken track — the shape a native
               segmented control uses — rather than a flat red field. The accent
@@ -430,7 +489,7 @@ export const Dashboard: React.FC = () => {
           <div
             role="group"
             aria-label={t("dashboard.filter.tools.by.category.72789b")}
-            className="chef-no-scrollbar mt-3 flex w-full flex-nowrap items-stretch gap-x-[2px] overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-[20px] border border-[var(--border-hairline)] bg-[var(--surface-sunken)] p-[3px] md:w-fit md:max-w-full"
+            className="mt-3 flex w-full flex-wrap items-stretch gap-x-[2px] gap-y-[12px] rounded-[20px] border border-[var(--border-hairline)] bg-[var(--surface-sunken)] p-[3px] md:w-fit md:max-w-full"
           >
             {categoryOrder.map((item) => {
               const selected = item === category;
@@ -444,7 +503,7 @@ export const Dashboard: React.FC = () => {
                   onClick={() => setCategory(item)}
                   style={{ flexGrow: CATEGORY_WEIGHT[item] }}
                   className={cx(
-                    'chef-pressable chef-hit-y flex min-h-[38px] min-w-touch grow shrink-0 basis-auto items-center justify-center whitespace-nowrap rounded-[var(--radius-row)] px-[2px] py-1 md:grow-0',
+                    'chef-pressable chef-hit-y flex min-h-[38px] min-w-touch grow shrink-0 basis-auto items-center justify-center whitespace-nowrap rounded-[var(--radius-row)] px-[2px] py-1 md:grow-0 md:px-3',
                     'text-[0.75rem] leading-[1.3333] transition-colors duration-transition ease-settle min-[360px]:text-[0.8125rem] min-[420px]:text-[0.875rem]',
                     selected
                       ? 'bg-[var(--surface-raised)] font-semibold text-[var(--accent-on-quiet)] shadow-[var(--elevation-raised)] ring-1 ring-inset ring-[var(--border-strong)]'
@@ -461,6 +520,18 @@ export const Dashboard: React.FC = () => {
 
       <div className="px-4 md:px-8">
         <div className="mx-auto max-w-4xl">
+          {/* Recently used: one tap back to a tool used before, at rest only (not while
+              searching or filtering), and absent until a tool has been used. */}
+          {!searching && category === 'All' && recentTools.length > 0 && (
+            <section aria-labelledby="home-recent-tools" className="mt-3.5">
+              <h2 id="home-recent-tools" className="text-[0.8125rem] font-semibold leading-[1.4] text-[var(--text-secondary)]">{t('home.recentTools')}</h2>
+              <ul role="list" className="mt-2 flex flex-wrap gap-2">
+                {recentTools.map((tool) => (
+                  <li key={tool.id} className="max-w-full"><RecentToolLink tool={tool} /></li>
+                ))}
+              </ul>
+            </section>
+          )}
           {filteredTools.length === 0 ? (
             <EmptyState
               icon={<Search size={30} />}

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium, webkit, devices } from 'playwright';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { openSlot } from './lib/tool-ui.mjs';
 
 const origin = process.env.PDF_CHEF_URL || 'http://127.0.0.1:4191';
 const output = process.env.PDF_CHEF_PREVIEW_OUTPUT || 'output/pdf-preview-progress';
@@ -46,8 +47,10 @@ async function opening(page) {
   assert(await progress.getAttribute('aria-labelledby'), 'Progress is labeled');
 }
 async function completed(page, route, count = 48) {
-  const previews = route === '/reorder' ? page.locator('main [role=list] img') : page.locator('main img');
-  await page.waitForFunction(({ selector, count }) => document.querySelectorAll(selector).length === count, { selector: route === '/reorder' ? 'main [role=list] img' : 'main img', count }, { timeout: 120_000 });
+  // The tool kit's header mark is an image inside <main> too; count page previews only.
+  const selector = route === '/reorder' ? 'main [role=list] img' : 'main img:not(.tk-top-mark-img)';
+  const previews = page.locator(selector);
+  await page.waitForFunction(({ selector, count }) => document.querySelectorAll(selector).length === count, { selector, count }, { timeout: 120_000 });
   assert.equal(await previews.count(), count);
   assert.equal(await page.locator('[data-pdf-loading-progress]').count(), 0, 'Finished work hides the loading card');
 }
@@ -104,6 +107,8 @@ try {
     await open(page, '/split');
     await page.getByText('Page previews are unavailable', { exact: true }).waitFor();
     assert.equal(await page.getByRole('progressbar').count(), 0);
+    // The page-range field lives in the sentence's "Pages to include" editor, which starts closed.
+    await openSlot(page, /^Pages to include/);
     await page.locator('[data-page-range-selector] input').fill('1-3');
     await page.locator('[data-page-range-selector] button').click();
     assert.equal(await page.getByRole('button', { name: 'Extract 3 pages as one PDF' }).isEnabled(), true);
@@ -194,8 +199,11 @@ try {
     await layout(page);
     await page.screenshot({ path: `${output}/iphone-opening.png` });
     release();
-    await page.locator('main img').first().waitFor();
+    // The header's tool mark is an image inside <main> too; wait for a page preview.
+    await page.locator('main img:not(.tk-top-mark-img)').first().waitFor();
+    await page.waitForFunction(() => document.querySelectorAll('main [aria-pressed]').length === 48);
     assert.equal(await page.locator('main [aria-pressed]').count(), 48);
+    await openSlot(page, /^Page numbers or ranges/);
     await page.locator('[data-page-range-selector] input').fill('1-3');
     await page.locator('[data-page-range-selector] button').click();
     assert.equal(await page.getByRole('button', { name: 'Export 3 selected pages' }).isEnabled(), true);

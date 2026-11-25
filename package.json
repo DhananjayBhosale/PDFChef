@@ -57,7 +57,13 @@
     "test:browser:geometry": "node scripts/verify-pdf-placement-geometry.mjs",
     "test:browser:tools": "node scripts/verify-pdf-tool-correctness.mjs && node scripts/verify-pdf-tool-outputs.mjs && node tests/browser/imagePdfIntegrity.mjs",
     "test:browser:edit-pdf:handoff": "node scripts/verify-edit-pdf-handoff.mjs",
-    "test:browser:preview-progress": "node scripts/verify-pdf-preview-progress.mjs"
+    "test:browser:preview-progress": "node scripts/verify-pdf-preview-progress.mjs",
+    "test:browser:save-separately": "node scripts/verify-save-separately.mjs",
+    "test:browser:slider-fields": "node tests/browser/sliderFieldCommit.mjs",
+    "test:browser:ui-controls": "node scripts/verify-ui-controls.mjs",
+    "test:browser:rotate-sentence": "node scripts/verify-rotate-sentence.mjs",
+    "test:browser:crop-frame": "node scripts/verify-crop-frame.mjs",
+    "test:browser:reader-zoom": "node scripts/verify-reader-zoom-scroll.mjs"
   },
   "dependencies": {
     "@aiden0z/pptx-renderer": "^1.2.4",

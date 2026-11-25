@@ -174,9 +174,9 @@ test('every screen that used a fixed sentence asks the classifier first', () => 
 test('Unlock PDF asks for no password when the file opens without one', () => {
   const unlock = read('components/Tools/UnlockPDF.tsx');
   assert.match(unlock, /opensWithoutPassword\(selected\)/);
-  assert.match(unlock, /\{needsPassword && <div>/);
+  assert.match(unlock, /const form = needsPassword \? \(/);
   assert.match(unlock, /unlockPDF\(file\.file, needsPassword \? password : ''\)/);
-  assert.match(unlock, /disabled=\{needsPassword !== false && password\.length === 0\}/);
+  assert.match(unlock, /\(needsPassword !== false && password\.length === 0\)/);
 });
 
 // NAV-45, FIL-31: "Open with PDF Chef" failed silently.

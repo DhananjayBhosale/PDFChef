@@ -34,6 +34,7 @@ import {
   StatusLine,
   cx,
 } from '../UI/Primitives';
+import { isConfirmEnter } from '../UI/keys';
 import { filenameStemLimit, formatBytes, formatTimestamp, formatTimestampLong, renameKeepingExtension, sanitizeFilenameStem, splitFilename } from '../UI/format';
 import {
   knownSpaceSaved,
@@ -870,6 +871,28 @@ export const RecentPage: React.FC = () => {
     }
   }, [deleteRecords, selectedSplit]);
 
+  const saveRename = async () => {
+    const target = renaming;
+    if (!target || !platform.rename || busy || !renameValue.trim()) return;
+    setBusy(true);
+    setRenameError('');
+    try {
+      await platform.rename(target, withOriginalExtension(renameValue, target.entry.name));
+      haptic('commit');
+      report('success', t("recent-page.renamed.fb1dd5"));
+      setRenaming(null);
+      await refresh();
+    } catch (caught) {
+      // The sheet stays open with the typed name, so it can be fixed and tried again.
+      haptic('error');
+      setRenameError(caught instanceof Error && caught.message
+        ? localizeError(caught)
+        : t("recent-page.that.result.could.not.be.renamed.d87425"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <>
       {/* Count and Select sit beside the title, which is where a list-wide fact
@@ -880,7 +903,9 @@ export const RecentPage: React.FC = () => {
           state.status === 'ready' && records.length > 0 ? (
             <div className="flex shrink-0 items-center gap-1">
               <span className="tabular type-footnote font-bold text-[var(--text-secondary)]">
-                {t('format.itemCount', { count: visibleRecords.length })}
+                {/* What Recent holds, not what the search shows: a search with no
+                    match does not read as an empty Recent (r4 mobile-12f). */}
+                {t('format.itemCount', { count: records.length })}
               </span>
               {records.some((record) => !isLegacyRecord(record)) && (
                 <Button tone="quiet" onClick={toggleSelectionMode} disabled={busy} className="px-2.5">
@@ -1085,22 +1110,25 @@ export const RecentPage: React.FC = () => {
 
         {/* The second clear action only exists where the platform can actually
             separate the record from the file it points at. Both sit in one
-            compact row: they are the footer of a list, and stacked at full width
-            they read as the subject of the screen instead. Chinese and Japanese
-            labels keep their words whole, so a label too long for half the row
-            moves its button onto a row of its own. */}
-        {state.status === 'ready' && records.length > 0 && !selectionMode && (
+            compact row at their own width: they are the footer of a list, and
+            stretched across it they read as the subject of the screen instead
+            (T-16). Chinese and Japanese labels keep their words whole, so a label
+            too long for the row moves its button onto a row of its own. */}
+        {/* Not beside "No matching files": there, Clear all reads as clearing the
+            search, but it deletes every stored file (r4 mobile-12f). Clear search
+            brings it back. */}
+        {state.status === 'ready' && visibleRecords.length > 0 && !selectionMode && (
           <div className="mt-4 flex flex-row flex-wrap gap-2 pb-6">
             <Button
               tone="destructive"
-              className="chef-keep-cjk-words flex-1 px-3"
+              className="chef-keep-cjk-words"
               icon={<Trash2 aria-hidden size={16} />}
               onClick={() => setConfirmClear('records')}
             >{t("recent-page.clear.all.29a390")}</Button>
             {platform.capabilities.separateClearActions && (
               <Button
                 tone="destructive"
-                className="chef-keep-cjk-words flex-1 px-3"
+                className="chef-keep-cjk-words"
                 icon={<Trash2 aria-hidden size={16} />}
                 onClick={() => setConfirmClear('documents')}
               >{t("recent-page.delete.files.only.911496")}</Button>
@@ -1238,27 +1266,7 @@ export const RecentPage: React.FC = () => {
               tone="primary"
               busy={busy}
               disabled={!renameValue.trim()}
-              onClick={() => void (async () => {
-                const target = renaming;
-                if (!target || !platform.rename) return;
-                setBusy(true);
-                setRenameError('');
-                try {
-                  await platform.rename(target, withOriginalExtension(renameValue, target.entry.name));
-                  haptic('commit');
-                  report('success', t("recent-page.renamed.fb1dd5"));
-                  setRenaming(null);
-                  await refresh();
-                } catch (caught) {
-                  // The sheet stays open with the typed name, so it can be fixed and tried again.
-                  haptic('error');
-                  setRenameError(caught instanceof Error && caught.message
-                    ? localizeError(caught)
-                    : t("recent-page.that.result.could.not.be.renamed.d87425"));
-                } finally {
-                  setBusy(false);
-                }
-              })()}
+              onClick={() => void saveRename()}
             >{t("recent-page.save.name.b72972")}</Button>
           </>
         }
@@ -1273,6 +1281,8 @@ export const RecentPage: React.FC = () => {
             setRenameValue(sanitizeFilenameStem(event.target.value));
             setRenameError('');
           }}
+          // Enter saves, as in the result sheet's Rename (rename is new on the web, r4 mobile-06).
+          onKeyDown={(event) => { if (isConfirmEnter(event)) { event.preventDefault(); void saveRename(); } }}
           autoComplete="off"
           spellCheck={false}
           data-sheet-initial-focus

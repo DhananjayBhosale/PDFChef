@@ -17,28 +17,28 @@
    beside TOOL_TINT in Dashboard.tsx. Each states the accent mix it stands for. */
 
 :root {
-  --chef-glass-tint: rgba(255, 252, 250, 0.74);
+  --chef-glass-tint: rgba(255, 255, 255, 0.74);
   --chef-glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0) 62%);
   --chef-glass-filter: saturate(180%) blur(24px);
   --chef-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  --chef-glass-rim: rgba(38, 31, 30, 0.12);
-  --chef-glass-float-shadow: 0 12px 32px -14px rgba(38, 31, 30, 0.22), 0 2px 8px rgba(38, 31, 30, 0.05);
+  --chef-glass-rim: rgba(29, 26, 22, 0.12);
+  --chef-glass-float-shadow: 0 12px 32px -14px rgba(60, 40, 20, 0.22), 0 2px 8px rgba(60, 40, 20, 0.05);
   /* Behind the floating bar: content fades into the canvas below and beside it. */
-  --chef-float-fade: linear-gradient(to top, rgba(255, 248, 244, 0.9), rgba(255, 248, 244, 0));
+  --chef-float-fade: linear-gradient(to top, rgba(250, 247, 242, 0.9), rgba(250, 247, 242, 0));
   /* Accent 8% over white 78%. */
-  --chef-tab-chip: rgba(251, 233, 232, 0.8);
+  --chef-tab-chip: rgba(251, 233, 227, 0.8);
   --chef-tab-rest: var(--text-body);
 }
 
 html.dark {
-  --chef-glass-tint: rgba(39, 31, 30, 0.84);
+  --chef-glass-tint: rgba(28, 25, 21, 0.84);
   --chef-glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 62%);
   --chef-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.14);
   --chef-glass-rim: rgba(255, 255, 255, 0.1);
   --chef-glass-float-shadow: 0 14px 36px -12px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
-  --chef-float-fade: linear-gradient(to top, rgba(23, 16, 15, 0.9), rgba(23, 16, 15, 0));
+  --chef-float-fade: linear-gradient(to top, rgba(20, 18, 15, 0.9), rgba(20, 18, 15, 0));
   /* Accent 14% over the glass. */
-  --chef-tab-chip: rgba(255, 77, 82, 0.14);
+  --chef-tab-chip: rgba(201, 64, 42, 0.22);
   /* Dark keeps the secondary step so the current tab stays the brightest. */
   --chef-tab-rest: var(--text-secondary);
 }
@@ -75,9 +75,22 @@ html.dark {
   }
 }
 
+/* A label too long for its tab ("Zuletzt verwendet") wraps onto a second line that is
+   centred, and it grows downwards: every icon and every first line stays on the same
+   line as its neighbours (r4 mobile-12b). The top padding is what centring gives a
+   one-line tab: (tab - icon - gap - one line) / 2. */
+.chef-tab-dock .chef-tab {
+  justify-content: flex-start;
+  padding-top: max(0.25rem, calc((var(--size-tab-bar) - 8px - 24px - 0.25rem - 0.8125rem) / 2));
+}
+.chef-tab-label {
+  text-align: center;
+  text-wrap: balance;
+}
+
 .chef-tab[aria-current] {
   background: var(--chef-tab-chip);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 0.5px rgba(38, 31, 30, 0.1), 0 2px 8px -2px rgba(38, 31, 30, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 0.5px rgba(29, 26, 22, 0.1), 0 2px 8px -2px rgba(60, 40, 20, 0.16);
 }
 
 html.dark .chef-tab[aria-current] {
@@ -105,5 +118,33 @@ html[data-system-text-scale='large'] .chef-tab-dock {
 @media (prefers-contrast: more) {
   .chef-tab-dock {
     box-shadow: 0 0 0 1px var(--border-strong);
+  }
+}
+
+/* --- Very short screens ---------------------------------------------------- */
+
+/* At 400% browser zoom a laptop window is about 200px tall, and the stacked bar took a third of
+   it (r8 desktop-06). On a screen that short each label sits beside its icon and the bar stops
+   floating, so it takes under a quarter. Phones, landscape included, are taller than this. */
+@media (max-height: 320px) {
+  /* `html:root`: the tokens' own `:root` block may load after this file. */
+  html:root {
+    --size-tab-bar: 48px;
+    --size-tab-bar-readable: calc(44px + max(4px - env(safe-area-inset-bottom, 0px), 0px));
+  }
+  .chef-tab-bar.chef-chrome {
+    padding-bottom: max(4px, env(safe-area-inset-bottom, 0px));
+  }
+  .chef-tab-dock {
+    padding: 2px;
+  }
+  .chef-tab-dock .chef-tab {
+    flex-direction: row;
+    justify-content: center;
+    gap: 0.25rem;
+    padding-top: 0;
+  }
+  .chef-tab-dock .chef-tab > .grid {
+    padding-inline: 0;
   }
 }

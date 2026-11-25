@@ -367,6 +367,85 @@ const renderPresentation = async (
   return presentation;
 };
 
+/** An off-screen box at the slide's own size, for html2canvas to draw from. */
+const slideRoot = (width: number, height: number) => {
+  const root = document.createElement('div');
+  root.setAttribute('aria-hidden', 'true');
+  Object.assign(root.style, {
+    position: 'fixed',
+    left: '-20000px',
+    top: '0',
+    width: `${width}px`,
+    height: `${height}px`,
+    overflow: 'hidden',
+    background: '#ffffff',
+    pointerEvents: 'none',
+  });
+  document.body.appendChild(root);
+  return root;
+};
+
+/** One slide drawn to a canvas, `scale` times its own size. */
+const drawSlide = async (
+  renderer: typeof import('@aiden0z/pptx-renderer'),
+  html2canvas: typeof import('html2canvas')['default'],
+  presentation: PresentationData,
+  index: number,
+  scale: number,
+  root: HTMLDivElement,
+): Promise<HTMLCanvasElement> => {
+  const handle = renderer.renderSlide(presentation, presentation.slides[index], {
+    pdfjs: undefined,
+    onNavigate: () => undefined,
+    onNodeError: (_nodeId, error) => console.warn('PowerPoint node render warning', error),
+  });
+  try {
+    root.replaceChildren(handle.element);
+    Object.assign(handle.element.style, {
+      position: 'absolute',
+      left: '0',
+      top: '0',
+    });
+    await handle.ready;
+    await settleLayout();
+    return await html2canvas(root, {
+      backgroundColor: '#ffffff',
+      width: presentation.width,
+      height: presentation.height,
+      scale,
+      logging: false,
+      useCORS: false,
+    });
+  } finally {
+    handle.dispose();
+    root.replaceChildren();
+  }
+};
+
+/**
+ * The first slide, drawn the way the converter draws it, for PowerPoint to PDF's preview
+ * (research r2, H3-03). Returns an object URL the caller revokes.
+ */
+export const renderPptxFirstSlide = async (file: File, longEdge = 960): Promise<string> => {
+  if (!file.name.toLowerCase().endsWith('.pptx')) throw new LocalizedError("office-document.choose.a.pptx.powerpoint.file.4f366c");
+  if (file.size > MAX_PPTX_BYTES) throw new LocalizedError("office-document.this.presentation.is.too.large.to.convert.8fae01");
+  const [html2canvasModule, renderer] = await Promise.all([
+    import('html2canvas'),
+    import('@aiden0z/pptx-renderer'),
+  ]);
+  const presentation = await renderPresentation(file, renderer.parseZip, renderer.buildPresentation, renderer.RECOMMENDED_ZIP_LIMITS);
+  const root = slideRoot(presentation.width, presentation.height);
+  try {
+    const scale = longEdge / Math.max(presentation.width, presentation.height);
+    const canvas = await drawSlide(renderer, html2canvasModule.default, presentation, 0, scale, root);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+    if (!blob) throw new Error('The slide could not be drawn.');
+    return URL.createObjectURL(blob);
+  } finally {
+    root.remove();
+  }
+};
+
 export const convertPptxToPdf = async (
   file: File,
   rotation: PptxPageRotation,
@@ -405,65 +484,28 @@ export const convertPptxToPdf = async (
   // shapes to the slide's 960 x 720 box while drawing them at 1280 x 960.
   const longEdge = 1280;
   const scale = longEdge / Math.max(sourceWidth, sourceHeight);
-  const root = document.createElement('div');
-  root.setAttribute('aria-hidden', 'true');
-  Object.assign(root.style, {
-    position: 'fixed',
-    left: '-20000px',
-    top: '0',
-    width: `${sourceWidth}px`,
-    height: `${sourceHeight}px`,
-    overflow: 'hidden',
-    background: '#ffffff',
-    pointerEvents: 'none',
-  });
-  document.body.appendChild(root);
+  const root = slideRoot(sourceWidth, sourceHeight);
 
   try {
     for (let index = 0; index < presentation.slides.length; index += 1) {
-      const handle = renderer.renderSlide(presentation, presentation.slides[index], {
-        pdfjs: undefined,
-        onNavigate: () => undefined,
-        onNodeError: (_nodeId, error) => console.warn('PowerPoint node render warning', error),
-      });
-      try {
-        root.replaceChildren(handle.element);
-        Object.assign(handle.element.style, {
-          position: 'absolute',
-          left: '0',
-          top: '0',
-        });
-        await handle.ready;
-        await settleLayout();
-        const canvas = await html2canvasModule.default(root, {
-          backgroundColor: '#ffffff',
-          width: sourceWidth,
-          height: sourceHeight,
-          scale,
-          logging: false,
-          useCORS: false,
-        });
+      const canvas = await drawSlide(renderer, html2canvasModule.default, presentation, index, scale, root);
 
-        let imageCanvas = canvas;
-        if (rotated) {
-          const rotatedCanvas = document.createElement('canvas');
-          rotatedCanvas.width = canvas.height;
-          rotatedCanvas.height = canvas.width;
-          const context = rotatedCanvas.getContext('2d');
-          if (!context) throw new LocalizedError("office-document.a.slide.could.not.be.turned.the.d9c142");
-          context.translate(rotatedCanvas.width, 0);
-          context.rotate(Math.PI / 2);
-          context.drawImage(canvas, 0, 0);
-          imageCanvas = rotatedCanvas;
-        }
-
-        if (index > 0) pdf.addPage([pageWidth, pageHeight], orientation);
-        pdf.addImage(imageCanvas.toDataURL('image/jpeg', 0.94), 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
-        onProgress?.(index + 1, presentation.slides.length);
-      } finally {
-        handle.dispose();
-        root.replaceChildren();
+      let imageCanvas = canvas;
+      if (rotated) {
+        const rotatedCanvas = document.createElement('canvas');
+        rotatedCanvas.width = canvas.height;
+        rotatedCanvas.height = canvas.width;
+        const context = rotatedCanvas.getContext('2d');
+        if (!context) throw new LocalizedError("office-document.a.slide.could.not.be.turned.the.d9c142");
+        context.translate(rotatedCanvas.width, 0);
+        context.rotate(Math.PI / 2);
+        context.drawImage(canvas, 0, 0);
+        imageCanvas = rotatedCanvas;
       }
+
+      if (index > 0) pdf.addPage([pageWidth, pageHeight], orientation);
+      pdf.addImage(imageCanvas.toDataURL('image/jpeg', 0.94), 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+      onProgress?.(index + 1, presentation.slides.length);
     }
   } finally {
     root.remove();

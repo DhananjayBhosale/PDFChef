@@ -13,14 +13,14 @@
   --chef-bg: var(--surface-canvas);
   --chef-fg: var(--text-primary);
   --chef-muted: var(--text-secondary);
-  --chef-selection: rgba(220, 32, 32, 0.2);
+  --chef-selection: rgba(194, 58, 34, 0.2);
   --chef-keyboard-inset: 0px;
   --chef-viewport-offset-top: 0px;
 }
 
 .dark {
   color-scheme: dark;
-  --chef-selection: rgba(255, 77, 82, 0.26);
+  --chef-selection: rgba(255, 138, 112, 0.28);
 }
 
 html,
@@ -116,6 +116,38 @@ html[data-interface-font='monospace'] button {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+/* The display serif belongs to the default font (and to "Serif"). Any other font
+   picked in Settings also sets titles and the tool sentence, as it always did; it
+   is an accessibility choice. `:root` lifts these above the per-script rules. */
+html[data-interface-font='manrope']:root {
+  --font-display: 'Manrope Variable', 'Manrope', var(--font-system);
+}
+html[data-interface-font='system']:root {
+  --font-display: var(--font-system);
+}
+html[data-interface-font='noto-sans']:root {
+  --font-display: 'Noto Sans', var(--font-system);
+}
+html[data-interface-font='monospace']:root {
+  --font-display: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Titles and the tool sentence take the display serif; nothing else does. The
+   interface font the person picks in Settings still sets every other string.
+   A file name in a toolbar (.chef-filename) stays in the interface font. */
+.chef-display,
+h1:not(.chef-filename) {
+  font-family: var(--font-display);
+  font-weight: var(--font-display-weight);
+}
+
+/* The selected chip of a segmented strip keeps a small lift, so the current choice
+   stays easy to find on a flat surface. Only the home filter and SegmentedControl. */
+.chef-chip-strip,
+.chef-no-scrollbar[role='group'] {
+  --elevation-raised: var(--elevation-chip);
+}
+
 ::selection {
   background: var(--chef-selection);
 }
@@ -168,7 +200,16 @@ h4,
 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
-  border-radius: var(--radius-control);
+  /* A fixed corner, not --radius-control: that token is a full pill, and a focused
+     field or link must not change shape when the ring appears. */
+  border-radius: 0.75rem;
+}
+
+/* A row inside a list that clips its corners (Tools home, search results) draws its ring just
+   inside its own edge, so none of it is cut off (research r2, desktop-08). */
+.chef-divided-list .chef-pressable-row:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
 }
 
 /* Route changes focus the main landmark for screen readers. Keep that semantic
@@ -214,23 +255,6 @@ html[data-system-text-scale='large'] .chef-chrome {
   background: var(--surface-raised);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-}
-
-/* Scroll edge effect: content fades where it meets floating chrome, instead of
-   a hard 1px divider that is always drawn whether or not anything overlaps. */
-.chef-scroll-edge::after {
-  content: '';
-  position: absolute;
-  inset-inline: 0;
-  height: 1px;
-  background: var(--border-hairline);
-  opacity: var(--chef-edge-opacity, 0);
-  transition: opacity var(--duration-transition) var(--ease-settle);
-  pointer-events: none;
-}
-
-.chef-scroll-edge-top::after {
-  bottom: 0;
 }
 
 /* --- Safe areas ----------------------------------------------------------- */
@@ -359,68 +383,20 @@ html[data-system-text-scale='large'] .chef-chrome {
   );
 }
 
-/* The height a full-height tool workspace actually has. `100dvh` is that box
-   plus the tool nav bar above it and the tab bar below it, so a tool that asks
-   for the whole viewport pushes its page taller than the screen on a route with
-   nothing to scroll to, and anything centred inside starts most of a screen
-   down. The bars are measured from the tokens they are drawn from, so the two
-   cannot disagree: the nav bar is its Back control's touch floor plus the bar's
-   own 4px above and below, and the foot is the same reservation
-   `.chef-tab-inset` already makes. */
-.chef-tool-surface {
-  --chef-workspace-fill: calc(
-    100dvh - var(--size-touch-target) - var(--space-2) - env(safe-area-inset-top, 0px) -
-      var(--size-tab-bar-readable) - env(safe-area-inset-bottom, 0px) - var(--space-4) -
-      var(--chef-keyboard-inset, 0px)
+/* A tool route has no tab bar: the page keeps the safe area, the keyboard and the
+   result strip clear at its foot instead. */
+.chef-tool-inset {
+  padding-bottom: calc(
+    env(safe-area-inset-bottom, 0px) + var(--space-4) + var(--chef-keyboard-inset, 0px) +
+      var(--chef-output-strip-space, 0px)
   );
 }
 
-@media (min-width: 768px) {
-  .chef-tool-surface {
-    /* Past md the tab bar is gone and the page keeps its own foot instead. */
-    --chef-workspace-fill: calc(
-      100dvh - var(--size-touch-target) - var(--space-2) - env(safe-area-inset-top, 0px) -
-        var(--space-10)
-    );
-  }
-}
-
-/* Only a loaded workspace claims that height, because its inner panel scrolls
-   against it. An empty state stays in flow: a drop zone centred in a full
-   screen is the void that pushed source selection below the fold. */
-.chef-workspace-fill {
-  height: var(--chef-workspace-fill, 100dvh);
-  min-height: var(--chef-workspace-fill, 100dvh);
-}
-
-/* A normal tool landing starts below the app bar without hugging it. This is a
-   deliberate upper-middle anchor: the picker feels centred, while the phone
-   does not waste half its useful height above a short panel. */
-@media (max-width: 767px) {
-  .chef-tool-shell.chef-tool-landing-centered,
-  .chef-tool-landing-centered:not(.chef-tool-shell) {
-    min-height: var(--chef-workspace-fill, auto);
-    display: grid;
-    align-content: safe center;
-    padding-top: 1rem !important;
-    padding-bottom: 4rem !important;
-  }
-
-  .chef-tool-shell.chef-tool-landing-centered > *,
-  .chef-tool-landing-centered:not(.chef-tool-shell) > * {
-    width: 100%;
-  }
-
-  .chef-tool-landing-centered [data-file-upload] {
-    min-height: 260px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-  }
-
-  /* Immersive workspaces do not have the shell tab bar to create breathing
-     room above Android's gesture handle. Keep their final content reachable
-     without moving the compact controls farther apart. */
+/* Reading and picture workspaces have no tab bar to create breathing
+   room above Android's gesture handle. */
+@media (max-width: 767px), (max-height: 479px) {
+  /* Keep the final content reachable without moving the compact controls
+     farther apart. */
   .chef-gesture-clear {
     padding-bottom: max(3rem, env(safe-area-inset-bottom, 0px));
     scroll-padding-bottom: max(3rem, env(safe-area-inset-bottom, 0px));
@@ -437,7 +413,7 @@ html[data-system-text-scale='large'] .chef-chrome {
   bottom: calc(1.5rem + var(--size-tab-bar-readable) + env(safe-area-inset-bottom));
 }
 
-@media (min-width: 768px) {
+@media (min-width: 768px) and (min-height: 480px) {
   .chef-above-tabbar {
     bottom: 1.5rem;
   }
@@ -456,6 +432,10 @@ html[data-system-text-scale='large'] .chef-chrome {
 
 .chef-pressable:active {
   transform: scale(0.975);
+}
+/* A main action that is off but stays reachable by keyboard (aria-disabled) does not press in. */
+.chef-pressable[aria-disabled="true"]:active {
+  transform: none;
 }
 
 /* PDF pinch zoom owns only the two-finger gesture. One-finger panning remains
@@ -578,7 +558,7 @@ input[type='search']::-webkit-search-decoration {
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 479px) {
   .chef-edge-fade-x {
     -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent 100%);
     mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent 100%);
@@ -723,7 +703,7 @@ html[data-system-text-scale='large'] .chef-clamp-2 {
   background: var(--border-hairline);
 }
 
-@media (min-width: 768px) {
+@media (min-width: 768px) and (min-height: 480px) {
   .chef-divided-list > li + li::before {
     margin-inline-start: 64px;
   }
@@ -865,9 +845,42 @@ html[data-system-text-scale='large'] .chef-clamp-2 {
   height: 32px;
 }
 
+/* Under a finger every slider is a 48 px target (research r3, mobile-06). */
+@media (pointer: coarse) {
+  .chef-slider,
+  .chef-slider.is-compact { height: var(--size-touch-target); }
+}
+
 /* Right-to-left layouts mirror the slider; ChefSlider flips pointer and arrow-key input to match. */
 [dir='rtl'] .chef-slider {
   transform: scaleX(-1);
+}
+
+/* One row per slider (a phone card with two sliders, owner 2026-11-15): label, slider, value. */
+.chef-slider-row {
+  display: grid;
+  grid-template-columns: 5.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+}
+.chef-slider-row > .contents > :first-child { grid-column: 1; grid-row: 1; line-height: 1.1rem; }
+.chef-slider-row > .contents > .chef-slider-value { grid-column: 3; grid-row: 1; }
+.chef-slider-row > .chef-slider { grid-column: 2; grid-row: 1; }
+/* In a card whose title is the slider's name: no label column, the taps under both (pass 3). */
+.chef-slider-row[data-titled] { grid-template-columns: minmax(0, 1fr) auto; }
+.chef-slider-row[data-titled] > .chef-slider { grid-column: 1; }
+.chef-slider-row[data-titled] > .contents > .chef-slider-value { grid-column: 2; }
+.chef-slider-row[data-titled] > .tk-taps { grid-column: 1 / -1; grid-row: 2; }
+
+/* The value field draws the ring around the whole field, so the ring of the number inside it
+   never cuts through the unit (Page Numbers' "14 pt" on Android, 2026-11-15). */
+.chef-slider-value:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.chef-slider-value input:focus-visible {
+  outline: none;
 }
 
 .chef-slider-value input::-webkit-outer-spin-button,
@@ -939,7 +952,7 @@ html[data-system-text-scale='large'] .chef-clamp-2 {
    arbitrary utility classes would be guessing at intent; these three are the
    phone rhythm every tool shares. */
 
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 479px) {
   /* The Android app's 16dp screen padding, applied once. Only the leading edge
      is set: a tool that reserves room at its foot for a floating action keeps
      that reservation. */
@@ -1057,14 +1070,14 @@ html[data-system-text-scale='large'] .chef-clamp-2 {
 /* Fixed ink steps (ink-200, ink-400, ink-700), not theme colours: the page stays white in both
    themes. */
 ::highlight(pdfchef-find) {
-  background-color: rgb(255 200 195 / 0.7);
+  background-color: rgb(255 194 178 / 0.7);
 }
 
 /* The match Next and Previous landed on. Stronger, and underlined, but still see-through: the
    word itself is drawn by the page underneath. */
 ::highlight(pdfchef-find-current) {
-  background-color: rgb(255 77 82 / 0.45);
-  text-decoration: underline 3px #b01e22;
+  background-color: rgb(201 64 42 / 0.45);
+  text-decoration: underline 3px #a93119;
 }
 
 /* An editable paragraph is invisible by design: the page underneath is what the reader sees.
@@ -1102,4 +1115,65 @@ html[data-system-text-scale='large'] .chef-clamp-2 {
 @keyframes chef-preview-travel {
   0%, 100% { transform: translateX(-100%); }
   50% { transform: translateX(280%); }
+}
+
+/* Windows high contrast (forced colors) drops fills, rings and shadows, so the states they carried
+   are drawn again in system colours, which forced colors keeps (research r4, desktop-01, -02).
+   !important: these lines exist only in this mode and must win over each control's own state rules. */
+/* The result strip's Download (path to 9, item 3): the word shows while the strip has room for it;
+   a narrow strip (a phone, large text) keeps the icon, named with the file. */
+.chef-result-card { container-type: inline-size; }
+.chef-result-download { padding-inline: 10px; }
+@container (max-width: 26rem) {
+  .chef-result-download-word { display: none; }
+  .chef-result-download { padding-inline: 0; }
+}
+
+@media (forced-colors: active) {
+  /* The chosen option of a choice or a pressed toggle is filled; its words keep the matching colour.
+     forced-color-adjust: none, or the words get the mode's Canvas backplate and vanish into it. */
+  [role="radio"][aria-checked="true"],
+  [role="tab"][aria-selected="true"],
+  [aria-pressed="true"] { forced-color-adjust: none; background-color: Highlight !important; border-color: Highlight !important; color: HighlightText !important; }
+  [role="radio"][aria-checked="true"] *,
+  [role="tab"][aria-selected="true"] *,
+  [aria-pressed="true"] * { forced-color-adjust: none; color: HighlightText !important; }
+  /* A switch: the track's edge and a knob in the text colour, filled when on. */
+  .chef-switch,
+  .tk-switch-track { border: 1px solid ButtonText !important; background-color: ButtonFace !important; }
+  .chef-switch-knob,
+  .tk-switch-knob { background-color: ButtonText !important; }
+  .chef-switch[aria-checked="true"],
+  [aria-checked="true"] > .tk-switch-track { background-color: Highlight !important; border-color: Highlight !important; }
+  .chef-switch[aria-checked="true"] .chef-switch-knob,
+  [aria-checked="true"] .tk-switch-knob { background-color: HighlightText !important; }
+  .chef-switch:disabled { border-color: GrayText !important; }
+  .chef-switch:disabled .chef-switch-knob { background-color: GrayText !important; }
+  /* A filled button keeps an edge, so it still reads as a button. */
+  .tk-primary,
+  button[class*="bg-[var(--accent-rest)]"],
+  a[class*="bg-[var(--accent-rest)]"] { border: 1px solid ButtonText !important; }
+  .tk-primary:disabled,
+  .tk-primary[aria-disabled="true"],
+  button[class*="bg-[var(--accent-rest)]"]:disabled { border-color: GrayText !important; }
+  /* A sentence's value is a button drawn as an underlined word. Forced colours drop the box shadow
+     that draws the line, so it gets a real one (dashed while the value is still pending); an open
+     value is filled like a pressed toggle. */
+  .tk-slot:not([aria-disabled]) { border-bottom: 2px solid ButtonText !important; }
+  .tk-slot[data-tone="pending"] { border-bottom-style: dashed !important; }
+  .tk-slot[aria-expanded="true"] { forced-color-adjust: none; background-color: Highlight !important; border-bottom-color: Highlight !important; color: HighlightText !important; }
+  .tk-slot[aria-expanded="true"] * { forced-color-adjust: none; color: HighlightText !important; }
+  /* A setting's chip under a preview (Page Numbers' position) is a tinted pill with no line. */
+  .tk-chip-editor { border: 1px solid ButtonText !important; }
+  .tk-chip-editor[aria-expanded="true"] { forced-color-adjust: none; background-color: Highlight !important; border-color: Highlight !important; color: HighlightText !important; }
+  .tk-chip-editor[aria-expanded="true"] * { forced-color-adjust: none; color: HighlightText !important; }
+  /* Round buttons drawn over a page picture (Reorder's drag handle and preview) are a white
+     disc on a white page: give them a line. */
+  .tk-drag,
+  .tk-rtile-eyebtn { border: 1px solid ButtonText !important; }
+  .tk-peek, .tk-peek-badge { border: 1px solid ButtonText !important; }
+  /* A slider: the track, the part already chosen, and the knob. */
+  .chef-slider__track { background-color: GrayText !important; }
+  .chef-slider__fill { background-color: Highlight !important; }
+  .chef-slider__thumb { background-color: ButtonFace !important; border-color: ButtonText !important; }
 }

@@ -35,6 +35,7 @@ import {
   getOutput,
   listOutputs,
   recordOutput,
+  renameOutput,
   OUTPUT_EVENT,
   RECORDS_CHANGED_EVENT,
   type OutputRecord,
@@ -260,7 +261,8 @@ const webShareFile = async (file: File, title: string) => {
  */
 export const browserPlatform: WorkspacePlatform = {
   capabilities: {
-    persistentRename: false,
+    // A kept result's name is stored with it in this browser, so Recent can rename it (r4, mobile-06).
+    persistentRename: true,
     durableDocuments: false,
     separateClearActions: false,
   },
@@ -292,6 +294,10 @@ export const browserPlatform: WorkspacePlatform = {
   async reopen(record) {
     const blob = await blobFor(record);
     return fileFrom(blob, record.entry.name, record.entry.mimeType);
+  },
+  async rename(record, name) {
+    if (!record.entry.id) throw new Error(t("use-workspace-runtime.that.file.is.no.longer.stored.on.a99d6c"));
+    await renameOutput(record.entry.id, name);
   },
   async saveFresh(result) {
     triggerBrowserDownload(result.blob, text(result.name) || t("use-workspace-runtime.untitled.document.9f6d7c"));
@@ -480,7 +486,8 @@ export const recordAbilities = (platform: WorkspacePlatform, record: RecentRecor
   const answered = platform.recordRecovery?.abilitiesFor(record);
   if (answered) return answered;
   const rename = Boolean(platform.capabilities.persistentRename && platform.rename);
-  return { rename, reversibleDelete: false, limitation: rename ? null : 'session-only' };
+  // A browser keeps its results only in this browser, so deleting one stays permanent, and says so.
+  return { rename, reversibleDelete: false, limitation: rename && platform.capabilities.durableDocuments ? null : 'session-only' };
 };
 
 /** Total actual bytes saved across records that reported both sizes. */

@@ -3,6 +3,7 @@ import { useI18n } from '../services/i18n/react';
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { acceptsDroppedFile } from '../services/fileDrop';
+import { dropZoneAcceptOn, dropZoneShown } from '../components/UI/dropZone';
 import { useOpenedPdf } from './useOpenedPdf';
 
 interface DropTarget {
@@ -22,6 +23,29 @@ export function useFileDrop(target: DropTarget) {
     targets?.add(latest);
     return () => { targets?.delete(latest); };
   }, [targets]);
+}
+
+// Files dropped on a loaded tool, for the drop zone its Change brings back (research r3, desktop-01).
+let handedDrop: { path: string; files: File[]; at: number } | null = null;
+export const takeHandedDrop = (path: string) => {
+  const drop = handedDrop;
+  handedDrop = null;
+  return drop && drop.path === path && Date.now() - drop.at < 2000 ? drop.files : null;
+};
+
+/**
+ * A loaded tool takes a dropped file the way its Change control would: the file it holds gives way
+ * and the dropped one opens, instead of the page leaving for Read PDF. While the tool is busy, or
+ * `off`, a drop does nothing here.
+ */
+export function useReplaceOnDrop({ onReplace, busy, off }: { onReplace: () => void; busy?: boolean; off?: boolean }) {
+  const path = window.location.pathname;
+  const accept = off ? '' : dropZoneAcceptOn(path) ?? '.pdf,application/pdf';
+  useFileDrop({ accept, onFiles: (files) => {
+    if (busy) return;
+    handedDrop = { path, files, at: Date.now() };
+    onReplace();
+  } });
 }
 
 /** One owner prevents browser navigation; mounted tools own how files are imported. */
@@ -58,7 +82,9 @@ export const FileDropProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return;
       }
       const pdf = files.find((file) => acceptsDroppedFile(file, '.pdf,application/pdf'));
-      if (pdf) {
+      // A loaded tool keeps its work: only an empty screen, or one that takes no drops, opens the
+      // PDF in Read PDF.
+      if (pdf && (dropZoneShown() || !candidates.some((candidate) => candidate.accept))) {
         setOpenedPdfFile(pdf);
         navigate('/view');
       } else {

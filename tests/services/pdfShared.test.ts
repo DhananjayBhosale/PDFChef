@@ -133,22 +133,26 @@ test('awaitable browser delivery announces an unretained result when automatic s
   }
 });
 
-test('awaitable browser delivery keeps the result dirty when an unretained picker is cancelled', async () => {
-  const browser = installBrowserHarness({ keepLocalHistory: false, autoDownload: true });
+// h3 F1: the save picker needs a user gesture, and a job ends long after the tap that started it.
+// An automatic save must download at once, also in browsers that have the picker.
+const installPickerSpy = () => {
+  let opened = 0;
   (globalThis.window as unknown as { showSaveFilePicker: () => Promise<never> }).showSaveFilePicker = async () => {
-    throw new DOMException('cancelled', 'AbortError');
+    opened += 1;
+    throw new DOMException('no user gesture', 'SecurityError');
   };
+  return () => opened;
+};
+
+test('awaitable automatic save downloads at once and never opens the save picker', async () => {
+  const browser = installBrowserHarness({ keepLocalHistory: false, autoDownload: true });
+  const pickerOpened = installPickerSpy();
   try {
-    await assert.rejects(
-      deliverBlob(new Blob(['result']), 'result.pdf', 'application/pdf'),
-      (error: unknown) => error instanceof Error && error.name === 'AbortError',
-    );
+    assert.deepEqual(await deliverBlob(new Blob(['result']), 'result.pdf', 'application/pdf'), { status: 'delivered' });
+    assert.equal(pickerOpened(), 0);
+    assert.deepEqual(browser.clicks, [{ href: 'blob:test-1', download: 'result.pdf' }]);
     assert.equal(browser.events.length, 1);
-    const retry = browser.events[0].detail as OutputReadyRecord;
-    assert.equal(retry.deliveryIssue, 'cancelled');
-    assert.equal(retry.historyRetained, false);
-    assert.equal(await retry.blob!.text(), 'result');
-    assert.deepEqual(browser.clicks, []);
+    assert.equal((browser.events[0].detail as OutputReadyRecord).deliveryIssue, undefined);
   } finally {
     browser.restore();
   }
@@ -221,21 +225,19 @@ test('retained native output stays saved while a cancelled optional export remai
   }
 });
 
-test('fire-and-forget browser cancellation exposes exact bytes without retaining history or falling back', async () => {
+test('fire-and-forget automatic save downloads at once and never opens the save picker', async () => {
   const browser = installBrowserHarness();
-  (window as unknown as { showSaveFilePicker: () => Promise<never> }).showSaveFilePicker = async () => {
-    throw new DOMException('cancelled', 'AbortError');
-  };
+  const pickerOpened = installPickerSpy();
   const blob = new Blob([new Uint8Array([0, 1, 255])]);
   try {
-    assert.equal(downloadBlob(blob, 'result.pdf', 'application/pdf'), null);
+    assert.equal(downloadBlob(blob, 'result.pdf', 'application/pdf'), 'blob:test-1');
     await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(pickerOpened(), 0);
+    assert.deepEqual(browser.clicks, [{ href: 'blob:test-1', download: 'result.pdf' }]);
     assert.equal(browser.events.length, 1);
-    const retry = browser.events[0].detail as OutputReadyRecord;
-    assert.equal(retry.blob, blob);
-    assert.equal(retry.deliveryIssue, 'cancelled');
-    assert.equal(retry.historyRetained, false);
-    assert.deepEqual(browser.created, []);
+    const ready = browser.events[0].detail as OutputReadyRecord;
+    assert.equal(ready.blob, blob);
+    assert.equal(ready.deliveryIssue, undefined);
   } finally {
     browser.restore();
   }
@@ -291,24 +293,115 @@ test('fire-and-forget delivery with unavailable history announces a ready, unkep
   }
 });
 
-test('a cancelled picker with unavailable history reports the cancellation, not the history failure', async () => {
+test('an automatic save with unavailable history still downloads and reads as delivered, not kept', async () => {
   const browser = installBrowserHarness({ keepLocalHistory: true, autoDownload: true });
-  (globalThis.window as unknown as { showSaveFilePicker: () => Promise<never> }).showSaveFilePicker = async () => {
-    throw new DOMException('cancelled', 'AbortError');
-  };
+  const pickerOpened = installPickerSpy();
   try {
     await withWarningsCounted(async () => {
-      await assert.rejects(
-        deliverBlob(new Blob(['result']), 'result.pdf', 'application/pdf'),
-        (error: unknown) => error instanceof Error && error.name === 'AbortError',
-      );
+      assert.deepEqual(await deliverBlob(new Blob(['result']), 'result.pdf', 'application/pdf'), { status: 'delivered' });
     });
+    assert.equal(pickerOpened(), 0);
+    assert.equal(browser.clicks.length, 1);
     assert.equal(browser.events.length, 1);
-    const retry = browser.events[0].detail as OutputReadyRecord;
-    assert.equal(retry.deliveryIssue, 'cancelled');
-    assert.equal(retry.historyRetained, false);
-    assert.deepEqual(browser.clicks, []);
+    const ready = browser.events[0].detail as OutputReadyRecord;
+    assert.equal(ready.deliveryIssue, undefined);
+    assert.equal(ready.historyRetained, false);
   } finally {
     browser.restore();
+  }
+});
+
+test('a Split set to separate PDFs keeps and announces its ZIP without downloading it', async () => {
+  const browser = installBrowserHarness();
+  const blob = new Blob([new Uint8Array([80, 75, 3, 4])], { type: 'application/zip' });
+  const folder = { name: 'Splits' } as unknown as FileSystemDirectoryHandle;
+  try {
+    assert.equal(downloadBlob(blob, 'report-split.zip', 'application/zip', { separateSave: { folder } }), null);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(browser.clicks, [], 'the ZIP is not saved; the strip saves its parts');
+    assert.equal(browser.events.length, 1);
+    const ready = browser.events[0].detail as OutputReadyRecord;
+    assert.equal(ready.blob, blob, 'the ZIP stays the result');
+    assert.equal(ready.externallyExported, false);
+    assert.equal(ready.separateSave?.folder, folder, 'the folder picked at the tap travels with it');
+  } finally {
+    browser.restore();
+  }
+});
+
+test('the native handler is told not to export a ZIP whose parts are saved separately', async () => {
+  const browser = installBrowserHarness({ keepLocalHistory: true, autoDownload: true });
+  const requests: Parameters<OutputDeliveryHandler>[0][] = [];
+  const uninstall = installOutputDeliveryHandler(async request => { requests.push(request); });
+  const blob = new Blob([new Uint8Array([80, 75, 3, 4])], { type: 'application/zip' });
+  try {
+    downloadBlob(blob, 'report-split.zip', 'application/zip', { separateSave: {} });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].autoDownload, false);
+    assert.equal(requests[0].keepLocalHistory, true, 'Recent still keeps the ZIP');
+    const ready = browser.events[0].detail as OutputReadyRecord;
+    assert.deepEqual(ready.separateSave, {});
+    assert.equal(ready.externallyExported, false);
+  } finally {
+    uninstall();
+    browser.restore();
+  }
+});
+
+// s2-07 (overnight A1): whether a browser result was exported comes from its delivery, never from
+// a setting read after it. Automatic download is off when the job ends and turned on (another tab)
+// before the event; the history write is rejected (Node has no IndexedDB).
+const turnedOnAfterFirstRead = () => {
+  let reads = 0;
+  return { keepLocalHistory: true, get autoDownload() { reads += 1; return reads > 1; } };
+};
+
+test('a browser result that was not downloaded says so itself, whatever the setting reads later', async () => {
+  const browser = installBrowserHarness(turnedOnAfterFirstRead());
+  try {
+    await withWarningsCounted(async () => {
+      assert.equal(downloadBlob(new Blob(['only copy']), 'result.pdf', 'application/pdf'), null);
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+    assert.deepEqual(browser.clicks, [], 'nothing was downloaded');
+    assert.equal(browser.events.length, 1);
+    const ready = browser.events[0].detail as OutputReadyRecord;
+    assert.equal(ready.historyRetained, false, 'the history write was rejected');
+    assert.equal(ready.externallyExported, false, 'not exported, said by the delivery');
+  } finally {
+    browser.restore();
+  }
+});
+
+test('the awaitable browser delivery says the same', async () => {
+  const browser = installBrowserHarness(turnedOnAfterFirstRead());
+  try {
+    await withWarningsCounted(async () => {
+      assert.deepEqual(await deliverBlob(new Blob(['only copy']), 'result.pdf', 'application/pdf'), { status: 'delivered' });
+    });
+    assert.deepEqual(browser.clicks, []);
+    const ready = browser.events[0].detail as OutputReadyRecord;
+    assert.equal(ready.externallyExported, false);
+  } finally {
+    browser.restore();
+  }
+});
+
+test('a browser result that was downloaded says so', async () => {
+  for (const deliver of ['downloadBlob', 'deliverBlob'] as const) {
+    const browser = installBrowserHarness({ keepLocalHistory: false, autoDownload: true });
+    try {
+      if (deliver === 'downloadBlob') {
+        downloadBlob(new Blob(['result']), 'result.pdf', 'application/pdf');
+        await new Promise(resolve => setTimeout(resolve, 0));
+      } else {
+        await deliverBlob(new Blob(['result']), 'result.pdf', 'application/pdf');
+      }
+      assert.equal(browser.clicks.length, 1, deliver);
+      assert.equal((browser.events[0].detail as OutputReadyRecord).externallyExported, true, deliver);
+    } finally {
+      browser.restore();
+    }
   }
 });

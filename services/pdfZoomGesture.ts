@@ -85,3 +85,43 @@ export const pdfPageFromSwipe = ({
   if (deltaY > 0 && startedAtStart) return Math.max(0, currentPage - 1);
   return currentPage;
 };
+
+export interface PdfPan { x: number; y: number }
+export interface PdfSize { width: number; height: number }
+
+/**
+ * A page drawn with `translate(pan) scale(zoom)` about the centre of its frame: the pan that keeps
+ * the point under `pointer` (measured from the frame's centre) where it is while the zoom changes.
+ * A pinch zooms about the fingers, a Ctrl+wheel about the pointer.
+ */
+export const pdfPanForZoom = (pan: PdfPan, pointer: PdfPan, previousZoom: number, nextZoom: number): PdfPan => {
+  if (previousZoom <= 0 || previousZoom === nextZoom) return pan;
+  const ratio = nextZoom / previousZoom;
+  return { x: pointer.x - ratio * (pointer.x - pan.x), y: pointer.y - ratio * (pointer.y - pan.y) };
+};
+
+/**
+ * Keeps a zoomed page over its frame: no pan past the page's own edges, and none on an axis where
+ * the page is no larger than the frame (it stays centred there). `page` is its size at zoom 1.
+ */
+export const clampPdfPan = (pan: PdfPan, page: PdfSize, frame: PdfSize, zoom: number): PdfPan => {
+  const maxX = Math.max(0, (page.width * zoom - frame.width) / 2);
+  const maxY = Math.max(0, (page.height * zoom - frame.height) / 2);
+  return { x: Math.min(maxX, Math.max(-maxX, pan.x)), y: Math.min(maxY, Math.max(-maxY, pan.y)) };
+};
+
+/**
+ * Where a zoom button zooms about, on one axis (REVIEW.md item 12: zooming about the middle showed
+ * the empty middle of the page). While the page's top edge, or the edge its lines start from, is in
+ * view, that edge stays where it is, so the first lines stay on screen; once the person has moved
+ * away from it, the zoom keeps the middle of what they are looking at. `fromEnd` is the line-start
+ * edge of a right-to-left interface. Client coordinates.
+ */
+export const pdfButtonZoomAnchor = (
+  page: { start: number; end: number },
+  view: { start: number; end: number },
+  fromEnd = false,
+) => {
+  if (fromEnd) return page.end <= view.end + 1 ? Math.max(view.start, page.end) : (view.start + view.end) / 2;
+  return page.start >= view.start - 1 ? Math.min(view.end, page.start) : (view.start + view.end) / 2;
+};

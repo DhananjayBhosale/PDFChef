@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { closeEditor, openSlot } from './lib/tool-ui.mjs';
 import { chromium } from 'playwright';
 import { PDFDocument, PDFDict, PDFName, StandardFonts, degrees, rgb } from 'pdf-lib';
 import JSZip from 'jszip';
@@ -227,7 +228,15 @@ try {
   checks.push(`all ${routes.length} tool routes render without runtime errors`);
   await page.goto(`${baseUrl}/ocr`);
   console.log('Checking OCR');
-  await page.getByRole('radio', { name: 'Scanned pages', exact: true }).click();
+  // The mode is beside the sentence on desktop (its value is plain text there, T-10); on a phone
+  // it is the editor of the sentence's `mode` slot, which starts closed.
+  const scanned = page.getByRole('radio', { name: 'Scanned pages', exact: true });
+  const modeSlot = page.getByRole('button', { name: /^How should we read this PDF/ });
+  // The route is loaded lazily: wait for one of the two before deciding which this is.
+  await scanned.or(modeSlot).first().waitFor({ timeout: 60000 });
+  if (!(await scanned.isVisible())) await openSlot(page, /^How should we read this PDF/);
+  await scanned.click();
+  await closeEditor(page);
   await page.locator('input[type=file]').setInputFiles({
     name: 'synthetic-scan.pdf', mimeType: 'application/pdf', buffer: Buffer.from(result.outputs.imageLayout.bytes),
   });

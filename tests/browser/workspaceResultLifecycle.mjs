@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { PDFDocument } from 'pdf-lib';
 
-// Current-source component checks: native purchase/storage timing is injected,
+// Current-source component checks. Needs `npm run dev` (it imports TypeScript source), not
+// preview. The result sheet's own Save is "Keep in Recent". Native purchase/storage timing is injected,
 // while the application providers, output pipeline and IndexedDB remain real.
 const origin = process.env.PDF_CHEF_URL || 'http://127.0.0.1:3000';
 const browser = await chromium.launch({ headless: true });
@@ -55,7 +56,7 @@ try {
       const { downloadBlob } = await import('/services/pdfShared.ts');
       downloadBlob(new Blob(['result A'], { type: 'application/pdf' }), 'A.pdf');
     });
-    await page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Keep in Recent', exact: true }).click();
     await page.waitForFunction(() => window.__saveStarted);
     await page.evaluate(async () => {
       const { downloadBlob } = await import('/services/pdfShared.ts');
@@ -64,7 +65,7 @@ try {
     await page.getByRole('dialog').getByText(/B.pdf/).waitFor();
     await page.evaluate(() => window.__releaseKeep());
     await page.waitForFunction(() => window.__saveFinished);
-    const save = page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true });
+    const save = page.getByRole('dialog').getByRole('button', { name: 'Keep in Recent', exact: true });
     assert.equal(await save.isDisabled(), false, 'finishing Save(A) must leave unsaved B savable');
     assert.equal(await page.getByRole('dialog').getByRole('button', { name: 'Show in Recent', exact: true }).count(), 0);
     assert.deepEqual(await page.evaluate(async () => {
@@ -112,15 +113,21 @@ try {
       });
       await page.getByRole('button', { name: /Process .*file/ }).click();
       await started;
+      // Leave through Tools (a phone's only way out), then open Recent from the rail. Tools asks
+      // first while a job runs (path to 9, item 7), and leaving discards the job as the question
+      // says: once the worker is free, no result arrives (path to 9, part 2). A late result
+      // reaching an open Recent is checked above.
+      await page.getByRole('link', { name: 'Tools', exact: true }).first().click();
+      await page.getByRole('dialog', { name: 'Leave this tool and discard your files?' }).getByRole('button', { name: 'Discard', exact: true }).click();
       await page.getByRole('link', { name: 'Recent', exact: true }).first().click();
       await page.waitForURL('**/recent');
       await page.getByText('No files yet', { exact: true }).waitFor();
       releaseWorker();
-      await page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true }).click();
-      await page.getByRole('dialog').getByRole('button', { name: 'Show in Recent', exact: true }).click();
-      await page.getByText(/^Batch processing \d{1,2} [A-Z][a-z]{2}\.zip$/).waitFor();
-      assert.equal(await page.getByText('No files yet', { exact: true }).count(), 0);
-      console.log('PASS: History-off Batch completion followed by explicit Save appears in the already-open Recent list.');
+      await page.waitForTimeout(4000);
+      assert.equal(await page.getByRole('dialog').count(), 0, 'a result was offered after leaving');
+      assert.equal(await page.getByText(/^Batch [Pp]rocessing .*\.zip$/).count(), 0, 'a ZIP reached Recent after leaving');
+      await page.getByText('No files yet', { exact: true }).waitFor();
+      console.log('PASS: Leaving a running Batch discards it: no result reaches Recent.');
     } finally {
       releaseWorker();
     }

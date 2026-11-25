@@ -1,103 +1,53 @@
-import { t } from '../../services/i18n/core.ts';
+import { t, formatPercent } from '../../services/i18n/core.ts';
 import { classifyPdfError, pdfProblemMessage } from '../../services/i18n/errors.ts';
 import { useI18n } from '../../services/i18n/react';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { AlertTriangle, CheckCircle2, FileText, Loader2, Wrench } from 'lucide-react';
+import React, { useState } from 'react';
+import { Wrench } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { FileUpload } from '../UI/FileUpload';
-import { Button } from '../UI/Primitives';
-import { ToolHeader, ToolShell } from '../UI/ToolLayout';
 import { PDFFile, ProcessingStatus } from '../../types';
-import { repairPDF } from '../../services/pdfDocument';
-import { loadPDFDocument, renderPageAsImage } from '../../services/pdfBrowser';
+import { repairPDF } from '../../services/pdfLazy';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
 import { formatBytes, toolOutputName } from '../UI/format';
-
-interface RepairPreview {
-  objectUrl: string;
-  pageCount: number;
-}
+import { ToolScreen } from '../Tool/ToolScreen';
+import { ChangeFile } from '../Tool/ToolTop';
+import { Sentence } from '../Tool/Sentence';
+import { Notice, ProgressLine } from '../Tool/parts';
+import { FilePreview } from '../Tool/FilePreview';
 
 const emptyStatus = (): ProcessingStatus => ({ isProcessing: false, progress: 0, message: '' });
 
 export const RepairPDF: React.FC = () => {
   useI18n();
   const [file, setFile] = useState<PDFFile | null>(null);
-  const [preview, setPreview] = useState<RepairPreview | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>(emptyStatus);
-  const previewUrlRef = useRef<string | null>(null);
-  const selectionVersionRef = useRef(0);
+  // Today's page count and "preview unavailable, but you can still re-save" line (A-010).
+  const [pageCount, setPageCount] = useState<number | null>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
 
-  const clearPreview = useCallback(() => {
-    if (previewUrlRef.current?.startsWith('blob:')) URL.revokeObjectURL(previewUrlRef.current);
-    previewUrlRef.current = null;
-    setPreview(null);
-  }, []);
-
-  useEffect(() => () => {
-    if (previewUrlRef.current?.startsWith('blob:')) URL.revokeObjectURL(previewUrlRef.current);
-  }, []);
-
-  const handleFilesSelected = async (files: File[]) => {
+  const handleFilesSelected = (files: File[]) => {
     if (files.length === 0) return;
     const selected = files[0];
     if (!isPdfFile(selected)) {
       setStatus({ isProcessing: false, progress: 0, message: '', error: t("repair-pdf.choose.a.pdf.file.c2a7df") });
       return;
     }
-
-    const selectionVersion = selectionVersionRef.current + 1;
-    selectionVersionRef.current = selectionVersion;
-    clearPreview();
-    setPreviewError(null);
-    setPreviewLoading(true);
     setStatus(emptyStatus());
+    setPageCount(null);
+    setPreviewFailed(false);
     setFile({
       id: uuidv4(),
       file: selected,
       name: selected.name,
       size: selected.size,
     });
-
-    let pdfDocument: any = null;
-    try {
-      pdfDocument = await loadPDFDocument(selected);
-      if (pdfDocument.numPages < 1) throw new Error(t("repair-pdf.the.pdf.has.no.pages.264071"));
-      const rendered = await renderPageAsImage(pdfDocument, 0, {
-        format: 'image/jpeg',
-        quality: 0.88,
-        scale: 1.2,
-      });
-      if (selectionVersion !== selectionVersionRef.current) {
-        URL.revokeObjectURL(rendered.objectUrl);
-        return;
-      }
-      previewUrlRef.current = rendered.objectUrl;
-      setPreview({ objectUrl: rendered.objectUrl, pageCount: pdfDocument.numPages });
-    } catch (error) {
-      console.error(error);
-      if (selectionVersion === selectionVersionRef.current) {
-        setPreviewError(t("repair-pdf.first.page.preview.is.unavailable.but.you.652fb7"));
-      }
-    } finally {
-      try {
-        if (pdfDocument?.destroy) await pdfDocument.destroy();
-      } finally {
-        if (selectionVersion === selectionVersionRef.current) setPreviewLoading(false);
-      }
-    }
   };
 
   const chooseAnotherFile = () => {
-    selectionVersionRef.current += 1;
-    clearPreview();
-    setPreviewLoading(false);
-    setPreviewError(null);
     setFile(null);
     setStatus(emptyStatus());
+    setPageCount(null);
+    setPreviewFailed(false);
   };
 
   const handleRepair = async () => {
@@ -128,92 +78,58 @@ export const RepairPDF: React.FC = () => {
     }
   };
 
-  return (
-    <ToolShell centered={!file}>
-      {/* The scope limit is stated once, beside the export button, where it
-          changes whether to press it. */}
-      <ToolHeader title={t("repair-pdf.repair.pdf.43faa0")} />
+  const title = t("repair-pdf.repair.pdf.43faa0");
 
-      <AnimatePresence mode="wait">
-        {!file ? (
-          <motion.div key="upload" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("repair-pdf.choose.a.pdf.to.re.save.02a5c9")} />
-          </motion.div>
-        ) : (
-          <motion.div key="repair" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
-            <section
-              aria-label={t("repair-pdf.selected.pdf.ed0ff3")}
-              className="flex items-center justify-between gap-3 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3"
-            >
-              <div className="min-w-0">
-                <p className="chef-filename text-sm font-semibold text-[var(--text-primary)]">{file.name}</p>
-                <p className="type-caption text-[var(--text-tertiary)]">{formatBytes(file.size)}</p>
-              </div>
-              <Button tone="quiet" onClick={chooseAnotherFile} disabled={status.isProcessing} className="shrink-0">{t("repair-pdf.change.c0bf75")}</Button>
-            </section>
-
-            <section className="rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 sm:p-4">
-              <div className="mx-auto flex max-w-sm flex-col items-center">
-                <div className="relative flex aspect-[210/297] w-[46%] min-w-32 items-center justify-center overflow-hidden rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)]">
-                  {previewLoading && <Loader2 aria-label={t("repair-pdf.loading.first.page.preview.9e97d7")} className="h-6 w-6 animate-spin text-[var(--accent-text)]" />}
-                  {!previewLoading && preview && (
-                    <img
-                      src={preview.objectUrl}
-                      alt={t("repair-pdf.first.page.of.3789b9", { v0: file.name })}
-                      className="h-full w-full object-contain"
-                    />
-                  )}
-                  {!previewLoading && !preview && (
-                    <FileText aria-hidden className="h-10 w-10 text-[var(--text-tertiary)]" />
-                  )}
-                </div>
-                <p className="type-footnote mt-1.5 font-medium text-[var(--text-secondary)]">
-                  {preview ? t("repair-pdf.page.1.of.d9604d", { v0: preview.pageCount }) : previewLoading ? t("repair-pdf.loading.preview.c4cf2b") : t("repair-pdf.preview.unavailable.b99fa6")}
-                </p>
-                {previewError && <p className="mt-1 text-center text-sm text-[var(--text-secondary)]">{previewError}</p>}
-              </div>
-
-              {/* Kept: without it "Repair" promises recovery this tool cannot
-                  do. Matches the Android footer summary. */}
-              <div className="mt-3 flex items-start gap-2 rounded-[var(--radius-field)] bg-[var(--status-caution-quiet)] px-3 py-2 text-[var(--status-caution-text)]">
-                <Wrench aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
-                <p className="type-footnote">{t("repair-pdf.re.saving.fixes.minor.compatibility.issues.it.48a32c")}</p>
-              </div>
-
-              {status.isProcessing && (
-                <div role="status" aria-live="polite" className="mt-3 flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)]">
-                  <Loader2 aria-hidden className="h-4 w-4 animate-spin text-[var(--accent-text)]" />
-                  {status.message}
-                </div>
-              )}
-
-              {!status.isProcessing && status.error && (
-                <div role="alert" className="mt-3 flex items-start gap-2 rounded-[var(--radius-field)] bg-[var(--status-danger-quiet)] px-3 py-2 text-[var(--status-danger-text)]">
-                  <AlertTriangle aria-hidden className="mt-0.5 h-5 w-5 shrink-0" />
-                  <p className="text-sm font-medium leading-5">{status.error}</p>
-                </div>
-              )}
-
-              {!status.isProcessing && !status.error && status.progress === 100 && (
-                <div role="status" aria-live="polite" className="mt-3 flex items-start gap-2 rounded-[var(--radius-field)] bg-[var(--status-success-quiet)] px-3 py-2 text-[var(--status-success-text)]">
-                  <CheckCircle2 aria-hidden className="mt-0.5 h-5 w-5 shrink-0" />
-                  <p className="text-sm font-medium leading-5">{status.message}</p>
-                </div>
-              )}
-
-              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
-                <Button
-                  tone="primary"
-                  icon={<Wrench aria-hidden size={18} />}
-                  busy={status.isProcessing}
-                  onClick={handleRepair}
-                  className="w-full sm:w-auto"
-                >{t("repair-pdf.save.repaired.pdf.ac389a")}</Button>
-              </div>
-            </section>
-          </motion.div>
+  if (!file) {
+    return (
+      <ToolScreen
+        title={title}
+        kind="file"
+        body={(
+          <div className="tk-empty">
+            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("repair-pdf.choose.a.pdf.to.re.save.02a5c9")} error={status.error} />
+          </div>
         )}
-      </AnimatePresence>
-    </ToolShell>
+      />
+    );
+  }
+
+  const notice = status.error
+    ? <Notice tone="error" role="alert">{status.error}</Notice>
+    : !status.isProcessing && status.progress === 100 && status.message
+      ? <Notice role="status">{status.message}</Notice>
+      : previewFailed
+        ? <Notice tone="caution" role="status">{t("repair-pdf.first.page.preview.is.unavailable.but.you.652fb7")}</Notice>
+        : null;
+  const meta = <>{pageCount !== null && <>{t('format.pageCount', { count: pageCount })} · </>}{formatBytes(file.size)}</>;
+
+  return (
+    <ToolScreen
+      title={title}
+      file={{ name: file.name, meta }}
+      heavyJob={{ bytes: file.size }}
+      change={<ChangeFile label={t('tool.chooseAnotherFile')} onClick={chooseAnotherFile} disabled={status.isProcessing} />}
+      kind="file"
+      bodyLabel={t("repair-pdf.selected.pdf.ed0ff3")}
+      body={<FilePreview file={file.file} name={file.name} meta={meta} onPages={setPageCount} onFailed={() => setPreviewFailed(true)} />}
+      // The scope limit is stated once, beside the export button, where it changes whether to press it.
+      sentence={(
+        <Sentence
+          template="repair-pdf.re.saving.fixes.minor.compatibility.issues.it.48a32c"
+          groupLabel={t('sentence.groupLabel', { tool: title })}
+          disabled={status.isProcessing}
+        />
+      )}
+      notice={notice}
+      action={(
+        <button type="button" onClick={() => void handleRepair()} disabled={status.isProcessing} className="tk-primary chef-pressable">
+          <Wrench aria-hidden size={18} />
+          <span>{t("repair-pdf.save.repaired.pdf.ac389a")}</span>
+        </button>
+      )}
+      progress={status.isProcessing ? (
+        <ProgressLine label={status.message} percent={formatPercent(Math.max(0, Math.min(100, status.progress)))} value={status.progress} />
+      ) : undefined}
+    />
   );
 };

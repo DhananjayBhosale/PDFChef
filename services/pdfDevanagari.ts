@@ -15,6 +15,7 @@ import {
   pushGraphicsState,
   setFillingColor,
   setFontAndSize,
+  setGraphicsState,
   setTextMatrix,
   setTextRenderingMode,
   showText,
@@ -53,6 +54,9 @@ interface LoadedFont {
 
 const loadedFonts = new Map<DevanagariFontId, LoadedFont>();
 let loadingFonts: Promise<void> | null = null;
+
+/** The face a Devanagari watermark is drawn in, on the page and in the live preview. */
+export const WATERMARK_DEVANAGARI_FONT: DevanagariFontId = 'MuktaBold';
 
 export const devanagariFontId = (klass: 'serif' | 'sans-serif' | 'monospace', bold: boolean): DevanagariFontId => (
   klass === 'serif' ? (bold ? 'MartelBold' : 'MartelRegular') : (bold ? 'MuktaBold' : 'MuktaRegular')
@@ -136,6 +140,22 @@ export const canShapeDevanagari = (text: string, id: DevanagariFontId): boolean 
   }
 };
 
+/**
+ * The first character this font cannot draw in `text`, or null when it can shape all of it. A line
+ * that has every glyph but still shapes to a missing one names its first non-space character.
+ */
+export const firstUnshapedDevanagariCharacter = (text: string, id: DevanagariFontId): string | null => {
+  if (canShapeDevanagari(text, id)) return null;
+  const face = (loadedFonts.get(id) ?? embeddedPdfFont(id as EmbeddedPdfFontId))?.face;
+  const characters = [...text];
+  const missing = face && characters.find((character) => {
+    const codePoint = character.codePointAt(0)!;
+    if (/\s/u.test(character) || codePoint === 0x200c || codePoint === 0x200d) return false;
+    return !face.hasGlyphForCodePoint(codePoint);
+  });
+  return missing || characters.find((character) => !/\s/u.test(character)) || null;
+};
+
 export const measureDevanagariText = (text: string, id: DevanagariFontId, size: number): number => {
   const face = fontFor(id).face;
   return face.layout(text.replace(/\t/g, '    ')).positions.reduce((sum, position) => sum + position.xAdvance, 0)
@@ -212,13 +232,19 @@ export class DevanagariPdfWriter {
     return cid.toString(16).padStart(4, '0');
   }
 
-  async drawLine(page: PDFPage, pieces: ShapedLinePiece[], fontSize: number, color: Color, rotationDegrees: number): Promise<void> {
+  async drawLine(page: PDFPage, pieces: ShapedLinePiece[], fontSize: number, color: Color, rotationDegrees: number, opacity?: number): Promise<void> {
     if (pieces.length === 0) return;
     const angle = rotationDegrees * Math.PI / 180;
     const a = Math.cos(angle), b = Math.sin(angle), c = -b, d = a;
     const emptyActualText = this.document.context.obj({ ActualText: PDFHexString.fromText('') });
+    page.pushOperators(pushGraphicsState());
+    // A see-through line (a watermark): one graphics state with its fill and stroke alpha.
+    if (opacity !== undefined && opacity < 1) {
+      const alpha = Math.max(0, opacity);
+      const state = this.document.context.register(this.document.context.obj({ Type: 'ExtGState', ca: alpha, CA: alpha }));
+      page.pushOperators(setGraphicsState(page.node.newExtGState('GS', state)));
+    }
     page.pushOperators(
-      pushGraphicsState(),
       PDFOperator.of(PDFOperatorNames.BeginMarkedContentSequence, [PDFName.of('Span'), emptyActualText as any]),
       beginText(),
       setFillingColor(color),

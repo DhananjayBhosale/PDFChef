@@ -23,7 +23,7 @@ test('Edit PDF cannot save, or spend a free job, before anything has changed', (
 
 test('Reorder Pages cannot save the original order', () => {
   const source = read('components/Tools/ReorderPDF.tsx');
-  assert.match(source, /disabled=\{loadingPreviews \|\| items\.length === 0 \|\| !hasOrderChanges\}/);
+  assert.match(source, /disabled=\{loadingPreviews \|\| items\.length === 0 \|\| !hasOrderChanges \|\| status\.isProcessing\}/);
 });
 
 test('Rotate Pages names how the selected pages now face, not the last tap', () => {

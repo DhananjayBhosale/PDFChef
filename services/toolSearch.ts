@@ -300,8 +300,12 @@ const UNSPACED_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p
 const containsAtWordStart = (text: string, phrase: string): boolean => {
   if (!phrase) return false;
   if (UNSPACED_SCRIPT.test(phrase[0])) return text.includes(phrase);
+  // Two letters are too short to be the start of a word you mean: "no" found "notes" and
+  // "normal" in unrelated tools. They match a whole word only (pass 3).
+  const whole = phrase.length < 3;
   for (let at = text.indexOf(phrase); at >= 0; at = text.indexOf(phrase, at + 1)) {
-    if (at === 0 || text[at - 1] === ' ') return true;
+    const end = at + phrase.length;
+    if ((at === 0 || text[at - 1] === ' ') && (!whole || end === text.length || text[end] === ' ')) return true;
   }
   return false;
 };
@@ -399,6 +403,28 @@ export const toolSearchScore = (tool: ToolCardData, query: string): number => {
   if (terms.some((term) => term === normalizedQuery)) score += 620;
   if (terms.some((term) => term.startsWith(normalizedQuery))) score += 480;
   if (terms.some((term) => containsAtWordStart(term, normalizedQuery))) score += 360;
+
+  // Every word typed has to count for this tool: itself, a typo of it, or a synonym that names the
+  // tool (its title or keywords). One stray word that happens to start a word somewhere in a
+  // description ("tool" in "zzzz-no-tool") no longer lists the tool; a synonym found only in a
+  // description ("document" for "scan") adds to the order but does not list a tool (pass 3).
+  // A phrase the app knows ("make smaller") still lists the tools it names.
+  // The start of a word in the tool's name counts at any length, so "ro" still finds Rotate.
+  const titleWords = profile.title.split(' ');
+  const directHit = (token: string) => profile.tokens.has(token)
+    || titleWords.some((word) => word.startsWith(token))
+    || terms.some((term) => containsAtWordStart(term, token))
+    || [...profile.tokens].some((indexed) => fuzzyTokenMatch(token, indexed));
+  // A synonym counts only in the tool's name, and not when it is another word of the same query
+  // ("numbers" means "page" too, but "page numbers" must not list Delete Pages).
+  const queryForms = new Set(queryTokens.flatMap((token) => [token, ...(token === 'page' || token === 'pages' ? ['page', 'pages'] : [])]));
+  const synonymHit = (token: string) => (QUERY_TOKEN_EXPANSIONS[token] ?? [])
+    .filter((value) => !queryForms.has(value))
+    .some((value) => containsAtWordStart(profile.title, value));
+  const covered = queryTokens.every((token) => directHit(token) || synonymHit(token));
+  const knownPhrase = Object.entries(QUERY_PHRASE_EXPANSIONS).some(([trigger, expansions]) => normalizedQuery.includes(trigger)
+    && expansions.map(normalizeSearchText).some((phrase) => [...profile.priorityTerms].some((term) => term === phrase || term.startsWith(phrase))));
+  if (!covered && !knownPhrase) return 0;
 
   let phraseHits = 0;
   expandedPhrases.forEach((phrase) => {

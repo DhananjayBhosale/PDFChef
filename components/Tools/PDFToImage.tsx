@@ -1,39 +1,68 @@
 import { formatBytes, toolOutputName, splitFilename } from '../UI/format';
 import { localizeError, pdfProblemMessage } from '../../services/i18n/errors.ts';
+import { getPdfRenderScale } from '../../services/pdfPageGeometry';
 import { t, formatNumber } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { FileUpload } from '../UI/FileUpload';
 import { PDFFile, ProcessingStatus } from '../../types';
-import {
-  extractEmbeddedImagesFromPDF,
-  loadPDFDocument,
-  renderPageAsImage,
-  renderPdfPageToBlob,
-  type EmbeddedPdfImageAsset,
-  type ImageExportConfig,
-} from '../../services/pdfBrowser';
+import { extractEmbeddedImagesFromPDF, loadJSZip, loadPDFDocument, renderPageAsImage, renderPdfPageToBlob, type EmbeddedPdfImageAsset, type ImageExportConfig } from '../../services/pdfLazy';
 import { deliverBlob, isPdfFile, revokeObjectUrls } from '../../services/pdfShared';
 import { parseBoundedPageRange } from '../../services/pageRange';
+import { shouldWarnForBytes } from '../../services/workspace';
 import { DEFAULT_IMAGE_EXPORT_QUALITY, DEFAULT_IMAGE_EXPORT_SCALE, MAX_IMAGE_EXPORT_SCALE, MIN_IMAGE_EXPORT_QUALITY, MIN_IMAGE_EXPORT_SCALE, imageExportExtension, imageExportPageFileName, imageExportRenderScale, resolveOptionalPageSelection } from '../../services/androidParity';
-import { Download, FileImage, ImageIcon, Loader2, Settings2, Undo2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Download, FileImage, ImageIcon, Loader2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { Link } from 'react-router-dom';
-import JSZip from 'jszip';
 import { ZoomControls } from '../UI/ZoomControls';
+import { PreviewFrame } from '../Tool/PreviewFrame';
 import { ChefSliderField } from '../UI/ChefSlider';
-import { useZoom } from '../../hooks/useZoom';
+import { usePanZoom } from '../../hooks/usePanZoom';
 import { StatusToast } from '../UI/StatusToast';
-import { ToolHeader, ToolShell } from '../UI/ToolLayout';
-import { tools } from './toolCatalog';
-import { ToolIdentity } from './ToolIdentity';
-import { useImmersiveWorkspace } from '../Layout/AppShell';
+import { ToolScreen } from '../Tool/ToolScreen';
+import { EnterCloses, FieldLabel } from '../Tool/Popover';
+import { ChangeFile, LogoTile } from '../Tool/ToolTop';
+import { Sentence, type SlotDef } from '../Tool/Sentence';
+import { Notice, ProgressLine, useAnnouncer } from '../Tool/parts';
+import { clip, clipLength, pagesPhrase, percent, times, type PageKeys } from '../Tool/values';
+import { useWide } from '../../hooks/useMediaQuery';
+import { useReplaceOnDrop } from '../../hooks/useFileDrop';
+import { formatPercent } from '../../services/i18n/core.ts';
+import { useRemembered, useRememberedFields } from '../Tool/useRemembered';
 
-const PDF_TO_IMAGE_TOOL = tools.find((tool) => tool.path === '/pdf-to-jpg');
+/** The page phrases this sentence owns (plan 2.14). */
+const IMAGE_PAGE_KEYS: PageKeys = {
+  all: 'sentence.pdfToImage.pages.all',
+  single: 'sentence.pdfToImage.pages.single',
+  range: 'sentence.pdfToImage.pages.range',
+  list: 'sentence.pdfToImage.pages.list',
+  selected: 'sentence.pdfToImage.pages.selected',
+};
 
 type ExportMode = 'pages' | 'embedded-images';
+
+/** Today's choice buttons (Pages / Images, JPEG / PNG / WEBP): buttons that are pressed or not. */
+function ChoiceRow<T extends string>({ label, value, options, onChange }: {
+  label: string;
+  value: T;
+  options: readonly { value: T; label: string }[];
+  onChange: (next: T) => void;
+}) {
+  return (
+    <div role="group" aria-label={label} className="tk-chipgroup">
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={value === option.value}
+          onClick={() => onChange(option.value)}
+          className="tk-chip tk-choice chef-pressable"
+        >{option.label}</button>
+      ))}
+    </div>
+  );
+}
 
 const PageImagePreview: React.FC<{
   pdfDoc: any;
@@ -50,7 +79,8 @@ const PageImagePreview: React.FC<{
     void (async () => {
       const page = await pdfDoc.getPage(1);
       if (!active) return;
-      const viewport = page.getViewport({ scale });
+      // Within the page canvas cap, as every other preview (s4-04).
+      const viewport = page.getViewport({ scale: getPdfRenderScale(page, scale) });
       canvas.width = viewport.width;
       canvas.height = viewport.height;
       const context = canvas.getContext('2d');
@@ -72,8 +102,11 @@ const PageImagePreview: React.FC<{
   // than the box on a phone, so the box clipped the page and showed only its blank middle.
   return (
     <figure className="absolute inset-0">
+      {/* Left to right like every other page preview: PDF.js draws the page's text with the canvas's
+          direction, and in Arabic an inherited right to left spaced the words wrongly (polish item 12). */}
       <canvas
         ref={canvasRef}
+        dir="ltr"
         role="img"
         aria-label={t("pdfto-image.page.1.preview.b4963a")}
         className="absolute inset-0 m-auto block max-h-full max-w-full select-none rounded-[2px] border border-[var(--border-strong)] bg-white shadow-[var(--elevation-panel)]"
@@ -88,15 +121,30 @@ const PageImagePreview: React.FC<{
 
 export const PDFToImage: React.FC = () => {
   useI18n();
+  const wide = useWide();
+  const settingsRef = useRef<HTMLDivElement>(null);
   const [file, setFile] = useState<PDFFile | null>(null);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
+  /** A page export can stop between pages (T-05): Cancel sets this, the loop checks it. */
+  const exportCancelRef = useRef(false);
+  // Leaving the tool discards its file, as its question says: a running export stops with it.
+  useEffect(() => () => { exportCancelRef.current = true; }, []);
+  const [exportCancellable, setExportCancellable] = useState(false);
+  const [exportCancelling, setExportCancelling] = useState(false);
+  /** The last export was stopped with Cancel: said once, and shown when no other line is (r4, desktop-05). */
+  const [exportCancelled, setExportCancelled] = useState(false);
+  const [announcer, announce] = useAnnouncer();
 
   // `PdfTool.PDF_TO_JPG.defaultOptionValue` is "format=jpg;quality=85;scale=1.2".
-  const [config, setConfig] = useState<ImageExportConfig>({
+  const [config, setConfig] = useRememberedFields<ImageExportConfig>({
     format: 'image/jpeg',
     quality: DEFAULT_IMAGE_EXPORT_QUALITY / 100,
     scale: DEFAULT_IMAGE_EXPORT_SCALE,
+  }, {
+    format: (value) => value === 'image/jpeg' || value === 'image/png' || value === 'image/webp',
+    quality: (value) => value >= MIN_IMAGE_EXPORT_QUALITY / 100 && value <= 1,
+    scale: (value) => value >= MIN_IMAGE_EXPORT_SCALE && value <= MAX_IMAGE_EXPORT_SCALE,
   });
   /** The app's `pages=` token; empty means every page. */
   const [pageSelection, setPageSelection] = useState('');
@@ -112,10 +160,9 @@ export const PDFToImage: React.FC = () => {
   const embeddedImagesRef = useRef<EmbeddedPdfImageAsset[]>([]);
   const scanRunIdRef = useRef(0);
 
-  const { zoom, zoomIn, zoomOut, resetZoom } = useZoom(1.0);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const stopPanRef = useRef<(() => void) | null>(null);
-  useEffect(() => () => { stopPanRef.current?.(); }, [file?.id, exportMode]);
+  // Two fingers, Ctrl+wheel, − and + (about the top of the page), and a drag that stops at the
+  // page's edges: the shared page zoom (pass 5).
+  const { zoom, zoomIn, zoomOut, reset: resetZoom, gestureRef, onPointerDown: handlePointerDown, transform, touchAction } = usePanZoom({ max: 4 });
 
   const replaceEmbeddedImages = useCallback((nextImages: EmbeddedPdfImageAsset[]) => {
     revokeObjectUrls(embeddedImagesRef.current.map((image) => image.objectUrl));
@@ -171,6 +218,7 @@ export const PDFToImage: React.FC = () => {
 
     try {
       const doc = await loadPDFDocument(selectedFile);
+      setExportCancelled(false);
       setFile({
         id: uuidv4(),
         file: selectedFile,
@@ -193,7 +241,14 @@ export const PDFToImage: React.FC = () => {
     if (!pdfDoc) return;
     setIsGeneratingPreview(true);
     try {
-      const result = await renderPageAsImage(pdfDoc, 0, config);
+      const rendered = await renderPageAsImage(pdfDoc, 0, config);
+      // The preview stays within the canvas cap, so an oversized page renders smaller than its
+      // export. The memory estimate reads the full size, so a heavy job still warns (s4-04).
+      const full = (await pdfDoc.getPage(1)).getViewport({ scale: config.scale });
+      const grow = (full.width * full.height) / Math.max(1, rendered.width * rendered.height);
+      const result = grow > 1
+        ? { ...rendered, width: Math.round(full.width), height: Math.round(full.height), sizeBytes: Math.round(rendered.sizeBytes * grow) }
+        : rendered;
       let previewResult = result;
       if (Capacitor.isNativePlatform()) {
         const reader = new FileReader();
@@ -229,47 +284,6 @@ export const PDFToImage: React.FC = () => {
     };
   }, [updatePreview]);
 
-  const handlePointerDown = (event: React.PointerEvent) => {
-    if (zoom <= 1 || event.button !== 0 || !event.isPrimary) return;
-    stopPanRef.current?.();
-    const target = event.currentTarget;
-    const pointerId = event.pointerId;
-    target.setPointerCapture(pointerId);
-    const startX = event.clientX - pan.x;
-    const startY = event.clientY - pan.y;
-
-    const onMove = (moveEvent: PointerEvent) => {
-      if (moveEvent.pointerId !== pointerId) return;
-      setPan({ x: moveEvent.clientX - startX, y: moveEvent.clientY - startY });
-    };
-    const stop = () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
-      window.removeEventListener('blur', stop);
-      target.removeEventListener('lostpointercapture', onUp);
-      stopPanRef.current = null;
-      if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
-    };
-    const onUp = (upEvent: PointerEvent) => {
-      if (upEvent.pointerId === pointerId) stop();
-    };
-
-    stopPanRef.current = stop;
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onUp);
-    window.addEventListener('blur', stop);
-    target.addEventListener('lostpointercapture', onUp);
-  };
-
-  useEffect(() => {
-    if (zoom <= 1) {
-      stopPanRef.current?.();
-      setPan({ x: 0, y: 0 });
-    }
-  }, [zoom]);
-
   const resolvedPageSelection = useMemo<number[] | null>(() => {
     if (!pdfDoc) return [];
     try {
@@ -292,8 +306,9 @@ export const PDFToImage: React.FC = () => {
     const accumulatedOutputBytes = preview.sizeBytes * exportPageCount * 1.5;
     return Math.round(file.size + activePageBytes + accumulatedOutputBytes);
   }, [exportPageCount, file, preview]);
-  const requiresLargeJobConfirmation = exportPageCount > 50
-    || estimatedWorkingMemoryBytes >= 256 * 1024 * 1024;
+  // "Warn before a heavy job" (Settings) decides, at its own threshold, applied to the memory this
+  // export needs (fix round 2, item 7): a 60-page, 12 kB file is not a heavy job.
+  const requiresLargeJobConfirmation = shouldWarnForBytes(estimatedWorkingMemoryBytes);
   const estimatedWorkingMemoryMb = Math.max(1, Math.ceil(estimatedWorkingMemoryBytes / (1024 * 1024)));
 
   useEffect(() => {
@@ -305,6 +320,8 @@ export const PDFToImage: React.FC = () => {
    * saying "Done!" and freeing Convert before then was not true.
    */
   const saveResult = async (blob: Blob, name: string, mimeType?: string) => {
+    // Writing the file is not stopped half way: Cancel ends with the rendering.
+    setExportCancellable(false);
     setStatus({ isProcessing: true, progress: 0, message: t("pdfto-image.saving.23e392") });
     try {
       await deliverBlob(blob, name, mimeType);
@@ -340,6 +357,13 @@ export const PDFToImage: React.FC = () => {
       return;
     }
     setStatus({ isProcessing: true, progress: 0, message: t("pdfto-image.starting.export.8e015a") });
+    setExportCancelled(false);
+    exportCancelRef.current = false;
+    setExportCancelling(false);
+    setExportCancellable(true);
+    const stopIfCancelled = () => {
+      if (exportCancelRef.current) throw new DOMException('cancelled', 'AbortError');
+    };
 
     try {
       const extension = imageExportExtension(config.format);
@@ -358,6 +382,7 @@ export const PDFToImage: React.FC = () => {
       if (exportIndices.length === 1) {
         setStatus({ isProcessing: true, progress: 50, message: t("pdfto-image.rendering.page.f14d93", { v0: exportIndices[0] + 1 }) });
         const { blob } = await renderPage(exportIndices[0]);
+        stopIfCancelled();
         await saveResult(
           blob,
           `${splitFilename(file.name).stem.trim() || 'document'}.${extension}`,
@@ -366,8 +391,9 @@ export const PDFToImage: React.FC = () => {
         return;
       }
 
-      const zip = new JSZip();
+      const zip = new (await loadJSZip())();
       for (let index = 0; index < exportIndices.length; index += 1) {
+        stopIfCancelled();
         const pageIndex = exportIndices[index];
         setStatus({
           isProcessing: true,
@@ -377,17 +403,29 @@ export const PDFToImage: React.FC = () => {
         const { blob } = await renderPage(pageIndex);
         zip.file(imageExportPageFileName(pageIndex, extension, highestPageIndex), blob);
       }
+      stopIfCancelled();
+      setExportCancellable(false);
 
       setStatus({ isProcessing: true, progress: 100, message: t("pdfto-image.putting.the.pictures.into.one.zip.file.1a0af7") });
       const content = await zip.generateAsync({ type: 'blob' });
       await saveResult(content, toolOutputName('images', file.name, 'zip'));
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError' && exportCancelRef.current) {
+        setStatus({ isProcessing: false, progress: 0, message: '' });
+        setExportCancelled(true);
+        announce(t("pdfto-word.conversion.cancelled.nothing.was.saved.44e2e7"));
+        return;
+      }
       setStatus({
         isProcessing: false,
         progress: 0,
         message: '',
         error: error instanceof Error ? localizeError(error) : t("pdfto-image.saving.did.not.work.f30329"),
       });
+    } finally {
+      exportCancelRef.current = false;
+      setExportCancellable(false);
+      setExportCancelling(false);
     }
   };
 
@@ -406,7 +444,7 @@ export const PDFToImage: React.FC = () => {
       }
 
       setStatus({ isProcessing: true, progress: 10, message: t("pdfto-image.getting.the.pictures.ready.13eef3") });
-      const zip = new JSZip();
+      const zip = new (await loadJSZip())();
       for (let index = 0; index < images.length; index += 1) {
         const image = images[index];
         setStatus({
@@ -434,6 +472,7 @@ export const PDFToImage: React.FC = () => {
 
   const handleStartOver = () => {
     scanRunIdRef.current += 1;
+    setExportCancelled(false);
     setIsScanningImages(false);
     setSelectedEmbeddedIds([]);
     setExportMode('pages');
@@ -470,11 +509,6 @@ export const PDFToImage: React.FC = () => {
     void handlePageExport();
   };
 
-  // The export workspace earns the whole screen; the drop zone that precedes it
-  // does not. Until a PDF is chosen this is an ordinary tool screen, with the
-  // shell's Tools navigation above it and the tab bar below it.
-  useImmersiveWorkspace(Boolean(file));
-
   const pageActionLabel = resolvedPageSelection === null
     ? t("pdfto-image.check.page.range.093d41")
     : t('pdfToImage.convertPages', { count: exportPageCount });
@@ -482,332 +516,383 @@ export const PDFToImage: React.FC = () => {
     ? t("pdfto-image.download.selected.ecbb46", { v0: selectedEmbeddedImages.length > 0 ? ` (${selectedEmbeddedImages.length})` : '' })
     : pageActionLabel;
 
+  const title = t("pdfto-image.pdf.to.image.185e0a");
+  const toast = <StatusToast status={status} />;
+  // Desktop: this route's header keeps "Back to tools" as the logo link. Phones: the tool's mark
+  // and name are that link, as on every tool (owner decision D-1), with the same name.
+  const leading = (
+    <Link
+      to="/"
+      aria-label={t("pdfto-image.back.to.tools.e42d59")}
+      title={t("pdfto-image.back.to.tools.e42d59")}
+      className="tk-brand chef-pressable"
+    >
+      <LogoTile />
+    </Link>
+  );
+
+  // Below 768 px the header has no Change control, so the screen takes a dropped file itself.
+  useReplaceOnDrop({ onReplace: handleStartOver, busy: status.isProcessing, off: wide || !file });
+
   if (!file) {
     return (
-      <ToolShell centered>
-        <ToolHeader title={t("pdfto-image.pdf.to.image.185e0a")} />
-        <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("pdfto-image.choose.a.pdf.to.convert.443592")} />
-        <StatusToast status={status} />
-      </ToolShell>
+      <ToolScreen
+        title={title}
+        kind="file"
+        body={(
+          <div className="tk-empty">
+            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("pdfto-image.choose.a.pdf.to.convert.443592")} />
+          </div>
+        )}
+        toast={toast}
+      />
     );
   }
 
-  return (
-    <div className="chef-safe-bottom flex h-[100dvh] min-h-[100dvh] w-full flex-col overflow-hidden bg-[var(--surface-canvas)]">
+  const embeddedMode = exportMode === 'embedded-images';
+  const pagesInvalid = !embeddedMode && resolvedPageSelection === null;
+  const pagesText = (() => {
+    if (embeddedMode) {
+      // "all 3 stored pictures" / "the only stored picture" when every one is chosen (pass 5, item 6).
+      if (selectedEmbeddedImages.length > 0 && selectedEmbeddedImages.length === embeddedImages.length) {
+        return t('sentence.pdfToImage.images.all', { count: embeddedImages.length });
+      }
+      return selectedEmbeddedImages.length > 0
+        ? t('sentence.pdfToImage.images.some', { count: selectedEmbeddedImages.length, total: embeddedImages.length })
+        : t('sentence.pdfToImage.images.none');
+    }
+    if (resolvedPageSelection === null) return clip(pageSelection.trim(), clipLength(wide));
+    return pagesPhrase(IMAGE_PAGE_KEYS, resolvedPageSelection, file.pageCount).text;
+  })();
+  const pagesLabel = embeddedMode ? t("pdfto-image.images.3df294", { v0: '' }) : t("pdfto-image.pages.9046da");
+  const formatName = config.format.split('/')[1].toUpperCase();
+  const qualityLabel = t("pdfto-image.quality.1b2c08");
+  const scaleLabel = t("pdfto-image.resolution.d4055f");
+  const formatLabel = t("pdfto-image.format.2f3436");
+  const pagesNoticeId = `pdf-to-image-pages-notice-${file.id}`;
 
-      {/* An immersive route gets no shell chrome, so it consumes the status-bar
-          inset itself rather than painting under the clock. */}
-      <div className="chef-safe-top z-30 flex min-h-16 flex-shrink-0 flex-col items-start justify-between gap-2 border-b border-[var(--border-hairline)] bg-[var(--surface-raised)] px-3 py-2 sm:flex-row sm:items-center sm:px-6 sm:py-0">
-        <div className="flex items-center gap-4">
-          {/* This route has no app nav bar, so this is the only way out. It
-              needs a name and a full target, not a bare glyph. */}
-          <Link
-            to="/"
-            aria-label={t("pdfto-image.back.to.tools.e42d59")}
-            className="chef-target grid place-items-center rounded-full text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-sunken)]"
-          >
-            <Undo2 aria-hidden size={20} />
-          </Link>
-          <div className="flex items-center gap-2">
-            {PDF_TO_IMAGE_TOOL && (
-              <ToolIdentity tool={PDF_TO_IMAGE_TOOL} size={20} assetSize={30} assetClassName="h-[30px] w-[30px] shrink-0 object-contain" />
-            )}
-            {/* The mode is stated by the Mode control and by the export
-                button's own label; it does not need a third voice here. */}
-            <h1 className="text-lg font-bold leading-none text-[var(--text-primary)]">{t("pdfto-image.pdf.to.image.185e0a")}</h1>
+  // The editors' controls: in each slot's editor on phones, beside the page on desktop
+  // (owner decision 1, A-008), so each change is one step. Same nodes, names and handlers.
+  const whatEditor = (
+    <div className="tk-fieldcol">
+      {hasImageModeOption && (
+        <ChoiceRow
+          label={t("pdfto-image.mode.5e23ec")}
+          value={exportMode}
+          options={[
+            { value: 'pages' as ExportMode, label: t("pdfto-image.pages.9046da") },
+            {
+              value: 'embedded-images' as ExportMode,
+              label: isScanningImages ? t("pdfto-image.scanning.38d96d") : t("pdfto-image.images.3df294", { v0: hasDetectedEmbeddedImages ? ` (${embeddedImages.length})` : '' }),
+            },
+          ]}
+          onChange={(next) => { if (next === 'pages' || hasDetectedEmbeddedImages) setExportMode(next); }}
+        />
+      )}
+      {!embeddedMode ? (
+        <label className="tk-field" htmlFor="pdf-to-image-pages">
+          <FieldLabel>{t("pdfto-image.pages.9046da")}</FieldLabel>
+          <input
+            id="pdf-to-image-pages"
+            value={pageSelection}
+            onChange={(event) => setPageSelection(event.target.value)}
+            placeholder={t("pdfto-image.all.pages.or.1.3.5.7f85f6")}
+            aria-invalid={pagesInvalid}
+            aria-describedby={pagesInvalid ? pagesNoticeId : undefined}
+            className="chef-field"
+          />
+        </label>
+      ) : hasDetectedEmbeddedImages && (
+        <>
+          <div className="tk-fieldrow">
+            <span className="tk-caution">{t("pdfto-image.selection.ca4067")}</span>
+            <span dir="ltr" className="tk-caution tabular">{formatNumber(selectedEmbeddedImages.length)} / {formatNumber(embeddedImages.length)}</span>
           </div>
-        </div>
+          <div className="tk-fieldrow">
+            <button type="button" onClick={() => setSelectedEmbeddedIds(embeddedImages.map((image) => image.id))} className="tk-btn tk-btn-outline chef-pressable">{t("pdfto-image.select.all.1fc9a3")}</button>
+            <button type="button" onClick={() => setSelectedEmbeddedIds([])} className="tk-btn tk-btn-outline chef-pressable">{t("pdfto-image.clear.83b12c")}</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+  const formatEditor = (
+    <ChoiceRow
+      label={formatLabel}
+      value={config.format}
+      options={(['image/jpeg', 'image/png', 'image/webp'] as const).map((format) => ({ value: format, label: format.split('/')[1].toUpperCase() }))}
+      onChange={(format) => setConfig({ ...config, format })}
+    />
+  );
+  const qualityEditor = (
+    <ChefSliderField
+      label={qualityLabel}
+      suffix="%"
+      min={MIN_IMAGE_EXPORT_QUALITY}
+      max={100}
+      step={1}
+      value={Math.round(config.quality * 100)}
+      onChange={(next) => setConfig({ ...config, quality: next / 100 })}
+      ariaLabel={t("pdfto-image.image.quality.6ad454")}
+    />
+  );
+  const scaleEditor = (
+    <ChefSliderField
+      label={scaleLabel}
+      suffix="×"
+      decimals={2}
+      fixedDecimals
+      min={MIN_IMAGE_EXPORT_SCALE}
+      max={MAX_IMAGE_EXPORT_SCALE}
+      step={0.05}
+      value={config.scale}
+      onChange={(next) => setConfig({ ...config, scale: next })}
+      ariaLabel={t("pdfto-image.image.resolution.93626a")}
+    />
+  );
+  const settingSlot = (name: string, editor: React.ReactNode) => (wide
+    ? { focusTarget: () => settingsRef.current?.querySelector<HTMLElement>(`[data-setting="${name}"] :is(input, [aria-pressed="true"], [role="slider"])`) ?? null }
+    : { editor });
 
-        {file && (
-          <div className="flex w-full items-center justify-end gap-2 sm:w-auto sm:gap-3">
-            {hasDetectedEmbeddedImages && (
-              <div className="type-caption hidden rounded-full bg-[var(--status-success-quiet)] px-3 py-1 uppercase text-[var(--status-success-text)] sm:block">{t("pdfto-image.message.204dac635c", { v0: embeddedImages.length })}</div>
-            )}
-            <button
-              onClick={handleStartOver}
-              className="chef-target chef-pressable rounded-[var(--radius-control)] px-3 text-xs font-bold text-[var(--status-danger-text)] transition-colors hover:bg-[var(--status-danger-quiet)] sm:px-4 sm:text-sm"
-            >{t("pdfto-image.start.over.5eed7e")}</button>
-            <button
-              onClick={handlePrimaryAction}
-              disabled={
-                status.isProcessing ||
-                (exportMode === 'embedded-images'
-                  ? selectedEmbeddedImages.length === 0
-                  : !preview || resolvedPageSelection === null || (requiresLargeJobConfirmation && !largeJobConfirmed))
-              }
-              className="chef-target chef-pressable flex items-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 text-xs font-bold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-55 sm:px-6 sm:text-sm"
-            >
-              {status.isProcessing ? <Loader2 className="animate-spin" size={18} /> : <Download size={18} />}
-              <span>{primaryActionLabel}</span>
-            </button>
+  const whatSlot: SlotDef = {
+    label: pagesLabel,
+    text: pagesText,
+    bidi: pagesInvalid || (!embeddedMode && pagesText.includes('–')) ? 'ltr' : undefined,
+    tone: pagesInvalid ? 'error' : undefined,
+    ...settingSlot('what', <EnterCloses valid={!pagesInvalid}>{whatEditor}</EnterCloses>),
+  };
+
+  const formatSlot: SlotDef = {
+    label: formatLabel,
+    text: formatName,
+    ...settingSlot('format', formatEditor),
+  };
+
+  const qualitySlot: SlotDef = {
+    label: qualityLabel,
+    text: percent(Math.round(config.quality * 100)),
+    ...settingSlot('quality', qualityEditor),
+  };
+
+  const scaleSlot: SlotDef = {
+    label: scaleLabel,
+    text: times(config.scale),
+    ...settingSlot('scale', scaleEditor),
+  };
+
+  const settings = wide ? (
+    <div ref={settingsRef} className="tk-side-settings">
+      <div data-setting="what" className="tk-side-setting">{whatEditor}</div>
+      {!embeddedMode && <div data-setting="format" className="tk-side-setting"><span className="tk-side-label">{formatLabel}</span>{formatEditor}</div>}
+      {!embeddedMode && config.format !== 'image/png' && <div data-setting="quality" className="tk-side-setting">{qualityEditor}</div>}
+      {!embeddedMode && <div data-setting="scale" className="tk-side-setting">{scaleEditor}</div>}
+    </div>
+  ) : undefined;
+
+  const sentence = embeddedMode ? (
+    <Sentence
+      // One picture is "a PNG file" (pass 5, item 6).
+      template={selectedEmbeddedImages.length === 1 ? 'sentence.pdfToImage.embeddedOne'
+        : selectedEmbeddedImages.length > 0 ? 'sentence.pdfToImage.embedded' : 'sentence.pdfToImage.embeddedNone'}
+      groupLabel={t('sentence.groupLabel', { tool: title })}
+      disabled={status.isProcessing}
+      slots={{ what: whatSlot }}
+    />
+  ) : config.format === 'image/png' ? (
+    <Sentence
+      // One page makes one picture: "as a PNG picture" (pass 5, item 6).
+      template={exportPageCount === 1 ? 'sentence.pdfToImage.losslessOne' : 'sentence.pdfToImage.lossless'}
+      groupLabel={t('sentence.groupLabel', { tool: title })}
+      disabled={status.isProcessing}
+      slots={{ what: whatSlot, format: formatSlot, scale: scaleSlot }}
+    />
+  ) : (
+    <Sentence
+      template={exportPageCount === 1 ? 'sentence.pdfToImage.lossyOne' : 'sentence.pdfToImage.lossy'}
+      groupLabel={t('sentence.groupLabel', { tool: title })}
+      disabled={status.isProcessing}
+      slots={{ what: whatSlot, format: formatSlot, quality: qualitySlot, scale: scaleSlot }}
+    />
+  );
+
+  const notice = pagesInvalid ? (
+    <Notice tone="error" role="alert" id={pagesNoticeId}>{t("pdfto-image.use.page.numbers.or.ranges.such.as.28c6a3")}</Notice>
+  ) : !embeddedMode && requiresLargeJobConfirmation ? (
+    /* Kept in full: this is the one place the tool can warn that a large export may exhaust the tab's memory. */
+    <Notice tone="caution" role="note">
+      <strong>{t("pdfto-image.large.browser.export.daeb4c")}</strong>{' '}
+      {t("pdfto-image.message.aa8fdb0667", { v0: exportPageCount, v1: estimatedWorkingMemoryMb })}
+      <label className="tk-check">
+        <input
+          type="checkbox"
+          checked={largeJobConfirmed}
+          onChange={(event) => setLargeJobConfirmed(event.target.checked)}
+        />
+        <span>{t("pdfto-image.continue.with.this.export.37f365")}</span>
+      </label>
+    </Notice>
+  ) : !embeddedMode && hasDetectedEmbeddedImages ? (
+    // Today's "12 images detected" and its "Images (12)" button (A-009): the only sign at rest
+    // that the PDF holds pictures that can be saved at full quality. On desktop the button is beside the page.
+    <Notice role="status">
+      {/* The plural-aware "1 image found" / "12 images found" (polish item 15). */}
+      {t("pdf-advanced-tools.message.ba0aedff09", { count: embeddedImages.length })}
+      {!wide && (
+        <>
+          {' '}
+          <button type="button" onClick={() => setExportMode('embedded-images')} disabled={status.isProcessing} className="tk-chip tk-notice-action chef-pressable">
+            {t("pdfto-image.images.3df294", { v0: ` (${embeddedImages.length})` })}
+          </button>
+        </>
+      )}
+    </Notice>
+  ) : exportCancelled && !status.isProcessing ? (
+    // Spoken by the announcer; drawn here without a live role so it is heard once.
+    <Notice>{t("pdfto-word.conversion.cancelled.nothing.was.saved.44e2e7")}</Notice>
+  ) : null;
+
+  const action = (
+    <button
+      type="button"
+      onClick={handlePrimaryAction}
+      disabled={
+        status.isProcessing ||
+        (exportMode === 'embedded-images'
+          ? selectedEmbeddedImages.length === 0
+          : !preview || resolvedPageSelection === null || (requiresLargeJobConfirmation && !largeJobConfirmed))
+      }
+      className="tk-primary chef-pressable"
+    >
+      <Download aria-hidden size={18} />
+      <span>{primaryActionLabel}</span>
+    </button>
+  );
+  const progress = status.isProcessing ? (
+    <ProgressLine
+      label={status.message || t("pdfto-image.starting.export.8e015a")}
+      percent={status.progress > 0 ? formatPercent(Math.max(0, Math.min(100, status.progress))) : undefined}
+      value={status.progress}
+      quietCancel
+      cancel={exportCancellable ? (
+        <button
+          type="button"
+          onClick={() => { exportCancelRef.current = true; setExportCancelling(true); }}
+          disabled={exportCancelling}
+          className="tk-btn chef-pressable"
+        >
+          {t("output-center.cancel.19766e")}
+        </button>
+      ) : undefined}
+    />
+  ) : undefined;
+
+  const body = embeddedMode ? (
+    <div className="tk-embedded">
+      <h2 className="tk-embedded-title">
+        <ImageIcon aria-hidden size={18} />{t("pdfto-image.embedded.images.f88df7")}
+        {hasDetectedEmbeddedImages && <span className="tk-embedded-count tabular">{t("pdf-advanced-tools.message.ba0aedff09", { count: embeddedImages.length })}</span>}
+      </h2>
+      {isScanningImages ? (
+        <div className="tk-crop-state">
+          <Loader2 className="animate-spin" size={28} aria-hidden />
+          <p>{t("pdfto-image.scanning.pdf.for.embedded.images.0f63ee")}</p>
+        </div>
+      ) : embeddedImages.length === 0 ? (
+        <div className="tk-crop-state">
+          <ImageIcon size={36} aria-hidden className="opacity-50" />
+          <p>{t("pdfto-image.this.pdf.has.no.pictures.stored.inside.5e555c")}</p>
+        </div>
+      ) : (
+        <div className="tk-embgrid">
+          {embeddedImages.map((image, index) => {
+            const isSelected = selectedEmbeddedIds.includes(image.id);
+            return (
+              <article key={image.id} className="tk-embcard" data-selected={isSelected ? '' : undefined}>
+                <button
+                  type="button"
+                  aria-pressed={isSelected}
+                  aria-label={t("pdfto-image.image.0f73dd", { v0: index + 1, v1: isSelected ? t("pdfto-image.selected.bd44f3") : '' })}
+                  onClick={() => toggleEmbeddedSelection(image.id)}
+                  className="tk-embcard-pic chef-pressable"
+                >
+                  <img src={image.objectUrl} alt="" aria-hidden />
+                </button>
+                <div className="tk-embcard-info">
+                  <div className="tk-embcard-head">
+                    <div>
+                      <div className="tk-embcard-name">{t("pdfto-image.message.fd3495587c", { v0: index + 1 })}</div>
+                      <div className="tk-embcard-meta">{t("pdfto-image.message.1fac9292db", { v0: image.pageNumbers.join(', ') })}</div>
+                    </div>
+                    <span className="tk-embcard-state">{isSelected ? t("pdfto-image.selected.57fd7a") : t("pdfto-image.not.selected.df12ae")}</span>
+                  </div>
+                  <div className="tk-embcard-meta tabular">
+                    <span dir="ltr">{image.width} × {image.height}</span> · {t("pdfto-image.pixels.6ec9c2")} · {formatBytes(image.byteSize)} · {t("pdfto-image.lossless.png.daae34")}
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={t("pdfto-image.download.image.fdaf13", { v0: index + 1 })}
+                    onClick={() => void downloadEmbeddedImages([image])}
+                    disabled={status.isProcessing}
+                    className="tk-btn tk-btn-outline chef-pressable"
+                  >
+                    <Download aria-hidden size={16} />{t("pdfto-image.download.image.2fd3a0")}</button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  ) : (
+    <PreviewFrame tools={<ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={4} />}>
+      <h2 className="sr-only">{title}</h2>
+      <div
+        ref={gestureRef}
+        className={`tk-imgstage-view ${zoom > 1 ? 'cursor-grab active:cursor-grabbing' : ''}`}
+        style={{ touchAction }}
+        onPointerDown={handlePointerDown}
+      >
+        {isGeneratingPreview && (
+          <div className="tk-imgstage-busy">
+            <Loader2 className="animate-spin text-[var(--accent-text)]" size={40} />
+          </div>
+        )}
+        {preview ? (
+          // The zoom sits above the stage, so the page fills it (T-13).
+          <div
+            className="absolute inset-0"
+            style={zoom === 1 ? undefined : { transform }}
+          >
+            <PageImagePreview pdfDoc={pdfDoc} scale={config.scale} />
+          </div>
+        ) : (
+          <div className="tk-crop-state">
+            <FileImage size={48} className="opacity-50" aria-hidden />
+            <p>{t("pdfto-image.generating.preview.17a59a")}</p>
           </div>
         )}
       </div>
+    </PreviewFrame>
+  );
 
-      <AnimatePresence mode="wait">
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="chef-gesture-clear flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3 sm:p-4 md:flex-row">
-            <div className="custom-scrollbar flex max-h-[46dvh] w-full flex-shrink-0 flex-col gap-3 overflow-y-auto md:h-full md:max-h-none md:w-80 md:max-w-80">
-              <div className="space-y-2 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3">
-                <div className="flex items-center gap-2 border-b border-[var(--border-hairline)] pb-2 text-sm font-bold text-[var(--text-primary)]">
-                  <Settings2 aria-hidden size={18} className="text-[var(--accent-text)]" />{t("pdfto-image.picture.settings.53a399")}</div>
-
-                {hasImageModeOption && (
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">{t("pdfto-image.mode.5e23ec")}</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => setExportMode('pages')}
-                        className={`chef-pressable chef-hit-y grid min-h-11 place-items-center rounded-[var(--radius-control)] border px-3 py-1.5 text-sm font-medium transition-colors ${
-                          exportMode === 'pages'
-                            ? 'border-[var(--accent-rest)] bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]'
-                            : 'border-[var(--border-strong)] text-[var(--text-primary)] hover:border-[var(--accent-rest)]'
-                        }`}
-                      >{t("pdfto-image.pages.9046da")}</button>
-                      <button
-                        onClick={() => hasDetectedEmbeddedImages && setExportMode('embedded-images')}
-                        disabled={!hasDetectedEmbeddedImages}
-                        className={`chef-pressable chef-hit-y grid min-h-11 place-items-center rounded-[var(--radius-control)] border px-3 py-1.5 text-sm font-medium transition-colors ${
-                          exportMode === 'embedded-images'
-                            ? 'border-[var(--accent-rest)] bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]'
-                            : 'border-[var(--border-strong)] text-[var(--text-primary)] hover:border-[var(--accent-rest)]'
-                        } disabled:cursor-not-allowed disabled:opacity-55`}
-                      >
-                        {isScanningImages ? t("pdfto-image.scanning.38d96d") : t("pdfto-image.images.3df294", { v0: hasDetectedEmbeddedImages ? ` (${embeddedImages.length})` : '' })}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {exportMode === 'pages' ? (
-                  <>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">{t("pdfto-image.format.2f3436")}</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {['image/jpeg', 'image/png', 'image/webp'].map((format) => (
-                          <button
-                            key={format}
-                            onClick={() => setConfig({ ...config, format: format as ImageExportConfig['format'] })}
-                            className={`chef-pressable chef-hit-y grid min-h-11 place-items-center rounded-[var(--radius-control)] border px-3 py-1.5 text-sm font-medium transition-colors ${
-                              config.format === format
-                                ? 'border-[var(--accent-rest)] bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]'
-                                : 'border-[var(--border-strong)] text-[var(--text-primary)] hover:border-[var(--accent-rest)]'
-                            }`}
-                          >
-                            {format.split('/')[1].toUpperCase()}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* One slider per row. Side by side they are wider than this card on a
-                        phone, and the Resolution value ended past the edge of the screen. */}
-                    <div className="grid gap-3">
-                      {config.format !== 'image/png' && (
-                        <ChefSliderField
-                          label={t("pdfto-image.quality.1b2c08")}
-                          suffix="%"
-                          min={MIN_IMAGE_EXPORT_QUALITY}
-                          max={100}
-                          step={1}
-                          value={Math.round(config.quality * 100)}
-                          onChange={(next) => setConfig({ ...config, quality: next / 100 })}
-                          ariaLabel={t("pdfto-image.image.quality.6ad454")}
-                        />
-                      )}
-
-                      <ChefSliderField
-                        label={t("pdfto-image.resolution.d4055f")}
-                        suffix="×"
-                        decimals={2}
-                        fixedDecimals
-                        min={MIN_IMAGE_EXPORT_SCALE}
-                        max={MAX_IMAGE_EXPORT_SCALE}
-                        step={0.05}
-                        value={config.scale}
-                        onChange={(next) => setConfig({ ...config, scale: next })}
-                        ariaLabel={t("pdfto-image.image.resolution.93626a")}
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]" htmlFor="pdf-to-image-pages">{t("pdfto-image.pages.9046da")}</label>
-                      <input
-                        id="pdf-to-image-pages"
-                        value={pageSelection}
-                        onChange={(event) => setPageSelection(event.target.value)}
-                        placeholder={t("pdfto-image.all.pages.or.1.3.5.7f85f6")}
-                        className="chef-field"
-                      />
-                      {resolvedPageSelection === null && (
-                        <p role="alert" className="text-xs font-medium text-rose-600 dark:text-rose-300">{t("pdfto-image.use.page.numbers.or.ranges.such.as.28c6a3")}</p>
-                      )}
-                    </div>
-
-                    {requiresLargeJobConfirmation && (
-                      /* Kept in full: this is the one place the tool can warn
-                         that a large export may exhaust the tab's memory. */
-                      <div role="note" className="rounded-[var(--radius-field)] border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-500 dark:bg-amber-500/10 dark:text-amber-100">
-                        <p className="font-bold">{t("pdfto-image.large.browser.export.daeb4c")}</p>
-                        <p className="mt-1 leading-relaxed">{t("pdfto-image.message.aa8fdb0667", { v0: exportPageCount, v1: estimatedWorkingMemoryMb })}</p>
-                        <label className="mt-3 flex min-h-11 cursor-pointer items-center gap-3 font-semibold">
-                          <input
-                            type="checkbox"
-                            checked={largeJobConfirmed}
-                            onChange={(event) => setLargeJobConfirmed(event.target.checked)}
-                            className="h-5 w-5 accent-blue-600"
-                          />{t("pdfto-image.continue.with.this.export.37f365")}</label>
-                      </div>
-                    )}
-
-                  </>
-                ) : (
-                  hasDetectedEmbeddedImages && (
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-                        <span>{t("pdfto-image.selection.ca4067")}</span>
-                        <span dir="ltr">{formatNumber(selectedEmbeddedImages.length)} / {formatNumber(embeddedImages.length)}</span>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedEmbeddedIds(embeddedImages.map((image) => image.id))}
-                          className="chef-target chef-pressable rounded-[var(--radius-control)] border border-[var(--border-strong)] px-3 text-sm font-medium text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]"
-                        >{t("pdfto-image.select.all.1fc9a3")}</button>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedEmbeddedIds([])}
-                          className="chef-target chef-pressable rounded-[var(--radius-control)] border border-[var(--border-strong)] px-3 text-sm font-medium text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)]"
-                        >{t("pdfto-image.clear.83b12c")}</button>
-                      </div>
-                    </div>
-                  )
-                )}
-              </div>
-            </div>
-
-            {exportMode === 'pages' ? (
-              <div className="relative flex min-h-[30dvh] flex-1 flex-col overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)] md:min-h-0">
-                <div className="absolute right-2 top-2 z-20 sm:right-4 sm:top-4">
-                  <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} />
-                </div>
-
-                <div
-                  className={`relative flex flex-1 items-center justify-center overflow-hidden ${zoom > 1 ? 'cursor-grab active:cursor-grabbing' : ''}`}
-                  style={{ touchAction: zoom > 1 ? 'none' : undefined }}
-                  onPointerDown={handlePointerDown}
-                >
-                  {isGeneratingPreview && (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--surface-raised)]/70 backdrop-blur-sm">
-                      <Loader2 className="animate-spin text-[var(--accent-text)]" size={40} />
-                    </div>
-                  )}
-                  {preview ? (
-                    // Starts below the zoom controls, so they never cover the top of the page.
-                    <div
-                      className="absolute inset-x-3 bottom-3 top-14 sm:top-16"
-                      style={zoom === 1 ? undefined : { transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
-                    >
-                      <PageImagePreview pdfDoc={pdfDoc} scale={config.scale} />
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center text-[var(--text-tertiary)]">
-                      <FileImage size={48} className="mb-2 opacity-50" />
-                      <p>{t("pdfto-image.generating.preview.17a59a")}</p>
-                    </div>
-                  )}
-                </div>
-
-
-              </div>
-            ) : (
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)]">
-                <div className="border-b border-[var(--border-hairline)] px-3 py-2">
-                  <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
-                    <ImageIcon aria-hidden size={18} className="text-[var(--accent-text)]" />{t("pdfto-image.embedded.images.f88df7")}</div>
-                </div>
-
-                <div className="custom-scrollbar flex-1 overflow-y-auto p-3">
-                  {isScanningImages ? (
-                    <div className="flex h-full flex-col items-center justify-center text-[var(--text-secondary)]">
-                      <Loader2 className="mb-4 animate-spin" size={32} />
-                      <p>{t("pdfto-image.scanning.pdf.for.embedded.images.0f63ee")}</p>
-                    </div>
-                  ) : embeddedImages.length === 0 ? (
-                    <div className="flex h-full flex-col items-center justify-center text-[var(--text-secondary)]">
-                      <ImageIcon size={40} className="mb-3 opacity-50" />
-                      <p>{t("pdfto-image.this.pdf.has.no.pictures.stored.inside.5e555c")}</p>
-                    </div>
-                  ) : (
-                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                      {embeddedImages.map((image, index) => {
-                        const isSelected = selectedEmbeddedIds.includes(image.id);
-                        return (
-                          <article
-                            key={image.id}
-                            className={`overflow-hidden rounded-2xl border text-start transition-all ${
-                              isSelected
-                                ? 'border-[var(--accent-rest)] shadow-lg'
-                                : 'border-[var(--border-strong)]'
-                            }`}
-                          >
-                            <button
-                              type="button"
-                              aria-pressed={isSelected}
-                              aria-label={t("pdfto-image.image.0f73dd", { v0: index + 1, v1: isSelected ? t("pdfto-image.selected.bd44f3") : '' })}
-                              onClick={() => toggleEmbeddedSelection(image.id)}
-                              className="chef-pressable block w-full"
-                            >
-                              <div className="flex aspect-[4/3] items-center justify-center bg-[var(--surface-sunken)] p-3">
-                                <img src={image.objectUrl} alt="" aria-hidden className="max-h-full max-w-full object-contain" />
-                              </div>
-                            </button>
-
-                            <div className="space-y-2 bg-[var(--surface-raised)] p-3">
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <div className="text-sm font-bold text-[var(--text-primary)]">{t("pdfto-image.message.fd3495587c", { v0: index + 1 })}</div>
-                                  <div className="text-xs text-[var(--text-secondary)]">{t("pdfto-image.message.1fac9292db", { v0: image.pageNumbers.join(', ') })}</div>
-                                </div>
-                                <div className={`type-caption rounded-full px-2 py-1 uppercase ${
-                                  isSelected
-                                    ? 'bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]'
-                                    : 'bg-[var(--surface-sunken)] text-[var(--text-secondary)]'
-                                }`}>
-                                  {isSelected ? t("pdfto-image.selected.57fd7a") : t("pdfto-image.not.selected.df12ae")}
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-2 text-xs text-[var(--text-secondary)]">
-                                <div className="rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-3 py-2">
-                                  <div className="font-semibold text-[var(--text-body)]">{image.width} × {image.height}</div>
-                                  <div>{t("pdfto-image.pixels.6ec9c2")}</div>
-                                </div>
-                                <div className="rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-3 py-2">
-                                  <div className="font-semibold text-[var(--text-body)]">{formatBytes(image.byteSize)}</div>
-                                  <div>{t("pdfto-image.lossless.png.daae34")}</div>
-                                </div>
-                              </div>
-
-                              <button
-                                type="button"
-                                aria-label={t("pdfto-image.download.image.fdaf13", { v0: index + 1 })}
-                                onClick={() => void downloadEmbeddedImages([image])}
-                                disabled={status.isProcessing}
-                                className="chef-target chef-pressable flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] text-sm font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)] disabled:opacity-55"
-                              >
-                                <Download aria-hidden size={16} />{t("pdfto-image.download.image.2fd3a0")}</button>
-                            </div>
-                          </article>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-        </motion.div>
-      </AnimatePresence>
-      <StatusToast status={status} />
-    </div>
+  return (
+    <ToolScreen
+      title={title}
+      file={{ name: file.name, meta: <>{t('format.pageCount', { count: file.pageCount })} · {formatBytes(file.size)}</> }}
+      // In the header on phones too, as Watermark (round 6, mobile-03).
+      change={<ChangeFile label={t('tool.chooseAnotherFile')} onClick={handleStartOver} />}
+      leading={wide ? leading : undefined}
+      homeLabel={t("pdfto-image.back.to.tools.e42d59")}
+      kind={embeddedMode ? 'grid' : 'preview'}
+      bodyLabel={title}
+      body={body}
+      side={settings}
+      sentence={sentence}
+      notice={notice}
+      action={action}
+      progress={progress}
+      toast={toast}
+      extra={announcer}
+    />
   );
 };

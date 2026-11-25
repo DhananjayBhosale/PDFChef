@@ -9,7 +9,7 @@ const output = process.env.PDF_CHEF_RANGE_OUTPUT || 'output/playwright/page-rang
 await mkdir(output, { recursive: true });
 const results = [];
 const requestedDevices = new Set((process.env.PDF_CHEF_RANGE_DEVICES || 'desktop,android,iphone').split(','));
-const phases = new Set((process.env.PDF_CHEF_RANGE_PHASES || 'devices,interaction,preview,locales').split(','));
+const phases = new Set((process.env.PDF_CHEF_RANGE_PHASES || 'devices,interaction,preview,locales,delete-draft').split(','));
 const source = await PDFDocument.create();
 const font = await source.embedFont(StandardFonts.Helvetica);
 for (let n = 1; n <= 300; n += 1) {
@@ -61,14 +61,42 @@ const selector = page => page.locator('[data-page-range-selector]');
 const field = page => selector(page).locator('input');
 const selectedCount = page => page.locator('main [aria-pressed="true"]').count();
 const onePdf = page => page.getByRole('button', { name: /^Extract \d+ pages? as one PDF$/ });
-const primary = (page, tool) => page.getByRole('button', { name: tool === 'split' ? 'Save the split files' : /^Export \d+ selected pages?$/ });
+// Extract with no pages chosen says what to do (review 2, item 17).
+const primary = (page, tool) => page.getByRole('button', { name: tool === 'split' ? 'Save the split files' : /^(Export \d+ selected pages?|Choose pages to export)$/ });
+// Split's settings sit behind two sentence slots (plan 2.5): the range field is in the
+// `pages` editor, the method and the count in the `size` editor. Other tools draw them inline.
+// Located by slot name, not by text, so the locale runs find them too.
+const pagesSlot = page => page.locator('button[data-slot="pages"]');
+const sizeSlot = page => page.locator('button[data-slot="size"]');
+const openEditor = page => page.locator('.tk-scrim:not([hidden])');
+const perFile = page => page.getByLabel('Pages per output PDF', { exact: true });
+async function closeEditor(page) {
+  if (!(await openEditor(page).count())) return;
+  await page.keyboard.press('Escape');
+  await openEditor(page).waitFor({ state: 'detached' });
+}
+async function showRange(page) {
+  if (await field(page).isVisible()) return;
+  await field(page).filter({ visible: true }).or(pagesSlot(page)).first().waitFor();
+  if (await field(page).isVisible()) return;
+  await closeEditor(page);
+  await pagesSlot(page).click();
+  await field(page).waitFor();
+}
+async function showSize(page) {
+  if (await sizeSlot(page).count() === 0 || await page.getByRole('radio', { name: 'Pages per file', exact: true }).isVisible()) return;
+  await closeEditor(page);
+  await sizeSlot(page).click();
+  await page.getByRole('radio', { name: 'Pages per file', exact: true }).waitFor();
+}
 
 async function open(page, tool, input = fixture) {
   await page.goto(`${origin}/${tool}`, { waitUntil: 'domcontentloaded' });
   await page.locator('input[type=file]').first().setInputFiles(input);
-  await field(page).waitFor();
+  await showRange(page);
 }
 async function apply(page, value = '187-230', enter = false) {
+  await showRange(page);
   await field(page).fill(value);
   if (enter) await field(page).press('Enter');
   else await selector(page).getByRole('button').click();
@@ -76,10 +104,11 @@ async function apply(page, value = '187-230', enter = false) {
   assert.equal(await field(page).evaluate(element => element === document.activeElement), false, 'Apply closes input focus');
 }
 async function download(page, action) {
+  await closeEditor(page);
   await action.click();
   const dialog = page.getByRole('dialog');
   await dialog.waitFor();
-  for (const name of ['Rename', 'Save', 'Share', 'Download', 'Tools']) {
+  for (const name of ['Download', 'Rename', 'Use in another tool', 'Keep in Recent']) {
     assert.equal(await dialog.getByRole('button', { name, exact: true }).count(), 1, `${name} must remain in output menu`);
   }
   const pending = page.waitForEvent('download');
@@ -88,10 +117,15 @@ async function download(page, action) {
   const chunks = [];
   for await (const chunk of await result.createReadStream()) chunks.push(chunk);
   const bytes = Buffer.concat(chunks);
-  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  // An archive cannot be opened here, so its Download closes the sheet and the screen is free for
+  // the next run (research r3, h4-04); a PDF's sheet stays open with Open PDF.
+  if (result.suggestedFilename().endsWith('.zip')) await dialog.waitFor({ state: 'hidden' });
+  else await dialog.getByRole('button', { name: 'Close', exact: true }).click();
   return { bytes, name: result.suggestedFilename() };
 }
 async function layout(page) {
+  // On a phone the range field is in the Pages value's card (owner decision 2026-11-15): open it to measure.
+  await showRange(page);
   const value = await selector(page).evaluate(element => {
     const input = element.querySelector('input');
     const button = element.querySelector('button');
@@ -127,7 +161,7 @@ try {
       page.on('pageerror', error => errors.push(error.message));
       await open(page, tool);
       assert.equal(await field(page).inputValue(), '', 'Range starts empty');
-      if (tool === 'split') assert.equal(await page.getByLabel('Pages per output PDF').inputValue(), '1');
+      if (tool === 'split') assert.equal(await perFile(page).inputValue(), '1');
       else assert.equal(await primary(page, tool).isDisabled(), true);
       await apply(page, '187-230', name === 'iphone');
       await page.locator('main [aria-pressed]').first().waitFor();
@@ -135,14 +169,27 @@ try {
       await layout(page);
       const action = tool === 'split' ? onePdf(page) : primary(page, tool);
       assert.equal(await action.isEnabled(), true);
+      // The new layout keeps the action in the band (desktop) or the foot sheet (phone),
+      // which never scrolls away: the one-PDF export is in view without passing the grid.
+      await closeEditor(page);
       const actionBox = await action.boundingBox();
-      const gridBox = await page.locator('main [aria-pressed]').first().boundingBox();
-      assert(actionBox.y < gridBox.y, 'One-PDF export is before the grid');
+      const viewport = page.viewportSize();
+      assert(actionBox && actionBox.y >= 0 && actionBox.y + actionBox.height <= viewport.height + 1, 'One-PDF export is in view without scrolling past the grid');
       await page.screenshot({ path: `${output}/${name}-${tool}.png` });
+      await showRange(page);
       const liveRegion = await selector(page).getByRole('status').elementHandle();
+      // Research r2, H2-02 (web-lead decision): Extract applies a valid range as it is typed, so
+      // Export is ready at once; an unfinished range still waits for Select below. Split does
+      // the same since the final fix round (item 9): Save no longer needs Select first.
       await field(page).fill('1-5');
+      await page.waitForFunction(() => document.querySelectorAll('main [aria-pressed="true"]').length === 5);
+      assert.equal(await primary(page, tool).isEnabled(), true, 'A valid typed range enables the main action at once');
+      assert.equal(await liveRegion.evaluate(element => element.textContent.trim()), '', 'An applied range is not pending');
+      await field(page).fill('187-230');
+      await page.waitForFunction(() => document.querySelectorAll('main [aria-pressed="true"]').length === 44);
+      await field(page).fill('1-');
       await selector(page).getByRole('status').waitFor();
-      assert.equal(await liveRegion.evaluate(element => element.isConnected && element.textContent.includes('Tap Select')), true, 'Pending announcement updates an existing live region');
+      assert.equal(await liveRegion.evaluate(element => element.isConnected && element.textContent.includes('Press Select')), true, 'Pending announcement updates an existing live region');
       assert.equal(await primary(page, tool).isDisabled(), true, 'Unapplied input blocks primary export');
       if (tool === 'split') assert.equal(await onePdf(page).isDisabled(), true, 'One-PDF action remains visible but disabled');
       await field(page).fill('');
@@ -166,8 +213,11 @@ try {
     await open(page, tool);
     await apply(page);
     await page.locator('main [aria-pressed]').first().waitFor();
-    await field(page).fill('1-2');
+    // The text arrives while an IME is composing (Extract applies a finished range as it is typed).
+    // A valid Select closes the Pages card on a phone, where the field lives only in it (owner decision 2026-11-15).
+    await showRange(page);
     await field(page).dispatchEvent('compositionstart');
+    await field(page).fill('1-2');
     await field(page).press('Enter');
     assert.equal(await selectedCount(page), 44, 'IME composition must not apply an unfinished range');
     await field(page).dispatchEvent('compositionend');
@@ -175,6 +225,7 @@ try {
     assert.equal(await selectedCount(page), 2);
     await apply(page);
     for (const invalid of ['230-187', '0', '301', 'abc']) {
+      await showRange(page);
       await field(page).fill(invalid);
       await selector(page).getByRole('button').click();
       await selector(page).getByRole('alert').waitFor();
@@ -183,10 +234,13 @@ try {
       assert.equal(await primary(page, tool).isDisabled(), true);
     }
     await apply(page);
+    await closeEditor(page);
     await page.getByRole('button', { name: /^Page 187,/ }).click();
     assert.equal(await selectedCount(page), 43);
     assert.equal(await field(page).inputValue(), '', 'Manual selection clears the applied range text');
+    await showRange(page);
     await field(page).fill('1-3');
+    await closeEditor(page);
     await page.getByRole('button', { name: tool === 'split' ? 'Use all pages' : 'Clear', exact: true }).click();
     assert.equal(await field(page).inputValue(), '');
     assert.equal(await selectedCount(page), tool === 'split' ? 300 : 0);
@@ -198,26 +252,30 @@ try {
     await layout(page);
     await page.screenshot({ path: `${output}/narrow-${tool}.png` });
     if (tool === 'split') {
-      await page.getByLabel('Pages per output PDF').fill('2');
+      await showSize(page);
+      await perFile(page).fill('2');
       const result = await download(page, primary(page, tool));
       const zip = await JSZip.loadAsync(result.bytes);
       const files = Object.values(zip.files).filter(f => !f.dir);
       assert.equal(files.length, 7, 'Existing pages-per-file split remains available');
       const order = [1, 5, ...Array.from({ length: 11 }, (_, i) => i + 10)];
       for (const [i, file] of files.entries()) await inspectPdf(await file.async('uint8array'), order.slice(i * 2, i * 2 + 2));
+      await showSize(page);
       await page.getByRole('radio', { name: 'Max file size', exact: true }).click();
-      assert.equal(await page.getByLabel('Maximum file size (MB)').inputValue(), '10');
+      assert.equal(await page.getByLabel('Maximum file size (MB)', { exact: true }).inputValue(), '10');
       await inspectPdf((await download(page, primary(page, tool))).bytes, order);
-      await page.getByRole('button', { name: 'Change', exact: true }).click();
+      await page.getByRole('button', { name: 'Choose another file', exact: true }).click();
     } else {
-      await page.getByRole('button', { name: 'Choose another PDF', exact: true }).click();
+      await closeEditor(page);
+      await page.getByRole('button', { name: 'Choose another file', exact: true }).click();
     }
     await page.locator('input[type=file]').first().setInputFiles(shortFixture);
-    await field(page).waitFor();
+    await showRange(page);
     assert.equal(await field(page).inputValue(), '', 'Changing the PDF resets range state');
     if (tool === 'split') {
+      await showSize(page);
       await page.getByRole('radio', { name: 'Pages per file', exact: true }).click();
-      await page.getByLabel('Pages per output PDF').fill('1');
+      await perFile(page).fill('1');
       const zip = await JSZip.loadAsync((await download(page, primary(page, tool))).bytes);
       assert.equal(Object.values(zip.files).filter(f => !f.dir).length, 4, 'All-page split default still exports every page');
     }
@@ -248,6 +306,7 @@ try {
         await page.locator('main [aria-pressed]').first().waitFor();
         assert.equal(await selectedCount(page), 44, 'Late previews preserve the range');
       } else if (tool === 'split') {
+        await closeEditor(page);
         await page.getByRole('button', { name: /Retry previews/ }).click();
         await page.getByText('Page previews are unavailable', { exact: true }).waitFor();
         assert.equal(await field(page).inputValue(), '187-230', 'Retry keeps the applied range');
@@ -256,6 +315,43 @@ try {
       results.push(`${tool}: actual range export during preview ${mode}; selection survives completion/retry`);
       console.log(`PASS ${results.at(-1)}`);
     } finally { release(); await context.close(); }
+  }
+
+  // Delete Pages (overnight 2026-11-24, s3-02): a range typed but not marked keeps Save off, and a
+  // rejected range's error goes once the field changes. Mark, or an empty field, turns Save on again.
+  for (const viewport of phases.has('delete-draft') ? [{ width: 1440, height: 900 }, { width: 390, height: 844 }] : []) {
+    const phone = viewport.width < 768;
+    const { context, page } = await setup(browser, phone ? { viewport, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } : { viewport });
+    await page.goto(`${origin}/delete-pages`, { waitUntil: 'domcontentloaded' });
+    await page.locator('input[type=file]').first().setInputFiles(shortFixture);
+    await page.getByRole('button', { name: 'Mark page 1', exact: true }).click();
+    const save = page.getByRole('button', { name: 'Save without those pages', exact: true });
+    assert.equal(await save.isEnabled(), true, 'one marked page can be saved');
+    const rangeField = page.locator('.tk-inline-field input');
+    const openRange = async () => { if (phone && !(await rangeField.isVisible())) await page.locator('button[data-slot="pages"]').click(); await rangeField.waitFor(); };
+    const errors = () => page.locator('main [role="alert"]:visible, main [data-tone="error"]:visible').count();
+    await openRange();
+    await rangeField.fill('99');
+    await page.locator('.tk-inline-field').getByRole('button', { name: 'Mark', exact: true }).click();
+    await page.waitForTimeout(300);
+    assert.ok(await errors() > 0, 'a rejected range shows its error');
+    await rangeField.fill('2');
+    await page.waitForTimeout(300);
+    assert.equal(await errors(), 0, 'the rejected range\'s error goes once the field changes');
+    await closeEditor(page);
+    assert.equal(await save.isEnabled(), false, 'a typed range that is not marked keeps Save off');
+    await openRange();
+    await page.locator('.tk-inline-field').getByRole('button', { name: 'Mark', exact: true }).click();
+    await closeEditor(page);
+    assert.equal(await save.isEnabled(), true, 'Mark turns Save on');
+    await openRange();
+    await rangeField.fill('3');
+    await rangeField.fill('');
+    await closeEditor(page);
+    assert.equal(await save.isEnabled(), true, 'an emptied field turns Save on again');
+    results.push(`delete-pages ${viewport.width}px: an unapplied range keeps Save off; a stale error clears`);
+    console.log(`PASS ${results.at(-1)}`);
+    await context.close();
   }
 
   for (const [locale, notation] of phases.has('locales') ? [['de-DE', '187–230'], ['hi-IN', '१८७-२३०'], ['ar-SA', '١٨٧-٢٣٠'], ['ja-JP', '１８７－２３０']] : []) {

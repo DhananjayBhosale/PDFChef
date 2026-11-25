@@ -14,33 +14,33 @@
  */
 
 const paper = {
-  25: '#fffcfa',
-  50: '#fff8f4',
-  100: '#fff1eb',
-  200: '#f0e2db',
-  300: '#ddc9c0',
-  400: '#a2918b',
-  500: '#80716c',
-  600: '#70625d',
-  700: '#564a46',
-  800: '#3a302e',
-  900: '#261f1e',
-  950: '#17100f',
+  25: '#ffffff',
+  50: '#faf7f2',
+  100: '#f2ede5',
+  200: '#e6dfd4',
+  300: '#d3c9ba',
+  400: '#a89c8c',
+  500: '#857a6b',
+  600: '#6f665c',
+  700: '#57504a',
+  800: '#34302a',
+  900: '#1d1a16',
+  950: '#14120f',
 };
 
 const ink = {
-  25: '#fff8f7',
-  50: '#fff2f0',
-  100: '#ffe4e1',
-  200: '#ffc8c3',
-  300: '#ff9b95',
-  400: '#ff4d52',
-  500: '#e42121',
-  600: '#dc2020',
-  700: '#b01e22',
-  800: '#881a1b',
-  900: '#631b19',
-  950: '#38100e',
+  25: '#fef6f3',
+  50: '#fbe9e3',
+  100: '#f6d3c8',
+  200: '#ffc2b2',
+  300: '#ff8a70',
+  400: '#c9402a',
+  500: '#c63c24',
+  600: '#c23a22',
+  700: '#a93119',
+  800: '#8a2814',
+  900: '#3a2018',
+  950: '#24120d',
 };
 
 const success = {
@@ -160,9 +160,15 @@ module.exports = {
   ],
   theme: {
     extend: {
+      // The wide layout needs 480 px of height too, so a phone on its side keeps the phone
+      // layout (hooks/useMediaQuery.ts MQ_LG; Android sync, 2026-11-15).
+      screens: {
+        md: { raw: '(min-width: 768px) and (min-height: 480px)' },
+      },
       fontFamily: {
         sans: ['var(--font-ui)'],
         system: ['var(--font-system)'],
+        display: ['var(--font-display)'],
       },
       colors: {
         // Semantic aliases — theme-aware, preferred for new work.
@@ -203,7 +209,7 @@ module.exports = {
 
         // Legacy family names re-pointed at the brand ramps. `red` and `rose`
         // remain the clay danger ramp; action red is `ink`, `accent`, or `primary`.
-        white: '#fffcfa',
+        white: '#ffffff',
         slate: paper,
         gray: paper,
         zinc: paper,
@@ -262,9 +268,12 @@ module.exports = {
         row: 'var(--radius-row)',
         panel: 'var(--radius-panel)',
         sheet: 'var(--radius-sheet)',
+        slot: 'var(--radius-slot)',
+        pop: 'var(--radius-pop)',
       },
       boxShadow: {
         raised: 'var(--elevation-raised)',
+        chip: 'var(--elevation-chip)',
         panel: 'var(--elevation-panel)',
         sheet: 'var(--elevation-sheet)',
       },

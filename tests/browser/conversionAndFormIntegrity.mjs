@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright';
-import { PDFDocument, PDFArray, decodePDFRawStream } from 'pdf-lib';
+import { PDFDocument, PDFArray, PDFCheckBox, PDFName, decodePDFRawStream } from 'pdf-lib';
 import JSZip from 'jszip';
 
 // These regressions use the current source modules exposed by the Vite dev server.
@@ -54,7 +54,7 @@ try {
   await page.getByRole('button', { name: 'Add signature', exact: true }).click();
   await page.getByRole('radio', { name: 'Type', exact: true }).click();
   await page.getByLabel('Signature text', { exact: true }).fill('Dhananjay Bhosale');
-  await page.getByRole('button', { name: 'Add Stamp', exact: true }).click();
+  await page.getByRole('button', { name: 'Add stamp', exact: true }).click();
   const stamp = page.getByRole('button', { name: 'Signature stamp. Drag to move, use arrow keys for precise movement.', exact: true });
   await stamp.waitFor();
   const geometry = () => stamp.evaluate((element) => {
@@ -125,12 +125,25 @@ try {
   await page.locator('select').last().selectOption('text');
   await page.locator('select').last().selectOption('dropdown');
   assert.equal(await options.inputValue(), 'First choice, Second choice');
+  // A checkbox drawn wide and short is saved as a square of the short side (round 6, desktop-01).
+  await page.locator('aside select').first().selectOption('checkbox');
+  await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.6);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.64);
+  await page.mouse.up();
   const formDownload = page.waitForEvent('download');
   await create.click();
   const formPath = path.join(outputDir, 'dropdown.pdf');
   await (await formDownload).saveAs(formPath);
   const form = (await PDFDocument.load(await fs.readFile(formPath))).getForm();
   assert.deepEqual(form.getDropdown('text_1').getOptions(), ['First choice', 'Second choice']);
+  const checkbox = form.getFields().find((field) => field instanceof PDFCheckBox);
+  assert.ok(checkbox, 'the drawn checkbox is saved');
+  const square = checkbox.acroField.getWidgets()[0].getRectangle();
+  assert.ok(Math.abs(square.width - square.height) < 1, `checkbox is square (${square.width.toFixed(1)}×${square.height.toFixed(1)})`);
+  // A dropdown's text fits its box (desktop-09): 8 to 16 pt, not the 32 pt of before.
+  const dropdownSize = Number(/([\d.]+) Tf/.exec(form.getDropdown('text_1').acroField.dict.get(PDFName.of('DA'))?.toString() ?? '')?.[1]);
+  assert.ok(dropdownSize >= 8 && dropdownSize <= 16, `dropdown text size ${dropdownSize}`);
   results.push({ name: 'placed-dropdown-choices', options: form.getDropdown('text_1').getOptions() });
   await page.screenshot({ path: path.join(outputDir, 'dropdown-options.png'), fullPage: true });
   await fs.writeFile(path.join(outputDir, 'results.json'), JSON.stringify(results, null, 2));

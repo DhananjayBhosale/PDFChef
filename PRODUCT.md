@@ -15,7 +15,7 @@ PDF Chef is a private, browser-first PDF workspace. A user should be able to cho
 ## Primary journeys
 
 1. Dashboard: understand privacy, search or filter the catalog, and start one tool quickly. Recent tools are a convenience, not a second navigation system.
-2. Single-file tool: select/drop an accepted file, see constraints before processing, receive progress or a useful error, then use the output card to rename, save, share when supported, or open local history.
+2. Single-file tool: select/drop an accepted file, see constraints before processing, read the one sentence that says what the action will do, receive progress or a useful error, then use the result strip in the tool's action area to save, share when supported, rename, or open local history. A split that makes several files can also save them separately, each as its own file, where the platform allows it.
 3. Forms/editor: open a PDF, navigate pages, add or edit content with visible selection, undo/redo where available, and save only after the user can review the page and field list.
 4. Batch: select multiple PDFs, choose one operation, see the ordered queue and per-file progress, then receive one ZIP. Partial failures remain inspectable in `failures.txt`; an all-failed batch is an error.
 5. History/settings: explain local retention, allow individual or full deletion, and expose interface, download, memory-warning, and history preferences without implying cloud settings.

@@ -1,6 +1,6 @@
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
-import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Loader2, X } from 'lucide-react';
 
@@ -86,6 +86,22 @@ export const Badge: React.FC<{ tone?: BadgeTone; children: React.ReactNode; clas
   </span>
 ); };
 
+/**
+ * The small BETA mark: 20px high, no border, on the caution tint, its caps at 12 px as
+ * today (A-023). It sits on a title's baseline and scales with the text-size setting (rem).
+ */
+export const BetaBadge: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => (
+  <span
+    className={cx(
+      'inline-flex h-5 shrink-0 items-center rounded-[4px] bg-[var(--status-caution-quiet)] px-1.5 align-middle',
+      'text-[0.75rem] font-bold uppercase leading-none tracking-[0.06em] text-[var(--status-caution-text)]',
+      className,
+    )}
+  >
+    {children}
+  </span>
+);
+
 /* --------------------------------------------------- Segmented control --- */
 
 export interface SegmentedOption<T extends string> {
@@ -104,6 +120,8 @@ export function SegmentedControl<T extends string>({
   options,
   onChange,
   columns,
+  fit = false,
+  className,
 }: {
   label: string;
   value: T;
@@ -114,8 +132,43 @@ export function SegmentedControl<T extends string>({
    * reads as one row; the rem basis exists for labels whose width is unknown.
    */
   columns?: 3 | 4;
+  /** A fit-width strip (38px segments in a sunken shell), for a strip inside a slot's editor. */
+  fit?: boolean;
+  className?: string;
 }) {
   const group = useRef<HTMLDivElement>(null);
+  // Fixed columns hold only while every label fits one line in its cell (research r3, mobile-07:
+  // German "Sehr groß" broke in two); otherwise two across, then one, and only then a label wraps.
+  const [across, setAcross] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const strip = group.current;
+    if (!strip || !columns) return undefined;
+    const measure = () => {
+      const buttons = Array.from(strip.children) as HTMLElement[];
+      if (!buttons.length || !strip.clientWidth) return;
+      const style = getComputedStyle(buttons[0]);
+      const chrome = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+        + parseFloat(style.borderLeftWidth) + parseFloat(style.borderRightWidth);
+      const gap = parseFloat(getComputedStyle(strip).columnGap) || 0;
+      // The labels' one-line widths, whether or not they wrap now.
+      const context = document.createElement('canvas').getContext('2d');
+      if (!context) return;
+      context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      const widest = Math.max(...buttons.map((button) => context.measureText(button.textContent ?? '').width));
+      // Four across from 360 px, two across below.
+      const base = columns === 4 && window.innerWidth < 360 ? 2 : columns;
+      const fits = (count: number) => widest + chrome <= (strip.clientWidth - gap * (count - 1)) / count + 0.5;
+      const count = [base, 2, 1].find((candidate) => candidate <= base && fits(candidate));
+      // Always set: Tailwind drops `min-[360px]:` here (the `md` screen is a raw query), so the
+      // classes alone left Text size at 2x2 on every phone (pass 3).
+      setAcross(count ?? 0);
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(strip);
+    return () => observer.disconnect();
+  }, [columns, options]);
 
   // Arrow keys move between options because this is a radio group, which is what
   // VoiceOver announces and what a keyboard user will reach for. Roving tabindex
@@ -141,7 +194,10 @@ export function SegmentedControl<T extends string>({
       aria-label={label}
       onKeyDown={onKeyDown}
       className={cx(
-        'w-full rounded-[var(--radius-field)] bg-[var(--surface-raised)]',
+        fit
+          ? 'chef-chip-strip inline-flex w-fit max-w-full flex-wrap gap-x-[2px] gap-y-2.5 rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)] p-[3px]'
+          : 'chef-chip-strip w-full rounded-[var(--radius-field)] bg-[var(--surface-raised)]',
+        className,
         // Without `columns` the options wrap on a rem basis, which is right when
         // the label widths are unknown. With it they hold one row on a phone,
         // and only a four-up set drops to 2x2 below 360px.
@@ -149,10 +205,12 @@ export function SegmentedControl<T extends string>({
         // pressable region is extended to the 48px floor. Any strip that can
         // wrap carries a row gap wider than that extension, or the regions of
         // two stacked rows would overlap.
-        !columns && 'flex flex-wrap gap-x-1 gap-y-2.5',
+        !fit && !columns && 'flex flex-wrap gap-x-1 gap-y-2.5',
         columns === 3 && 'grid grid-cols-3 gap-1',
-        columns === 4 && 'grid grid-cols-2 gap-x-1 gap-y-2.5 min-[360px]:grid-cols-4 min-[360px]:gap-1',
+        columns === 4 && 'grid grid-cols-2 gap-x-1 gap-y-2.5',
+        columns && across !== null && across < columns && 'gap-y-2.5',
       )}
+      style={columns && across !== null ? { gridTemplateColumns: `repeat(${Math.max(1, across)}, minmax(0, 1fr))` } : undefined}
     >
       {options.map((option) => {
         const selected = option.value === value;
@@ -171,7 +229,14 @@ export function SegmentedControl<T extends string>({
             // rather than as two things to choose between. The selected chip
             // keeps a transparent border so gaining the raised surface never
             // moves anything.
-            className={cx(
+            className={fit ? cx(
+              // flex-auto, not flex-1: a label wider than half the strip wraps the strip onto two rows
+              // instead of being clipped (round 6, German "Maximale Dateigröße" at Largest text).
+              'chef-pressable chef-hit-y grid min-h-[38px] min-w-[7.5rem] flex-auto place-items-center whitespace-nowrap rounded-[calc(var(--radius-field)-3px)] px-4 text-sm font-semibold',
+              selected
+                ? 'bg-[var(--surface-raised)] text-[var(--accent-on-quiet)] shadow-[var(--elevation-raised)] ring-1 ring-inset ring-[var(--border-strong)]'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
+            ) : cx(
               'chef-pressable chef-hit-y grid min-h-11 min-w-0 place-items-center rounded-[var(--radius-field)] border px-1.5 text-sm font-semibold',
               !columns && 'flex-1 basis-[6.5rem] px-2',
               selected
@@ -179,7 +244,7 @@ export function SegmentedControl<T extends string>({
                 : 'border-[var(--border-strong)] bg-[var(--surface-raised)] text-[var(--text-secondary)]',
             )}
           >
-            {option.label}
+            {columns ? <span className={across === 0 ? undefined : 'whitespace-nowrap'}>{option.label}</span> : option.label}
           </button>
         );
       })}
@@ -223,7 +288,7 @@ export const Switch: React.FC<{
         // The switch keeps its 51x31 iOS proportions; `chef-hit` grows the
         // pressable area to 44pt without moving a pixel of the visual.
         className={cx(
-          'chef-pressable chef-hit relative mt-0.5 h-[31px] w-[51px] shrink-0 rounded-[var(--radius-pill)] border transition-colors duration-tap ease-settle',
+          'chef-switch chef-pressable chef-hit relative mt-0.5 h-[31px] w-[51px] shrink-0 rounded-[var(--radius-pill)] border transition-colors duration-tap ease-settle',
           'disabled:cursor-not-allowed disabled:opacity-55',
           checked
             ? 'border-transparent bg-[var(--accent-rest)]'
@@ -234,7 +299,7 @@ export const Switch: React.FC<{
           aria-hidden
           className={cx(
             // Transform, not `left`: the knob must not run a layout animation.
-            'absolute start-[2px] top-1/2 block h-[25px] w-[25px] rounded-full bg-[var(--surface-raised)] shadow-[var(--elevation-raised)]',
+            'chef-switch-knob absolute start-[2px] top-1/2 block h-[25px] w-[25px] rounded-full bg-[var(--surface-raised)] shadow-[var(--elevation-raised)]',
             'transition-transform duration-transition ease-settle',
             checked ? '-translate-y-1/2 translate-x-[20px] rtl:-translate-x-[20px]' : '-translate-y-1/2 translate-x-0',
           )}
@@ -274,7 +339,18 @@ export const Sheet: React.FC<{
   footer?: React.ReactNode;
   /** Hides the close affordance for a first-run flow that has its own exit. */
   dismissible?: boolean;
-}> = ({ open, onClose, title, description, children, footer, dismissible = true }) => {
+  /**
+   * Where focus goes on close when what opened the sheet is gone or disabled: a result sheet that
+   * opened by itself after the job (research r1, desktop-11) returns to its strip's More actions.
+   */
+  returnFocusRef?: React.RefObject<HTMLElement | null>;
+  /**
+   * Picks where focus goes on close, ahead of the rest: the result sheet returns to the control
+   * that started the job, or to its strip when that control is gone (final fix, item 5). Null
+   * leaves the choice to the rules above.
+   */
+  returnFocusTo?: () => HTMLElement | null;
+}> = ({ open, onClose, title, description, children, footer, dismissible = true, returnFocusRef, returnFocusTo }) => {
   useI18n();
   const panel = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -284,6 +360,10 @@ export const Sheet: React.FC<{
   // re-running and moving focus off the field after the first character.
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const returnFocusRefRef = useRef(returnFocusRef);
+  returnFocusRefRef.current = returnFocusRef;
+  const returnFocusToRef = useRef(returnFocusTo);
+  returnFocusToRef.current = returnFocusTo;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -329,7 +409,15 @@ export const Sheet: React.FC<{
     return () => {
       document.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = overflow;
+      const chosen = returnFocusToRef.current?.();
+      if (chosen) {
+        chosen.focus();
+        return;
+      }
       previous?.focus();
+      // The opener may have left the page, or been disabled by the job it started (focus was then
+      // already on the page itself when the sheet opened).
+      if (!previous || previous === document.body || document.activeElement !== previous) returnFocusRefRef.current?.current?.focus();
     };
   }, [dismissible, open]);
 
@@ -399,7 +487,9 @@ export const ConfirmSheet: React.FC<{
   /** A way out that keeps the work, such as Save, shown as the main button. */
   keepLabel?: string;
   onKeep?: () => Promise<void>;
-}> = ({ open, title, description, confirmLabel, onConfirm, onCancel, keepLabel, onKeep }) => {
+  /** The confirm button's look: destructive (the default, it throws work away) or primary. */
+  confirmTone?: 'destructive' | 'primary';
+}> = ({ open, title, description, confirmLabel, onConfirm, onCancel, keepLabel, onKeep, confirmTone = 'destructive' }) => {
   useI18n();
   const [busy, setBusy] = useState<'confirm' | 'keep' | null>(null);
 
@@ -424,7 +514,7 @@ export const ConfirmSheet: React.FC<{
       footer={
         <>
           <Button tone="secondary" onClick={onCancel} disabled={busy !== null}>{t("primitives.cancel.19766e")}</Button>
-          <Button tone={onKeep ? 'secondary' : 'destructive'} busy={busy === 'confirm'} disabled={busy === 'keep'}
+          <Button tone={onKeep ? 'secondary' : confirmTone} busy={busy === 'confirm'} disabled={busy === 'keep'}
             onClick={() => void run('confirm', onConfirm)}>
             {confirmLabel}
           </Button>

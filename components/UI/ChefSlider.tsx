@@ -1,6 +1,10 @@
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { isConfirmEnter } from './keys';
+import { finalNumberValue } from './numberDraft.ts';
+import { useCloseEditor, useEditorTitle } from '../Tool/Popover';
+import { TapChoices } from '../Tool/parts';
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 // Arabic and other right-to-left layouts mirror the slider: the minimum sits on the right.
@@ -11,6 +15,12 @@ interface ChefSliderProps {
   min: number;
   max: number;
   step?: number;
+  /**
+   * What one arrow key moves, and PageUp/PageDown (default ten arrows). A fine drag step
+   * (0.1%, 0.5°) made a keyboard user press 90 times for 45° (round 6, desktop-06).
+   */
+  keyStep?: number;
+  pageStep?: number;
   onChange: (value: number) => void;
   onChangeEnd?: (value: number) => void;
   ariaLabel: string;
@@ -20,9 +30,15 @@ interface ChefSliderProps {
 
 interface ChefSliderFieldProps extends ChefSliderProps {
   label: string;
+  /** One row: the label, the slider and the value box side by side (a phone card with two sliders). */
+  row?: boolean;
   suffix?: string;
   decimals?: number;
   fixedDecimals?: boolean;
+  /** Common values offered as taps under the slider while it sits in a slot's editor (phones). */
+  presets?: readonly number[];
+  /** The visible text of a preset, formatted like the slot's value. */
+  presetText?: (value: number) => string;
 }
 
 const getPrecision = (step: number) => {
@@ -36,6 +52,8 @@ export const ChefSlider: React.FC<ChefSliderProps> = ({
   min,
   max,
   step = 1,
+  keyStep,
+  pageStep,
   onChange,
   onChangeEnd,
   ariaLabel,
@@ -182,15 +200,17 @@ export const ChefSlider: React.FC<ChefSliderProps> = ({
     if (disabled) return;
 
     const rtl = isRtl(event.currentTarget);
+    const arrow = keyStep && keyStep > 0 ? keyStep : safeStep;
+    const page = pageStep && pageStep > 0 ? pageStep : arrow * 10;
     let next: number | null = null;
     if (event.key === (rtl ? 'ArrowRight' : 'ArrowLeft') || event.key === 'ArrowDown') {
-      next = safeValue - safeStep;
+      next = safeValue - arrow;
     } else if (event.key === (rtl ? 'ArrowLeft' : 'ArrowRight') || event.key === 'ArrowUp') {
-      next = safeValue + safeStep;
+      next = safeValue + arrow;
     } else if (event.key === 'PageDown') {
-      next = safeValue - safeStep * 10;
+      next = safeValue - page;
     } else if (event.key === 'PageUp') {
-      next = safeValue + safeStep * 10;
+      next = safeValue + page;
     } else if (event.key === 'Home') {
       next = safeMin;
     } else if (event.key === 'End') {
@@ -238,38 +258,62 @@ export const ChefSliderField: React.FC<ChefSliderFieldProps> = ({
   min,
   max,
   step = 1,
+  keyStep,
+  pageStep,
   onChange,
   onChangeEnd,
   ariaLabel,
   disabled = false,
   className,
+  presets,
+  presetText,
+  row = false,
 }) => {
   useI18n();
   const format = (next: number) => {
     const fixed = next.toFixed(decimals);
     return fixedDecimals ? fixed : fixed.replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
   };
+  const closeEditor = useCloseEditor();
+  // In a card titled with the same word ("Size" over "Size"), the title is the label: the slider
+  // and its value share one row (pass 3). The value box keeps its own name.
+  const titled = useEditorTitle() === label;
   const [draft, setDraft] = useState(() => format(value));
-  const editing = useRef(false);
+  // The box holds the person's own text only from their first keystroke until it is applied.
+  // Focus alone does not make it theirs: a slot editor focuses the box on open, and a slider
+  // dragged after that must not be undone by the box's old text when the editor closes
+  // (round 5, mobile-01). Moving the slider drops any typed text, so the last change wins.
+  const typed = useRef(false);
 
   useEffect(() => {
-    if (!editing.current) setDraft(format(value));
+    if (!typed.current) setDraft(format(value));
   }, [value, decimals, fixedDecimals]);
 
   const commit = () => {
-    editing.current = false;
-    const parsed = Number(draft);
-    const next = Number.isFinite(parsed) ? clamp(parsed, min, max) : value;
+    if (!typed.current) {
+      setDraft(format(value));
+      return;
+    }
+    typed.current = false;
+    // Kept at the precision the box shows: a typed 12.34 read "12.3" but saved 12.34 (round 6, desktop-10).
+    const typedValue = finalNumberValue(draft, min, max);
+    const next = typedValue === null ? value : Math.min(max, Math.max(min, Number(typedValue.toFixed(decimals))));
     setDraft(format(next));
     onChange(next);
     onChangeEnd?.(next);
   };
 
+  const slide = (next: number) => {
+    typed.current = false;
+    onChange(next);
+  };
+
   return (
-    <div className="space-y-0.5">
-      <div className="flex min-h-8 items-center justify-between gap-3">
-        <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">{label}</span>
-        <label className="chef-slider-value chef-hit-y flex h-8 items-center rounded-[var(--radius-control)] border border-[var(--border-hairline)] bg-[var(--surface-canvas)] px-2 text-[var(--text-secondary)] focus-within:border-[var(--accent-rest)] focus-within:ring-1 focus-within:ring-[var(--focus-ring)]">
+    <div className={titled ? 'chef-slider-row' : row ? 'chef-slider-row' : 'space-y-0.5'} data-titled={titled ? '' : undefined}>
+      <div className={row || titled ? 'contents' : 'flex min-h-8 items-center justify-between gap-3'}>
+        {!titled && <span className="text-[0.8125rem] font-semibold text-[var(--text-secondary)]">{label}</span>}
+        {/* Drawn as a field (border-strong, primary text) so it reads as one you can type in (round 5, h2-03). */}
+        <label className="chef-slider-value chef-hit-y flex h-8 items-center rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] px-2 text-[var(--text-primary)] focus-within:border-[var(--accent-rest)] focus-within:ring-1 focus-within:ring-[var(--focus-ring)]">
           <span className="sr-only">{label}</span>
           <input
             type="number"
@@ -280,16 +324,24 @@ export const ChefSliderField: React.FC<ChefSliderFieldProps> = ({
             value={draft}
             disabled={disabled}
             aria-label={t("chef-slider.value.71f9e8", { v0: ariaLabel })}
-            onFocus={(event) => {
-              editing.current = true;
-              event.currentTarget.select();
+            onFocus={(event) => event.currentTarget.select()}
+            onChange={(event) => {
+              typed.current = true;
+              setDraft(event.target.value);
             }}
-            onChange={(event) => setDraft(event.target.value)}
             onBlur={commit}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') event.currentTarget.blur();
+              if (isConfirmEnter(event)) {
+                event.currentTarget.blur();
+                // In a slot editor, Enter applies the value and closes it, as every editor field does
+                // (M-02). Prevented, so the same Enter does not press the slot that takes focus back.
+                if (closeEditor) {
+                  event.preventDefault();
+                  closeEditor();
+                }
+              }
               if (event.key === 'Escape') {
-                setDraft(format(value));
+                typed.current = false;
                 event.currentTarget.blur();
               }
             }}
@@ -302,13 +354,30 @@ export const ChefSliderField: React.FC<ChefSliderFieldProps> = ({
         min={min}
         max={max}
         step={step}
+        keyStep={keyStep}
+        pageStep={pageStep}
         value={value}
-        onChange={onChange}
+        onChange={slide}
         onChangeEnd={onChangeEnd}
         ariaLabel={ariaLabel}
         disabled={disabled}
         className={`is-compact chef-hit-y ${className ?? ''}`.trim()}
       />
+      {closeEditor && presets?.length ? (
+        <TapChoices
+          label={label}
+          values={presets}
+          current={value}
+          text={presetText ?? ((next) => `${format(next)}${suffix}`)}
+          onPick={(next) => {
+            typed.current = false;
+            setDraft(format(next));
+            onChange(next);
+            onChangeEnd?.(next);
+          }}
+          disabled={disabled}
+        />
+      ) : null}
     </div>
   );
 };

@@ -36,3 +36,11 @@ export const returnToTools = (navigate: NavigateFunction, index = historyIndex()
   if (index > 0 && pathsByIndex[index - 1] === '/') navigate(-1);
   else navigate('/', { replace: true, state: TAB_ENTRY });
 };
+
+/**
+ * The path of the entry just behind this one, when this session has seen it; null on
+ * the first entry or after a reload. The tool header shows Back only when this is
+ * known and is not Tools home.
+ */
+export const pathBehind = (index = historyIndex()): string | null =>
+  index > 0 ? pathsByIndex[index - 1] ?? null : null;

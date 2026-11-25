@@ -6,5 +6,5 @@ import test from 'node:test';
 // original when the new copy is not smaller. Batch must make the same choice.
 test('batch compress keeps the original file when compression would not make it smaller', () => {
   const batch = readFileSync(new URL('../../components/Tools/BatchPDF.tsx', import.meta.url), 'utf8');
-  assert.match(batch, /result\.data\.length >= file\.size\) return \{ blob: file, filename: file\.name \}/);
+  assert.match(batch, /result\.data\.length >= file\.size\) return \{ blob: file, filename: keptPdfName\(file\.name\) \}/);
 });

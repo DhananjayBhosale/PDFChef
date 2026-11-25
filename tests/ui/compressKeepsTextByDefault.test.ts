@@ -12,10 +12,13 @@ const browser = read('services/pdfBrowser.ts');
 // REG-20: by default Compress turned every page into a picture, so text could no longer be
 // searched or copied, while Help said the default keeps selectable text.
 test('Compress PDF keeps text selectable unless the person turns it off', () => {
-  assert.match(compress, /const \[keepText, setKeepText\] = useState\(true\);/);
+  // On by default; a choice the person made is kept for the next visit (path to 9, item 5).
+  assert.match(compress, /const \[keepText, setKeepText\] = useRemembered<boolean>\('keepText', true\);/);
   // Picking files or clearing them must not undo a choice the person made.
   assert.deepEqual([...compress.matchAll(/setKeepText\b/g)].length, 2, 'setKeepText is only declared and wired to the switch');
-  assert.match(compress, /onChange=\{setKeepText\}/);
+  // The switch is the sentence's one-tap word (owner decision 1, A-004), still named "Keep text selectable".
+  assert.match(compress, /role="switch"\s*aria-checked=\{keepText\}\s*aria-label=\{switchLabel\}\s*onClick=\{\(\) => setKeepText\(\(current\) => !current\)\}/);
+  assert.match(compress, /const switchLabel = t\("compress-pdf\.keep\.text\.selectable\.89e827"\);/);
   // The switch decides flattening; nothing else does.
   assert.match(compress, /effectiveConfig,\s*!keepText,/);
 });
@@ -43,11 +46,15 @@ test('a text-only PDF that cannot shrink names the switch that trades text for s
   assert.match(message, /turn off “\{v0\}”/);
   assert.match(message, /pictures/);
   // Shown only on the "already as small as it gets" result, only when text was kept, and it
-  // quotes the switch's own label so the two always read the same.
+  // quotes the switch's own label so the two always read the same. Since T-01 that result is
+  // the tool's notice line (the old result card is gone), so the hint is a line of the notice.
   assert.match(
     compress,
-    /\{keepText && \(\s*<p[^>]*>\s*\{t\("compress-pdf\.to\.make\.it\.smaller\.turn\.off\.pages\.4ef0d4", \{ v0: t\("compress-pdf\.keep\.text\.selectable\.89e827"\) \}\)\}/,
+    /\{keepText && \(\s*<span[^>]*>\{t\("compress-pdf\.to\.make\.it\.smaller\.turn\.off\.pages\.4ef0d4", \{ v0: t\("compress-pdf\.keep\.text\.selectable\.89e827"\) \}\)\}/,
   );
-  const skippedBranch = compress.slice(compress.indexOf('{isSkipped ? ('), compress.indexOf('formatSize(trialOriginalTotal)'));
+  const skippedStart = compress.indexOf(': skipped ? (');
+  assert.ok(skippedStart >= 0, 'the notice has a branch for a file that cannot shrink');
+  const skippedBranch = compress.slice(skippedStart, compress.indexOf(': null;', skippedStart));
+  assert.match(skippedBranch, /compress-pdf\.already\.as\.small\.as\.it\.gets\.c4d3a1/);
   assert.match(skippedBranch, /compress-pdf\.to\.make\.it\.smaller\.turn\.off\.pages\.4ef0d4/);
 });

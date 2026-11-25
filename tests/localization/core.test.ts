@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { direction, locales, resolveLocale } from '../../services/i18n/locales.ts';
-import { formatMessage, getLocale, getLocalePreference, loadCatalog, setLocalePreference, setTemporaryLocale, subscribeLocale, t } from '../../services/i18n/core.ts';
+import { formatMessage, getLocale, getLocalePreference, isPendingTranslation, loadCatalog, pendingTextProps, setLocalePreference, setTemporaryLocale, subscribeLocale, t } from '../../services/i18n/core.ts';
+import { pendingTranslation } from '../../services/i18n/pending.ts';
 import { LocalizedError, localizeError, nativeTextPlanningError } from '../../services/i18n/errors.ts';
 import { readFileSync } from 'node:fs';
 import { normalizeSearchText } from '../../services/toolSearch.ts';
@@ -130,6 +131,8 @@ test('every supported catalog loads locally and is cached for synchronous lookup
       for (const [key, value] of Object.entries(english)) {
         // URLs are retained; full English UI sentences are not.
         if (typeof value !== 'string' || value.replace(/https?:\/\/\S+/g, '').length <= 35) continue;
+        // Keys on the pending list are English on purpose until a translator takes them (plan 4).
+        if (pendingTranslation.has(key as never)) continue;
         assert.notEqual(first[key as keyof typeof first], value, `${locale}:${key}: untranslated English sentence`);
       }
     }
@@ -203,5 +206,57 @@ test('batch summaries keep output counts independent of failure plural selection
     assert.ok(pl.includes(failures === 1 ? '1 błąd wymieniony' : '2 błędy wymienione'));
     assert.ok(en.includes('results.zip') && pl.includes('results.zip'));
     assert.ok(en.includes('failures.txt') && pl.includes('failures.txt'));
+  }
+});
+
+test('a pending key in a right-to-left locale is wrapped in left-to-right isolates; others are not', async () => {
+  const pending = pendingTranslation as Set<string>;
+  const key = 'settings.language';
+  const original = getLocalePreference();
+  try {
+    pending.add(key);
+    await setLocalePreference('ar-SA', false);
+    const text = t(key);
+    assert.equal(text, `\u2066${(await loadCatalog('ar-SA'))[key]}\u2069`);
+    assert.equal(isPendingTranslation(key), true);
+    assert.deepEqual(pendingTextProps(key), { lang: 'en', dir: 'ltr' });
+    // A key that is not pending is left alone, and so is a plural message that is.
+    assert.equal(t('settings.systemLanguage'), (await loadCatalog('ar-SA'))['settings.systemLanguage']);
+    assert.equal(pendingTextProps('settings.systemLanguage'), undefined);
+    pending.add('settings-page..24a420');
+    assert.match(t('settings-page..24a420', { count: 2 }), /^\u2066.*\u2069$/);
+    // Left-to-right locales never get isolates, even for a pending key.
+    await setLocalePreference('de-DE', false);
+    assert.equal(t(key).includes('\u2066'), false);
+    assert.equal(isPendingTranslation(key), true, 'German is not English, so the key still counts as pending');
+    assert.deepEqual(pendingTextProps(key), { lang: 'en', dir: 'ltr' });
+    // English is never wrapped and never marked.
+    await setLocalePreference('en-US', false);
+    assert.equal(t(key), 'Language');
+    assert.equal(isPendingTranslation(key), false);
+    assert.equal(pendingTextProps(key), undefined);
+  } finally {
+    pending.delete(key);
+    pending.delete('settings-page..24a420');
+    await setLocalePreference(original, false);
+  }
+});
+
+test('the pending list names real keys and every pending key carries the English text in every locale', async () => {
+  const english = (await loadCatalog('en-US')) as Record<string, unknown>;
+  for (const key of pendingTranslation) assert.ok(key in english, `${key} is not in en-US`);
+  for (const [locale] of locales) {
+    if (locale.startsWith('en-')) continue;
+    const catalog = (await loadCatalog(locale)) as Record<string, unknown>;
+    for (const key of pendingTranslation) {
+      const message = catalog[key];
+      assert.ok(message !== undefined, `${locale} lacks ${key}`);
+      const source = english[key];
+      if (typeof source === 'string') assert.equal(message, source, `${locale}:${key} is listed as pending but differs from English`);
+      else for (const [category, text] of Object.entries(message as Record<string, string>)) {
+        const fallback = category === 'one' ? ((source as Record<string, string>).one ?? (source as Record<string, string>).other) : (source as Record<string, string>).other;
+        assert.equal(text, fallback, `${locale}:${key}:${category} is listed as pending but differs from English`);
+      }
+    }
   }
 });

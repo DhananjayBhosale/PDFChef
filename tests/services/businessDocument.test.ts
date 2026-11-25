@@ -7,6 +7,7 @@ import { inflateSync } from 'node:zlib';
 
 import {
   businessDocumentFileName,
+  documentDate,
   BusinessDocumentValidationError,
   lineAmountOf,
   parseDocumentNumber,
@@ -370,4 +371,17 @@ test('an unreadable logo is reported instead of silently missing from the saved 
 test('oversized monetary labels are refused instead of overlapping financial columns', async () => {
   await assert.rejects(renderBusinessDocument(document({ currency: 'Long currency '.repeat(30) })),
     /too long to fit legibly/);
+});
+
+test('a new document starts with a date its fonts can draw, in every language', async () => {
+  const now = new Date(2026, 10, 15);
+  const local = (locale: string) => new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric' }).format(now);
+  // Latin, Cyrillic and Devanagari dates are drawn as the reader writes them.
+  for (const locale of ['en-US', 'de-DE', 'ru-RU', 'hi-IN']) assert.equal(documentDate(local(locale), now), local(locale));
+  // Arabic, Chinese, Japanese and Korean dates are not drawn yet, so the form starts with 2026-11-15.
+  for (const locale of ['ar-SA', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR']) {
+    const date = documentDate(local(locale), now);
+    assert.equal(date, '2026-11-15', locale);
+    await renderBusinessDocument(document({ issuedOn: date }));
+  }
 });

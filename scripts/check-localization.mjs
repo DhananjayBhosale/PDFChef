@@ -1,10 +1,12 @@
 import { readFile, readdir } from 'node:fs/promises';
 import ts from 'typescript';
 import { resolve } from 'node:path';
+import { literalValue, parsePendingKeys } from './lib/locale-fallbacks.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const failures = [];
 const draftMode = process.argv.includes('--drafts');
+const noPending = process.argv.includes('--no-pending');
 const source = await readFile(resolve(root, 'services/i18n/en-US.ts'), 'utf8');
 const parseCatalog = (source, path) => {
   const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true);
@@ -20,10 +22,17 @@ const parseCatalog = (source, path) => {
     if (seen.has(key)) failures.push(`${path}: duplicate ${key}`);
     seen.add(key);
   }
-  return JSON.parse(source.slice(object.getStart(file), object.end));
+  // Read through the syntax tree, not JSON.parse, so a comment such as the English-fallback marker is allowed.
+  return literalValue(object);
 };
 const english = parseCatalog(source, 'en-US');
 const keys = Object.keys(english);
+// Keys still showing English in the other languages (services/i18n/pending.ts).
+const pendingPath = resolve(root, 'services/i18n/pending.ts');
+const pendingKeys = parsePendingKeys(await readFile(pendingPath, 'utf8'), 'services/i18n/pending.ts');
+for (const key of pendingKeys) if (!Object.hasOwn(english, key)) failures.push(`services/i18n/pending.ts: ${key} is not in en-US`);
+if (new Set(pendingKeys).size !== pendingKeys.length) failures.push('services/i18n/pending.ts: duplicate keys');
+if (noPending && pendingKeys.length) failures.push(`${pendingKeys.length} keys are still pending translation (services/i18n/pending.ts)`);
 const vars = (message) => [...new Set([...message.matchAll(/\{([a-zA-Z]\w*)\}/g)].map(match => match[1]))].sort().join(',');
 const checkProtectedText = (from, to, label) => {
   for (const name of ['PDF Chef', 'Aadhaar', 'GST', 'Google Play', 'App Store', 'Android', 'iOS', 'Apple', 'Cloudflare', 'Dhananjay Tech']) {
@@ -118,7 +127,8 @@ if (!draftMode) {
   async function walk(directory) {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       const path = resolve(directory, entry.name);
-      if (path === englishCatalog || path === generatedCatalogs) continue;
+      // The pending list names keys without using them, so it must not count as a use.
+      if (path === englishCatalog || path === generatedCatalogs || path === pendingPath) continue;
       if (entry.isDirectory()) await walk(path);
       else if (/\.tsx?$/.test(entry.name)) {
         const code = await readFile(path, 'utf8');
@@ -131,7 +141,7 @@ if (!draftMode) {
   const app = await readFile(resolve(root, 'App.tsx'), 'utf8');
   for (const key of keys) if (app.includes(JSON.stringify(key))) used.add(key);
   // Closed unions used by contextual UI messages. Unrelated keys sharing a prefix are still unused.
-  const dynamicKeys = /^(?:category\.(?:All|Create|Edit|Optimize|Convert|Secure)|business\.(?:invoice|receipt|quote)\.(?:title|reference|issued|settled|recipient|total|drawing|cannotDraw|preview|ready|cannotSave|maker|save)|editor\.(?:text|image|rectangle|ellipse|line|arrow)\.(?:add|place|properties|selected|aria|selectedAria)|font\.class\.(?:sans-serif|serif|monospace)|theme\.switch\.(?:light|dark))$/;
+  const dynamicKeys = /^(?:category\.(?:All|Create|Edit|Optimize|Convert|Secure)|business\.(?:invoice|receipt|quote)\.(?:title|reference|issued|settled|recipient|total|drawing|cannotDraw|preview|ready|cannotSave|maker|save)|editor\.(?:text|image|rectangle|ellipse|line|arrow)\.(?:add|added|choose|properties|selected|aria|selectedAria)|font\.class\.(?:sans-serif|serif|monospace)|theme\.switch\.(?:light|dark))$/;
   for (const key of keys) if (dynamicKeys.test(key)) used.add(key);
 }
 const unused = draftMode ? [] : keys.filter(key => !used.has(key));
@@ -180,7 +190,7 @@ if (draftMode) {
       missingKeys: keys,
     });
   }
-  console.log(JSON.stringify({ mode: 'drafts', keys: keys.length, draftReports, unused, failures }, null, 2));
+  console.log(JSON.stringify({ mode: 'drafts', keys: keys.length, pendingTranslation: pendingKeys.length, draftReports, unused, failures }, null, 2));
 } else {
   const localeFiles = await readdir(resolve(root, 'services/i18n/locales'));
   const reports = [];
@@ -196,7 +206,7 @@ if (draftMode) {
       reports.push({ locale, keys: 0, missing: keys.length, extra: 0, catalogAbsent: true });
     }
   }
-  console.log(JSON.stringify({ keys: keys.length, localeReports: reports, unused, failures }, null, 2));
+  console.log(JSON.stringify({ keys: keys.length, pendingTranslation: pendingKeys.length, localeReports: reports, unused, failures }, null, 2));
 }
 if (failures.length) process.exitCode = 1;
 

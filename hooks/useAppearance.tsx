@@ -438,7 +438,7 @@ export const AppearanceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     root.style.colorScheme = resolvedTheme;
     const themeColor = document.querySelector('meta[name="theme-color"]');
     if (themeColor) {
-      themeColor.setAttribute('content', resolvedTheme === 'dark' ? '#16140f' : '#f8f5ef');
+      themeColor.setAttribute('content', resolvedTheme === 'dark' ? '#14120f' : '#faf7f2');
     }
     if (Capacitor.getPlatform() === 'android') {
       void StatusBar.setStyle({
@@ -450,6 +450,18 @@ export const AppearanceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   useEffect(() => {
     document.documentElement.dataset.textScale = textScale;
   }, [textScale]);
+
+  // Another open tab changed the theme or the text size: follow it, as Recent and the Settings
+  // switches already do (path to 9, item 7). A cleared store (`key` null) goes back to defaults.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.storageArea && event.storageArea !== window.localStorage) return;
+      if (event.key === null || event.key === THEME_KEY) setThemeState(readTheme());
+      if (event.key === null || event.key === TEXT_SCALE_KEY) setTextScaleState(readTextScale());
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   // In the iPhone app the phone's text size scales the app's text as well.
   useEffect(() => (Capacitor.getPlatform() === 'ios' ? followDynamicType() : undefined), []);

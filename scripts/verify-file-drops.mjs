@@ -48,8 +48,10 @@ try {
   await go('/merge');
   await page.locator('[data-file-upload]').waitFor();
   await drop([fixture, { ...fixture, name: 'second.pdf' }]);
-  await page.getByText('second.pdf', { exact: true }).waitFor();
-  assert.equal(await page.getByText('drop-document.pdf', { exact: true }).count(), 1);
+  // The file list, not the order card in the sentence (pass 6), which names each file again.
+  const mergeList = page.getByLabel('Merge PDF', { exact: true });
+  await mergeList.getByText('second.pdf', { exact: true }).waitFor();
+  assert.equal(await mergeList.getByText('drop-document.pdf', { exact: true }).count(), 1);
   assert.match(page.url(), /\/merge$/);
   console.log('PASS: multi-file page drop stays in Merge and imports each PDF once.');
 
@@ -78,10 +80,10 @@ try {
   console.log('PASS: images dropped before a PDF, on the document, or in the signature dialog become stamps.');
 
   await page.getByRole('button', { name: 'Export', exact: true }).click();
-  const output = page.locator('aside').filter({ hasText: 'Result ready' });
-  await output.getByText('Result ready').waitFor();
+  const output = page.getByRole('dialog').filter({ hasText: 'Result ready' });
+  await output.waitFor();
   const downloading = page.waitForEvent('download');
-  await output.getByRole('button', { name: 'Save', exact: true }).click();
+  await output.getByRole('button', { name: 'Download', exact: true }).click();
   const result = await PDFDocument.load(await readFile(await (await downloading).path()));
   assert.equal(result.getPageCount(), 1);
   const objects = result.getPages()[0].node.Resources().lookup(PDFName.of('XObject'));
@@ -100,6 +102,21 @@ try {
   await drop([{ name: 'broken.png', type: 'image/png', base64: Buffer.from('not an image').toString('base64') }]);
   await page.getByText('This signature picture could not be read. Try a JPG or PNG instead.').waitFor();
   assert.equal(await page.getByText('Stamp 1', { exact: true }).count(), 1);
+  // Overnight 2026-11-24, s4-01: a second PDF dropped over unsaved stamps asks first, as Choose
+  // another file does. Cancel keeps the stamp and the file; Discard opens the new PDF.
+  const discardQuestion = page.getByRole('dialog', { name: 'Discard your unsaved edits?' });
+  await drop([{ ...fixture, name: 'second.pdf' }]);
+  await discardQuestion.waitFor({ timeout: 5000 });
+  await discardQuestion.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.waitForTimeout(1000);
+  assert.equal(await page.getByText('Stamp 1', { exact: true }).count(), 1, 'Cancel keeps the stamp');
+  assert.equal(await page.locator('.tk-fname').first().textContent(), 'drop-document.pdf', 'Cancel keeps the file');
+  await drop([{ ...fixture, name: 'second.pdf' }]);
+  await discardQuestion.waitFor({ timeout: 5000 });
+  await discardQuestion.getByRole('button', { name: 'Discard', exact: true }).click();
+  await page.locator('.tk-fname', { hasText: 'second.pdf' }).first().waitFor();
+  assert.equal(await page.getByText('Stamp 1', { exact: true }).count(), 0, 'Discard opens the new PDF without the old stamp');
+  console.log('PASS: a PDF dropped over unsaved stamps asks first; Cancel keeps them, Discard opens it.');
   await go('/merge');
   await page.locator('[data-file-upload]').waitFor();
   await drop([image]);
@@ -116,4 +133,31 @@ try {
   assert.equal(page.context().pages().length, 1);
   assert.deepEqual(errors, []);
   console.log('PASS: invalid images and unsupported files stay in the app; route cleanup, text drag, and file pickers remain functional.');
+
+  // Overnight 2026-11-24, s4-01: Make Fillable's Choose another file asks before drawn fields are lost.
+  await go('/make-fillable');
+  await page.locator('input[type=file]').first().setInputFiles({ name: fixture.name, mimeType: fixture.type, buffer: pdfBytes });
+  const fillPage = page.locator('img.tk-fill-img').first();
+  await fillPage.waitFor({ timeout: 60_000 });
+  await page.waitForTimeout(500);
+  const fieldCount = () => page.locator('img.tk-fill-img ~ button').count();
+  const pageBox = await fillPage.boundingBox();
+  await page.mouse.move(pageBox.x + pageBox.width * 0.2, pageBox.y + pageBox.height * 0.3);
+  await page.mouse.down();
+  await page.mouse.move(pageBox.x + pageBox.width * 0.5, pageBox.y + pageBox.height * 0.34, { steps: 6 });
+  await page.mouse.up();
+  await page.waitForTimeout(500);
+  assert.equal(await fieldCount(), 1, 'one drawn field');
+  await page.getByRole('button', { name: 'Choose another file', exact: true }).first().click();
+  await discardQuestion.waitFor({ timeout: 5000 });
+  await discardQuestion.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.waitForTimeout(500);
+  assert.equal(await fieldCount(), 1, 'Cancel keeps the field');
+  assert.equal(await page.locator('[data-file-upload]').count(), 0, 'Cancel keeps the file');
+  await page.getByRole('button', { name: 'Choose another file', exact: true }).first().click();
+  await discardQuestion.waitFor({ timeout: 5000 });
+  await discardQuestion.getByRole('button', { name: 'Discard', exact: true }).click();
+  await page.locator('[data-file-upload]').waitFor();
+  assert.deepEqual(errors, []);
+  console.log('PASS: Make Fillable asks before Choose another file loses drawn fields; Cancel keeps them.');
 } finally { await browser.close(); }

@@ -50,3 +50,8 @@ action appears as a polite status line above the list, not a toast over content.
   `hooks/useWorkspaceRuntime.tsx`. No direct persistence decisions here.
 - Unknown values are rendered as unknown. Never inferred.
 - Long filenames wrap; they are never truncated so that the extension is lost.
+
+## Identity update
+
+The layout is unchanged. The screen takes the new tokens (warm paper, one tomato
+accent) and the serif title (`--font-display`).

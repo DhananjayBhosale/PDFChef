@@ -60,10 +60,25 @@ test('an error names the next thing to try', () => {
   assert.deepEqual(real, [], `Errors with nowhere to go:\n${real.join('\n')}`);
 });
 
-test('every tool screen says what the tool does before a file is picked', () => {
-  const layout = read('components/UI/ToolLayout.tsx');
-  assert.match(layout, /import \{ tools \} from '\.\.\/Tools\/toolCatalog'/);
-  assert.match(layout, /const line = note \?\? tools\.find\(\(tool\) => tool\.path === pathname\)\?\.description/);
+test('no tool screen draws a line under its title, and every picker names the task (D7)', () => {
+  // The catalog line stays on the Tools home row. A tool screen says what it does in
+  // its picker label before a file is chosen, and in its sentence once one is loaded.
+  const screen = read('components/Tool/ToolScreen.tsx');
+  assert.doesNotMatch(screen, /description/);
+  assert.match(read('components/Tool/ToolTop.tsx'), /const Title = heading \? 'h1'/);
+  const unnamed: string[] = [];
+  for (const file of toolFiles) {
+    const source = read(`components/Tools/${file}`);
+    // A tool drawn by ToolScreen passes the title that becomes the page's h1.
+    for (const match of source.matchAll(/<ToolScreen\b([\s\S]*?)\/>/g)) {
+      if (!/\btitle=\{/.test(match[1])) unnamed.push(`${file}: ToolScreen without a title`);
+    }
+    // Every picker label is a translated message, never a literal.
+    for (const match of source.matchAll(/<FileUpload\b([\s\S]*?)\/>/g)) {
+      if (!/\blabel=\{/.test(match[1])) unnamed.push(`${file}: FileUpload without a translated label`);
+    }
+  }
+  assert.deepEqual(unnamed, []);
 });
 
 test('a box you type into never renders under 16px', () => {

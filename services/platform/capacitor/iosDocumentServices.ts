@@ -42,6 +42,7 @@ import {
   LocalStorageLegacyWorkspaceMigrationJournal,
   migrateLegacyWorkspace,
   type LegacyWorkspaceMigrationJournal,
+  type LegacyWorkspaceMigrationJournalEntry,
   type LegacyWorkspaceSource,
 } from './legacyWorkspaceMigration.ts';
 import {
@@ -177,6 +178,16 @@ export const createIOSWorkspacePlatform = (
       : createLocalWorkspaceRepositories();
   const settings = options.settings ?? repositories.settings;
   const recent = options.recent ?? repositories.recent;
+  const legacySource = options.legacyWorkspaceSource ?? new IndexedDbLegacyWorkspaceSource();
+  const legacyJournal = options.legacyWorkspaceJournal ?? new LocalStorageLegacyWorkspaceMigrationJournal();
+  // Results migrated from the browser workspace still have their original in its
+  // `outputs` store. Deleting the result must delete that copy too (PRODUCT.md:
+  // individual or full deletion), so only completed imports are listed here.
+  const migratedLegacyIds = async (
+    matches: (entry: LegacyWorkspaceMigrationJournalEntry) => boolean,
+  ): Promise<string[]> => (await legacyJournal.list())
+    .filter(entry => entry.status === 'complete' && matches(entry))
+    .map(entry => entry.legacyId);
   const now = options.now ?? Date.now;
   const transientRefs = new Set<DurableDocumentRef>();
   const reopenedDocuments = new WeakMap<File, StoredDocument>();
@@ -261,19 +272,23 @@ export const createIOSWorkspacePlatform = (
     async delete(id: string): Promise<void> {
       const entry = await recent.get(id);
       if (!entry) return;
-      if (entry.documentRef) {
-        const stillReferenced = (await recent.list()).some(
-          value => value.id !== id && value.documentRef === entry.documentRef,
-        );
-        if (!stillReferenced) {
-          const retained = (await bridge.listDocuments()).some(value => value.document.ref === entry.documentRef);
-          if (retained) await bridge.delete(entry.documentRef);
-        }
+      const stillReferenced = entry.documentRef !== null && (await recent.list()).some(
+        value => value.id !== id && value.documentRef === entry.documentRef,
+      );
+      // The legacy copy goes first and its deletion commits before anything else, so
+      // a failure leaves the row in Recent for the person to try again.
+      await legacySource.delete(await migratedLegacyIds(value => value.legacyId === id
+        || (!stillReferenced && entry.documentRef !== null && value.documentRef === entry.documentRef)));
+      if (entry.documentRef && !stillReferenced) {
+        const retained = (await bridge.listDocuments()).some(value => value.document.ref === entry.documentRef);
+        if (retained) await bridge.delete(entry.documentRef);
       }
       await recent.delete(id);
     },
 
     async clearRecords(): Promise<void> {
+      // Pending imports stay: they were never shown in Recent and finish on next launch.
+      await legacySource.delete(await migratedLegacyIds(() => true));
       const retained = await bridge.listDocuments();
       for (const value of retained) {
         if (!value.pending && !transientRefs.has(value.document.ref)) await bridge.delete(value.document.ref);
@@ -412,12 +427,7 @@ export const createIOSWorkspacePlatform = (
   const initialized = Promise.all([pendingImportReady, signatureCapabilityReady, scannerCapabilityReady]).then(async () => {
     // The app renders after ready, so Create PDF sees the scanner from its first frame.
     if (scannerAvailable) platform.documentScanner = documentScanner;
-    await migrateLegacyWorkspace({
-      source: options.legacyWorkspaceSource ?? new IndexedDbLegacyWorkspaceSource(),
-      journal: options.legacyWorkspaceJournal ?? new LocalStorageLegacyWorkspaceMigrationJournal(),
-      bridge,
-      recent,
-    });
+    await migrateLegacyWorkspace({ source: legacySource, journal: legacyJournal, bridge, recent });
     if (pendingImportFailure) throw pendingImportFailure.error;
   });
 

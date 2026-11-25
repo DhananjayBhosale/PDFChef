@@ -1,12 +1,15 @@
 import { localizeError } from '../../services/i18n/errors.ts';
 import { formatDate, t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Eye, Image as ImageIcon, Plus, Save, Trash2, X } from 'lucide-react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, Eye, Image as ImageIcon, Loader2, Lock, Plus, Save, Trash2, X } from 'lucide-react';
 import { PDFPreviewModal } from '../UI/PDFPreviewModal';
 import { StatusToast } from '../UI/StatusToast';
-import { Button, StatusLine } from '../UI/Primitives';
-import { ToolHeader, ToolPanel, ToolShell } from '../UI/ToolLayout';
+import { StatusLine } from '../UI/Primitives';
+import { ToolScreen } from '../Tool/ToolScreen';
+import { Notice } from '../Tool/parts';
+import { useWide } from '../../hooks/useMediaQuery';
+import { loadPDFDocument, releasePDFDocument, renderPageAsImage } from '../../services/pdfLazy';
 import { deliverBlob } from '../../services/pdfShared';
 import { normalizeImageFile } from '../../services/imageBrowser';
 import { imageProblemOf } from '../../services/imageIntake';
@@ -14,6 +17,7 @@ import { useConfirmDiscard } from '../../hooks/useConfirmDiscard';
 import type { ProcessingStatus } from '../../types';
 import {
   businessDocumentFileName,
+  documentDate,
   BusinessDocumentValidationError,
   lineAmountOf,
   parseDocumentNumber,
@@ -82,8 +86,10 @@ const readRemembered = (): RememberedSender => {
   }
 };
 
-const today = () =>
-  formatDate(new Date(), { day: 'numeric', month: 'long', year: 'numeric' });
+const today = () => {
+  const now = new Date();
+  return documentDate(formatDate(now, { day: 'numeric', month: 'long', year: 'numeric' }), now);
+};
 
 /**
  * A line as it is being typed, not as it is meant.
@@ -112,17 +118,104 @@ const itemOf = (draft: LineItemDraft): DocumentLineItem => ({
   unitPrice: numberOf(draft.unitPrice),
 });
 
+/**
+ * A labelled field. A hint under the label is not drawn (D8): it becomes the field's
+ * placeholder when the field has none, and otherwise its described-by text, kept
+ * outside the label so the field's name stays the label alone. `hintInLabel` draws the
+ * hint after the label on its line instead, so it is still there once the field is filled
+ * and a long one wraps rather than being cut (h4 F5, F7); it is spoken as the description.
+ */
 const Field: React.FC<{
   label: string;
   hint?: string;
-  children: React.ReactNode;
-}> = ({ label, hint, children }) => { useI18n(); return (
-  <label className="block">
-    <span className="block text-sm font-semibold text-[var(--text-primary)]">{label}</span>
-    {hint ? <span className="type-footnote mb-1.5 block text-[var(--text-secondary)]">{hint}</span> : null}
-    <span className={hint ? 'block' : 'mt-1.5 block'}>{children}</span>
-  </label>
-); };
+  hintInLabel?: boolean;
+  children: React.ReactElement<React.InputHTMLAttributes<HTMLInputElement>>;
+}> = ({ label, hint, hintInLabel = false, children }) => {
+  useI18n();
+  const hintId = useId();
+  const hasPlaceholder = children.props.placeholder !== undefined;
+  const described = Boolean(hint && (hasPlaceholder || hintInLabel));
+  const field = hint
+    ? React.cloneElement(children, described ? { 'aria-describedby': hintId } : { placeholder: hint })
+    : children;
+  return (
+    <div className="tk-bizfield">
+      <label className="tk-field">
+        <span>
+          {label}
+          {hint && hintInLabel ? <span aria-hidden="true" className="tk-bizfield-hint"> · {hint}</span> : null}
+        </span>
+        {field}
+      </label>
+      {described ? <span id={hintId} className="sr-only">{hint}</span> : null}
+    </div>
+  );
+};
+
+/**
+ * Page 1 of the document as it will be saved, redrawn 600 ms after the last change with
+ * the same drawing "See it first" uses (desktop only, plan 2.21). One draw at a time;
+ * a failed draw keeps the last good picture and reports the failure.
+ */
+const LiveDocument: React.FC<{
+  build: () => Promise<File>;
+  alt: string;
+  /** The reason the last draw failed, or null once a draw succeeds. */
+  onFailedChange: (reason: string | null) => void;
+}> = ({ build, alt, onFailedChange }) => {
+  const [url, setUrl] = useState<string | null>(null);
+  const drawing = useRef<Promise<void>>(Promise.resolve());
+  const reportFailed = useRef(onFailedChange);
+  reportFailed.current = onFailedChange;
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      drawing.current = drawing.current.then(async () => {
+        if (cancelled) return;
+        try {
+          const file = await build();
+          const pdf = await loadPDFDocument(file);
+          try {
+            const scale = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+            const { objectUrl } = await renderPageAsImage(pdf, 0, { scale, format: 'image/png', quality: 1 });
+            if (cancelled) { URL.revokeObjectURL(objectUrl); return; }
+            setUrl((previous) => {
+              if (previous) URL.revokeObjectURL(previous);
+              return objectUrl;
+            });
+            reportFailed.current(null);
+          } finally {
+            void releasePDFDocument(file).catch(() => undefined);
+          }
+        } catch (error) {
+          if (!cancelled) reportFailed.current(error instanceof BusinessDocumentValidationError ? localizeError(error) : '');
+        }
+      });
+    }, 600);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [build]);
+
+  useEffect(() => () => {
+    setUrl((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return null;
+    });
+  }, []);
+
+  return (
+    <figure className="tk-filepreview tk-livedoc">
+      <div className="tk-filepreview-page" aria-busy={url ? undefined : true}>
+        {url
+          ? <img src={url} alt={alt} draggable={false} />
+          : <span className="tk-filepreview-loading" role="status">{t('file-preview.loading')}</span>}
+      </div>
+    </figure>
+  );
+};
 
 export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> = ({ kind }: { kind: BusinessDocumentKind }) => {
   useI18n();
@@ -149,6 +242,8 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
   const [logoError, setLogoError] = useState('');
   const [buildError, setBuildError] = useState('');
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const wide = useWide();
+  const [liveFailed, setLiveFailed] = useState<string | null>(null);
 
   // The sender is remembered as it is typed, so only the rest of the form is lost by leaving.
   const work = JSON.stringify([recipient, reference, issuedOn, settledOn, paymentMethod, notes, items, logoName, logo !== null]);
@@ -263,16 +358,18 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
     }
   };
 
-  return (
-    <ToolShell>
-      <ToolHeader title={t(`business.${kind}.maker`)} />
+  const title = t(`business.${kind}.maker`);
+  const sectionHeading = 'tk-bizhead';
+  const colourHintId = `business-${kind}-colour-hint`;
+  const logoHintId = `business-${kind}-logo-hint`;
+  const yourDetailsHintId = `business-${kind}-details-hint`;
 
-      <div className="space-y-3">
+  const form = (
+    <div className="tk-bizform">
         {/* -------------------------------------------------- your details -- */}
-        <ToolPanel as="section" aria-label={t("business-document-builder.your.details.c0bcd4")}>
-          <h2 className="mb-2.5 text-sm font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">{t("business-document-builder.your.details.c0bcd4")}</h2>
-          <p className="type-footnote mb-3 text-[var(--text-secondary)]">{t("business-document-builder.filled.in.for.you.next.time.on.833430")}</p>
-          <div className="space-y-2.5">
+        <section className="tk-bizsec" aria-label={t("business-document-builder.your.details.c0bcd4")} aria-describedby={yourDetailsHintId}>
+          <h2 className={sectionHeading}>{t("business-document-builder.your.details.c0bcd4")}</h2>
+          <div className="tk-bizfields">
             <Field label={t("business-document-builder.your.name.or.business.5a3dbc")}>
               <input
                 className="chef-field"
@@ -283,12 +380,12 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
             </Field>
             <Field label={t("business-document-builder.address.56ef8f")} hint={t("business-document-builder.one.line.each.as.you.would.write.8ae47d")}>
               <textarea
-                className="chef-field min-h-[76px] resize-y"
+                className="chef-field tk-bizarea"
                 value={sender.address}
                 onChange={(event) => setSender({ ...sender, address: event.target.value })}
               />
             </Field>
-            <div className="grid gap-2.5 sm:grid-cols-2">
+            <div className="tk-bizpair">
               <Field label={t("business-document-builder.email.969ccb")}>
                 <input
                   className="chef-field"
@@ -308,7 +405,7 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
                 />
               </Field>
             </div>
-            <div className="grid gap-2.5 sm:grid-cols-2">
+            <div className="tk-bizpair">
               <Field label={t("business-document-builder.money.symbol.e4928f")} hint={t("business-document-builder.a.symbol.like.or.or.a.code.4bfcd9")}>
                 <input
                   className="chef-field"
@@ -316,27 +413,36 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
                   onChange={(event) => setSender({ ...sender, currency: event.target.value })}
                 />
               </Field>
-              <Field label={t("business-document-builder.colour.3a9dfa")} hint={t("business-document-builder.used.for.the.title.and.the.total.0c24ce")}>
-                <span className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    aria-label={t("business-document-builder.pick.your.colour.8b6765")}
-                    className="chef-target h-11 w-14 shrink-0 cursor-pointer rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-canvas)] p-1"
-                    value={/^#[0-9a-f]{6}$/i.test(sender.accentColor) ? sender.accentColor : '#c0392b'}
-                    onChange={(event) => setSender({ ...sender, accentColor: event.target.value })}
-                  />
-                  <input
-                    className="chef-field"
-                    aria-label={t("business-document-builder.colour.code.3a26d6")}
-                    value={sender.accentColor}
-                    onChange={(event) => setSender({ ...sender, accentColor: event.target.value })}
-                  />
-                </span>
-              </Field>
+              <div className="tk-bizfield">
+                <div className="tk-field">
+                  <span>{t("business-document-builder.colour.3a9dfa")}</span>
+                  <span className="tk-bizcolour">
+                    <input
+                      type="color"
+                      aria-label={t("business-document-builder.pick.your.colour.8b6765")}
+                      aria-describedby={colourHintId}
+                      className="tk-swatch"
+                      value={/^#[0-9a-f]{6}$/i.test(sender.accentColor) ? sender.accentColor : '#c0392b'}
+                      onChange={(event) => setSender({ ...sender, accentColor: event.target.value })}
+                    />
+                    {/* A colour code reads left to right in every language: in Arabic "#c0392b" showed as "c0392b#" (desktop-r9-06). */}
+                    <input
+                      className="chef-field"
+                      dir="ltr"
+                      spellCheck={false}
+                      aria-label={t("business-document-builder.colour.code.3a26d6")}
+                      aria-describedby={colourHintId}
+                      value={sender.accentColor}
+                      onChange={(event) => setSender({ ...sender, accentColor: event.target.value })}
+                    />
+                  </span>
+                </div>
+                <span id={colourHintId} className="sr-only">{t("business-document-builder.used.for.the.title.and.the.total.0c24ce")}</span>
+              </div>
             </div>
-            <div>
-              <span className="block text-sm font-semibold text-[var(--text-primary)]">{t("business-document-builder.logo.d707dc")}</span>
-              <span className="type-footnote mb-1.5 block text-[var(--text-secondary)]">{t("business-document-builder.a.jpg.or.png.it.sits.at.fa7de7")}</span>
+            <div className="tk-bizfield">
+              <span className="tk-field"><span>{t("business-document-builder.logo.d707dc")}</span></span>
+              <span id={logoHintId} className="sr-only">{t("business-document-builder.a.jpg.or.png.it.sits.at.fa7de7")}</span>
               <input
                 ref={logoInputRef}
                 type="file"
@@ -349,44 +455,51 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
                   event.target.value = '';
                 }}
               />
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  icon={<ImageIcon aria-hidden size={16} />}
-                  onClick={() => logoInputRef.current?.click()}
-                >
-                  {logo ? t("business-document-builder.change.logo.a1ab83") : t("business-document-builder.choose.a.logo.6c5e0f")}
-                </Button>
+              <div className="tk-bizlogo">
+                <button type="button" onClick={() => logoInputRef.current?.click()} aria-describedby={logoHintId} className="tk-btn chef-pressable">
+                  <ImageIcon aria-hidden size={16} />
+                  <span>{logo ? t("business-document-builder.change.logo.a1ab83") : t("business-document-builder.choose.a.logo.6c5e0f")}</span>
+                </button>
                 {logo ? (
                   <>
-                    <span className="chef-filename type-footnote min-w-0 flex-1 text-[var(--text-secondary)]">
+                    <span className="chef-filename tk-bizlogo-name">
                       {logoName}
                     </span>
-                    <Button
-                      tone="quiet"
-                      icon={<X aria-hidden size={16} />}
+                    <button
+                      type="button"
                       onClick={() => {
                         setLogo(null);
                         setLogoName('');
                       }}
-                    >{t("business-document-builder.remove.c3812f")}</Button>
+                      className="tk-btn tk-btn-quiet chef-pressable"
+                    >
+                      <X aria-hidden size={16} />
+                      <span>{t("business-document-builder.remove.c3812f")}</span>
+                    </button>
                   </>
                 ) : null}
               </div>
               {logoError ? (
-                <div role="alert" className="mt-2">
+                <div role="alert">
                   <StatusLine tone="danger" icon={<AlertTriangle size={16} />}>{logoError}</StatusLine>
                 </div>
               ) : null}
             </div>
           </div>
-        </ToolPanel>
+          {/* The privacy promise for these fields (research r1, desktop-01): drawn after them, inside
+              their group, not as a line under the heading. */}
+          <p id={yourDetailsHintId} className="tk-bizsec-note">
+            <Lock aria-hidden size={14} />
+            <span>{t("business-document-builder.filled.in.for.you.next.time.on.833430")}</span>
+          </p>
+        </section>
 
         {/* ------------------------------------------------ their details -- */}
-        <ToolPanel as="section" aria-label={wording.recipient}>
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
+        <section className="tk-bizsec" aria-label={wording.recipient}>
+          <h2 className={sectionHeading}>
             {wording.recipient}
           </h2>
-          <div className="space-y-2.5">
+          <div className="tk-bizfields">
             <Field label={t("business-document-builder.name.dcd1d5")}>
               <input
                 className="chef-field"
@@ -396,12 +509,12 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
             </Field>
             <Field label={t("business-document-builder.address.56ef8f")}>
               <textarea
-                className="chef-field min-h-[76px] resize-y"
+                className="chef-field tk-bizarea"
                 value={recipient.address}
                 onChange={(event) => setRecipient({ ...recipient, address: event.target.value })}
               />
             </Field>
-            <div className="grid gap-2.5 sm:grid-cols-2">
+            <div className="tk-bizpair">
               <Field label={t("business-document-builder.email.969ccb")}>
                 <input
                   className="chef-field"
@@ -420,13 +533,13 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
               </Field>
             </div>
           </div>
-        </ToolPanel>
+        </section>
 
         {/* ------------------------------------------------- the numbers --- */}
-        <ToolPanel as="section" aria-label={t("business-document-builder.dates.and.numbering.128e9a")}>
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">{t("business-document-builder.dates.and.numbering.128e9a")}</h2>
-          <div className="grid gap-2.5 sm:grid-cols-2">
-            <Field label={wording.reference} hint={t("business-document-builder.anything.you.like.as.long.as.you.fa8131")}>
+        <section className="tk-bizsec" aria-label={t("business-document-builder.dates.and.numbering.128e9a")}>
+          <h2 className={sectionHeading}>{t("business-document-builder.dates.and.numbering.128e9a")}</h2>
+          <div className="tk-bizpair">
+            <Field label={wording.reference} hint={t("business-document-builder.anything.you.like.as.long.as.you.fa8131")} hintInLabel>
               <input
                 className="chef-field"
                 value={reference}
@@ -457,17 +570,14 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
               </Field>
             ) : null}
           </div>
-        </ToolPanel>
+        </section>
 
         {/* ---------------------------------------------------- the lines -- */}
-        <ToolPanel as="section" aria-label={t("business-document-builder.what.it.is.for.1ad944")}>
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">{t("business-document-builder.what.it.is.for.1ad944")}</h2>
-          <div className="space-y-3">
+        <section className="tk-bizsec" aria-label={t("business-document-builder.what.it.is.for.1ad944")}>
+          <h2 className={sectionHeading}>{t("business-document-builder.what.it.is.for.1ad944")}</h2>
+          <div className="tk-bizfields">
             {items.map((item, index) => (
-              <div
-                key={index}
-                className="rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)] p-2.5"
-              >
+              <div key={index} className="tk-bizline">
                 <Field label={t("business-document-builder.line.257307", { v0: index + 1 })}>
                   <input
                     className="chef-field"
@@ -476,7 +586,7 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
                     onChange={(event) => setItem(index, { description: event.target.value })}
                   />
                 </Field>
-                <div className="mt-2.5 grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+                <div className="tk-bizline-nums">
                   <Field label={t("business-document-builder.how.many.e2a6ff")}>
                     <input
                       className="chef-field"
@@ -493,27 +603,32 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
                       onChange={(event) => setItem(index, { unitPrice: event.target.value })}
                     />
                   </Field>
-                  <Button
-                    tone="quiet"
+                  <button
+                    type="button"
                     aria-label={t("business-document-builder.remove.line.fe6393", { v0: index + 1 })}
-                    icon={<Trash2 aria-hidden size={18} />}
                     onClick={() => setItems((current) =>
                       current.length === 1 ? [blankItem()] : current.filter((_, at) => at !== index))}
-                  />
+                    className="tk-iconbtn tk-iconbtn-danger chef-pressable"
+                  >
+                    <Trash2 aria-hidden size={18} />
+                  </button>
                 </div>
-                <p className="type-footnote mt-2 text-end text-[var(--text-secondary)]">
+                <p className="tk-bizline-amount tabular">
                   {formatMoney(lineAmountOf(itemOf(item)), sender.currency)}
                 </p>
               </div>
             ))}
-            <Button
-              icon={<Plus aria-hidden size={16} />}
+            <button
+              type="button"
               onClick={() => setItems((current) => [...current, blankItem()])}
-              block
-            >{t("business-document-builder.add.another.line.f2daca")}</Button>
+              className="tk-btn chef-pressable tk-bizadd"
+            >
+              <Plus aria-hidden size={16} />
+              <span>{t("business-document-builder.add.another.line.f2daca")}</span>
+            </button>
           </div>
 
-          <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+          <div className="tk-bizpair tk-biztax">
             <Field label={t("business-document-builder.tax.name.ae6611")} hint={t("business-document-builder.vat.gst.sales.tax.or.leave.it.56a53b")}>
               <input
                 className="chef-field"
@@ -521,7 +636,7 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
                 onChange={(event) => setSender({ ...sender, taxLabel: event.target.value })}
               />
             </Field>
-            <Field label={t("business-document-builder.tax.ce793a")} hint={t("business-document-builder.leave.blank.for.no.tax.044e69")}>
+            <Field label={t("business-document-builder.tax.ce793a")} hint={t("business-document-builder.leave.blank.for.no.tax.044e69")} hintInLabel>
               <input
                 className="chef-field"
                 inputMode="decimal"
@@ -531,65 +646,99 @@ export const BusinessDocumentBuilder: React.FC<{ kind: BusinessDocumentKind }> =
             </Field>
           </div>
 
-          <dl className="mt-3 space-y-1 rounded-[var(--radius-field)] bg-[var(--surface-sunken)] p-3 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-[var(--text-secondary)]">{t("business-document-builder.subtotal.8c0f2c")}</dt>
-              <dd className="tabular font-medium">{formatMoney(totals.subtotal, sender.currency)}</dd>
+          <dl className="tk-biztotals">
+            <div>
+              <dt>{t("business-document-builder.subtotal.8c0f2c")}</dt>
+              <dd className="tabular">{formatMoney(totals.subtotal, sender.currency)}</dd>
             </div>
             {totals.tax ? (
-              <div className="flex justify-between">
-                <dt className="text-[var(--text-secondary)]">{sender.taxLabel || t("business-document-builder.tax.47e288")}</dt>
-                <dd className="tabular font-medium">{formatMoney(totals.tax, sender.currency)}</dd>
+              <div>
+                <dt>{sender.taxLabel || t("business-document-builder.tax.47e288")}</dt>
+                <dd className="tabular">{formatMoney(totals.tax, sender.currency)}</dd>
               </div>
             ) : null}
-            <div className="flex justify-between border-t border-[var(--border-hairline)] pt-1">
-              <dt className="font-bold">{wording.total}</dt>
-              <dd className="tabular text-base font-bold">{formatMoney(totals.total, sender.currency)}</dd>
+            <div className="tk-biztotals-sum">
+              <dt>{wording.total}</dt>
+              <dd className="tabular">{formatMoney(totals.total, sender.currency)}</dd>
             </div>
           </dl>
-        </ToolPanel>
+        </section>
 
         {/* -------------------------------------------------------- notes -- */}
-        <ToolPanel as="section" aria-label={t("business-document-builder.notes.8a7525")}>
+        <section className="tk-bizsec" aria-label={t("business-document-builder.notes.8a7525")}>
           <Field label={t("business-document-builder.notes.8a7525")} hint={t("business-document-builder.payment.terms.a.thank.you.anything.else.113c30")}>
             <textarea
-              className="chef-field min-h-[88px] resize-y"
+              className="chef-field tk-bizarea"
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
             />
           </Field>
-        </ToolPanel>
+        </section>
+    </div>
+  );
 
-        {/* Above the buttons, in the page's flow, so it never covers them. */}
-        {buildError ? (
-          <div role="alert">
-            <StatusLine tone="danger" icon={<AlertTriangle size={16} />}>{buildError}</StatusLine>
-          </div>
-        ) : null}
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Button icon={<Eye aria-hidden size={18} />} onClick={() => void handlePreview()} block>{t("business-document-builder.see.it.first.04adbf")}</Button>
-          <Button
-            tone="primary"
-            icon={<Save aria-hidden size={18} />}
-            busy={status.isProcessing}
-            onClick={() => void handleSave()}
-            block
-          >{t(`business.${kind}.save`)}</Button>
-        </div>
-      </div>
+  // The total, as plain text where a sentence would be.
+  const totalLine = (
+    <p className="tk-biztotal">
+      <span>{wording.total}</span>
+      <bdi className="tabular">{formatMoney(totals.total, sender.currency)}</bdi>
+    </p>
+  );
 
-      {preview ? (
-        <PDFPreviewModal
-          file={preview}
-          pageIndex={0}
-          pageLabel={wording.title}
-          onClose={() => setPreview(null)}
-        />
-      ) : null}
+  const notice = buildError
+    ? <Notice tone="error" role="alert">{buildError}</Notice>
+    : wide && liveFailed !== null
+      ? <Notice tone="caution" role="status">{liveFailed || t(`business.${kind}.cannotDraw`)}</Notice>
+      : null;
 
-      {discardSheet}
-      <StatusToast status={status} />
-    </ToolShell>
+  const secondary = (
+    <button type="button" onClick={() => void handlePreview()} className="tk-btn tk-btn-outline chef-pressable">
+      <Eye aria-hidden size={18} />
+      <span>{t("business-document-builder.see.it.first.04adbf")}</span>
+    </button>
+  );
+  const action = (
+    <button
+      type="button"
+      onClick={() => void handleSave()}
+      disabled={status.isProcessing}
+      aria-busy={status.isProcessing || undefined}
+      className="tk-primary chef-pressable"
+    >
+      {status.isProcessing ? <Loader2 aria-hidden className="animate-spin" size={18} /> : <Save aria-hidden size={18} />}
+      <span>{t(`business.${kind}.save`)}</span>
+    </button>
+  );
+
+  return (
+    <ToolScreen
+      title={title}
+      kind="form"
+      // Typed and not saved: reload and a closed tab ask, as Back and the links do (s1-01).
+      holdsWork={work !== savedWork}
+      className="tk-biz"
+      bodyLabel={title}
+      body={wide ? <LiveDocument build={build} alt={wording.title} onFailedChange={setLiveFailed} /> : form}
+      side={wide ? form : undefined}
+      sentence={totalLine}
+      notice={notice}
+      secondary={secondary}
+      action={action}
+      extra={(
+        <>
+          {preview ? (
+            <PDFPreviewModal
+              file={preview}
+              pageIndex={0}
+              pageLabel={wording.title}
+              onClose={() => setPreview(null)}
+            />
+          ) : null}
+          {discardSheet}
+        </>
+      )}
+      toast={<StatusToast status={status} />}
+    />
   );
 };
 

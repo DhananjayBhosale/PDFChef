@@ -285,6 +285,83 @@ const applyRouteMeta = (html, pathname) => {
   return nextHtml;
 };
 
+/*
+ * Old and new version side by side (owner, 25 Nov 2026). The deployment holds the new build at the
+ * root and the old build's page and service worker in /__old/ (their hashed /assets/ files sit
+ * together in /assets/). A cookie picks the version; without it a visitor gets the old one.
+ * /__version/old and /__version/new set the cookie and go back to the page (`to`). The new
+ * build is marked with a meta tag, so its Settings shows the switch; the old build, which cannot be
+ * changed, gets a small switch on Home from /__version/switch.js. A deployment without /__old/
+ * (a local preview, a plain deploy) serves the root build to everyone.
+ */
+const VERSION_COOKIE = "pdfchef_version";
+const OLD_SHELL = "/__old/";
+
+const readVersion = (request) =>
+  /(?:^|;\s*)pdfchef_version=new(?:;|$)/.test(request.headers.get("cookie") || "") ? "new" : "old";
+
+const safeReturnPath = (value) =>
+  typeof value === "string" && /^\/(?!\/)/.test(value) && !value.startsWith("/__") ? value : "/";
+
+const SWITCH_WORDS = {
+  ar: ["الإصدار القديم", "الإصدار الجديد", "إصدار الموقع"], da: ["Gammel version", "Ny version", "Webstedsversion"],
+  de: ["Alte Version", "Neue Version", "Website-Version"], en: ["Old version", "New version", "Website version"],
+  es: ["Versión anterior", "Versión nueva", "Versión del sitio web"], fr: ["Ancienne version", "Nouvelle version", "Version du site"],
+  hi: ["पुराना संस्करण", "नया संस्करण", "वेबसाइट संस्करण"], id: ["Versi lama", "Versi baru", "Versi situs web"],
+  it: ["Versione precedente", "Nuova versione", "Versione del sito"], ja: ["旧バージョン", "新バージョン", "ウェブサイトのバージョン"],
+  ko: ["이전 버전", "새 버전", "웹사이트 버전"], nl: ["Oude versie", "Nieuwe versie", "Websiteversie"],
+  pl: ["Stara wersja", "Nowa wersja", "Wersja strony"], pt: ["Versão antiga", "Versão nova", "Versão do site"],
+  ru: ["Старая версия", "Новая версия", "Версия сайта"], sv: ["Gammal version", "Ny version", "Webbplatsversion"],
+  tr: ["Eski sürüm", "Yeni sürüm", "Web sitesi sürümü"], "zh-hans": ["旧版", "新版", "网站版本"], "zh-hant": ["舊版", "新版", "網站版本"],
+};
+
+// The old build's switch: a slim bar above the app on Home only, outside React's root.
+const SWITCH_SCRIPT = `(() => {
+  const words = ${JSON.stringify(SWITCH_WORDS)};
+  const pick = () => {
+    const lang = (document.documentElement.lang || "en").toLowerCase();
+    if (lang.startsWith("zh")) return words[/hant|tw|hk|mo/.test(lang) ? "zh-hant" : "zh-hans"];
+    return words[lang.split("-")[0]] || words.en;
+  };
+  const bar = document.createElement("nav");
+  bar.style.cssText = "justify-content:center;padding:calc(env(safe-area-inset-top,0px) + 10px) 16px 2px;background:var(--surface-canvas,transparent)";
+  const group = document.createElement("div");
+  group.style.cssText = "display:inline-flex;gap:2px;padding:2px;border:1px solid var(--border-strong,#d9c9c0);border-radius:999px;background:var(--surface-raised,#fff);font:600 13px/1.2 system-ui,sans-serif";
+  const segment = (selected) => {
+    const element = document.createElement(selected ? "span" : "a");
+    element.style.cssText = "display:inline-flex;align-items:center;min-height:36px;padding:0 14px;border-radius:999px;text-decoration:none;"
+      + (selected ? "background:var(--accent-rest,#b3261e);color:var(--text-on-accent,#fff)" : "color:var(--text-primary,#241a17)");
+    return element;
+  };
+  const oldPart = segment(true);
+  oldPart.setAttribute("aria-current", "true");
+  const newPart = segment(false);
+  newPart.href = "/__version/new?to=/";
+  group.append(oldPart, newPart);
+  bar.append(group);
+  const render = () => {
+    const [oldWord, newWord, label] = pick();
+    oldPart.textContent = oldWord;
+    newPart.textContent = newWord;
+    bar.setAttribute("aria-label", label);
+    bar.style.display = location.pathname === "/" ? "flex" : "none";
+  };
+  for (const name of ["pushState", "replaceState"]) {
+    const original = history[name];
+    history[name] = function (...args) { const result = original.apply(this, args); render(); return result; };
+  }
+  addEventListener("popstate", render);
+  new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+  render();
+  document.body.prepend(bar);
+})();`;
+
+const fetchOldBuild = async (context, url, path) => {
+  if (!context.env || !context.env.ASSETS) return null;
+  const response = await context.env.ASSETS.fetch(new Request(new URL(path, url)));
+  return response.ok ? response : null;
+};
+
 export async function onRequest(context) {
   const url = new URL(context.request.url);
 
@@ -293,7 +370,31 @@ export async function onRequest(context) {
     return Response.redirect(url.toString(), 308);
   }
 
-  const response = await context.next();
+  if (url.pathname === "/__version/old" || url.pathname === "/__version/new") {
+    const version = url.pathname.endsWith("/new") ? "new" : "old";
+    return new Response(null, {
+      status: 303,
+      headers: {
+        Location: safeReturnPath(url.searchParams.get("to")),
+        "Set-Cookie": `${VERSION_COOKIE}=${version}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+  if (url.pathname === "/__version/switch.js") {
+    return new Response(SWITCH_SCRIPT, { headers: { "content-type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" } });
+  }
+
+  const version = readVersion(context.request);
+  // Two builds answer one URL, so a cached copy's validator says nothing about the other build.
+  const request = new Request(context.request);
+  request.headers.delete("if-none-match");
+  request.headers.delete("if-modified-since");
+  let response = await context.next(request);
+  // The old build's own service worker, so an old page and its files stay one version.
+  if (version === "old" && url.pathname === "/sw.js" && context.request.method === "GET") {
+    response = (await fetchOldBuild(context, url, `${OLD_SHELL}sw.js`)) || response;
+  }
   const contentType = response.headers.get("content-type") || "";
   if (context.request.method !== "GET") {
     return response;
@@ -305,6 +406,7 @@ export async function onRequest(context) {
     if (!isHashedAsset && !isStableShellFile) return response;
 
     const headers = new Headers(response.headers);
+    if (url.pathname === "/sw.js") headers.append("Vary", "Cookie");
     headers.set(
       "Cache-Control",
       isHashedAsset
@@ -318,12 +420,22 @@ export async function onRequest(context) {
     });
   }
 
-  const html = await response.text();
+  const oldShell = version === "old" && !url.pathname.startsWith("/__old/")
+    ? await fetchOldBuild(context, url, OLD_SHELL)
+    : null;
+  const page = oldShell ? await oldShell.text() : await response.text();
+  // Only a deployment that holds both builds offers the switch.
+  const switchable = version === "old" ? oldShell !== null : (await fetchOldBuild(context, url, OLD_SHELL)) !== null;
+  const html = !switchable ? page
+    : oldShell ? page.replace(/<\/head>/i, '<script src="/__version/switch.js" defer></script></head>')
+      : page.replace(/<\/head>/i, '<meta name="pdfchef-version-switch" content="new" /></head>');
   const analyticsReadyHtml = url.origin === ORIGIN ? allowCloudflareWebAnalytics(html) : html;
   const rewrittenHtml = applyRouteMeta(analyticsReadyHtml, url.pathname);
   const headers = new Headers(response.headers);
   headers.delete("content-length");
   headers.set("Cache-Control", "no-cache");
+  headers.append("Vary", "Cookie");
+  headers.delete("etag");
   // `/*  /index.html  200` in public/_redirects means a typo, a stale backlink or
   // a scraped junk URL is served the shell with a 200 and the default metadata:
   // a soft 404, which Search Console flags and which lets any URL variant

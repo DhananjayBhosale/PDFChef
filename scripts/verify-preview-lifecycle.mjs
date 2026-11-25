@@ -119,7 +119,7 @@ try {
     for (let iteration = 0; iteration < 3; iteration++) {
       await page.locator('input[type=file]').setInputFiles(fixture);
       await page.locator('main img').first().waitFor();
-      await page.getByRole('button', { name: 'Change', exact: true }).click();
+      await page.getByRole('button', { name: 'Choose another file', exact: true }).click();
       await page.locator('input[type=file]').waitFor({ state: 'attached' });
       await expectNoPdfWorkers(page);
     }

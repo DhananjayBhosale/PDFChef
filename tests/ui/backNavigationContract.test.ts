@@ -8,6 +8,7 @@ import {
   TAB_ENTRY,
   historyIndex,
   openedByTab,
+  pathBehind,
   rememberHistoryEntry,
   returnToTools,
 } from '../../components/Layout/navigationHistory.ts';
@@ -92,6 +93,30 @@ test('a new entry forgets the forward entries it replaced, and unknown entries n
   assert.deepEqual(replaced.calls, [['/', { replace: true, state: TAB_ENTRY }]]);
 });
 
+test('the tool header knows the path behind it only when this session saw it', () => {
+  // The first entry has nothing behind it.
+  rememberHistoryEntry('/split', true, 0);
+  assert.equal(pathBehind(0), null);
+  // Read PDF, then a tool opened from its menu: Back shows and returns to Read PDF.
+  rememberHistoryEntry('/view', true, 0);
+  rememberHistoryEntry('/split', true, 1);
+  assert.equal(pathBehind(1), '/view');
+  // After a reload the entries behind are unknown, so the header shows no Back.
+  rememberHistoryEntry('/split', true, 6);
+  assert.equal(pathBehind(6), null);
+});
+
+test('the tool header draws Back only when the screen behind is known and is not Tools home', () => {
+  const top = read('components/Tool/ToolTop.tsx');
+  const back = top.slice(top.indexOf('export const BackIfNeeded'), top.indexOf('export const ToolTop'));
+  assert.match(back, /const behind = pathBehind\(\);/);
+  assert.match(back, /if \(fromSettings \|\| !behind \|\| behind === '\/' \|\| behind === pathname\) return null;/);
+  assert.match(back, /onClick=\{\(\) => navigate\(-1\)\}/);
+  // Tools is a link that goes to Tools home the way the Tools tab does.
+  assert.match(top, /const toolsTab = nav\.items\[0\];/);
+  assert.match(read('components/Layout/AppShell.tsx'), /onClick: pressTab\(to, navigate\),/);
+});
+
 test('Android Back leaves the app from Tools before it considers the history behind it', () => {
   const back = read('components/Layout/NativeBackHandler.tsx');
   const handler = back.slice(back.indexOf("addListener('backButton'"));
@@ -108,7 +133,7 @@ test('Android Back leaves the app from Tools before it considers the history beh
 test('tabs replace the current entry instead of stacking a new one', () => {
   const shell = read('components/Layout/AppShell.tsx');
   const tabBar = shell.slice(shell.indexOf('const TabBar'), shell.indexOf('/* ---------------------------------------------------------- Side rail'));
-  const sideRail = shell.slice(shell.indexOf('const SideRail'), shell.indexOf('/* ----------------------------------------------------------- Nav bar'));
+  const sideRail = shell.slice(shell.indexOf('const SideRail'), shell.indexOf('/* ------------------------------------------------------ Tool header'));
   assert.match(tabBar, /<Link\s+to=\{to\}\s+replace\s+state=\{TAB_ENTRY\}\s+onClick=\{pressTab\(to, navigate\)\}/);
   assert.match(sideRail, /<NavLink\s+to=\{to\}\s+replace\s+state=\{TAB_ENTRY\}\s+onClick=\{pressTab\(to, navigate\)\}/);
   assert.match(sideRail, /<Link to="\/" replace state=\{TAB_ENTRY\} onClick=\{pressTab\('\/', navigate\)\}/);

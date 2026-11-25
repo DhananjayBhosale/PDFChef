@@ -159,6 +159,11 @@ export interface WorkspaceCapabilities {
   exportFolder?: string;
   /** The largest file the platform can keep or save, when it has a fixed limit. */
   maximumOutputBytes?: number;
+  /**
+   * True when `saveFreshMany` saves a set of files with one folder pick. A Split
+   * result then offers "Save N files separately" (plan 8.3, the iOS request).
+   */
+  multipleFileExport?: boolean;
 }
 
 /** A copy written outside the app: the name the platform kept, and a handle to rename it. */
@@ -275,6 +280,11 @@ export interface WorkspacePlatform {
   /** Renames a copy an earlier save wrote; resolves to the name the platform kept. */
   renameSaved?: (exportRef: string, name: string) => Promise<string>;
   saveFresh(result: FreshResult): Promise<void | SavedCopy>;
+  /**
+   * Saves several fresh results with one destination choice. Optional: not implemented
+   * on any platform yet. Rejects with an AbortError when the person cancels.
+   */
+  saveFreshMany?: (results: FreshResult[]) => Promise<void | SavedCopy[]>;
   keepFresh?: (result: FreshResult) => Promise<void>;
   shareFresh?: (result: FreshResult) => Promise<void>;
 }

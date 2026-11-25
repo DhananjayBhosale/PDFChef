@@ -1,11 +1,11 @@
 import english from '../../services/i18n/en-US.ts';
+import { useWide } from '../../hooks/useMediaQuery';
 import { LocalizedError, localizeError } from '../../services/i18n/errors.ts';
 import { getLocale, t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useNavigationType } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertTriangle,
   ArrowDown,
@@ -21,7 +21,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { ProcessingStatus } from '../../types';
-import { createPDFFromImages } from '../../services/pdfDocument';
+import { createPDFFromImages } from '../../services/pdfLazy';
 import { preparePdfImageAsset } from '../../services/imageBrowser';
 import { imageProblemOf, skippedImagesMessage, type SkippedImage } from '../../services/imageIntake';
 import { createJpegPhotoPdf } from '../../services/jpegPhotoPdf';
@@ -29,7 +29,14 @@ import { mapWithConcurrency } from '../../services/mapWithConcurrency';
 import { downloadBlob, type OutputReadyRecord } from '../../services/pdfShared';
 import { OUTPUT_RENAMED_EVENT, announceOutput, announceOutputRenamed, announceRecordsChanged } from '../../services/workspace';
 import { StatusToast } from '../UI/StatusToast';
-import { ToolHeader, ToolShell } from '../UI/ToolLayout';
+import { ToolScreen } from '../Tool/ToolScreen';
+import { Sentence } from '../Tool/Sentence';
+import { EnterCloses } from '../Tool/Popover';
+import { useFileDrop } from '../../hooks/useFileDrop';
+import { Notice, ProgressLine, useToolAnnounce } from '../Tool/parts';
+import { PageGrid } from '../Tool/PageGrid';
+import { PeekButton, usePinchToOpen } from '../Tool/PagePeek';
+import { PDFPreviewModal } from '../UI/PDFPreviewModal';
 import { Button, ConfirmSheet, Sheet, StatusLine } from '../UI/Primitives';
 import {
   useHaptics,
@@ -42,7 +49,7 @@ import { useConfirmDiscard } from '../../hooks/useConfirmDiscard';
 import { historyIndex } from '../Layout/navigationHistory';
 import { keepsMakePdfDraftOnLeave, makePdfDraft, releaseMakePdfDraft } from './makePdfDraft';
 import type { StoredDocument } from '../../services/domain/workspaceModels';
-import { datedFileStem, filenameStemLimit, formatBytes, renameKeepingExtension, sanitizeFilenameStem, splitFilename } from '../UI/format';
+import { datedFileStem, filenameStemLimit, formatBytes, photoStem, renameKeepingExtension, sanitizeFilenameStem, splitFilename } from '../UI/format';
 
 interface CapturedImage {
   id: string;
@@ -80,6 +87,7 @@ const SCAN_FAILURES: Readonly<Record<string, string>> = {
 const SCAN_FAILED = english["make-pdf.that.scan.could.not.be.kept.so.30410c"];
 const SCAN_OPEN_FAILED = english["make-pdf.that.scan.could.not.be.opened.it.7a1de2"];
 const IMAGE_PREPARE_CONCURRENCY = 2;
+const PDF_EXTENSION = '.pdf';
 /** A row's thumbnail is 44 x 56 points; 400 x 400 pixels covers it at any phone's density. */
 const THUMBNAIL_PIXELS = 160_000;
 
@@ -128,10 +136,16 @@ export const MakePDF: React.FC = () => {
   const addingPhotos = photosBeingAdded > 0;
   const [confirmClear, setConfirmClear] = useState(false);
   const freshPdfName = () => datedFileStem(t("make-pdf.scanned.pdf.370cd5"), new Date(), getLocale());
-  // Null until the person types, so the suggested name follows today's date and language.
+  // Null until the person types, so the suggested name follows the first photo (owner decision,
+  // path to 9), or today's date and language when there is no usable photo name.
   const [typedPdfName, setTypedPdfName] = useState<string | null>(() => makePdfDraft.typedName);
-  const pdfName = typedPdfName ?? freshPdfName();
+  const photosPdfName = () => photoStem(images[0]?.file.name) || freshPdfName();
+  const pdfName = typedPdfName ?? photosPdfName();
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  // Phone (owner decision 2026-11-15, item 1): a setting appears once, as a value in the sentence
+  // whose card holds its control. Desktop keeps the control on the screen beside the sentence.
+  const wide = useWide();
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const previewUrlsRef = useRef(new Set<string>());
 
@@ -340,7 +354,7 @@ export const MakePDF: React.FC = () => {
     releaseMakePdfDraft();
   }, []);
 
-  const appendFiles = async (files: FileList | null) => {
+  const appendFiles = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
     const picked = Array.from(files);
     // Every picture left out is named in one notice, whatever the reason.
@@ -384,7 +398,10 @@ export const MakePDF: React.FC = () => {
     setImages((prev) => [...prev, ...next]);
   };
 
+  const announce = useToolAnnounce();
   const removeImage = (id: string) => {
+    const index = images.findIndex((item) => item.id === id);
+    if (index >= 0) announce(t('tool.removed', { v0: t('page-thumbnail.page.c140ba', { v0: index + 1 }) }));
     setImages((prev) => {
       const target = prev.find((item) => item.id === id);
       if (target && target.previewUrl.startsWith('blob:')) {
@@ -425,7 +442,7 @@ export const MakePDF: React.FC = () => {
       // Photos are JPEGs, written into the PDF as they are; pdf-lib's copies are only for PNGs.
       const pdf = await createJpegPhotoPdf(files)
         ?? new Blob([await createPDFFromImages(files)], { type: 'application/pdf' });
-      const fallback = `${freshPdfName()}.pdf`;
+      const fallback = `${photosPdfName()}.pdf`;
       downloadBlob(pdf, renameKeepingExtension(pdfName, '.pdf', fallback));
       setExportedImages(images);
       setStatus({ isProcessing: false, progress: 100, message: t("make-pdf.scanned.pdf.ready.with.page.02e105", { count: images.length }) });
@@ -443,10 +460,117 @@ export const MakePDF: React.FC = () => {
     }
   };
 
-  return (
-    <ToolShell width="wide" centered={images.length === 0}>
-      <ToolHeader title={t("make-pdf.create.pdf.e45411")} />
+  const title = t("make-pdf.create.pdf.e45411");
+  const busy = status.isProcessing;
+  const hasPages = images.length > 0;
+  // An empty name saves under today's default name, as before (M-14).
+  const nameMissing = pdfName.trim().length === 0;
+  const shownName = nameMissing ? `${photosPdfName()}.pdf` : `${pdfName}.pdf`;
+  const startBusy = busy || scanning;
 
+  // Camera and Gallery are not disabled while adding: the one just used still has focus.
+  const cameraButton = (className: string) => (
+    <button
+      type="button"
+      onClick={() => { if (!addingPhotos) cameraInputRef.current?.click(); }}
+      aria-disabled={addingPhotos || undefined}
+      disabled={startBusy}
+      className={className}
+    >
+      <Camera aria-hidden size={18} />
+      <span>{scanner ? t("make-pdf.basic.camera.237a91") : t("make-pdf.camera.03494b")}</span>
+    </button>
+  );
+  const galleryButton = (className: string) => (
+    <button
+      type="button"
+      onClick={() => { if (!addingPhotos) galleryInputRef.current?.click(); }}
+      aria-disabled={addingPhotos || undefined}
+      disabled={startBusy}
+      className={className}
+    >
+      {addingPhotos ? <Loader2 aria-hidden className="animate-spin" size={18} /> : <FileImage aria-hidden size={18} />}
+      <span>{addingPhotos ? t("make-pdf.adding.photos.137e59") : t("make-pdf.gallery.352cfc")}</span>
+    </button>
+  );
+
+  // The device scanner (Android app): Scan document, or the kept scan's card, and the basic-camera fallback.
+  const scannerSection = scanner ? (
+    <section aria-label={t("make-pdf.device.scanner.7d7538")} className="tk-makepdf-scanner">
+      {scanned ? (
+        <div className="chef-enter tk-makepdf-scan">
+          <div className="tk-makepdf-scan-head">
+            <CheckCircle2 aria-hidden size={20} className="tk-makepdf-scan-mark" />
+            <div className="min-w-0">
+              <p role="status" className="tk-makepdf-scan-title">{t("make-pdf.message.93ad0d32b8", { count: scanned.pageCount })}</p>
+              <p className="tk-makepdf-scan-meta chef-filename">{t("make-pdf.message.d22425d581", { v0: scannedName, v1: formatBytes(scanned.document.sizeBytes) })}</p>
+            </div>
+          </div>
+          <div className="tk-makepdf-scan-actions">
+            <Button
+              tone="primary"
+              busy={openingScan}
+              disabled={scanning || busy}
+              icon={<ExternalLink aria-hidden size={16} />}
+              onClick={() => void openScan()}
+              className="min-h-12 flex-1 basis-[11rem]"
+            >{t("make-pdf.open.scanned.pdf.213753")}</Button>
+            {platform.rename && (
+              <Button
+                tone="secondary"
+                disabled={scanning || openingScan || busy}
+                icon={<Pencil aria-hidden size={16} />}
+                onClick={startScanRename}
+                className="min-h-12 flex-1 basis-[9rem]"
+              >{t("output-center.rename.3064d7")}</Button>
+            )}
+            <Button
+              tone="secondary"
+              busy={scanning}
+              disabled={openingScan || busy}
+              icon={<RefreshCw aria-hidden size={16} />}
+              onClick={() => void runScan()}
+              className="min-h-12 flex-1 basis-[9rem]"
+            >{t("make-pdf.scan.again.3d0458")}</Button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" onClick={() => void runScan()} disabled={busy || scanning} aria-busy={scanning || undefined} className="tk-primary chef-pressable">
+          {scanning ? <Loader2 aria-hidden className="animate-spin" size={18} /> : <ScanLine aria-hidden size={18} />}
+          <span>{t("make-pdf.scan.document.49793d")}</span>
+        </button>
+      )}
+
+      {scanNotice && (
+        <div className="tk-makepdf-scan-notice" role="status" aria-live="polite">
+          <StatusLine tone="caution" icon={<AlertTriangle aria-hidden size={16} />}>
+            {scanNotice}
+          </StatusLine>
+          <button
+            type="button"
+            onClick={() => cameraInputRef.current?.click()}
+            disabled={busy || scanning || openingScan}
+            className="tk-btn chef-pressable"
+          >
+            <Camera aria-hidden size={16} />
+            <span>{t("make-pdf.use.the.basic.camera.8625f2")}</span>
+          </button>
+        </div>
+      )}
+    </section>
+  ) : null;
+
+  const skippedNotice = selectionNotice ? (
+    <div role="status" aria-live="polite" className="tk-makepdf-skipped">
+      <AlertTriangle aria-hidden className="mt-0.5 shrink-0" size={18} />
+      <span>{selectionNotice}</span>
+    </div>
+  ) : null;
+
+  const addingLine = <span role="status" aria-live="polite" className="sr-only">{addingPhotos ? t("make-pdf.adding.photos.137e59") : ''}</span>;
+
+  const inputs = (
+    <>
       <input
         ref={cameraInputRef}
         type="file"
@@ -469,203 +593,12 @@ export const MakePDF: React.FC = () => {
           event.target.value = '';
         }}
       />
+    </>
+  );
 
-      {scanner && (
-        <section
-          aria-label={t("make-pdf.device.scanner.7d7538")}
-          className="mb-3 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3"
-        >
-          {scanned ? (
-            <div className="chef-enter space-y-3">
-              <div className="flex items-start gap-2">
-                <CheckCircle2 aria-hidden size={20} className="mt-0.5 shrink-0 text-[var(--status-success-text)]" />
-                <div className="min-w-0">
-                  <p role="status" className="text-[1.0625rem] font-semibold text-[var(--text-primary)]">{t("make-pdf.message.93ad0d32b8", { count: scanned.pageCount })}</p>
-                  <p className="type-footnote chef-filename text-[var(--text-secondary)]">{t("make-pdf.message.d22425d581", { v0: scannedName, v1: formatBytes(scanned.document.sizeBytes) })}</p>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  tone="primary"
-                  busy={openingScan}
-                  disabled={scanning || status.isProcessing}
-                  icon={<ExternalLink aria-hidden size={16} />}
-                  onClick={() => void openScan()}
-                  className="min-h-12 flex-1 basis-[11rem]"
-                >{t("make-pdf.open.scanned.pdf.213753")}</Button>
-                {platform.rename && (
-                  <Button
-                    tone="secondary"
-                    disabled={scanning || openingScan || status.isProcessing}
-                    icon={<Pencil aria-hidden size={16} />}
-                    onClick={startScanRename}
-                    className="min-h-12 flex-1 basis-[9rem]"
-                  >{t("output-center.rename.3064d7")}</Button>
-                )}
-                <Button
-                  tone="secondary"
-                  busy={scanning}
-                  disabled={openingScan || status.isProcessing}
-                  icon={<RefreshCw aria-hidden size={16} />}
-                  onClick={() => void runScan()}
-                  className="min-h-12 flex-1 basis-[9rem]"
-                >{t("make-pdf.scan.again.3d0458")}</Button>
-              </div>
-            </div>
-          ) : (
-            <Button
-              block
-              tone="primary"
-              busy={scanning}
-              icon={<ScanLine aria-hidden size={18} />}
-              onClick={() => void runScan()}
-              disabled={status.isProcessing}
-              className="min-h-12"
-            >{t("make-pdf.scan.document.49793d")}</Button>
-          )}
-
-          {scanNotice && (
-            <div className="mt-3 space-y-2" role="status" aria-live="polite">
-              <StatusLine tone="caution" icon={<AlertTriangle aria-hidden size={16} />}>
-                {scanNotice}
-              </StatusLine>
-              <Button
-                tone="secondary"
-                icon={<Camera aria-hidden size={16} />}
-                onClick={() => cameraInputRef.current?.click()}
-                disabled={status.isProcessing || scanning || openingScan}
-                className="min-h-12"
-              >{t("make-pdf.use.the.basic.camera.8625f2")}</Button>
-            </div>
-          )}
-        </section>
-      )}
-
-      <div className="mb-3 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-3 sm:p-4">
-        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
-          <button
-            type="button"
-            // Camera and Gallery are not disabled while adding: the one just used still has focus.
-            onClick={() => { if (!addingPhotos) cameraInputRef.current?.click(); }}
-            aria-disabled={addingPhotos || undefined}
-            disabled={status.isProcessing || scanning}
-            className={scanner
-              // One filled action per screen. With the device scanner present
-              // the plain camera is the fallback, so it stops competing for the
-              // same glance while keeping the exact behaviour it always had.
-              ? 'chef-target flex items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-4 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)] disabled:opacity-55'
-              : 'chef-target flex items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 text-sm font-semibold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-55'}
-          >
-            <Camera aria-hidden size={18} />
-            <span>{scanner ? t("make-pdf.basic.camera.237a91") : t("make-pdf.camera.03494b")}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => { if (!addingPhotos) galleryInputRef.current?.click(); }}
-            aria-disabled={addingPhotos || undefined}
-            disabled={status.isProcessing || scanning}
-            className="chef-target flex items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-4 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)] disabled:opacity-55"
-          >
-            {addingPhotos ? <Loader2 aria-hidden className="animate-spin" size={18} /> : <FileImage aria-hidden size={18} />}
-            <span>{addingPhotos ? t("make-pdf.adding.photos.137e59") : t("make-pdf.gallery.352cfc")}</span>
-          </button>
-          <span role="status" aria-live="polite" className="sr-only">{addingPhotos ? t("make-pdf.adding.photos.137e59") : ''}</span>
-          {images.length > 0 && (
-          <div className="flex items-center justify-between gap-3 text-sm text-[var(--text-secondary)] sm:ml-auto">
-            <span>{t("make-pdf.message.dc7f250a5f", { v2: formatBytes(totalSize), count: images.length })}</span>
-            {images.length > 0 && (
-              <button type="button" onClick={() => setConfirmClear(true)} disabled={status.isProcessing || addingPhotos} className="chef-target rounded-[var(--radius-control)] px-2 font-semibold text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)] disabled:opacity-55">{t("make-pdf.clear.all.29a390")}</button>
-            )}
-          </div>
-          )}
-        </div>
-      </div>
-
-      {/* The action goes in flow, directly under the intake it belongs to, and
-          before the queue it acts on. A bar pinned to the bottom of the phone
-          screen competes with the tab bar for the same strip and hides the last
-          page in the list behind itself; in flow it is anchored to the control
-          that produced the pages and cannot cover anything. */}
-      {images.length > 0 && (
-        <div className="mb-3 space-y-2">
-          <div>
-            <label htmlFor="make-pdf-name" className="type-footnote block font-semibold text-[var(--text-secondary)]">{t("output-center.file.name.3efed3")}</label>
-            <input
-              id="make-pdf-name"
-              className="chef-field mt-1 sm:max-w-md"
-              value={pdfName}
-              maxLength={filenameStemLimit('.pdf')}
-              autoComplete="off"
-              spellCheck={false}
-              disabled={status.isProcessing}
-              onChange={(event) => setTypedPdfName(sanitizeFilenameStem(event.target.value))}
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => void handleBuildPdf()}
-            disabled={status.isProcessing || addingPhotos}
-            className="chef-target chef-pressable flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-4 text-sm font-bold text-[var(--text-on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-55 sm:w-auto sm:min-w-64"
-          >
-            {status.isProcessing ? <Loader2 aria-hidden className="animate-spin" size={18} /> : <ScanLine aria-hidden size={18} />}
-            <span>{status.isProcessing ? status.message : t("make-pdf.export.page.pdf.2e36cb", { count: images.length })}</span>
-          </button>
-        </div>
-      )}
-
-      {selectionNotice && (
-        <div role="status" aria-live="polite" className="mb-3 flex items-start gap-2 rounded-[var(--radius-field)] border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-800 dark:border-amber-500 dark:bg-amber-900/20 dark:text-amber-200">
-          <AlertTriangle className="mt-0.5 shrink-0" size={18} />
-          <span>{selectionNotice}</span>
-        </div>
-      )}
-
-      <AnimatePresence mode="wait">
-        {images.length > 0 && (
-          <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
-            {/* One queue row, not a stacked card: the phone version used to give
-                each page a full-width 176px preview, so three pages filled the
-                screen before the reorder controls appeared. */}
-            {images.map((image, index) => (
-              <div key={image.id} className="flex items-center gap-2 rounded-[var(--radius-row)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-1.5">
-                <img src={image.previewUrl} alt={t("make-pdf.scan.07df33", { v0: index + 1 })} className="h-14 w-11 shrink-0 rounded-[var(--radius-control)] border border-[var(--border-hairline)] object-cover" />
-                <div className="min-w-0 flex-1">
-                  <div className="chef-filename text-sm font-semibold text-[var(--text-primary)]">{image.file.name}</div>
-                  <div className="type-caption text-[var(--text-tertiary)]">{t("make-pdf.message.179910f5ad", { v0: index + 1, v1: formatBytes(image.file.size) })}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => moveImage(index, index - 1)}
-                  disabled={index === 0}
-                  aria-label={t("make-pdf.move.page.up.79624d", { v0: index + 1 })}
-                  className="chef-target inline-flex shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:text-[var(--text-tertiary)] disabled:opacity-35"
-                >
-                  <ArrowUp aria-hidden size={18} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveImage(index, index + 1)}
-                  disabled={index === images.length - 1}
-                  aria-label={t("make-pdf.move.page.down.9e61e2", { v0: index + 1 })}
-                  className="chef-target inline-flex shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:text-[var(--text-tertiary)] disabled:opacity-35"
-                >
-                  <ArrowDown aria-hidden size={18} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => removeImage(image.id)}
-                  disabled={status.isProcessing}
-                  className="chef-target inline-flex shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--status-danger-text)] hover:bg-[var(--status-danger-quiet)] disabled:opacity-55"
-                  aria-label={t("make-pdf.remove.page.0a72af", { v0: index + 1 })}
-                >
-                  <Trash2 aria-hidden size={18} />
-                </button>
-              </div>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
+  const sheets = (
+    <>
+      {inputs}
       <ConfirmSheet
         open={confirmClear}
         title={t("make-pdf.remove.every.page.6c477e")}
@@ -712,7 +645,203 @@ export const MakePDF: React.FC = () => {
       </Sheet>
 
       {discardSheet}
-      <StatusToast status={status} />
-    </ToolShell>
+    </>
+  );
+  const toast = <StatusToast status={status} />;
+
+  // No pages yet: today's start choices, centred.
+  // Pictures dropped on the screen are added like picked ones.
+  useFileDrop({ accept: 'image/*', onFiles: appendFiles });
+
+  // A photo opens large, at full size, with its eye or two fingers spread on it, as pages do in
+  // the page grids (fable-2 item 2), so a scan can be checked for sharpness before saving.
+  const [largePhoto, setLargePhoto] = useState<{ file: File; url: string } | null>(null);
+  const openPhoto = (index: number) => {
+    const image = images[index];
+    if (image) setLargePhoto({ file: image.file, url: URL.createObjectURL(image.file) });
+  };
+  useEffect(() => () => { if (largePhoto) URL.revokeObjectURL(largePhoto.url); }, [largePhoto]);
+  const photoPinchRef = usePinchToOpen((target) => {
+    const index = Number(target?.closest('[data-peek-page]')?.getAttribute('data-peek-page'));
+    if (Number.isInteger(index) && index >= 0) openPhoto(index);
+  });
+
+  if (!hasPages) {
+    return (
+      <ToolScreen
+        title={title}
+        kind="grid"
+        holdsWork={false}
+        body={(
+          <div className="tk-empty">
+            <div className="tk-makepdf-start">
+              {scannerSection}
+              <div className="tk-makepdf-starts">
+                {cameraButton(scanner ? 'tk-btn tk-btn-outline tk-makepdf-big chef-pressable' : 'tk-primary tk-makepdf-big chef-pressable')}
+                {galleryButton('tk-btn tk-btn-outline tk-makepdf-big chef-pressable')}
+              </div>
+              {addingLine}
+              {skippedNotice}
+            </div>
+          </div>
+        )}
+        extra={sheets}
+        toast={toast}
+      />
+    );
+  }
+
+  const nameLabel = t("output-center.file.name.3efed3");
+  // Today's field, on the screen under the sentence (phones) or in the band beside it (desktop),
+  // one step as before (owner decision 1, B-008).
+  const nameEditor = (
+    <EnterCloses>
+      <label className="tk-field" htmlFor="make-pdf-name">
+        <span>{nameLabel}</span>
+        <span className="tk-makepdf-name">
+          <input
+            ref={nameRef}
+            id="make-pdf-name"
+            className="chef-field"
+            value={pdfName}
+            placeholder={photosPdfName()}
+            maxLength={filenameStemLimit('.pdf')}
+            autoComplete="off"
+            spellCheck={false}
+            disabled={busy}
+            onChange={(event) => setTypedPdfName(sanitizeFilenameStem(event.target.value))}
+          />
+          <span aria-hidden className="tk-makepdf-ext">{PDF_EXTENSION}</span>
+        </span>
+      </label>
+    </EnterCloses>
+  );
+
+  const sentence = (
+    <Sentence
+      template="sentence.makePdf.export"
+      values={{ count: images.length }}
+      groupLabel={t('sentence.groupLabel', { tool: title })}
+      disabled={busy}
+      slots={{
+        name: {
+          label: nameLabel,
+          text: shownName,
+          // Desktop: the field is in the band beside the sentence; the slot points at it. Phone:
+          // the field is in the slot's card, so the name shows once (owner decision 2026-11-15).
+          // The field's own label names it, so the card's title is for assistive technology only.
+          ...(wide ? { focusTarget: () => nameRef.current } : { editor: nameEditor, showTitle: false }),
+        },
+      }}
+    />
+  );
+
+  const chips = (
+    <>
+      {wide && <div className="tk-inline-field tk-makepdf-namefield">{nameEditor}</div>}
+      {/* Camera and Gallery sit here, so they stay on screen however many pages there are
+          (B-011). The one pair once photos are in: the add tile after the last page repeated
+          them (polish item 9). With no photos yet, Camera is the filled first action. */}
+      {cameraButton('tk-chip chef-pressable')}
+      {galleryButton('tk-chip chef-pressable')}
+      <button
+        type="button"
+        onClick={() => setConfirmClear(true)}
+        disabled={busy || addingPhotos}
+        className="tk-chip tk-chip-danger chef-pressable"
+      >
+        <Trash2 aria-hidden />
+        {t("make-pdf.clear.all.29a390")}
+      </button>
+    </>
+  );
+
+  const notice = selectionNotice
+    ? <Notice tone="caution" role="status">{selectionNotice}</Notice>
+    : <Notice>{t("make-pdf.message.dc7f250a5f", { v2: formatBytes(totalSize), count: images.length })}</Notice>;
+
+  const action = (
+    <button
+      type="button"
+      onClick={() => void handleBuildPdf()}
+      disabled={busy || addingPhotos}
+      className="tk-primary chef-pressable"
+    >
+      <ScanLine aria-hidden size={18} />
+      <span>{t("make-pdf.export.page.pdf.2e36cb", { count: images.length })}</span>
+    </button>
+  );
+
+  const progress = busy ? <ProgressLine label={status.message} /> : undefined;
+
+  const body = (
+    <>
+      <h2 id="make-pdf-pages" className="sr-only">{title}</h2>
+      {scannerSection}
+      {addingLine}
+      <PageGrid count={images.length} minTile={150} labelHeight={96} gestureRef={photoPinchRef}>
+        {images.map((image, index) => (
+          <div key={image.id} className="tk-mtile" data-work-item={image.id} data-peek-page={index}>
+            <div className="tk-mtile-page">
+              <img src={image.previewUrl} alt={t("make-pdf.scan.07df33", { v0: index + 1 })} draggable={false} />
+              <PeekButton page={index + 1} onOpen={() => openPhoto(index)} />
+            </div>
+            {/* The photo's own name, as before (B-010): one line, the full name in its title. */}
+            <bdi className="tk-mtile-name chef-filename" title={image.file.name}>{image.file.name}</bdi>
+            <span className="tk-tile-label tabular" title={t("make-pdf.message.179910f5ad", { v0: index + 1, v1: formatBytes(image.file.size) })}>
+              {t("make-pdf.message.179910f5ad", { v0: index + 1, v1: formatBytes(image.file.size) })}
+            </span>
+            <div className="tk-mtile-actions">
+              <button
+                type="button"
+                onClick={() => moveImage(index, index - 1)}
+                disabled={index === 0}
+                aria-label={t("make-pdf.move.page.up.79624d", { v0: index + 1 })}
+                className="tk-move chef-pressable"
+              >
+                <ArrowUp aria-hidden size={18} className="tk-mtile-prev" />
+              </button>
+              <button
+                type="button"
+                onClick={() => moveImage(index, index + 1)}
+                disabled={index === images.length - 1}
+                aria-label={t("make-pdf.move.page.down.9e61e2", { v0: index + 1 })}
+                className="tk-move chef-pressable"
+              >
+                <ArrowDown aria-hidden size={18} className="tk-mtile-next" />
+              </button>
+              <button
+                type="button"
+                onClick={() => removeImage(image.id)}
+                disabled={busy}
+                aria-label={t("make-pdf.remove.page.0a72af", { v0: index + 1 })}
+                className="tk-move tk-move-danger chef-pressable"
+              >
+                <Trash2 aria-hidden size={18} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </PageGrid>
+      {largePhoto && (
+        <PDFPreviewModal file={largePhoto.file} image={largePhoto.url} pageIndex={0} pageLabel={largePhoto.file.name} onClose={() => setLargePhoto(null)} />
+      )}
+    </>
+  );
+
+  return (
+    <ToolScreen
+      title={title}
+      kind="grid"
+      bodyLabelledBy="make-pdf-pages"
+      body={body}
+      sentence={sentence}
+      chips={chips}
+      notice={notice}
+      action={action}
+      progress={progress}
+      extra={sheets}
+      toast={toast}
+    />
   );
 };

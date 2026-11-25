@@ -70,6 +70,14 @@ export function useDragReorder<T>({
   /** A reorder moved the nodes, so the frozen slots describe the old order. */
   const needsRemeasureRef = useRef(false);
   const slotsRef = useRef<Slot[]>([]);
+  /**
+   * A grid of tiles (Reorder Pages, Image to PDF): the centre of each place in the grid, in order
+   * and in content space, read once when the drag starts. The places do not move while the items
+   * trade them, so the drop needs no re-measuring. Null for a one-column list.
+   */
+  const placesRef = useRef<{ x: number; y: number }[] | null>(null);
+  /** From the finger to the centre of the dragged tile as drawn under it. */
+  const centreShiftRef = useRef({ x: 0, y: 0 });
   const scrollIntervalRef = useRef<number | null>(null);
   const pointerRef = useRef<{ x: number, y: number } | null>(null);
   const isDraggingRef = useRef(false);
@@ -102,6 +110,21 @@ export function useDragReorder<T>({
 
   // --- CORE LOGIC ---
 
+  /**
+   * In a grid the dragged tile takes the place whose centre is nearest the centre of the tile under
+   * the finger (research r1, H2-01): drop it on page 1 and it becomes page 1, wherever on the tile
+   * the grip is. The finger alone landed one row off when the grip sat in a tile's corner.
+   */
+  const nearestPlace = (places: { x: number; y: number }[], x: number, y: number) => {
+    let best = 0;
+    let bestDistance = Infinity;
+    places.forEach((place, index) => {
+      const distance = (place.x - x) ** 2 + (place.y - y) ** 2;
+      if (distance < bestDistance) { bestDistance = distance; best = index; }
+    });
+    return best;
+  };
+
   const calculateTargetIndex = (docX: number, docY: number): number => {
     const slots = slotsRef.current;
     if (slots.length === 0) return 0;
@@ -127,7 +150,10 @@ export function useDragReorder<T>({
     const draggedId = draggedIdRef.current;
     if (!isDraggingRef.current || !draggedId) return;
 
-    const { x: docX, y: docY } = toContentSpace(clientX, clientY);
+    const places = placesRef.current;
+    const { x: docX, y: docY } = places
+      ? toContentSpace(clientX + centreShiftRef.current.x, clientY + centreShiftRef.current.y)
+      : toContentSpace(clientX, clientY);
 
     // The live list, not the one this drag started with: a multi-position drag
     // reorders as it goes, and each further move works from the new order.
@@ -137,7 +163,11 @@ export function useDragReorder<T>({
     const fromIndex = currentItems.findIndex(item => key(item) === draggedId);
     if (fromIndex === -1) return;
 
-    const targetIndex = calculateTargetIndex(docX, docY);
+    // A grid moves the tile into the place it is over (before that tile going back, after it going
+    // forward); a list moves it past each row's middle.
+    const targetIndex = places && places.length === currentItems.length
+      ? nearestPlace(places, docX, docY)
+      : calculateTargetIndex(docX, docY);
 
     if (targetIndex !== fromIndex && targetIndex <= currentItems.length) {
       const newItems = [...currentItems];
@@ -206,6 +236,7 @@ export function useDragReorder<T>({
     needsRemeasureRef.current = false;
     setActiveId(null);
     slotsRef.current = [];
+    placesRef.current = null;
     pointerRef.current = null;
     setPointer(null);
 
@@ -249,6 +280,18 @@ export function useDragReorder<T>({
     setPointer({ x: e.clientX, y: e.clientY });
 
     measureSlots(id);
+    centreShiftRef.current = { x: rect.left + rect.width / 2 - e.clientX, y: rect.top + rect.height / 2 - e.clientY };
+    // Every item's place, the dragged one included, in the list's own order (so right-to-left needs
+    // nothing more). A grid is two places on one row.
+    const places = itemsRef.current.map((item) => {
+      const node = itemRefs.current.get(keyExtractorRef.current(item));
+      if (!node) return null;
+      const r = node.getBoundingClientRect();
+      return { ...toContentSpace(r.left + r.width / 2, r.top + r.height / 2), top: r.top };
+    });
+    const complete = places.every(Boolean) ? (places as { x: number; y: number; top: number }[]) : [];
+    const isGrid = complete.some((place, index) => complete.some((other, j) => j !== index && Math.abs(other.top - place.top) <= 10));
+    placesRef.current = isGrid ? complete.map(({ x, y }) => ({ x, y })) : null;
 
     // Attach Listeners. Held in refs so the exact same function is removed,
     // whichever render produced it.
@@ -259,7 +302,7 @@ export function useDragReorder<T>({
     window.addEventListener('pointercancel', handlePointerUp);
 
     startAutoScroll(id);
-  }, [measureSlots, handlePointerMove, handlePointerUp]);
+  }, [measureSlots, handlePointerMove, handlePointerUp, toContentSpace]);
 
   // --- AUTO SCROLL ---
 

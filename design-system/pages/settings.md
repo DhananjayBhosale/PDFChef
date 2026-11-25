@@ -51,3 +51,8 @@
 - Preserve screen-reader labels, segmented-control names, confirmation titles
   and buttons, and live status behavior even when visible supporting copy is
   removed.
+
+## Identity update
+
+The layout is unchanged. The screen takes the new tokens (warm paper, one tomato
+accent) and the serif title (`--font-display`).

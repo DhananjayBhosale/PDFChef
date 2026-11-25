@@ -2,8 +2,8 @@
 
 ## Screen
 
-- Name: Tool workflows (all `/tool-route` screens, with immersive editor
-  exceptions defined by the shell)
+- Name: Tool workflows (all `/tool-route` screens, with editor exceptions defined
+  by `ToolScreen`)
 - User goal: choose local files, understand the meaningful choices, complete
   one PDF task and recover the result comfortably on a phone
 
@@ -61,17 +61,39 @@ inspector instead of stretching the one-handed phone chrome across the page.
 
 ## Shared shell
 
-Every non-immersive tool route renders inside `.chef-tool-surface`, which
-`AppShell` sets once. The phone density of all 34 tools is that scope's rules in
-`index.css` — 16px leading edge, the in-page title at the Heading step with no
-top margin, 16px under the title block — not 34 sets of per-tool numbers. A tool
-that needs to change its own phone density is describing a rule the shell is
-missing.
+Every tool route renders one `ToolScreen` (`components/Tool/ToolScreen.tsx`), full
+viewport, with its own `ToolTop` header: Back (only when the screen behind is not
+Tools home), the tool's name as the `h1`, the file, "change the file", and Tools at
+the end. No tab bar, no side rail, no Recent or Settings link on a tool route. The
+phone density is the kit's (`components/Tool/tool.css`), not per-tool numbers. A
+tool that needs to change its own density is describing a rule the kit is missing.
 
-`/view`, `/image-to-pdf`, `/pdf-to-jpg` and loaded compact `/edit` are immersive: the shell gives them no
-chrome, so each carries `chef-safe-top` on its own header and owns its named way
-out. A phone that reports a real top inset otherwise paints their header, and the
-action inside it, underneath the status bar.
+Phone: header, body, then a foot sheet (result strip, sentence, chips, one notice
+line, main action). Live-preview tools (Watermark, Page Numbers, PDF to Image,
+Crop, Compare) put the sentence in a band on top and the actions in a foot bar.
+Desktop (1024px and up, tablets too): header, one band (sentence, chips, notice,
+action, result strip), then the canvas filling the rest of the viewport.
+
+Editors (`/edit`, `/sign`, `/make-fillable`, Image to PDF's page editor) draw their
+own toolbar under the header and keep their own main action; the result strip is
+drawn in a slot above the toolbar. The header's height is fixed (48px plus the top
+safe area on a phone, 52px on desktop).
+
+Settings of most tools are **slots** in a sentence: a value that opens an editor
+holding today's control. Tools by layout kind:
+
+| Kind | Tools |
+|---|---|
+| grid | Split, Extract Pages, Delete Pages, Reorder Pages, Rotate Pages, Create PDF |
+| list | Merge, Batch Processing |
+| file | Compress, Flatten, Repair, Remove hidden info, Remove comments, Clean Up, Remove blank pages, Extract images, PDF to Word, Word to PDF, PowerPoint to PDF, Extract Text, Header & Footer, Verify signatures |
+| form | Protect, Unlock, Document Info, Invoice, Receipt, Quote (live document beside the form on desktop) |
+| preview | Watermark, Page Numbers, PDF to Image, Crop (live frame), Compare Summary |
+| editor | Edit PDF, Sign PDF, Make Fillable, Image to PDF |
+| reader | Read PDF |
+
+Split results also offer "Save N files separately" (web and Android; hidden in the
+iOS app until a native one-picker export exists).
 
 ## Interaction rules
 

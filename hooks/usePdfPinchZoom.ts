@@ -6,11 +6,18 @@ import {
   pdfZoomScrollOffset,
 } from '../services/pdfZoomGesture';
 
+export type PdfZoomAt = (zoom: number, clientX: number, clientY: number) => void;
+
 interface PdfPinchZoomOptions {
   zoom: number;
   setZoom: (zoom: number) => void;
   min?: number;
   max?: number;
+  /**
+   * A page that is not scrolled but moved (`translate` and `scale`, usePanZoom) takes the zoom and
+   * its point itself; the gestures are the same.
+   */
+  zoomAt?: PdfZoomAt;
 }
 
 interface WebKitGestureEvent extends Event {
@@ -36,7 +43,7 @@ const touchMidpoint = (touches: TouchList) => {
   };
 };
 
-export const usePdfPinchZoom = ({ zoom, setZoom, min = 0.5, max = 2 }: PdfPinchZoomOptions) => {
+export const usePdfPinchZoom = ({ zoom, setZoom, min = 0.5, max = 2, zoomAt }: PdfPinchZoomOptions) => {
   const [viewport, setViewport] = useState<HTMLElement | null>(null);
   const zoomRef = useRef(zoom);
   const pinchStartRef = useRef({ distance: 0, zoom });
@@ -72,6 +79,11 @@ export const usePdfPinchZoom = ({ zoom, setZoom, min = 0.5, max = 2 }: PdfPinchZ
     const previousZoom = zoomRef.current;
     const nextZoom = clampPdfZoom(requestedZoom, min, max);
     if (Math.abs(nextZoom - previousZoom) < 0.001) return;
+    if (zoomAt) {
+      zoomRef.current = nextZoom;
+      zoomAt(nextZoom, clientX, clientY);
+      return;
+    }
 
     const bounds = viewport.getBoundingClientRect();
     const pointerX = Math.max(0, Math.min(bounds.width, clientX - bounds.left));
@@ -95,7 +107,7 @@ export const usePdfPinchZoom = ({ zoom, setZoom, min = 0.5, max = 2 }: PdfPinchZ
       frameRef.current = requestAnimationFrame(settle);
     };
     frameRef.current = requestAnimationFrame(settle);
-  }, [applyPendingScroll, max, min, setZoom, viewport]);
+  }, [applyPendingScroll, max, min, setZoom, viewport, zoomAt]);
 
   useEffect(() => {
     if (!viewport) return undefined;
@@ -111,12 +123,27 @@ export const usePdfPinchZoom = ({ zoom, setZoom, min = 0.5, max = 2 }: PdfPinchZ
         }
       }, 260);
     };
+    // A plain scroll or a one-finger pan after a zoom is the reader taking over: the zoom's
+    // anchor stops chasing its offset. Otherwise an offset the page cannot reach (a pointer
+    // near the far edge) is retried for several frames and undoes the reader's first scroll.
+    const releaseAnchor = () => {
+      pendingScrollRef.current = null;
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
+    };
     const handleWheel = (event: WheelEvent) => {
-      if (!event.ctrlKey || event.deltaY === 0) return;
+      if (!event.ctrlKey) {
+        releaseAnchor();
+        return;
+      }
+      if (event.deltaY === 0) return;
       event.preventDefault();
       applyZoom(pdfZoomFromWheel(zoomRef.current, event.deltaY, min, max), event.clientX, event.clientY);
     };
     const handleTouchStart = (event: TouchEvent) => {
+      if (event.touches.length === 1) releaseAnchor();
       if (event.touches.length !== 2) return;
       event.preventDefault();
       pinchStartRef.current = { distance: touchDistance(event.touches), zoom: zoomRef.current };

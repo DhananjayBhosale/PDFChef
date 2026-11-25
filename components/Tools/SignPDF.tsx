@@ -1,10 +1,11 @@
 import { t } from '../../services/i18n/core.ts';
 import { pdfProblemMessage } from '../../services/i18n/errors.ts';
 import { useI18n } from '../../services/i18n/react';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { AnimatePresence, motion } from 'framer-motion';
+import { ToolScreen } from '../Tool/ToolScreen';
+import { ActionRow, ResultSlot, useAnnouncer } from '../Tool/parts';
 import {
   ChevronLeft,
   ChevronRight,
@@ -24,9 +25,10 @@ import { PDFFile, ProcessingStatus } from '../../types';
 import { useZoom } from '../../hooks/useZoom';
 import { usePdfPinchZoom } from '../../hooks/usePdfPinchZoom';
 import { useFileDrop } from '../../hooks/useFileDrop';
-import { useConfirmDiscard } from '../../hooks/useConfirmDiscard';
-import { loadPDFDocument } from '../../services/pdfBrowser';
-import { applySignaturesToPDF } from '../../services/pdfDocument';
+import { useDiscardPrompt, useLeaveGuarded } from '../../hooks/useConfirmDiscard';
+import { ChangeFile } from '../Tool/ToolTop';
+import { useWorkInput } from '../UI/workSignature';
+import { applySignaturesToPDF, loadPDFDocument } from '../../services/pdfLazy';
 import { getPdfRenderScale } from '../../services/pdfPageGeometry';
 import { downloadBlob, isPdfFile } from '../../services/pdfShared';
 import { normalizeImageFile } from '../../services/imageBrowser';
@@ -35,6 +37,7 @@ import { planImageNormalization } from '../../services/imageNormalization';
 import { SegmentedControl } from '../UI/Primitives';
 import { StatusToast } from '../UI/StatusToast';
 import { toolOutputName } from '../UI/format';
+import { MQ_LG, useWide } from '../../hooks/useMediaQuery';
 
 interface SignatureItem {
   localId: string;
@@ -58,6 +61,8 @@ const getPoint = (event: PointerEvent | React.PointerEvent) => ({ x: event.clien
  * to, where a 50 MP photo kept whole froze the page and made a 100 MB PDF.
  */
 const MAX_SIGNATURE_PIXELS = 2_000_000;
+/** The page zooms to 400% of its fitted view, as in the other viewers (fable-2 item 15). */
+const SIGN_MAX_ZOOM = 4;
 
 /** Decode the picked picture once, upright and at signature size, before anything else uses it. */
 const shrinkSignatureImage = (file: File) => normalizeImageFile(file, { maxPixels: MAX_SIGNATURE_PIXELS });
@@ -168,6 +173,7 @@ const SignatureOverlay: React.FC<{
   const [editing, setEditing] = useState(false);
   const modeRef = useRef<EditMode>(null);
   const originRef = useRef({
+    pointerId: -1,
     clientX: 0,
     clientY: 0,
     x: item.x,
@@ -183,6 +189,7 @@ const SignatureOverlay: React.FC<{
     const point = getPoint(event);
     modeRef.current = mode;
     originRef.current = {
+      pointerId: event.pointerId,
       clientX: point.x,
       clientY: point.y,
       x: item.x,
@@ -224,8 +231,10 @@ const SignatureOverlay: React.FC<{
   useEffect(() => {
     if (!editing) return;
 
+    // The edit follows the finger that started it. A second finger is a pinch: the stamp goes back
+    // to where it started and the edit ends (s4-03).
     const handleMove = (event: PointerEvent) => {
-      if (!containerRef.current || !modeRef.current) return;
+      if (!containerRef.current || !modeRef.current || event.pointerId !== originRef.current.pointerId) return;
       const point = getPoint(event);
       const dx = point.x - originRef.current.clientX;
       const dy = point.y - originRef.current.clientY;
@@ -250,65 +259,88 @@ const SignatureOverlay: React.FC<{
       }
     };
 
-    const handleUp = () => {
+    const handleUp = (event: PointerEvent) => {
+      if (event.pointerId !== originRef.current.pointerId) return;
+      modeRef.current = null;
+      setEditing(false);
+    };
+
+    const handleSecondFinger = (event: PointerEvent) => {
+      if (!modeRef.current || event.pointerId === originRef.current.pointerId) return;
+      const { x, y, width } = originRef.current;
+      onUpdate(item.localId, { x, y, width });
       modeRef.current = null;
       setEditing(false);
     };
 
     window.addEventListener('pointermove', handleMove);
     window.addEventListener('pointerup', handleUp);
+    window.addEventListener('pointerdown', handleSecondFinger, true);
 
     return () => {
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', handleUp);
+      window.removeEventListener('pointerdown', handleSecondFinger, true);
     };
   }, [containerRef, editing, item.localId, onUpdate]);
 
+  const box = {
+    left: `${item.x * 100}%`,
+    top: `${item.y * 100}%`,
+    width: `${item.width * 100}%`,
+    aspectRatio: item.aspectRatio,
+  } as React.CSSProperties;
+
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={t("sign-pdf.signature.stamp.drag.to.move.use.arrow.90b646")}
-      className={`absolute z-20 cursor-move touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-500 ${isSelected ? 'ring-2 ring-ink-500' : 'ring-ink-400 hover:ring-1'}`}
-      style={{
-        left: `${item.x * 100}%`,
-        top: `${item.y * 100}%`,
-        width: `${item.width * 100}%`,
-        aspectRatio: item.aspectRatio,
-      }}
-      onPointerDown={(event) => startEdit(event, 'drag')}
-      onClick={(event) => event.stopPropagation()}
-      onKeyDown={handleKeyDown}
-    >
-      <img src={item.dataUrl} alt="" aria-hidden className="pointer-events-none h-full w-full object-contain" />
+    <>
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={t("sign-pdf.signature.stamp.drag.to.move.use.arrow.90b646")}
+        data-stamp-id={item.localId}
+        className={`absolute z-20 cursor-move touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-500 ${isSelected ? 'ring-2 ring-ink-500' : 'ring-ink-400 hover:ring-1'}`}
+        style={box}
+        onPointerDown={(event) => startEdit(event, 'drag')}
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={handleKeyDown}
+      >
+        <img src={item.dataUrl} alt="" aria-hidden className="pointer-events-none h-full w-full object-contain" />
+      </div>
       {isSelected && (
-        <>
+        // The handles sit beside the stamp, not inside it, in a box of the same size. A finger tap
+        // goes to the nearest button it touches, and Chrome passes over a tappable element that
+        // holds another (its touch adjustment), so with the handles inside, a tap on the start of
+        // the name went to Remove (round 6, gpt-terra-01).
+        <div className="pointer-events-none absolute z-[21]" style={box} onClick={(event) => event.stopPropagation()}>
+          {/* Remove at the top-left corner, Resize at the bottom-right: on a small stamp their 48 px
+              targets no longer sit on top of each other (round 5, mobile-07). Remove's target sits
+              wholly outside the corner and grows away from it when zoomed out. */}
           <button
             type="button"
             aria-label={t("sign-pdf.remove.signature.stamp.54e28c")}
-            className="absolute -right-6 -top-6 grid h-12 w-12 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger-500"
+            className="tk-sign-handle tk-sign-remove group pointer-events-auto absolute bottom-full right-full grid h-12 w-12 place-items-end focus-visible:outline-none"
             onClick={(event) => {
               event.stopPropagation();
               onDelete(item.localId);
             }}
           >
-            <span className="grid h-7 w-7 place-items-center rounded-full bg-danger-600 text-paper-25 shadow">
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-danger-600 text-paper-25 shadow group-focus-visible:ring-2 group-focus-visible:ring-danger-500 group-focus-visible:ring-offset-2">
               <X aria-hidden size={14} />
             </span>
           </button>
           <button
             type="button"
             aria-label={t("sign-pdf.resize.signature.stamp.b617b6")}
-            className="absolute -bottom-6 -right-6 grid h-12 w-12 touch-none place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-500"
+            className="tk-sign-handle pointer-events-auto absolute -bottom-6 -right-6 grid h-12 w-12 touch-none place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-500"
             onPointerDown={(event) => startEdit(event, 'resize')}
           >
             <span className="grid h-7 w-7 place-items-center rounded-full bg-ink-600 text-paper-25 shadow">
               <Expand aria-hidden size={14} />
             </span>
           </button>
-        </>
+        </div>
       )}
-    </div>
+    </>
   );
 };
 
@@ -363,7 +395,9 @@ const PDFPageCanvas: React.FC<{
       const viewport = page.getViewport({ scale });
       setDimensions({ width: viewport.width / scale, height: viewport.height / scale });
 
+      // The page may have been replaced (a new file dropped) while getPage ran (B-034).
       const canvas = canvasRef.current;
+      if (!canvas) return;
       const context = canvas.getContext('2d');
       if (!context) return;
 
@@ -395,7 +429,8 @@ const PDFPageCanvas: React.FC<{
         ref={containerRef}
         dir="ltr"
         className="relative origin-top-left bg-white"
-        style={{ width: dimensions.width, height: dimensions.height, transform: `scale(${zoom})` }}
+        // The handles read --sign-zoom to stay 48 px on screen when the page is drawn smaller (B-027).
+        style={{ width: dimensions.width, height: dimensions.height, transform: `scale(${zoom})`, ['--sign-zoom' as string]: zoom } as React.CSSProperties}
         onClick={onBackgroundClick}
       >
         {!rendered && (
@@ -422,13 +457,20 @@ const PDFPageCanvas: React.FC<{
 
 export const SignPDF: React.FC = () => {
   useI18n();
+  const wide = useWide();
   const dropBusy = useRef(false);
   const [file, setFile] = useState<PDFFile | null>(null);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [status, setStatus] = useState<ProcessingStatus>({ isProcessing: false, progress: 0, message: '' });
   const [signatures, setSignatures] = useState<SignatureItem[]>([]);
   const [savedSignatures, setSavedSignatures] = useState<SignatureItem[] | null>(null);
-  const discardSheet = useConfirmDiscard(signatures.length > 0 && signatures !== savedSignatures);
+  const unsavedStamps = signatures.length > 0 && signatures !== savedSignatures;
+  // Back, a link and "Choose another PDF" ask before placed stamps that were not exported are lost.
+  const discardPrompt = useDiscardPrompt();
+  useLeaveGuarded(unsavedStamps, discardPrompt.ask);
+  const discardSheet = discardPrompt.sheet;
+  // The placed signatures are the input of the result strip's file (workSignature.ts).
+  useWorkInput(signatures);
   const [selectedSignatureId, setSelectedSignatureId] = useState<string | null>(null);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [mobilePanel, setMobilePanel] = useState<'document' | 'stamps'>('document');
@@ -449,11 +491,64 @@ export const SignPDF: React.FC = () => {
   const [hasDrawnSignature, setHasDrawnSignature] = useState(false);
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
+  // The drawing as it was when Draw was left (Type, Upload) or the pad was resized: drawn back
+  // when Draw shows again, so a look at another tab keeps it (fable C5).
+  const drawnSnapshotRef = useRef('');
+  const hasDrawnRef = useRef(false);
+  hasDrawnRef.current = hasDrawnSignature;
 
-  const { zoom, zoomIn, zoomOut, resetZoom, setExactZoom } = useZoom(1.0);
-  const setPdfZoomViewport = usePdfPinchZoom({ zoom, setZoom: setExactZoom });
+  // The zoom is held relative to the view the file opened at (owner decision, path to 9): fitted
+  // to the width on a phone, 100% on a wider screen. That view reads 100%, as fit width does in the
+  // other viewers (fable-2 item 15), and Reset returns to it. Its name is "Fit page" on every
+  // screen (owner decision 2026-11-15). `zoom` is the page's drawn scale.
+  const { zoom: view, zoomIn, zoomOut, setExactZoom } = useZoom(1, 0.5, SIGN_MAX_ZOOM);
+  const [startZoom, setStartZoom] = useState(1);
+  const startZoomRef = useRef(1);
+  const zoom = view * startZoom;
+  const resetZoom = useCallback(() => setExactZoom(1), [setExactZoom]);
+  const setPdfZoomViewport = usePdfPinchZoom({ zoom: view, setZoom: setExactZoom, max: SIGN_MAX_ZOOM });
+  // The page view is measured so the start zoom shows the whole page width at every size (final
+  // fix, item 11: on a 768–834 px portrait tablet 100% cut the page off). It is measured again
+  // whenever the page view changes size (a turned phone, a narrower window; fix round 2, item 9),
+  // so Reset always lands on the fitted view, and every zoom keeps its share of the new fit.
+  const zoomViewportRef = useRef<HTMLDivElement | null>(null);
+  const firstPageWidthRef = useRef<number | null>(null);
+  const fitToViewport = useCallback(() => {
+    const width = firstPageWidthRef.current;
+    const viewport = zoomViewportRef.current;
+    if (!width || !viewport || !viewport.getClientRects().length) return;
+    const style = window.getComputedStyle(viewport);
+    const room = viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - 2;
+    if (room <= 0) return;
+    const start = Math.max(0.5, Math.min(2, Math.min(1, room / width)));
+    if (Math.abs(start - startZoomRef.current) < 0.001) return;
+    startZoomRef.current = start;
+    setStartZoom(start);
+  }, []);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const setZoomViewport = useCallback((node: HTMLDivElement | null) => {
+    zoomViewportRef.current = node;
+    setPdfZoomViewport(node);
+    resizeObserverRef.current?.disconnect();
+    resizeObserverRef.current = null;
+    if (node && typeof ResizeObserver !== 'undefined') {
+      resizeObserverRef.current = new ResizeObserver(() => fitToViewport());
+      resizeObserverRef.current.observe(node);
+    }
+  }, [setPdfZoomViewport, fitToViewport]);
+  useLayoutEffect(() => { if (pdfDoc) fitToViewport(); }, [pdfDoc, fitToViewport]);
 
   const pageCount = pdfDoc?.numPages || 0;
+  // A page change is said to a screen reader (research r4, desktop-04).
+  const [announcer, announce] = useAnnouncer();
+  const announcedPage = useRef<number | null>(null);
+  useEffect(() => {
+    if (pageCount < 2) return;
+    if (announcedPage.current !== null && announcedPage.current !== currentPageIndex) {
+      announce(t("sign-pdf.message.61ebc290b6", { v0: currentPageIndex + 1, v1: pageCount }));
+    }
+    announcedPage.current = currentPageIndex;
+  }, [announce, pageCount, currentPageIndex]);
   const selectedSignature = signatures.find((signature) => signature.localId === selectedSignatureId) || null;
   const pageSignatures = useMemo(
     () => signatures.filter((signature) => signature.pageIndex === currentPageIndex),
@@ -515,6 +610,21 @@ export const SignPDF: React.FC = () => {
     if (target) setCurrentPageIndex(target.pageIndex);
   };
 
+  // A stamp that was just added, or picked in the list, is scrolled into view: zoomed in, the
+  // middle of the page where a stamp starts can be below the screen (round 6, desktop-03).
+  const revealStampRef = useRef<string | null>(null);
+  useEffect(() => {
+    const id = revealStampRef.current;
+    if (!id || id !== selectedSignatureId) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const stamp = document.querySelector<HTMLElement>(`[data-stamp-id="${id}"]`);
+      if (!stamp) return;
+      revealStampRef.current = null;
+      stamp.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [selectedSignatureId, signatures, currentPageIndex]);
+
   const updateSignature = (id: string, updates: Partial<SignatureItem>) => {
     setSignatures((previous) =>
       previous.map((signature) =>
@@ -530,6 +640,7 @@ export const SignPDF: React.FC = () => {
 
   const deleteSignature = (id: string) => {
     setSignatures((previous) => previous.filter((signature) => signature.localId !== id));
+    announce(t('sign-pdf.stamp.removed'));
     if (selectedSignatureId === id) setSelectedSignatureId(null);
   };
 
@@ -592,6 +703,8 @@ export const SignPDF: React.FC = () => {
 
     try {
       const doc = await loadPDFDocument(selected);
+      const firstWidth = (await doc.getPage(1)).getViewport({ scale: 1 }).width;
+      firstPageWidthRef.current = firstWidth;
       setFile({ id: uuidv4(), file: selected, name: selected.name, size: selected.size });
       setPdfDoc(doc);
       // Images dropped before choosing a document are waiting for its first page.
@@ -599,7 +712,17 @@ export const SignPDF: React.FC = () => {
       setSelectedSignatureId(null);
       setCurrentPageIndex(0);
       setMobilePanel('document');
-      setExactZoom(window.matchMedia('(max-width: 767px)').matches ? 0.5 : 1);
+      // Phones open the page fitted to the width (T-02), not at a fixed 50%. The page view's own
+      // width replaces this estimate once it is drawn (the effect below).
+      let start = 1;
+      if (!window.matchMedia(MQ_LG).matches) {
+        start = Math.min(1, (window.innerWidth - 24) / firstWidth);
+      }
+      // Never drawn below half size.
+      start = Math.max(0.5, Math.min(2, start));
+      startZoomRef.current = start;
+      setStartZoom(start);
+      setExactZoom(1);
       setStatus({ isProcessing: false, progress: 0, message: '' });
       return true;
     } catch (error) {
@@ -633,7 +756,18 @@ export const SignPDF: React.FC = () => {
         image.src = dataUrl;
       });
       nextSignature.aspectRatio = image.width / Math.max(1, image.height);
-      setSignatures((previous) => [...previous, nextSignature]);
+      // A new stamp never lands exactly on an earlier one on the same page (round 5, mobile-06):
+      // it steps down and to the right until the spot is free.
+      setSignatures((previous) => {
+        const taken = (x: number, y: number) => previous.some((item) => item.pageIndex === pageIndex
+          && Math.abs(item.x - x) < 0.02 && Math.abs(item.y - y) < 0.02);
+        for (let step = 0; step < 6 && taken(nextSignature.x, nextSignature.y); step += 1) {
+          nextSignature.x = Math.min(nextSignature.x + 0.04, 1 - nextSignature.width);
+          nextSignature.y += 0.04;
+        }
+        return [...previous, nextSignature];
+      });
+      revealStampRef.current = nextSignature.localId;
       setSelectedSignatureId(nextSignature.localId);
       setMobilePanel('document');
     } catch {
@@ -644,12 +778,20 @@ export const SignPDF: React.FC = () => {
   useFileDrop({
     accept: '.pdf,application/pdf,image/*,.png,.jpg,.jpeg,.webp,.gif,.bmp,.svg',
     priority: 10,
-    onFiles: async (files) => {
+    onFiles: async function takeDrop(files: File[], asked = false): Promise<void> {
       if (dropBusy.current || status.isProcessing) return;
+      // A new PDF replaces the document and its stamps: unsaved stamps ask first, as Choose another
+      // file does (s4-01). Cancel keeps both; Discard takes the drop. Stamps dropped before any PDF
+      // wait for it, so they do not ask.
+      if (!asked && file && unsavedStamps && files.some(isPdfFile)) {
+        discardPrompt.ask(() => { void takeDrop(files, true); });
+        return;
+      }
       dropBusy.current = true;
       try {
         const pdf = files.find(isPdfFile);
         if (pdf && !await handleFilesSelected([pdf])) return;
+        if (pdf) setSavedSignatures(null);
         for (const image of files.filter((item) => !isPdfFile(item))) {
           // The same shrunk, upright, re-encoded copy the picker makes, for preview and export alike.
           const stamp = await createSignatureStamp(await shrinkSignatureImage(image), transparentUpload);
@@ -663,6 +805,23 @@ export const SignPDF: React.FC = () => {
       }
     },
   });
+
+  // The header's "change the file" control, named as in Make Fillable (pass 5, item 9): Sign had
+  // none, so the only way to another PDF was Tools and back.
+  const chooseAnother = () => {
+    const clear = () => {
+      setFile(null);
+      setPdfDoc(null);
+      setSignatures([]);
+      setSavedSignatures(null);
+      setSelectedSignatureId(null);
+      setCurrentPageIndex(0);
+      setMobilePanel('document');
+      setStatus({ isProcessing: false, progress: 0, message: '' });
+    };
+    if (unsavedStamps) discardPrompt.ask(clear);
+    else clear();
+  };
 
   const handleSave = async () => {
     if (!file) return;
@@ -694,14 +853,31 @@ export const SignPDF: React.FC = () => {
     setHasDrawnSignature(false);
   };
 
+  // Every opening starts on an empty Draw canvas (B-031): the resets run on their own, so a
+  // dialog left in Type or Upload mode (no canvas mounted) still goes back to Draw.
   useEffect(() => {
     if (!showModal) return;
+    setSignatureMode('draw');
+    setTransparentUpload(true);
+    setUploadedSignatureSource(null);
+    setUploadedSignature('');
+    setUploadError('');
+    setTypedSignature('');
+    drawnSnapshotRef.current = '';
+  }, [showModal]);
+
+  useEffect(() => {
+    if (!showModal || signatureMode !== 'draw') return;
     const canvas = signatureCanvasRef.current;
     if (!canvas) return;
     const context = canvas.getContext('2d');
     if (!context) return;
 
+    let first = true;
     const initializeCanvas = () => {
+      const keep = first ? drawnSnapshotRef.current : hasDrawnRef.current ? canvas.toDataURL('image/png') : '';
+      first = false;
+      drawnSnapshotRef.current = '';
       const dpr = window.devicePixelRatio || 1;
       const targetHeight = window.innerWidth < 640 ? 180 : 220;
       canvas.style.width = '100%';
@@ -716,22 +892,27 @@ export const SignPDF: React.FC = () => {
       context.setTransform(1, 0, 0, 1, 0, 0);
       context.scale(dpr, dpr);
       clearSignatureCanvas();
+      if (!keep) return;
+      const image = new Image();
+      image.onload = () => {
+        context.save();
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.drawImage(image, 0, 0);
+        context.restore();
+        setHasDrawnSignature(true);
+      };
+      image.src = keep;
     };
 
     const raf = window.requestAnimationFrame(initializeCanvas);
     window.addEventListener('resize', initializeCanvas);
-    setSignatureMode('draw');
-    setTransparentUpload(true);
-    setUploadedSignatureSource(null);
-    setUploadedSignature('');
-    setUploadError('');
-    setTypedSignature('');
 
     return () => {
       window.cancelAnimationFrame(raf);
       window.removeEventListener('resize', initializeCanvas);
+      if (hasDrawnRef.current && !first) drawnSnapshotRef.current = canvas.toDataURL('image/png');
     };
-  }, [showModal]);
+  }, [showModal, signatureMode]);
 
   useEffect(() => {
     const context = signatureCanvasRef.current?.getContext('2d');
@@ -833,77 +1014,34 @@ export const SignPDF: React.FC = () => {
     }
   };
 
-  return (
-    // The workspace claims the shell's own content box, and only once it has a
-    // document to put in it. `100dvh` inside a route that already spends a nav
-    // bar and a tab bar overflowed the page by exactly that chrome, and centred
-    // the empty drop zone a screen below the fold.
-    <div className={`mx-auto w-full max-w-7xl px-4 py-4 sm:py-6 ${file ? 'chef-workspace-fill flex flex-col' : 'chef-tool-landing-centered'}`}>
-      <div className="mb-2 flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">{t("sign-pdf.sign.pdf.1bf93e")}</h1>
-          {!file && (
-            <p className="mt-1 text-[var(--text-secondary)]">{t("sign-pdf.draw.your.signature.and.place.it.on.541540")}</p>
-          )}
-        </div>
-        {file && (
-          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
-            <button
-              ref={addSignatureRef}
-              onClick={() => setShowModal(true)}
-              className="chef-target chef-pressable flex min-w-0 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-3 text-sm font-bold text-[var(--text-primary)] transition-colors hover:border-[var(--accent-rest)] sm:px-4"
-            >
-              <Plus size={18} />{t("sign-pdf.add.signature.5f9ca2")}</button>
-            <button
-              onClick={handleSave}
-              disabled={status.isProcessing || signatures.length === 0}
-              className="chef-target chef-pressable flex min-w-0 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent-rest)] px-3 text-sm font-bold text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] disabled:border disabled:border-[var(--border-hairline)] disabled:bg-[var(--surface-sunken)] disabled:text-[var(--text-tertiary)] disabled:opacity-100 sm:px-6"
-            >
-              {status.isProcessing ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}{t("sign-pdf.export.366489")}</button>
-          </div>
-        )}
-      </div>
+  const title = t("sign-pdf.sign.pdf.1bf93e");
 
-      {file && (
-        <div className="mb-2 md:hidden">
-          <SegmentedControl
-            label={t("sign-pdf.sign.pdf.workspace.7eac1d")}
-            value={mobilePanel}
-            options={[
-              { value: 'document', label: t("sign-pdf.document.d6bd8c") },
-              { value: 'stamps', label: t("sign-pdf.stamps.18f974", { v0: signatures.length }) },
-            ]}
-            onChange={setMobilePanel}
-          />
-        </div>
-      )}
-
-      <AnimatePresence mode="wait">
-        {!file ? (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mx-auto w-full max-w-xl">
-            <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("sign-pdf.choose.a.pdf.to.sign.0d93e1")} />
-            {signatures.length > 0 && <div className="mt-3 rounded-xl border border-[var(--border-hairline)] p-3">
-              <p role="status">{t("sign-pdf.message.51b1112d1d", { count: signatures.length })}</p>
-              <div className="mt-2 flex flex-wrap gap-2">{signatures.map((stamp, index) =>
-                <img key={stamp.localId} src={stamp.dataUrl} alt={t("sign-pdf.pending.signature.stamp.275b7b", { v0: index + 1 })} className="h-16 max-w-40 object-contain" />,
-              )}</div>
-            </div>}
-          </motion.div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="grid min-h-0 flex-1 gap-2 md:grid-cols-[minmax(0,1fr)_320px]"
-          >
-            <div className={`relative min-h-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)] ${mobilePanel === 'document' ? 'flex' : 'hidden'} md:flex`}>
-              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-[var(--border-hairline)] bg-[var(--surface-raised)] px-3 py-2 sm:px-4">
-                <div className="chef-filename min-w-[8rem] flex-1 text-sm font-semibold text-[var(--text-body)]">{file.name}</div>
+  const addSignatureButton = (
+      <button
+        ref={addSignatureRef}
+        type="button"
+        onClick={() => setShowModal(true)}
+        className="tk-btn chef-pressable"
+      >
+        <Plus aria-hidden size={18} />{t("sign-pdf.add.signature.5f9ca2")}</button>
+  );
+  const exportButton = (
+      <button
+        type="button"
+        onClick={handleSave}
+        disabled={status.isProcessing || signatures.length === 0}
+        className="tk-primary tk-primary-inline chef-pressable"
+      >
+        {status.isProcessing ? <Loader2 aria-hidden className="animate-spin" size={18} /> : <Save aria-hidden size={18} />}{t("sign-pdf.export.366489")}</button>
+  );
+  const signButtons = <>{addSignatureButton}{exportButton}</>;
+  const pager = (
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => jumpToPage(currentPageIndex - 1)}
                     disabled={currentPageIndex <= 0}
                     aria-label={t("sign-pdf.previous.page.1208ec")}
-                    className="chef-hit-y chef-pressable grid h-11 w-11 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:opacity-55"
+                    className="chef-hit-y chef-pressable grid h-11 w-touch place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:opacity-55"
                   >
                     <ChevronLeft size={16} className="rtl:rotate-180" />
                   </button>
@@ -912,22 +1050,15 @@ export const SignPDF: React.FC = () => {
                     onClick={() => jumpToPage(currentPageIndex + 1)}
                     disabled={!pageCount || currentPageIndex >= pageCount - 1}
                     aria-label={t("sign-pdf.next.page.c08ac7")}
-                    className="chef-hit-y chef-pressable grid h-11 w-11 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:opacity-55"
+                    className="chef-hit-y chef-pressable grid h-11 w-touch place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:opacity-55"
                   >
                     <ChevronRight size={16} className="rtl:rotate-180" />
                   </button>
                 </div>
-                <ZoomControls
-                  className="w-fit max-w-full"
-                  zoom={zoom}
-                  onZoomIn={zoomIn}
-                  onZoomOut={zoomOut}
-                  onReset={resetZoom}
-                />
-              </div>
-
+  );
+  const pageView = (
               <div
-                ref={setPdfZoomViewport}
+                ref={setZoomViewport}
                 data-testid="pdf-zoom-viewport"
                 data-pdf-zoom={zoom.toFixed(3)}
                 className="chef-pdf-zoom-viewport custom-scrollbar flex-1 overflow-auto p-3 sm:p-6"
@@ -952,10 +1083,9 @@ export const SignPDF: React.FC = () => {
                     <Loader2 className="mr-2 animate-spin" />{t("sign-pdf.loading.pages.fdde04")}</div>
                 )}
               </div>
-
-            </div>
-
-            <aside className={`min-h-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] ${mobilePanel === 'stamps' ? 'flex' : 'hidden'} md:flex`}>
+  );
+  const stampsPanel = (
+            <aside className={`min-h-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] ${wide || mobilePanel === 'stamps' ? 'flex' : 'hidden'}`}>
               <div className="border-b border-[var(--border-hairline)] px-3 py-2">
                 <div className="text-sm font-semibold text-[var(--text-primary)]">{t("sign-pdf.signature.stamps.42bab6")}</div>
               </div>
@@ -968,7 +1098,7 @@ export const SignPDF: React.FC = () => {
                     {signatures.map((signature, index) => (
                       <button
                         key={signature.localId}
-                        onClick={() => selectSignature(signature.localId)}
+                        onClick={() => { revealStampRef.current = signature.localId; selectSignature(signature.localId); }}
                         className={`w-full rounded-xl border px-3 py-2 text-start ${
                           selectedSignatureId === signature.localId
                             ? 'border-[var(--accent-rest)] bg-[var(--accent-quiet)] text-[var(--accent-on-quiet)]'
@@ -1022,14 +1152,14 @@ export const SignPDF: React.FC = () => {
                     </div>
 
                     <div>
+                      {/* Whole percents: a dragged corner leaves any width, and "52.59 %"
+                          is precision nobody asked for (r4 mobile-09). */}
                       <ChefSliderField
                         label={t("sign-pdf.stamp.width.b43467")}
                         suffix="%"
-                        decimals={2}
-                        min={Math.min(10, Number((selectedSignature.width * 100).toFixed(2)))}
-                        max={Math.max(80, Number((selectedSignature.width * 100).toFixed(2)))}
-                        step={0.25}
-                        value={Number((selectedSignature.width * 100).toFixed(2))}
+                        min={Math.min(10, Math.round(selectedSignature.width * 100))}
+                        max={Math.max(80, Math.round(selectedSignature.width * 100))}
+                        value={Math.round(selectedSignature.width * 100)}
                         onChange={(next) => updateSignature(selectedSignature.localId, { width: next / 100 })}
                         ariaLabel={t("sign-pdf.signature.width.d53c9c")}
                       />
@@ -1051,11 +1181,95 @@ export const SignPDF: React.FC = () => {
               </div>
 
             </aside>
-          </motion.div>
-        )}
-      </AnimatePresence>
+  );
+  const workspace = !file ? (
+    <div className="tk-empty">
+      <FileUpload onFilesSelected={handleFilesSelected} accept=".pdf" label={t("sign-pdf.choose.a.pdf.to.sign.0d93e1")} />
+      {signatures.length > 0 && <div className="mt-3 rounded-[var(--radius-panel)] border border-[var(--border-hairline)] p-3">
+        <p role="status">{t("sign-pdf.message.51b1112d1d", { count: signatures.length })}</p>
+        <div className="mt-2 flex flex-wrap gap-2">{signatures.map((stamp, index) =>
+          <img key={stamp.localId} src={stamp.dataUrl} alt={t("sign-pdf.pending.signature.stamp.275b7b", { v0: index + 1 })} className="h-16 max-w-40 object-contain" />,
+        )}</div>
+      </div>}
+    </div>
+  ) : wide ? (
+    <div className="tk-editor tk-sign">
+      {/* Desktop: the two actions sit at the page toolbar's end (B-029); the result strip keeps its row. */}
+      <div className="tk-editor-bar">
+        <ResultSlot className="tk-editor-result" />
+      </div>
+          <div className="grid min-h-0 flex-1 gap-2 md:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="relative flex min-h-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-hairline)] bg-[var(--surface-sunken)]">
+              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-[var(--border-hairline)] bg-[var(--surface-raised)] px-3 py-2 sm:px-4">
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => jumpToPage(currentPageIndex - 1)}
+                    disabled={currentPageIndex <= 0}
+                    aria-label={t("sign-pdf.previous.page.1208ec")}
+                    className="chef-hit-y chef-pressable grid h-11 w-touch place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:opacity-55"
+                  >
+                    <ChevronLeft size={16} className="rtl:rotate-180" />
+                  </button>
+                  <div className="tabular rounded-[var(--radius-control)] bg-[var(--surface-sunken)] px-3 py-1 text-xs font-semibold text-[var(--text-body)]">{t("sign-pdf.message.61ebc290b6", { v0: currentPageIndex + 1, v1: Math.max(1, pageCount) })}</div>
+                  <button
+                    onClick={() => jumpToPage(currentPageIndex + 1)}
+                    disabled={!pageCount || currentPageIndex >= pageCount - 1}
+                    aria-label={t("sign-pdf.next.page.c08ac7")}
+                    className="chef-hit-y chef-pressable grid h-11 w-touch place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] disabled:opacity-55"
+                  >
+                    <ChevronRight size={16} className="rtl:rotate-180" />
+                  </button>
+                </div>
+                <ZoomControls
+                  className="w-fit max-w-full"
+                  zoom={view}
+                  onZoomIn={zoomIn}
+                  onZoomOut={zoomOut}
+                  onReset={resetZoom}
+                  max={SIGN_MAX_ZOOM}
+                  resetLabel={t('sign-pdf.fit.page')}
+                />
+                <div className="tk-sign-actions">{signButtons}</div>
+              </div>
+              {pageView}
+            </div>
+            {stampsPanel}
+          </div>
+    </div>
+  ) : (
+    // Phone (T-02): Document / Stamps as one segmented toolbar, the page fitted to the width with
+    // its pager and zoom in one bar on the page, and Add signature and Export at the foot.
+    <div className="tk-editor tk-sign tk-sign-phone">
+      {/* First in the document so the actions come before the page, drawn at the foot (verify V-01). */}
+      <div className="tk-footbar">
+        <ResultSlot />
+        <ActionRow>{addSignatureButton}{exportButton}</ActionRow>
+      </div>
+      <div className="tk-sign-toolbar">
+        <SegmentedControl
+          fit
+          className="w-full"
+          label={t("sign-pdf.sign.pdf.workspace.7eac1d")}
+          value={mobilePanel}
+          options={[
+            { value: 'document', label: t("sign-pdf.document.d6bd8c") },
+            { value: 'stamps', label: t("sign-pdf.stamps.18f974", { v0: signatures.length }) },
+          ]}
+          onChange={setMobilePanel}
+        />
+      </div>
+      {mobilePanel === 'document' ? (
+        <div className="tk-sign-doc">
+          {pageView}
+          {/* The page frame (T-13): zoom at the top end, outside the page at rest; the pager at the bottom centre. */}
+          <ZoomControls className="tk-sign-zoom" zoom={view} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={SIGN_MAX_ZOOM} resetLabel={t('sign-pdf.fit.page')} />
+          <div className="tk-sign-pagebar">{pager}</div>
+        </div>
+      ) : stampsPanel}
+    </div>
+  );
 
-      {showModal && (
+  const modal = showModal && (
         <Portal>
         <div className="chef-safe-x fixed inset-0 z-[100] flex items-end justify-center bg-black/50 sm:items-center sm:p-4">
           <div
@@ -1102,7 +1316,7 @@ export const SignPDF: React.FC = () => {
               </div>
             ) : signatureMode === 'type' ? (
               <div className="mb-3 space-y-2.5">
-                <label className="block text-sm font-semibold text-[var(--text-secondary)]">{t("sign-pdf.signature.text.9e82cf")}<input value={typedSignature} onChange={(event) => setTypedSignature(event.target.value)} placeholder={t("sign-pdf.your.name.2c6b2e")} className="chef-field mt-2 text-2xl italic" /></label>
+                <label className="block text-sm font-semibold text-[var(--text-secondary)]">{t("sign-pdf.signature.text.9e82cf")}<input value={typedSignature} onChange={(event) => setTypedSignature(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing && typedSignature.trim()) { event.preventDefault(); void applySignatureFromModal(); } } /* Enter adds the stamp, as Add stamp does (round 6, desktop-11) */} placeholder={t("sign-pdf.your.name.2c6b2e")} className="chef-field mt-2 text-2xl italic" /></label>
                 <label className="inline-flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)]">{t("sign-pdf.ink.color.6ca8e0")}<input type="color" value={inkColor} onChange={(event) => setInkColor(event.target.value)} className="h-8 w-10 rounded border-0 bg-transparent" /></label>
                 {typedSignature.trim() && <div className="rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-white p-3"><img src={typedSignatureImage(typedSignature, inkColor)} alt={t("sign-pdf.typed.signature.preview.450d64")} className="max-h-28" /></div>}
               </div>
@@ -1154,10 +1368,23 @@ export const SignPDF: React.FC = () => {
           </div>
         </div>
         </Portal>
-      )}
+  );
 
-      <StatusToast status={status} />
-      {discardSheet}
-    </div>
+  return (
+    <ToolScreen
+      title={title}
+      kind={file ? 'editor' : 'file'}
+      file={file ? { name: file.name } : undefined}
+      change={file ? <ChangeFile label={t('tool.chooseAnotherFile')} onClick={chooseAnother} disabled={status.isProcessing} /> : undefined}
+      body={workspace}
+      extra={(
+        <>
+          {modal}
+          {discardSheet}
+          {announcer}
+        </>
+      )}
+      toast={<StatusToast status={status} />}
+    />
   );
 };

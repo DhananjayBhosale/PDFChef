@@ -17,6 +17,14 @@ interface ZoomControlsProps {
   /** Leave focus where it is, so zooming while typing keeps the caret and the keyboard. */
   keepFocus?: boolean;
   className?: string;
+  /** No cluster border, for a bar or pill that is already one surface (the reader). */
+  bare?: boolean;
+  /** 40 px-wide controls for a crowded phone bar. */
+  dense?: boolean;
+  /** The zoom Reset returns to, when the view starts at another zoom than 100% (Sign on a phone). */
+  resetTo?: number;
+  /** The reset button's name when it returns to a fitted view rather than 100% (Sign: "Fit page"). */
+  resetLabel?: string;
 }
 
 /**
@@ -34,21 +42,23 @@ const controlClass =
   + 'text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-sunken)] disabled:opacity-55';
 
 export const ZoomControls: React.FC<ZoomControlsProps> = ({
-  zoom, onZoomIn, onZoomOut, onReset, min = 0.5, max = 2.0, compact = false, keepFocus = false, className = ''
+  zoom, onZoomIn, onZoomOut, onReset, min = 0.5, max = 2.0, compact = false, keepFocus = false, className = '',
+  bare = false, dense = false, resetTo = 1, resetLabel,
 }) => {
+  const buttonClass = dense ? controlClass.replace('w-touch', 'w-10') : controlClass;
   useI18n();
   const holdFocus = keepFocus ? (event: React.PointerEvent) => event.preventDefault() : undefined;
   const percent = formatPercent(Math.round(zoom * 100));
   return (
     <div
-      className={`inline-flex w-fit max-w-full items-center rounded-[var(--radius-field)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-0.5 ${className}`}
+      className={`inline-flex w-fit max-w-full items-center rounded-[var(--radius-field)] ${bare ? '' : 'border border-[var(--border-hairline)] bg-[var(--surface-raised)] p-0.5'} ${className}`}
     >
       <button
         type="button"
         onClick={onZoomOut}
         onPointerDown={holdFocus}
         disabled={zoom <= min}
-        className={controlClass}
+        className={buttonClass}
         aria-label={t("zoom-controls.zoom.out.bc7b63")}
       >
         <Minus aria-hidden size={18} />
@@ -60,12 +70,12 @@ export const ZoomControls: React.FC<ZoomControlsProps> = ({
           type="button"
           onClick={onReset}
           onPointerDown={holdFocus}
-          className="chef-pressable chef-hit-y tabular h-9 min-w-11 shrink-0 rounded-[var(--radius-control)] px-1 text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-sunken)]"
+          className="chef-pressable chef-hit-y tabular h-9 min-w-touch shrink-0 rounded-[var(--radius-control)] px-1 text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-sunken)]"
         >
-          {percent}<span className="sr-only">{`, ${t("zoom-controls.reset.zoom.to.100.39cdc8")}`}</span>
+          {percent}<span className="sr-only">{`, ${resetLabel ?? t("zoom-controls.reset.zoom.to.100.39cdc8")}`}</span>
         </button>
       ) : (
-        <span className="tabular w-11 text-center text-xs font-semibold text-[var(--text-primary)] select-none">
+        <span className={`tabular ${dense ? 'w-10' : 'w-11'} text-center text-xs font-semibold text-[var(--text-primary)] select-none`}>
           {percent}
         </span>
       )}
@@ -75,7 +85,7 @@ export const ZoomControls: React.FC<ZoomControlsProps> = ({
         onClick={onZoomIn}
         onPointerDown={holdFocus}
         disabled={zoom >= max}
-        className={controlClass}
+        className={buttonClass}
         aria-label={t("zoom-controls.zoom.in.0e47f0")}
       >
         <Plus aria-hidden size={18} />
@@ -88,9 +98,9 @@ export const ZoomControls: React.FC<ZoomControlsProps> = ({
           <button
             type="button"
             onClick={onReset}
-            disabled={zoom === 1}
-            className={controlClass}
-            aria-label={t("zoom-controls.reset.zoom.to.100.39cdc8")}
+            disabled={Math.abs(zoom - resetTo) < 0.001}
+            className={buttonClass}
+            aria-label={resetLabel ?? t("zoom-controls.reset.zoom.to.100.39cdc8")}
           >
             <RotateCcw aria-hidden size={16} />
           </button>
