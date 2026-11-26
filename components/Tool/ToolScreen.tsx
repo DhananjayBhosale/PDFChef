@@ -20,15 +20,19 @@ import { t } from '../../services/i18n/core.ts';
 /**
  * The one layout every tool route uses (plan 2.2).
  *
+ * The settings and the main action are at the foot of every tool (owner, 26 Nov 2026): the body
+ * scrolls above them and is never under them. In the document they come before the body, so Tab
+ * and a screen reader reach them first; CSS `order` draws them at the foot.
+ *
  * Phone (below 768 px):
  *  - grid / list / file / form bodies: header, file line, the body, and a foot sheet
  *    with the result slot, the sentence, chips, one notice line and the main action.
- *  - preview bodies: header, the sentence as a band on top, the preview, and a foot
+ *  - preview bodies: header, the preview, the sentence as a band under it, and a foot
  *    bar with the result slot and the actions.
  *  - editor bodies: header, then the editor's own layout.
- * Wide (768 px and up, tablets included): header with the file and the change control, then one band: the sentence,
- * chips and notice, with the main action at its end and the result under the action;
- * then the canvas, which fills the rest of the viewport.
+ * Wide (768 px and up, tablets included): header with the file and the change control, the canvas,
+ * which fills the viewport down to the band, then one band at the foot: the result, and under it
+ * the sentence, chips and notice with the main action at their end.
  */
 
 export type ToolScreenKind = 'grid' | 'list' | 'file' | 'preview' | 'form' | 'editor';
@@ -56,7 +60,18 @@ export interface ToolScreenProps {
   sentence?: React.ReactNode;
   chips?: React.ReactNode;
   notice?: React.ReactNode;
+  /** The main action as the tool's own button. A tool whose main action is one plain button gives
+      `onRun` instead, and the screen draws it. */
   action?: React.ReactNode;
+  /**
+   * The main action, drawn by the screen (simplification item 4): what a press runs, the button's
+   * icon and words, whether it is off, and the id of the line that says why. The screen asks the
+   * heavy-job question before it calls `onRun`.
+   */
+  onRun?: () => void;
+  runLabel?: React.ReactNode;
+  runDisabled?: boolean;
+  runDescribedBy?: string;
   secondary?: React.ReactNode;
   /** Desktop only: a choice about the main action, drawn under it in the band's end column
       (Split's "Separate PDFs / One ZIP"), so it does not add a row to the band. */
@@ -90,6 +105,8 @@ const shown = (node: HTMLElement) => node.isConnected && node.getClientRects().l
 /** A control that starts the tool's job besides its main action (Split's "Extract N pages"):
  *  the heavy-job warning asks before it too. */
 const HEAVY_ACTION = '[data-heavy-action]';
+/** The main action a ToolScreen draws from `onRun`: it asks the heavy-job question itself. */
+const RUN_BUTTON = '[data-run]';
 const mainActionIn = (root: ParentNode | null) => (root
   ? Array.from(root.querySelectorAll<HTMLElement>(MAIN_ACTION)).find((node) => shown(node)) ?? null
   : null);
@@ -259,7 +276,7 @@ export const ToolLeaveGuard: React.FC<{ holdsWork?: boolean; children: React.Rea
 
 export const ToolScreen: React.FC<ToolScreenProps> = ({
   title, beta, file, change, leading, homeLabel, kind, body, bodyLabelledBy, bodyLabel, side, lead, sentence, chips, notice,
-  action, secondary, endControl, progress, toast, extra, className, holdsWork, heavyJob,
+  action: ownAction, onRun, runLabel, runDisabled, runDescribedBy, secondary, endControl, progress, toast, extra, className, holdsWork, heavyJob,
 }) => {
   useI18n();
   useShellOwnChrome(true);
@@ -273,7 +290,7 @@ export const ToolScreen: React.FC<ToolScreenProps> = ({
   const editor = kind === 'editor';
   // Desktop with a settings column (research r2, desktop-04): the column comes before the main
   // action in the document, so Tab goes sentence, settings, action, as it did in today's panel.
-  // The action and the result strip are drawn in the band's row all the same (`data-tail`).
+  // The action is drawn in the band's row at the foot all the same (`data-tail`).
   const tail = wide && !editor && Boolean(side);
 
   const leaveGuard = useScreenLeaveGuard(holdsWork, Boolean(progress));
@@ -289,32 +306,52 @@ export const ToolScreen: React.FC<ToolScreenProps> = ({
   const heavyRef = useRef({ job: heavyJob, confirm: heavy.confirm, confirmed: '' });
   heavyRef.current.job = heavyJob;
   heavyRef.current.confirm = heavy.confirm;
+  // The question this work still has to be asked, or null: `ask` resolves true on "Continue".
+  const heavyQuestion = useCallback(() => {
+    const { job, confirm, confirmed } = heavyRef.current;
+    if (!job || job.bytes <= 0 || !shouldWarnForBytes(job.bytes)) return null;
+    const key = `${job.bytes}:${job.files ?? 1}`;
+    if (confirmed === key) return null;
+    const title = job.title ?? ((job.files ?? 1) > 1
+      ? t('heavy-job.files')
+      : t('pdfto-word.this.is.a.large.pdf.and.may.848eab'));
+    return () => confirm(job.bytes, title).then((go) => {
+      if (go) heavyRef.current.confirmed = key;
+      return go;
+    });
+  }, []);
+  // The main action the screen draws: a press, Ctrl+Enter and `pressMainAction` all come through here.
+  const runRef = useRef(onRun);
+  runRef.current = onRun;
+  const runMain = useCallback(() => {
+    const ask = heavyQuestion();
+    if (!ask) { runRef.current?.(); return; }
+    void ask().then((go) => { if (go) runRef.current?.(); });
+  }, [heavyQuestion]);
+  // A tool's own main button (an editor's Save) and a second control that starts the job
+  // (`HEAVY_ACTION`) are caught as they are pressed, and pressed again after "Continue".
   useEffect(() => {
     const root = screenRef.current;
     if (!root) return undefined;
     const onClick = (event: MouseEvent) => {
-      const { job, confirm, confirmed } = heavyRef.current;
-      if (!job || job.bytes <= 0 || !shouldWarnForBytes(job.bytes)) return;
       const from = event.target as Element | null;
       const target = from?.closest<HTMLElement>(HEAVY_ACTION) ?? from?.closest<HTMLElement>(MAIN_ACTION) ?? null;
-      if (!target || isOff(target)) return;
+      if (!target || isOff(target) || target.matches(RUN_BUTTON)) return;
       if (!target.matches(HEAVY_ACTION) && target !== mainActionIn(root)) return;
-      const key = `${job.bytes}:${job.files ?? 1}`;
-      if (confirmed === key) return;
-      const title = job.title ?? ((job.files ?? 1) > 1
-        ? t('heavy-job.files')
-        : t('pdfto-word.this.is.a.large.pdf.and.may.848eab'));
+      const ask = heavyQuestion();
+      if (!ask) return;
       event.preventDefault();
       event.stopPropagation();
-      void confirm(job.bytes, title).then((go) => {
-        if (!go || !target.isConnected) return;
-        heavyRef.current.confirmed = key;
-        target.click();
-      });
+      void ask().then((go) => { if (go && target.isConnected) target.click(); });
     };
     root.addEventListener('click', onClick, true);
     return () => root.removeEventListener('click', onClick, true);
-  }, []);
+  }, [heavyQuestion]);
+  const action = ownAction ?? (onRun ? (
+    <button type="button" data-run="" onClick={runMain} disabled={runDisabled} aria-describedby={runDescribedBy} className="tk-primary chef-pressable">
+      {runLabel}
+    </button>
+  ) : undefined);
 
   const fileBits = file && (
     <>
@@ -467,14 +504,14 @@ export const ToolScreen: React.FC<ToolScreenProps> = ({
                 {actionRow}
                 {endControl}
               </div>
-              {/* The result strip takes the band's width under both (T-07). */}
+              {/* The result strip takes the band's width, drawn above both (T-07). */}
               <div ref={resultRef} className="tk-result tk-band-result" />
             </>
           )}
         </div>
       )}
       {!wide && preview && (sentence || noticeLine) && (
-        <div className="tk-band tk-band-top" {...startProps(startOnControls)}>
+        <div className="tk-band tk-band-foot" {...startProps(startOnControls)}>
           {sentence}
           {chipRow}
           {noticeLine}
@@ -483,7 +520,7 @@ export const ToolScreen: React.FC<ToolScreenProps> = ({
       {sheetFirst && sheet}
       {canvas}
       {/* The band's action and result strip, after the settings column in the document and drawn
-          in the band's row (research r2, desktop-04). */}
+          in the band's rows at the foot (research r2, desktop-04). */}
       {tail && hasControls && (
         // Also a `.tk-band`, so the band's action rules apply; it draws no box of its own.
         <div className="tk-band tk-band-tail">

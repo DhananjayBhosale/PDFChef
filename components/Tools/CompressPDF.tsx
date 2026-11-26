@@ -623,20 +623,15 @@ export const CompressPDF: React.FC = () => {
     // The estimate is shown once, in the quality section beside its slider (A-019).
     : null;
 
-  const action = (
-    <button
-      type="button"
-      onClick={() => void executeCompression(false)}
-      disabled={status.isProcessing || !analysis.done}
-      className="tk-primary chef-pressable"
-    >
+  const runLabel = (
+    <>
       {status.isProcessing || !analysis.done ? (
         <Loader2 aria-hidden className="animate-spin" size={18} />
       ) : (
         <Layers aria-hidden size={18} />
       )}
       <span>{t("compress-pdf.compress.033fc0")}</span>
-    </button>
+    </>
   );
 
   const progress = status.isProcessing ? (
@@ -666,7 +661,9 @@ export const CompressPDF: React.FC = () => {
       side={wide ? qualityBlock : undefined}
       sentence={sentence}
       notice={notice}
-      action={action}
+      onRun={() => void executeCompression(false)}
+      runDisabled={status.isProcessing || !analysis.done}
+      runLabel={runLabel}
       progress={progress}
       toast={toast}
       extra={<>{announcer}{showPreview && files[0] && previewConfig ? (

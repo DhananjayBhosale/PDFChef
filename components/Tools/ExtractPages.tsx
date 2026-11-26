@@ -298,18 +298,12 @@ export const ExtractPages: React.FC = () => {
   // A rejected range: the field's own error line says what is wrong, so no "Press Select" here.
   const notice = rangePending && !rangeRejected ? <Notice tone="pending" id={noticeId}>{t('page-range-selector.pending.select')}</Notice> : null;
 
-  const action = (
-    <button
-      type="button"
-      onClick={() => void handleExtract()}
-      disabled={!canExtract}
-      aria-describedby={notice ? noticeId : undefined}
-      className="tk-primary chef-pressable"
-    >
+  const runLabel = (
+    <>
       <Download aria-hidden size={18} />
       {/* Nothing chosen: what to do, not "Export 0 selected pages" (review 2, item 17). */}
       <span>{selectedPages.length ? t("extract-pages.message.2f2b9d8bc2", { count: selectedPages.length }) : t('extract-pages.chooseToExport')}</span>
-    </button>
+    </>
   );
 
   const progress = status.isProcessing ? (
@@ -360,7 +354,10 @@ export const ExtractPages: React.FC = () => {
       sentence={sentence}
       chips={chips}
       notice={notice}
-      action={action}
+      onRun={() => void handleExtract()}
+      runDisabled={!canExtract}
+      runDescribedBy={notice ? noticeId : undefined}
+      runLabel={runLabel}
       progress={progress}
       toast={toast}
     />

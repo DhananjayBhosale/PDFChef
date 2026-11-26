@@ -9,6 +9,13 @@ import { loadDisposablePDFDocument, renderPageAsImage } from '../../services/pdf
 import { motion, useReducedMotion } from 'framer-motion';
 import { ZoomControls } from './ZoomControls';
 import { usePanZoom } from '../../hooks/usePanZoom';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
+import type { PDFDocumentProxy } from 'pdfjs-dist';
+import { LARGE_PREVIEW_MAX_ZOOM } from '../../hooks/useZoom';
+import { SharpPageLayer, type SharpPdfDocument } from '../Tool/SharpPageLayer';
+
+/** A PDF.js document as `loadDisposablePDFDocument` hands it over: with the `destroy` the app adds. */
+type OpenedPdf = PDFDocumentProxy & { destroy?: () => Promise<void> };
 
 interface PDFPreviewModalProps {
   file: File;
@@ -22,83 +29,35 @@ interface PDFPreviewModalProps {
 export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageIndex, pageLabel, onClose, image }) => {
   useI18n();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [pdfDoc, setPdfDoc] = useState<any | null>(null);
+  const [pdfDoc, setPdfDoc] = useState<OpenedPdf | null>(null);
   const [currentPageIndex, setCurrentPageIndex] = useState(pageIndex);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   // Pinch, Ctrl+wheel, − and + about the top of the page, and a drag or the wheel that moves a page
   // larger than the frame, never past its edges (pass 5; fable-2 item 1: 100% is the whole page).
-  const { zoom, zoomIn, zoomOut, reset: resetZoom, panning: isPanning, movable, moving, gestureRef, onPointerDown, transform, touchAction } = usePanZoom({ min: 0.5, max: 5 });
+  const { zoom, zoomIn, zoomOut, reset: resetZoom, panning: isPanning, movable, moving, gestureRef, onPointerDown, transform, touchAction } = usePanZoom({ min: 0.5, max: LARGE_PREVIEW_MAX_ZOOM });
   const [error, setError] = useState<string | null>(null);
   const imageUrlRef = useRef<string | null>(null);
   /** The document and page the picture on screen shows. */
-  const shownPageRef = useRef<{ doc: any; page: number } | null>(null);
-  const pdfDocRef = useRef<any | null>(null);
+  const shownPageRef = useRef<{ doc: OpenedPdf; page: number } | null>(null);
+  const pdfDocRef = useRef<OpenedPdf | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const reduceMotion = useReducedMotion();
   const renderScale = zoom >= 2 ? 2.6 : 2.0;
 
+  // Focus comes in, Tab stays inside, Escape (and Android Back, which arrives as Escape) closes,
+  // and focus goes back to the thumbnail: the same as every full-screen dialog.
+  useDialogFocus(panelRef, onClose);
+
   useEffect(() => {
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const selector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-    const focusables = (): HTMLElement[] => {
-      const panel = panelRef.current;
-      if (!panel) return [];
-      const items: HTMLElement[] = [];
-      panel.querySelectorAll(selector).forEach((item) => {
-        if (item instanceof HTMLElement && item.getClientRects().length > 0) items.push(item);
-      });
-      return items;
+    const turnPage = (event: KeyboardEvent) => {
+      if (event.key === 'ArrowLeft') setCurrentPageIndex((value) => Math.max(0, value - 1));
+      if (event.key === 'ArrowRight') setCurrentPageIndex((value) => Math.min(Math.max(0, totalPages - 1), value + 1));
     };
-    (focusables()[0] || panelRef.current)?.focus();
-
-    const handleTab = (event: KeyboardEvent) => {
-      if (event.key !== 'Tab') return;
-      const items = focusables();
-      if (items.length === 0) {
-        event.preventDefault();
-        panelRef.current?.focus();
-        return;
-      }
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (!panelRef.current?.contains(document.activeElement)) {
-        event.preventDefault();
-        first.focus();
-      } else if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    const { overflow } = document.body.style;
-    document.body.style.overflow = 'hidden';
-    document.addEventListener('keydown', handleTab);
-    return () => {
-      document.removeEventListener('keydown', handleTab);
-      document.body.style.overflow = overflow;
-      if (previous?.isConnected) previous.focus();
-    };
-  }, []);
-
-  // Escape closes the preview. Android Back arrives as an Escape sent to the
-  // document, and only a handled one stops it from leaving the tool underneath.
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-      if (e.key === 'ArrowLeft') setCurrentPageIndex((value) => Math.max(0, value - 1));
-      if (e.key === 'ArrowRight') setCurrentPageIndex((value) => Math.min(Math.max(0, totalPages - 1), value + 1));
-    };
-    document.addEventListener('keydown', handleEsc);
-    return () => document.removeEventListener('keydown', handleEsc);
-  }, [onClose, totalPages]);
+    document.addEventListener('keydown', turnPage);
+    return () => document.removeEventListener('keydown', turnPage);
+  }, [totalPages]);
 
   useEffect(() => {
     setCurrentPageIndex(pageIndex);
@@ -119,7 +78,7 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
     (async () => {
       try {
         setError(null);
-        const doc = await loadDisposablePDFDocument(file);
+        const doc: OpenedPdf = await loadDisposablePDFDocument(file);
         if (!active) {
           if (doc?.destroy) void doc.destroy();
           return;
@@ -243,7 +202,7 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
             >
               <ArrowRight aria-hidden size={18} className="rtl:rotate-180" />
             </button>
-            <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={5} />
+            <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={LARGE_PREVIEW_MAX_ZOOM} />
             <div className="mx-2 hidden h-6 w-px bg-paper-600 sm:block" />
             <button
               onClick={onClose}
@@ -274,18 +233,22 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ file, pageInde
               style={{ 
                 transform,
                 transformOrigin: 'center',
+                // The box the sharp layer is placed in.
+                position: 'relative',
                 // No easing while fingers or the mouse move the page: it must stay under them.
                 transition: reduceMotion || moving ? 'none' : 'transform 0.2s ease-out'
               }}
               // The frame's own size, so the page inside fits it whole at 100% (fable-2 item 1).
               className="flex h-full w-full items-center justify-center"
             >
-              <img 
-                src={imageUrl} 
-                alt={pageLabel} 
+              <img
+                src={imageUrl}
+                alt={pageLabel}
                 className="block max-h-full max-w-full object-contain bg-white rounded-sm shadow-2xl"
                 draggable={false}
               />
+              {/* The part in sight, drawn again at the screen's resolution once the zoom rests. */}
+              <SharpPageLayer source={{ pdfDoc: image ? null : (pdfDoc as unknown as SharpPdfDocument | null) }} pageIndex={currentPageIndex} zoom={zoom > 1 ? zoom : undefined} transform={transform} fitted />
             </div>
           ) : null}
           {isPanning && (

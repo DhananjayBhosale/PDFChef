@@ -25,6 +25,7 @@ import { Notice, ProgressLine, TapChoices } from '../Tool/parts';
 import { FitStage } from '../Tool/FitStage';
 import { PagePager, PreviewFrame } from '../Tool/PreviewFrame';
 import { LargePagePreview } from '../Tool/LargePagePreview';
+import { SharpPageLayer } from '../Tool/SharpPageLayer';
 import { usePinchToOpen } from '../Tool/PagePeek';
 import { clip, clipLength, pair, points, quoted, spanPhrase, type PageKeys } from '../Tool/values';
 import { useWide } from '../../hooks/useMediaQuery';
@@ -516,17 +517,11 @@ export const PageNumbersPDF: React.FC = () => {
         ? <Notice tone="caution">{t("page-numbers-pdf.this.preview.page.is.outside.the.selected.d7d778")}</Notice>
         : null;
 
-  const action = (
-    <button
-      type="button"
-      onClick={() => void handleApply()}
-      disabled={blocked || status.isProcessing}
-      aria-describedby={errorNoticeId}
-      className="tk-primary chef-pressable"
-    >
+  const runLabel = (
+    <>
       <Hash aria-hidden size={18} />
       <span>{t("page-numbers-pdf.save.numbered.pdf.5815aa")}</span>
-    </button>
+    </>
   );
 
   const progress = status.isProcessing ? (
@@ -573,6 +568,8 @@ export const PageNumbersPDF: React.FC = () => {
   const pageDrawing = previewUrl ? (
     <>
       <img src={previewUrl} alt={t("page-numbers-pdf.page.preview.39a278")} className="absolute inset-0 h-full w-full object-contain" draggable={false} />
+      {/* In the large preview only: the part in sight at full detail, under the number. */}
+      <SharpPageLayer source={{ file: file?.file ?? null }} pageIndex={previewPageIndex} />
       {previewIsNumbered && layout && (
         <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${previewDimensions.width} ${previewDimensions.height}`} aria-hidden>
           <text
@@ -689,7 +686,10 @@ export const PageNumbersPDF: React.FC = () => {
       side={settings}
       sentence={sentence}
       notice={notice}
-      action={action}
+      onRun={() => void handleApply()}
+      runDisabled={blocked || status.isProcessing}
+      runDescribedBy={errorNoticeId}
+      runLabel={runLabel}
       progress={progress}
       toast={toast}
     />

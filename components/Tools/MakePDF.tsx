@@ -760,16 +760,11 @@ export const MakePDF: React.FC = () => {
     ? <Notice tone="caution" role="status">{selectionNotice}</Notice>
     : <Notice>{t("make-pdf.message.dc7f250a5f", { v2: formatBytes(totalSize), count: images.length })}</Notice>;
 
-  const action = (
-    <button
-      type="button"
-      onClick={() => void handleBuildPdf()}
-      disabled={busy || addingPhotos}
-      className="tk-primary chef-pressable"
-    >
+  const runLabel = (
+    <>
       <ScanLine aria-hidden size={18} />
       <span>{t("make-pdf.export.page.pdf.2e36cb", { count: images.length })}</span>
-    </button>
+    </>
   );
 
   const progress = busy ? <ProgressLine label={status.message} /> : undefined;
@@ -838,7 +833,9 @@ export const MakePDF: React.FC = () => {
       sentence={sentence}
       chips={chips}
       notice={notice}
-      action={action}
+      onRun={() => void handleBuildPdf()}
+      runDisabled={busy || addingPhotos}
+      runLabel={runLabel}
       progress={progress}
       extra={sheets}
       toast={toast}

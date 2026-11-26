@@ -237,13 +237,14 @@ test('the editing overlay leaves scrolling, pinch zoom and native selection to t
   assert.match(blockLayer, /const iosZoomGuard = fontSizePx > 0[\s\S]*?MINIMUM_COMPUTED_FONT_PX \/ fontSizePx\)/);
   assert.match(blockLayer, /transform: iosZoomGuard > 1 \? `scale\(\$\{1 \/ iosZoomGuard\}\)` : undefined/);
   assert.match(editor, /const MINIMUM_EDITING_FONT_PX = 16/);
-  assert.match(editor, /const EDITOR_MAX_ZOOM = 4/);
+  assert.match(editor, /import \{ MAX_ZOOM, useZoom \} from '\.\.\/\.\.\/hooks\/useZoom';/);
+  assert.match(read('hooks/useZoom.ts'), /export const MAX_ZOOM = 4;/);
   // Found on a phone: zooming 12 pt text to 16 px (250%) cut every line in half. The tap fits the
   // paragraph's width, keeps text at least 10 px, stays under the 16 px zoom, and is undone on Done.
   // On a phone the paragraph is typed into the dock field, so the page only fits its width: the
   // 10 px floor cut a fifth off every line of A4 body text (OnePlus 15).
   assert.match(editor, /const autoZoomTo = useCallback\(\(element: HTMLElement, fitOnly = dockEditing\) =>/);
-  assert.match(editor, /const target = Math\.min\(EDITOR_MAX_ZOOM, ceiling, fitOnly \? fitsWidth : Math\.max\(fitsWidth, legible\)\)/);
+  assert.match(editor, /const target = Math\.min\(MAX_ZOOM, ceiling, fitOnly \? fitsWidth : Math\.max\(fitsWidth, legible\)\)/);
   assert.match(editor, /const dockEditing = isImmersiveEditor && coarsePointer && !APPLE_TOUCH;/);
   assert.match(editor, /const LEGIBLE_EDITING_FONT_PX = 10;/);
   assert.match(editor, /autoZoomRef\.current = null;\n    setExactZoom\(from\);/);
@@ -546,8 +547,8 @@ test('typing on a phone leaves the screen to the page', () => {
   // Page and zoom share one row, the percentage doubles as reset, and + reaches the editor's maximum.
   // While the keyboard is up the row goes, so the page keeps the height; pinching still zooms.
   assert.match(editor, /<div className="chef-hide-while-typing mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-3">\s*\{pageCount > 1 && \(/);
-  assert.match(editor, /<ZoomControls zoom=\{zoom\} onZoomIn=\{zoomIn\} onZoomOut=\{zoomOut\} onReset=\{resetZoom\} max=\{EDITOR_MAX_ZOOM\} compact /);
-  assert.equal((editor.match(/max=\{EDITOR_MAX_ZOOM\}/g) ?? []).length, 2);
+  assert.match(editor, /<ZoomControls zoom=\{zoom\} onZoomIn=\{zoomIn\} onZoomOut=\{zoomOut\} onReset=\{resetZoom\} max=\{MAX_ZOOM\} compact /);
+  assert.equal((editor.match(/max=\{MAX_ZOOM\}/g) ?? []).length, 2);
   assert.match(zoomControls, /\{percent\}<span className="sr-only">/);
   // The add row and the home-indicator inset give way to the keyboard.
   assert.match(css, /:root\[data-chef-keyboard\] \.chef-hide-while-typing \{\s*display: none;/);

@@ -63,7 +63,9 @@
     "test:browser:ui-controls": "node scripts/verify-ui-controls.mjs",
     "test:browser:rotate-sentence": "node scripts/verify-rotate-sentence.mjs",
     "test:browser:crop-frame": "node scripts/verify-crop-frame.mjs",
-    "test:browser:reader-zoom": "node scripts/verify-reader-zoom-scroll.mjs"
+    "test:browser:sharp-zoom": "node scripts/verify-sharp-zoom.mjs",
+    "test:browser:reader-zoom": "node scripts/verify-reader-zoom-scroll.mjs",
+    "test:browser:all": "node scripts/run-browser-checks.mjs"
   },
   "dependencies": {
     "@aiden0z/pptx-renderer": "^1.2.4",

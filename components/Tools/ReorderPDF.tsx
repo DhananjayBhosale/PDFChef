@@ -295,16 +295,11 @@ export const ReorderPDF: React.FC = () => {
     </div>
   ) : undefined;
 
-  const action = (
-    <button
-      type="button"
-      onClick={() => void handleSave()}
-      disabled={loadingPreviews || items.length === 0 || !hasOrderChanges || status.isProcessing}
-      className="tk-primary chef-pressable"
-    >
+  const runLabel = (
+    <>
       <Save aria-hidden size={18} />
       <span>{t("reorder-pdf.save.reordered.pdf.b8306f")}</span>
-    </button>
+    </>
   );
 
   const progress = status.isProcessing ? (
@@ -489,7 +484,9 @@ export const ReorderPDF: React.FC = () => {
         body={body}
         sentence={sentence}
         chips={chips}
-        action={action}
+        onRun={() => void handleSave()}
+        runDisabled={loadingPreviews || items.length === 0 || !hasOrderChanges || status.isProcessing}
+        runLabel={runLabel}
         progress={progress}
         toast={toast}
       />

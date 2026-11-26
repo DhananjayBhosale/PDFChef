@@ -23,13 +23,14 @@ import { loadDisposablePDFDocument, loadProtectedPDFDocument, pdfFileProblem } f
 import { getPdfRenderScale } from '../../services/pdfPageGeometry';
 import { downloadBlob } from '../../services/pdfShared';
 import { useOpenedPdf } from '../../hooks/useOpenedPdf';
-import { useZoom } from '../../hooks/useZoom';
+import { MAX_ZOOM, useZoom } from '../../hooks/useZoom';
 import { usePdfPinchZoom } from '../../hooks/usePdfPinchZoom';
 import type { ProcessingStatus } from '../../types';
 import { tools } from './toolCatalog';
 import type { ToolCardData } from './toolCatalog';
 import { ToolIdentity } from './ToolIdentity';
 import { ToolScreen } from '../Tool/ToolScreen';
+import { SharpPageLayer } from '../Tool/SharpPageLayer';
 import { DesktopNavLinks, useNavFit } from '../Tool/ToolTop';
 import { useHeaderLinks, useWide } from '../../hooks/useMediaQuery';
 import { useLongName } from '../../hooks/useLongName';
@@ -67,9 +68,6 @@ const VIEWER_TOOL_PATHS = [
 const viewerTools = VIEWER_TOOL_PATHS
   .map((path) => tools.find((tool) => tool.path === path))
   .filter((tool): tool is ToolCardData => Boolean(tool));
-
-/** The reader zooms to 400%, as Edit PDF does (fable-2 item 20). */
-const READER_MAX_ZOOM = 4;
 
 const ViewerPage: React.FC<{
   pdfDoc: any;
@@ -180,7 +178,7 @@ const ViewerPage: React.FC<{
       </div>
       <div
         dir="ltr"
-        className="origin-top-left"
+        className="relative origin-top-left"
         style={{
           width: dimensions.width * fittedZoom,
           height: dimensions.height * fittedZoom,
@@ -198,6 +196,7 @@ const ViewerPage: React.FC<{
             transformOrigin: 'top left',
           }}
         />
+        <SharpPageLayer source={{ pdfDoc }} pageIndex={pageIndex} zoom={fittedZoom} />
       </div>
     </section>
   );
@@ -235,8 +234,8 @@ export const ViewPDF: React.FC = () => {
   const passwordAttemptRef = useRef(0);
   const activeOpenedPdfIdRef = useRef(openedPdf?.id);
   activeOpenedPdfIdRef.current = openedPdf?.id;
-  const { zoom, zoomIn, zoomOut, resetZoom, setExactZoom } = useZoom(1, 0.5, READER_MAX_ZOOM, 0.25);
-  const setPdfZoomViewport = usePdfPinchZoom({ zoom, setZoom: setExactZoom, max: READER_MAX_ZOOM });
+  const { zoom, zoomIn, zoomOut, resetZoom, setExactZoom } = useZoom(1, 0.5, MAX_ZOOM, 0.25);
+  const setPdfZoomViewport = usePdfPinchZoom({ zoom, setZoom: setExactZoom, max: MAX_ZOOM });
   const navigate = useNavigate();
   const location = useLocation();
   const wide = useWide();
@@ -516,7 +515,7 @@ export const ViewPDF: React.FC = () => {
   const key = 'tk-rkey chef-pressable chef-hit';
   // A file that could not be opened has nothing to download or zoom (T-09).
   const unreadable = Boolean(status.error && !pdfDoc && !needsPassword);
-  const zoomCluster = <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={READER_MAX_ZOOM} bare dense className="tk-rzoom" />;
+  const zoomCluster = <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={MAX_ZOOM} bare dense className="tk-rzoom" />;
   const gutter = wide ? 64 : 24;
 
   return (

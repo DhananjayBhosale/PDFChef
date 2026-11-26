@@ -68,6 +68,8 @@ The new tool kit's scripts, besides the older `test:browser:*` ones:
 | `test:browser:crop-frame` | Crop frame drag, keyboard and field sync |
 | `test:browser:reader-zoom` | Read PDF zoom pill hides on scroll (phone) and never hides (desktop) |
 
+**All at once.** `npm run test:browser:all` (`scripts/run-browser-checks.mjs`) builds into its own folder (never `dist/`), starts the dev and preview servers, runs every browser check on the right one, one at a time with one log each, prints a table and stops both servers.
+
 **Which server.** Scripts that load TypeScript source (`/App.tsx`, `/services/*.ts`) need `npm run dev -- --port 4195 --strictPort` instead of preview. Checked 2026-11-12: `test:browser:preview-progress`, `test:browser:geometry`, `test:browser:tools`, `test:browser:edit-pdf:shared-forms`, `test:browser:edit-pdf:trailing-blank` and `tests/browser/workspaceResultLifecycle.mjs` fail on preview and pass on dev; every other `test:browser:*` script passes on preview (built `dist/`). Starting dev re-copies `public/vendor/`, which makes `dist/` look stale to `tests/offline`: run `npm run build` again afterwards.
 
 **New strings are English first.** Add the key and its English text to `services/i18n/en-US.ts` and to `services/i18n/pending.ts`, then run `node scripts/sync-locale-fallbacks.mjs`. That writes the English text into the other 21 locale files and drafts, so nothing is missing at runtime; a language is done when its translation replaces the English and the key leaves `pending.ts`. `check-localization.mjs --no-pending` fails while the list is not empty (for the later translation milestone).

@@ -33,7 +33,7 @@ const saveCurrentOutput = async (page, prefix) => {
   const actions = page.getByRole('dialog').filter({ hasText: 'Result ready' });
   await actions.waitFor({ timeout: 120_000 });
   const downloadPromise = page.waitForEvent('download');
-  await actions.getByRole('button', { name: 'Download', exact: true }).click();
+  await actions.getByRole('button', { name: /^Download( as one ZIP)?$/ }).click();
   return saveDownload(await downloadPromise, prefix);
 };
 

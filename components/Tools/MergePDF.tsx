@@ -276,16 +276,31 @@ export const MergePDF: React.FC = () => {
     />
   );
 
-  const action = (
-    <button
-      type="button"
-      onClick={handleMerge}
-      disabled={files.length < 2 || status.isProcessing || isPreflighting || Boolean(lockedFile)}
-      className="tk-primary chef-pressable"
-    >
+  const runLabel = (
+    <>
       <Download aria-hidden size={18} />
       <span>{t("merge-pdf.save.the.combined.pdf.b53124")}</span>
-    </button>
+    </>
+  );
+
+  // The one "Add PDFs" (B-004, T-12): a chip under the sentence, above the main action at the foot,
+  // in reach of the thumb (owner, 26 Nov 2026). Not while a merge runs.
+  const addPdfs = !status.isProcessing && (
+    <label className="tk-chip tk-add-btn chef-pressable cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--focus-ring)]">
+      <Plus aria-hidden size={16} />{t("merge-pdf.add.pdfs.e2f591")}<input
+        type="file"
+        accept=".pdf"
+        multiple
+        disabled={isPreflighting}
+        aria-label={t("merge-pdf.add.more.pdfs.to.merge.1b5087")}
+        className="sr-only"
+        onChange={(event) => {
+          const picked = Array.from(event.target.files ?? []) as File[];
+          if (picked.length) handleFilesSelected(picked);
+          event.target.value = '';
+        }}
+      />
+    </label>
   );
 
   const progress = status.isProcessing ? (
@@ -311,30 +326,12 @@ export const MergePDF: React.FC = () => {
     <div ref={scroller.attach} className="tk-list select-none">
       <h2 id="merge-queue-heading" className="sr-only">{title}</h2>
       <div className="tk-listhead">
-        {/* This count is a live region. It is the count only, so it shares one row with the two
-            buttons (review 2, item 9): the order is the sentence's, which is spoken too (pass 5, item 9). */}
+        {/* This count is a live region. It is the count only, so it shares one row with Clear all
+            (review 2, item 9): the order is the sentence's, which is spoken too (pass 5, item 9). */}
         <p role="status" aria-live="polite" className="min-w-0">
           {t('format.pdfCount', { count: files.length })}
         </p>
         <div className="tk-listhead-actions">
-          {/* The one "Add PDFs": the head row stays at the top however long the list is (B-004, T-12). */}
-          {!status.isProcessing && (
-            <label className="tk-btn tk-add-btn chef-pressable cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--focus-ring)]">
-              <Plus aria-hidden size={16} />{t("merge-pdf.add.pdfs.e2f591")}<input
-                type="file"
-                accept=".pdf"
-                multiple
-                disabled={isPreflighting}
-                aria-label={t("merge-pdf.add.more.pdfs.to.merge.1b5087")}
-                className="sr-only"
-                onChange={(event) => {
-                  const picked = Array.from(event.target.files ?? []) as File[];
-                  if (picked.length) handleFilesSelected(picked);
-                  event.target.value = '';
-                }}
-              />
-            </label>
-          )}
           <button
             type="button"
             onClick={clearFiles}
@@ -389,7 +386,10 @@ export const MergePDF: React.FC = () => {
         notice={lockedFile && !status.isProcessing
           ? <Notice tone="error" role="alert">{t('error.pdfLockedNamed', { v0: lockedFile.name })}</Notice>
           : undefined}
-        action={action}
+        chips={addPdfs || undefined}
+        onRun={handleMerge}
+        runDisabled={files.length < 2 || status.isProcessing || isPreflighting || Boolean(lockedFile)}
+        runLabel={runLabel}
         progress={progress}
         toast={toast}
       />

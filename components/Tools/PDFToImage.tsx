@@ -19,6 +19,7 @@ import { ZoomControls } from '../UI/ZoomControls';
 import { PreviewFrame } from '../Tool/PreviewFrame';
 import { ChefSliderField } from '../UI/ChefSlider';
 import { usePanZoom } from '../../hooks/usePanZoom';
+import { MAX_ZOOM } from '../../hooks/useZoom';
 import { StatusToast } from '../UI/StatusToast';
 import { ToolScreen } from '../Tool/ToolScreen';
 import { EnterCloses, FieldLabel } from '../Tool/Popover';
@@ -30,6 +31,7 @@ import { useWide } from '../../hooks/useMediaQuery';
 import { useReplaceOnDrop } from '../../hooks/useFileDrop';
 import { formatPercent } from '../../services/i18n/core.ts';
 import { useRemembered, useRememberedFields } from '../Tool/useRemembered';
+import { SharpPageLayer } from '../Tool/SharpPageLayer';
 
 /** The page phrases this sentence owns (plan 2.14). */
 const IMAGE_PAGE_KEYS: PageKeys = {
@@ -67,7 +69,9 @@ function ChoiceRow<T extends string>({ label, value, options, onChange }: {
 const PageImagePreview: React.FC<{
   pdfDoc: any;
   scale: number;
-}> = ({ pdfDoc, scale }) => {
+  zoom: number;
+  transform?: string;
+}> = ({ pdfDoc, scale, zoom, transform }) => {
   useI18n();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -111,6 +115,7 @@ const PageImagePreview: React.FC<{
         aria-label={t("pdfto-image.page.1.preview.b4963a")}
         className="absolute inset-0 m-auto block max-h-full max-w-full select-none rounded-[2px] border border-[var(--border-strong)] bg-white shadow-[var(--elevation-panel)]"
       />
+      <SharpPageLayer source={{ pdfDoc }} pageIndex={0} zoom={zoom > 1 ? zoom : undefined} transform={transform} fitted />
     </figure>
   );
 };
@@ -162,7 +167,7 @@ export const PDFToImage: React.FC = () => {
 
   // Two fingers, Ctrl+wheel, − and + (about the top of the page), and a drag that stops at the
   // page's edges: the shared page zoom (pass 5).
-  const { zoom, zoomIn, zoomOut, reset: resetZoom, gestureRef, onPointerDown: handlePointerDown, transform, touchAction } = usePanZoom({ max: 4 });
+  const { zoom, zoomIn, zoomOut, reset: resetZoom, gestureRef, onPointerDown: handlePointerDown, transform, touchAction } = usePanZoom({ max: MAX_ZOOM });
 
   const replaceEmbeddedImages = useCallback((nextImages: EmbeddedPdfImageAsset[]) => {
     revokeObjectUrls(embeddedImagesRef.current.map((image) => image.objectUrl));
@@ -751,21 +756,11 @@ export const PDFToImage: React.FC = () => {
     <Notice>{t("pdfto-word.conversion.cancelled.nothing.was.saved.44e2e7")}</Notice>
   ) : null;
 
-  const action = (
-    <button
-      type="button"
-      onClick={handlePrimaryAction}
-      disabled={
-        status.isProcessing ||
-        (exportMode === 'embedded-images'
-          ? selectedEmbeddedImages.length === 0
-          : !preview || resolvedPageSelection === null || (requiresLargeJobConfirmation && !largeJobConfirmed))
-      }
-      className="tk-primary chef-pressable"
-    >
+  const runLabel = (
+    <>
       <Download aria-hidden size={18} />
       <span>{primaryActionLabel}</span>
-    </button>
+    </>
   );
   const progress = status.isProcessing ? (
     <ProgressLine
@@ -844,7 +839,7 @@ export const PDFToImage: React.FC = () => {
       )}
     </div>
   ) : (
-    <PreviewFrame tools={<ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={4} />}>
+    <PreviewFrame tools={<ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={MAX_ZOOM} />}>
       <h2 className="sr-only">{title}</h2>
       <div
         ref={gestureRef}
@@ -863,7 +858,7 @@ export const PDFToImage: React.FC = () => {
             className="absolute inset-0"
             style={zoom === 1 ? undefined : { transform }}
           >
-            <PageImagePreview pdfDoc={pdfDoc} scale={config.scale} />
+            <PageImagePreview pdfDoc={pdfDoc} scale={config.scale} zoom={zoom} transform={transform} />
           </div>
         ) : (
           <div className="tk-crop-state">
@@ -889,7 +884,14 @@ export const PDFToImage: React.FC = () => {
       side={settings}
       sentence={sentence}
       notice={notice}
-      action={action}
+      onRun={handlePrimaryAction}
+      runDisabled={
+        status.isProcessing ||
+        (exportMode === 'embedded-images'
+          ? selectedEmbeddedImages.length === 0
+          : !preview || resolvedPageSelection === null || (requiresLargeJobConfirmation && !largeJobConfirmed))
+      }
+      runLabel={runLabel}
       progress={progress}
       toast={toast}
       extra={announcer}

@@ -356,16 +356,11 @@ export const RotatePDF: React.FC = () => {
     </Notice>
   ) : null;
 
-  const action = (
-    <button
-      type="button"
-      onClick={() => void handleSave()}
-      disabled={!hasRotationChanges || status.isProcessing}
-      className="tk-primary chef-pressable"
-    >
+  const runLabel = (
+    <>
       <Save aria-hidden size={18} />
       <span>{t("rotate-pdf.save.turned.pdf.fa1cfd")}</span>
-    </button>
+    </>
   );
 
   const progress = status.isProcessing ? (
@@ -423,7 +418,9 @@ export const RotatePDF: React.FC = () => {
       sentence={sentence}
       chips={ready ? <ChipActions actions={selectionActions} /> : undefined}
       notice={notice}
-      action={action}
+      onRun={() => void handleSave()}
+      runDisabled={!hasRotationChanges || status.isProcessing}
+      runLabel={runLabel}
       progress={progress}
       toast={toast}
     />

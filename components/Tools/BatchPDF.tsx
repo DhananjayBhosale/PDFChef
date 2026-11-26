@@ -599,16 +599,11 @@ export const BatchPDF: React.FC = () => {
       ? <Notice tone="caution" role="status">{selectionNotice}</Notice>
       : <Notice>{t("batch-pdf.every.result.is.returned.in.one.zip.5e9c36")}</Notice>;
 
-  const runAction = (
-    <button
-      type="button"
-      onClick={() => void runBatch()}
-      disabled={status.isProcessing || Boolean(validationMessage)}
-      className="tk-primary chef-pressable"
-    >
+  const runLabel = (
+    <>
       <Files aria-hidden size={18} />
       <span>{t("batch-pdf.message.cc8a61d63f", { count: files.length })}</span>
-    </button>
+    </>
   );
 
   const progress = status.isProcessing ? (
@@ -646,7 +641,9 @@ export const BatchPDF: React.FC = () => {
         sentence={sentence}
         chips={wide ? settings : undefined}
         notice={notice}
-        action={runAction}
+        onRun={() => void runBatch()}
+        runDisabled={status.isProcessing || Boolean(validationMessage)}
+        runLabel={runLabel}
         toast={toast}
       />
     );
@@ -759,7 +756,9 @@ export const BatchPDF: React.FC = () => {
         sentence={sentence}
         chips={wide ? settings : undefined}
         notice={notice}
-        action={runAction}
+        onRun={() => void runBatch()}
+        runDisabled={status.isProcessing || Boolean(validationMessage)}
+        runLabel={runLabel}
         progress={progress}
         toast={toast}
       />

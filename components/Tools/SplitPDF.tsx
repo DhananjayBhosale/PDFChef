@@ -283,7 +283,7 @@ export const SplitPDF: React.FC = () => {
         result.blob,
         toolOutputName('split', sourceFile.name, 'zip'),
         undefined,
-        separately ? { separateSave: folder ? { folder } : {} } : undefined,
+        separately ? { separateSave: { ...(folder ? { folder } : {}), ...(result.parts ? { parts: result.parts } : {}) } } : undefined,
       );
       return;
     }
@@ -359,6 +359,7 @@ export const SplitPDF: React.FC = () => {
             });
           },
           controller.signal,
+          separately,
         )
         : await splitPDFByMaximumSize(
           sourceFile.file,
@@ -373,6 +374,7 @@ export const SplitPDF: React.FC = () => {
             });
           },
           controller.signal,
+          separately,
         );
 
       if (controller.signal.aborted || activeJobControllerRef.current !== controller) return;
@@ -726,17 +728,11 @@ export const SplitPDF: React.FC = () => {
     </>
   );
 
-  const action = (
-    <button
-      type="button"
-      onClick={handleExport}
-      disabled={!canExport}
-      aria-describedby={!canExport && (settingsError || (rangePending && !rangeRejected)) ? noticeId : undefined}
-      className="tk-primary chef-pressable"
-    >
+  const runLabel = (
+    <>
       <Scissors aria-hidden size={18} />
       <span>{oneOutput ? t('split-pdf.save.the.pdf') : t("split-pdf.save.the.split.files.33c422")}</span>
-    </button>
+    </>
   );
 
   const progress = status.isProcessing ? (
@@ -808,7 +804,10 @@ export const SplitPDF: React.FC = () => {
       sentence={sentence}
       chips={chips}
       notice={notice}
-      action={action}
+      onRun={handleExport}
+      runDisabled={!canExport}
+      runDescribedBy={!canExport && (settingsError || (rangePending && !rangeRejected)) ? noticeId : undefined}
+      runLabel={runLabel}
       endControl={deliverySegments}
       progress={progress}
       toast={toast}

@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import ts from 'typescript';
-import { saveParts } from '../../services/saveSeparately.ts';
+import { saveParts, separatePartName } from '../../services/saveSeparately.ts';
 
 type Cell = { value?: unknown; current?: unknown; deps?: unknown[]; cleanup?: (() => void) | undefined };
 
@@ -120,6 +120,7 @@ function loadHook(readZipParts: (zip: Blob, name: string) => Promise<Part[]>, pa
       separatePath: () => path,
       countZipParts: async () => 2,
       readZipParts,
+      separatePartName,
       saveParts: extra.share
         ? (parts: Part[], to: never, options: object) => saveParts(parts, to, { ...options, share: extra.share as never })
         : saveParts,
@@ -290,5 +291,19 @@ test('a part list read on arrival for an earlier result is not used for the next
   h.value.run();
   await h.settle();
   assert.deepEqual(shared, [['B-1.pdf', 'B-2.pdf']], 'B shares only its own parts');
+  h.dispose();
+});
+
+// Simplification step 5 (26 Nov 2026): a Split saved as separate PDFs hands its parts over in memory.
+test('parts the split handed over are saved as they are: the ZIP is not read or counted', async () => {
+  let reads = 0;
+  const handed = [1, 2, 3].map((n) => ({ name: `part_${n}_${n}.pdf`, blob: new Blob([`p${n}`]) }));
+  const { h, writes, render } = loadHook(async () => { reads += 1; return partsOf('A'); }, 'sequential', { auto: { parts: handed } });
+  render();
+  await h.settle();
+  assert.equal(h.value.count, 3, 'counted from the handed parts, not the ZIP (the ZIP count stub says 2)');
+  assert.equal(h.value.done, true, 'saved at once, as "separate PDFs" does');
+  assert.equal(reads, 0, 'the ZIP is never read');
+  assert.deepEqual(writes, ['A-part_1_1.pdf', 'A-part_2_2.pdf', 'A-part_3_3.pdf'], 'each part under the result name plus its entry name');
   h.dispose();
 });

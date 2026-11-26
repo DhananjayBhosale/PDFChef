@@ -24,6 +24,7 @@ import { useWide } from '../../hooks/useMediaQuery';
 import { ZoomControls } from '../UI/ZoomControls';
 import { PreviewFrame } from '../Tool/PreviewFrame';
 import { usePanZoom } from '../../hooks/usePanZoom';
+import { MAX_ZOOM } from '../../hooks/useZoom';
 import { PeekButton, usePagePreview } from '../Tool/PagePeek';
 import { getPageTextSignatures, loadPDFDocument, renderPageAsImage } from '../../services/pdfLazy';
 import { downloadBlob } from '../../services/pdfShared';
@@ -32,6 +33,7 @@ import { compareExtractedPageText } from '../../services/pdfToolResults';
 import { createComparisonReport } from '../../services/comparisonReport.ts';
 import { useMonetization, type JobAccessGrant } from '../../hooks/useMonetization';
 import { datedOutputName } from '../UI/format';
+import { SharpPageLayer } from '../Tool/SharpPageLayer';
 
 interface PreviewState {
   left: string;
@@ -79,7 +81,7 @@ export const ComparePDF: React.FC = () => {
 
   // Both pages zoom and move together: two fingers on either, Ctrl+wheel, or − and + (about the
   // top of the page), with the shared page zoom (pass 5), up to 400% like the other viewers.
-  const { zoom, zoomIn, zoomOut, reset: resetZoom, panning: isPanning, gestureRef, onPointerDown: handlePointerDown, transform, touchAction } = usePanZoom({ max: 4 });
+  const { zoom, zoomIn, zoomOut, reset: resetZoom, panning: isPanning, gestureRef, onPointerDown: handlePointerDown, transform, touchAction } = usePanZoom({ max: MAX_ZOOM });
   // Each pane's eye opens its own document large, at the page shown (fable-2 item 3).
   const previewA = usePagePreview(file1, file1?.name);
   const previewB = usePagePreview(file2, file2?.name);
@@ -443,7 +445,7 @@ export const ComparePDF: React.FC = () => {
   const body = (
     <PreviewFrame
       className="tk-compare"
-      tools={<ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={4} />}
+      tools={<ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={MAX_ZOOM} />}
       pager={wide ? pager : undefined}
     >
       {previewError && (
@@ -460,8 +462,8 @@ export const ComparePDF: React.FC = () => {
       )}
       <div ref={gestureRef} className="tk-compare-panes" style={{ touchAction }}>
         {[
-          { name: file1.name, src: preview?.left, large: previewA },
-          { name: file2.name, src: preview?.right, large: previewB },
+          { name: file1.name, src: preview?.left, large: previewA, pdf: pdf1 },
+          { name: file2.name, src: preview?.right, large: previewB, pdf: pdf2 },
         ].map((entry, index) => (
           <figure key={`${index}-${entry.name}`} className="tk-compare-pane">
             <figcaption className="chef-filename tk-compare-name" title={entry.name}>
@@ -478,13 +480,16 @@ export const ComparePDF: React.FC = () => {
                 </div>
               )}
               {entry.src && (
-                <img
-                  src={entry.src}
-                  alt={t("compare-pdf.page.of.477c22", { v0: pageIndex + 1, v1: entry.name })}
-                  draggable={false}
-                  className="select-none will-change-transform"
-                  style={{ transform }}
-                />
+                // The page and its sharp layer move together, about the frame's centre.
+                <div className="absolute inset-0 flex items-center justify-center will-change-transform" style={{ transform }}>
+                  <img
+                    src={entry.src}
+                    alt={t("compare-pdf.page.of.477c22", { v0: pageIndex + 1, v1: entry.name })}
+                    draggable={false}
+                    className="select-none"
+                  />
+                  <SharpPageLayer source={{ pdfDoc: entry.pdf }} pageIndex={pageIndex} zoom={zoom > 1 ? zoom : undefined} transform={transform} fitted />
+                </div>
               )}
               {zoom > 1 && isPanning && (
                 <div className="tk-compare-synced">

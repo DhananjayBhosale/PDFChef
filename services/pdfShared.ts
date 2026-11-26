@@ -46,6 +46,8 @@ export interface OutputReadyRecord extends OutputRecord {
 
 export interface SeparateSaveRequest {
   readonly folder?: FileSystemDirectoryHandle;
+  /** The ZIP's PDFs under their entry names, as the split made them: not read back out of the ZIP. */
+  readonly parts?: readonly { readonly name: string; readonly blob: Blob }[];
 }
 
 export interface OutputAccessRequest {

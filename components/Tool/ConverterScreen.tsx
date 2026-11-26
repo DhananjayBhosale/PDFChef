@@ -104,15 +104,13 @@ export const ConverterScreen: React.FC<{
       sentence={sentence}
       chips={chips}
       notice={notice}
-      action={refused ? (
-        <button type="button" onClick={onChooseAnother} className="tk-primary chef-pressable">
-          <span>{chooseAnotherLabel}</span>
-        </button>
-      ) : (
-        <button type="button" onClick={onConvert} disabled={status.isProcessing} className="tk-primary chef-pressable">
+      onRun={refused ? onChooseAnother : onConvert}
+      runDisabled={!refused && status.isProcessing}
+      runLabel={refused ? <span>{chooseAnotherLabel}</span> : (
+        <>
           {actionIcon}
           <span>{status.error ? tryAgainLabel : actionLabel}</span>
-        </button>
+        </>
       )}
       progress={status.isProcessing ? (
         <ProgressLine

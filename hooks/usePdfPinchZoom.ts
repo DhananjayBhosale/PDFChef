@@ -5,6 +5,7 @@ import {
   pdfZoomFromWheel,
   pdfZoomScrollOffset,
 } from '../services/pdfZoomGesture';
+import { MAX_ZOOM } from './useZoom';
 
 export type PdfZoomAt = (zoom: number, clientX: number, clientY: number) => void;
 
@@ -43,7 +44,7 @@ const touchMidpoint = (touches: TouchList) => {
   };
 };
 
-export const usePdfPinchZoom = ({ zoom, setZoom, min = 0.5, max = 2, zoomAt }: PdfPinchZoomOptions) => {
+export const usePdfPinchZoom = ({ zoom, setZoom, min = 0.5, max = MAX_ZOOM, zoomAt }: PdfPinchZoomOptions) => {
   const [viewport, setViewport] = useState<HTMLElement | null>(null);
   const zoomRef = useRef(zoom);
   const pinchStartRef = useRef({ distance: 0, zoom });

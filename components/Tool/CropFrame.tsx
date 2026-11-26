@@ -40,7 +40,9 @@ export const CropFrame: React.FC<{
   valueText: (value: number) => string;
   alt: string;
   disabled?: boolean;
-}> = ({ src, pageWidth, pageHeight, margins, onChange, labels, valueText, alt, disabled = false }) => {
+  /** Drawn directly above the page picture, under the shade and the frame (the sharp zoom layer). */
+  underlay?: React.ReactNode;
+}> = ({ src, pageWidth, pageHeight, margins, onChange, labels, valueText, alt, disabled = false, underlay }) => {
   const stageRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -142,6 +144,7 @@ export const CropFrame: React.FC<{
         dir="ltr"
       >
         <img src={src} alt={alt} draggable={false} className="tk-crop-img" />
+        {underlay}
         <div aria-hidden className="tk-crop-clip"><div className="tk-crop-shade" style={frameStyle} /></div>
         <div className="tk-crop-frame" style={frameStyle} data-crop-frame="">
           {CROP_EDGES.map((edge) => (

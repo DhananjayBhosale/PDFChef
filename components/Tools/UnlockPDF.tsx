@@ -163,17 +163,14 @@ export const UnlockPDF: React.FC = () => {
         />
       )}
       notice={notice}
-      action={(
-        <button
-          type="button"
-          disabled={status.isProcessing || needsPassword === null || (needsPassword !== false && password.length === 0)}
-          aria-describedby={needsPassword && password.length === 0 ? 'unlock-password-required' : undefined}
-          onClick={() => void handleUnlock()}
-          className="tk-primary chef-pressable"
-        >
+      onRun={() => void handleUnlock()}
+      runDisabled={status.isProcessing || needsPassword === null || (needsPassword !== false && password.length === 0)}
+      runDescribedBy={needsPassword && password.length === 0 ? 'unlock-password-required' : undefined}
+      runLabel={(
+        <>
           <Unlock aria-hidden size={18} />
           <span>{title}</span>
-        </button>
+        </>
       )}
       progress={status.isProcessing ? (
         <ProgressLine label={status.message} percent={formatPercent(Math.max(0, Math.min(100, status.progress)))} value={status.progress} />

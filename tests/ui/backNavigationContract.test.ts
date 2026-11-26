@@ -160,9 +160,13 @@ test('Back on Preview PDF closes the preview, not the tool under it', () => {
   const preview = read('components/UI/PDFPreviewModal.tsx');
   // Back arrives as a non-bubbling Escape on the document, so a window listener never hears it.
   assert.doesNotMatch(preview, /window\.addEventListener\('keydown'/);
-  assert.match(preview, /if \(e\.key === 'Escape'\) \{\s*e\.preventDefault\(\);\s*onClose\(\);/);
-  assert.match(preview, /document\.addEventListener\('keydown', handleEsc\)/);
-  assert.match(preview, /document\.removeEventListener\('keydown', handleEsc\)/);
+  // The dialog's keys are the shared hook's (hooks/useDialogFocus.ts).
+  assert.match(preview, /useDialogFocus\(panelRef, onClose\);/);
+  const dialog = read('hooks/useDialogFocus.ts');
+  assert.doesNotMatch(dialog, /window\.addEventListener\('keydown'/);
+  assert.match(dialog, /if \(event\.key === 'Escape'\) \{\s*event\.preventDefault\(\);\s*onCloseRef\.current\(\);/);
+  assert.match(dialog, /document\.addEventListener\('keydown', onKeyDown\)/);
+  assert.match(dialog, /document\.removeEventListener\('keydown', onKeyDown\)/);
 });
 
 test('Create PDF, Flatten and the invoice builder ask before Back drops unsaved work, with one blocker each', () => {

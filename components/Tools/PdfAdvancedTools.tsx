@@ -31,6 +31,7 @@ import { PagePager, PreviewFrame } from '../Tool/PreviewFrame';
 import { PageGrid } from '../Tool/PageGrid';
 import { ExpandButton, usePagePreview, usePinchToOpen } from '../Tool/PagePeek';
 import { LargePagePreview } from '../Tool/LargePagePreview';
+import { SharpPageLayer } from '../Tool/SharpPageLayer';
 import { joinSentences, numberList, pair, points, quoted, clipLength, sharedPictureNote } from '../Tool/values';
 import { useWide } from '../../hooks/useMediaQuery';
 import { useRemembered } from '../Tool/useRemembered';
@@ -98,11 +99,13 @@ const FileToolScreen: React.FC<FileToolScreenProps> = ({
       side={side}
       sentence={<Sentence template={statement} groupLabel={t('sentence.groupLabel', { tool: title })} disabled={status.isProcessing} />}
       notice={notice || noticeLine ? <>{notice}{noticeLine}</> : null}
-      action={(
-        <button type="button" onClick={onAction} disabled={status.isProcessing} className="tk-primary chef-pressable">
+      onRun={onAction}
+      runDisabled={status.isProcessing}
+      runLabel={(
+        <>
           <Download aria-hidden size={18} />
           <span>{actionLabel}</span>
-        </button>
+        </>
       )}
       progress={status.isProcessing ? (
         <ProgressLine
@@ -620,17 +623,11 @@ export const CropPDF: React.FC = () => {
       ? <Notice tone="pending" id={noticeId}>{t("pdf-advanced-tools.increase.at.least.one.margin.559863")}</Notice>
       : cropStatusNotice;
 
-  const action = (
-    <button
-      type="button"
-      onClick={() => void handleCrop()}
-      disabled={status.isProcessing || allZero}
-      aria-describedby={allZero ? noticeId : undefined}
-      className="tk-primary chef-pressable"
-    >
+  const runLabel = (
+    <>
       <Download aria-hidden size={18} />
       <span>{t("pdf-advanced-tools.crop.pdf.dc4bdb")}</span>
-    </button>
+    </>
   );
 
   const progress = status.isProcessing ? (
@@ -682,6 +679,7 @@ export const CropPDF: React.FC = () => {
               valueText={valueText}
               alt={t('file-preview.alt', { name: file.name })}
               disabled={status.isProcessing}
+              underlay={<SharpPageLayer source={{ file: file.file }} pageIndex={Math.max(0, Math.min(pageCount - 1, previewIndex))} />}
             />
           </div>
         </LargePagePreview>
@@ -701,7 +699,10 @@ export const CropPDF: React.FC = () => {
       sentence={sentence}
       chips={cropFields}
       notice={notice}
-      action={action}
+      onRun={() => void handleCrop()}
+      runDisabled={status.isProcessing || allZero}
+      runDescribedBy={allZero ? noticeId : undefined}
+      runLabel={runLabel}
       progress={progress}
       toast={toast}
     />
@@ -757,6 +758,8 @@ const HeaderFooterPreview: React.FC<{ file: File; name: string; options: HeaderF
   const pageWithLines = page && (
     <>
       <img src={page.url} alt={t('file-preview.alt', { name })} className="absolute inset-0 h-full w-full" draggable={false} />
+      {/* In the large preview only: the part in sight at full detail, under the header and footer. */}
+      <SharpPageLayer source={{ file }} pageIndex={Math.max(0, Math.min(total - 1, index))} />
       <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${page.width} ${page.height}`} aria-hidden>
         {lines.header && line(lines.header, size + 18)}
         {lines.footer && line(lines.footer, page.height - 18)}
@@ -1063,17 +1066,11 @@ export const HeaderFooterPDF: React.FC = () => {
       <Notice tone="pending" id={noticeId}>{t("pdf-advanced-tools.add.header.text.footer.text.or.page.0b0900")}</Notice>
     );
 
-  const action = (
-    <button
-      type="button"
-      onClick={() => void handleApply()}
-      disabled={!hasContent || Boolean(fontMessage) || status.isProcessing}
-      aria-describedby={hasContent && !fontMessage ? undefined : noticeId}
-      className="tk-primary chef-pressable"
-    >
+  const runLabel = (
+    <>
       <FileCheck aria-hidden size={18} />
       <span>{t("pdf-advanced-tools.add.header.footer.532ade")}</span>
-    </button>
+    </>
   );
 
   const progress = status.isProcessing ? (
@@ -1097,7 +1094,10 @@ export const HeaderFooterPDF: React.FC = () => {
       sentence={sentence}
       chips={wide ? undefined : numbersCheck}
       notice={notice}
-      action={action}
+      onRun={() => void handleApply()}
+      runDisabled={!hasContent || Boolean(fontMessage) || status.isProcessing}
+      runDescribedBy={hasContent && !fontMessage ? undefined : noticeId}
+      runLabel={runLabel}
       progress={progress}
       toast={toast}
     />
@@ -1306,16 +1306,13 @@ export const RemoveBlankPagesPDF: React.FC = () => {
       body={body}
       sentence={<Sentence template="pdf-advanced-tools.nearly.empty.pages.count.as.blank.8e2727" groupLabel={t('sentence.groupLabel', { tool: title })} disabled={status.isProcessing} />}
       notice={status.error ? statusNotice : notice}
-      action={(
-        <button
-          type="button"
-          onClick={() => void handleRemove()}
-          disabled={status.isProcessing || scanning || marked.length === 0 || allMarked || Boolean(previewError)}
-          className="tk-primary chef-pressable"
-        >
+      onRun={() => void handleRemove()}
+      runDisabled={status.isProcessing || scanning || marked.length === 0 || allMarked || Boolean(previewError)}
+      runLabel={(
+        <>
           <Trash2 aria-hidden size={18} />
           <span>{t('pdf-advanced-tools.remove.blank.pages.527c64')}</span>
-        </button>
+        </>
       )}
       progress={status.isProcessing ? (
         <ProgressLine label={status.message} percent={formatPercent(status.progress)} value={status.progress} />

@@ -100,17 +100,22 @@ for (const [route, expected] of Object.entries(sliderSlots)) {
           assert.equal(Number(await box.inputValue()), Number(during), `${before}: the box follows the slider`);
           if (closeBy === 'Close') await editor.getByRole('button', { name: 'Close' }).first().tap();
           else if (closeBy === 'Escape') await page.keyboard.press('Escape');
-          // An empty spot above the preview: the page itself would take a tap (Watermark places its
-          // stamp there), and the header has no empty middle once Change sits in it (round 6).
+          // An empty spot off the preview: the page itself would take a tap (Watermark places its
+          // stamp there), and the header has no empty middle once Change sits in it (round 6). Since
+          // the settings moved to the foot (26 Nov 2026), the spot may be anywhere on the screen.
           else {
-            // Clear for 20 px around, or a finger tap is drawn to the nearest button (touch adjustment).
+            // Clear around, or a finger tap is drawn to the nearest button (touch adjustment). Since the
+            // settings sit at the foot under the open card, the clear spots are the strips beside the
+            // page: 12 px clear up and down, 4 px to the sides.
             const spot = await page.evaluate(() => {
               const inert = (x, y) => {
                 const hit = document.elementFromPoint(x, y);
                 return !!hit && !hit.closest('button, a, input, select, textarea, label, [role=slider], [role=button], [role=dialog], [aria-haspopup], img, canvas, .tk-pframe');
               };
-              for (let y = 24; y < 300; y += 6) for (let x = 24; x < innerWidth - 24; x += 8) {
-                if ([-20, 0, 20].every((dy) => [-20, 0, 20].every((dx) => inert(x + dx, y + dy)))) return { x, y };
+              // Below the header: a tap beside its Home link is drawn to it.
+              const top = (document.querySelector('main')?.getBoundingClientRect().top ?? 0) + 24;
+              for (let y = top; y < innerHeight - 24; y += 4) for (let x = 4; x < innerWidth - 4; x += 2) {
+                if ([-12, 0, 12].every((dy) => [-4, 0, 4].every((dx) => inert(x + dx, y + dy)))) return { x, y };
               }
               return null;
             });

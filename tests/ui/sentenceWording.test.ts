@@ -1,42 +1,44 @@
 import assert from 'node:assert/strict';
+import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import test from 'node:test';
 import english from '../../services/i18n/en-US.ts';
-import { fitMiddleName, middleNameParts } from '../../components/UI/format.ts';
+import { setTemporaryLocale } from '../../services/i18n/core.ts';
+import { joinSentences, sharedPictureNote } from '../../components/Tool/values.ts';
 import { PAGE_NUMBER_FORMAT_PRESETS } from '../../services/androidParity.ts';
 
-// Pass 5 fixes (output/web/pass5-fixes/REPORT.md): the review's usability items.
+// Tool sentences and notes read as natural language with every count and locale.
+// Fix round 2 (output/web/ui-redesign/audit/prompts/final-fix-2.md): the contracts behind each item.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
-// A monospaced stand-in for the browser's measure: 7 px a character.
-const mono = (text: string) => Array.from(text).length * 7;
 const fill = (template: string, values: Record<string, string>) =>
   template.replace(/\{(\w+)\}/g, (_, slot: string) => values[slot] ?? `{${slot}}`);
 
-test('item 4: the tail of a cut name starts at a word, so the date stays whole', () => {
-  assert.deepEqual(middleNameParts('Merge PDF 16 Nov.pdf'), { head: 'Merge PDF', tail: ' 16 Nov.pdf' });
-  assert.deepEqual(middleNameParts('qa-sample.pdf'), { head: 'qa-s', tail: 'ample.pdf' });
-  // Never between the two halves of an emoji.
-  assert.equal(middleNameParts(`ab${'😀'.repeat(6)}.pdf`).tail, '😀😀😀.pdf');
-  assert.equal(middleNameParts('a.pdf').head, '');
+test('item 6: Extract Images says when one picture is used on several pages', () => {
+  assert.equal(sharedPictureNote([{ pageNumbers: [1] }, { pageNumbers: [2] }]), '');
+  assert.equal(sharedPictureNote([{ pageNumbers: [2, 2] }]), '', 'the same page twice is not sharing');
+  assert.equal(sharedPictureNote([{ pageNumbers: [4, 1, 3, 2] }]), 'The same picture is used on pages ⁦1–4⁩, so it is saved once.');
+  assert.equal(sharedPictureNote([{ pageNumbers: [1, 3] }]), 'The same picture is used on pages 1 and 3, so it is saved once.');
+  assert.equal(sharedPictureNote([{ pageNumbers: [1, 2] }, { pageNumbers: [3, 4] }]), '2 pictures are used on more than one page. Each is saved once.');
+  assert.equal(joinSentences('Found 1 embedded image.', ''), 'Found 1 embedded image.');
+  assert.equal(joinSentences('A.', 'B.'), 'A. B.');
 });
 
-test('item 4: a name that does not fit is cut in the middle, never inside the date', () => {
-  const name = 'Merge PDF 16 Nov.pdf';
-  assert.equal(fitMiddleName(name, mono(name), mono), null, 'a name that fits is left whole');
-  assert.equal(fitMiddleName(name, 15 * 7, mono), 'Mer… 16 Nov.pdf');
-  assert.equal(fitMiddleName(name, 13 * 7, mono), 'M… 16 Nov.pdf', 'a tail of whole words keeps one letter of the start');
-  for (let room = 0; room < name.length; room += 1) {
-    const shown = fitMiddleName(name, room * 7, mono);
-    assert.ok(shown !== null && shown.endsWith('.pdf'), `room ${room}: ${shown}`);
-    assert.doesNotMatch(shown, /…6 Nov/u, `room ${room}: "6 Nov" reads as the 6th`);
-    assert.ok(mono(shown) <= room * 7 || shown === '….pdf', `room ${room}: ${shown} is too wide`);
+test('item 6: the note is translated, with the locale digits, and Japanese joins without a space', async () => {
+  await setTemporaryLocale('ar-SA');
+  try {
+    assert.match(sharedPictureNote([{ pageNumbers: [1, 2, 3, 4] }]), /[١٤]/);
+    assert.doesNotMatch(sharedPictureNote([{ pageNumbers: [1, 2, 3, 4] }]), /The same picture/);
+  } finally {
+    await setTemporaryLocale('en-US');
   }
-  // A short name in little room keeps its start and its end (Read PDF's title on a 360 px phone).
-  assert.equal(fitMiddleName('qa-sample.pdf', 10 * 7, mono), 'qa-…le.pdf');
-  assert.equal(fitMiddleName('Merge PDF 16 Nov.pdf', 14 * 7, mono), 'Me… 16 Nov.pdf');
+  await setTemporaryLocale('ja-JP');
+  try {
+    assert.equal(joinSentences('一。', '二。'), '一。二。');
+  } finally {
+    await setTemporaryLocale('en-US');
+  }
 });
 
 test('items 3 and 6: the sentences read as English with every count', () => {
@@ -78,22 +80,4 @@ test('item 5: Header & Footer offers the same footer formats as Page Numbers', (
   const tools = read('components/Tools/PdfAdvancedTools.tsx');
   assert.match(tools, /PAGE_NUMBER_FORMAT_PRESETS/);
   assert.match(tools, /interpolateHeaderFooterText\(preset, 1, /);
-});
-
-test('items 1, 2, 7-10: the strip stays in its slot, Open PDF previews, and the cards fit', () => {
-  // StrictMode's second mount registers the slot again (the strip covered Save PDF in development).
-  assert.match(read('components/UI/resultSlot.ts'), /if \(latest\.current && !element\.current && enabledRef\.current\) register\(latest\.current\);/);
-  // Open PDF on a tool screen shows the result over the tool instead of leaving it.
-  const output = read('components/UI/OutputCenter.tsx');
-  assert.match(output, /if \(!openTools && slotTarget\) \{[^}]*setPreviewFile\(file\);/s);
-  assert.match(output, /<PDFPreviewModal/);
-  assert.match(read('components/Tool/ConverterScreen.tsx'), /<FileCard icon=\{icon\} name=\{file\.name\} meta=\{formatBytes\(file\.size\)\} \/>/);
-  assert.match(read('components/Tools/ViewPDF.tsx'), /<MiddleName name=\{openedPdf\.name\} \/>/);
-  assert.doesNotMatch(read('components/Tool/tool.css'), /\.tk-rtitle-name \{[^}]*line-clamp/s);
-  const merge = read('components/Tools/MergePDF.tsx');
-  assert.match(merge, /locked = classifyPdfError\(error\) === 'locked';/);
-  assert.match(merge, /file\.locked \? t\('batch\.unlock\.locked'\)/);
-  assert.match(read('components/Tools/SignPDF.tsx'), /<ChangeFile label=\{t\('tool\.chooseAnotherFile'\)\} onClick=\{chooseAnother\}/);
-  assert.match(read('components/Tool/Popover.tsx'), /export const PREVIEW_FLOOR_TALL = 0\.2;/);
-  assert.match(read('components/Tools/PageNumbersPDF.tsx'), /previewFloor=\{PREVIEW_FLOOR_TALL\}/);
 });

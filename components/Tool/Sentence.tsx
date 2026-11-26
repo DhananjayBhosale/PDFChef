@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { AlertCircle, ChevronDown } from 'lucide-react';
 import { pendingTextProps, t, type TranslationKey } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
@@ -48,6 +48,8 @@ export interface SlotDef {
   static?: boolean;
   /** Popover width on desktop. */
   width?: number;
+  /** How much of the screen the live preview keeps while the card is open (Popover `previewFloor`). */
+  previewFloor?: number;
   /**
    * The line drawn under the editor's controls while it is open. By default the tool's
    * own notice line (errors, pending and outcome lines), which the open editor covers;
@@ -197,7 +199,7 @@ export const Sentence: React.FC<{
   const measureRef = useRef<HTMLParagraphElement>(null);
   const sentenceRef = useRef<HTMLParagraphElement>(null);
   const [overflow, setOverflow] = useState(false);
-  const signature = useMemo(() => `${formatted}|${names.map((name) => `${slots[name].text}|${slots[name].tone}`).join('|')}`, [formatted, names, slots]);
+  const signature = `${formatted}|${names.map((name) => `${slots[name].text}|${slots[name].tone}`).join('|')}`;
 
   useLayoutEffect(() => {
     if (form !== 'auto') return undefined;
@@ -356,6 +358,7 @@ export const Sentence: React.FC<{
           showTitle={slots[name].showTitle ?? true}
           quiet={slots[name].quiet}
           width={slots[name].width ?? 340}
+          previewFloor={slots[name].previewFloor}
           notice={'notice' in slots[name] ? slots[name].notice : toolNotice}
         >
           {slots[name].editor}

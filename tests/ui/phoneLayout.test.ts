@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import english from '../../services/i18n/en-US.ts';
 
-// Fable's phone layout (owner decisions of 2026-11-15). Behaviour is checked in the browser by
-// tests/browser/phoneFableChecks.mjs; these pin the contracts in the source.
+// The phone layout (owner decisions of 2026-11-15). Behaviour is checked in the browser by
+// tests/browser/phoneLayoutChecks.mjs; these pin the contracts in the source.
 const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
 test('item 1: on a phone a setting shows once, as a value whose card holds its control', () => {
@@ -48,7 +48,7 @@ test('item 3: four or more values on a phone read as labelled rows', () => {
   assert.match(sentence, /form === 'auto' && \(overflow \|\| many\)/);
   assert.match(sentence, /data-many=\{many \? '' : undefined\}/);
   const css = read('components/Tool/tool.css');
-  assert.match(css, /\.tk-band-top \.tk-rows\[data-many\] \{\s*display: grid;\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(css, /\.tk-band-foot \.tk-rows\[data-many\] \{\s*display: grid;\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
 });
 
 test('item 4: an open card leaves a live preview at least 30% of the screen (40% when it fits)', () => {

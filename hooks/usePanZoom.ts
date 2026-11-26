@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type React from 'react';
-import { useZoom } from './useZoom';
+import { MAX_ZOOM, useZoom } from './useZoom';
 import { usePdfPinchZoom } from './usePdfPinchZoom';
 import { clampPdfPan, pdfButtonZoomAnchor, pdfPanForZoom, type PdfPan, type PdfSize } from '../services/pdfZoomGesture';
 
@@ -42,7 +42,7 @@ const overflows = (frame: HTMLElement, zoom: number) => {
  * `gestureRef` goes on the element that takes the gestures; the frames are that element itself, or
  * the elements inside it marked `data-zoom-frame` (Compare: both pages move together).
  */
-export const usePanZoom = ({ min = 1, max = 2, step = 0.25 }: { min?: number; max?: number; step?: number } = {}) => {
+export const usePanZoom = ({ min = 1, max = MAX_ZOOM, step = 0.25 }: { min?: number; max?: number; step?: number } = {}) => {
   const { zoom, setExactZoom } = useZoom(1, min, max, step);
   const [pan, setPan] = useState<PdfPan>({ x: 0, y: 0 });
   const [panning, setPanning] = useState(false);

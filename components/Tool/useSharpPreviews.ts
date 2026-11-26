@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getPdfPagePreviews } from '../../services/pdfLazy';
 import { revokeObjectUrls } from '../../services/pdfShared';
+import { neededRenderScale } from '../../services/pdfSharpZoom';
 import type { GridFit } from './gridFit.ts';
 
 /**
  * Sharper thumbnails when the grid draws tiles wider than the preview bitmap (plan 2.4).
+ * A zoomed page is the other case, and `SharpPageLayer` handles it: thumbnails are small and whole,
+ * so they are drawn again whole; a zoomed page is drawn again only where it is in sight.
  * The first load is the tool's own, at `PREVIEW_SCALES[0]`; when the grid reports a tile
  * that needs more, this draws the pages again at the next scale and hands the new URLs
  * to `apply`. Only the pictures are replaced. Above 24 pages the scale never changes.
@@ -43,7 +46,7 @@ export const useSharpPreviews = (
 
   const onGridFit = useCallback((fit: GridFit) => {
     if (count > SHARP_PREVIEW_LIMIT || !pageWidthPoints) return;
-    const needed = (fit.tile * (window.devicePixelRatio || 1)) / pageWidthPoints;
+    const needed = neededRenderScale(fit.tile, window.devicePixelRatio, pageWidthPoints);
     const next = PREVIEW_SCALES.find((scale) => scale >= needed) ?? PREVIEW_SCALES[PREVIEW_SCALES.length - 1];
     setWantedScale((current) => Math.max(current, next));
   }, [pageWidthPoints, count]);

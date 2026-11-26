@@ -257,6 +257,10 @@ for (const key of ['390x844', '1440x900']) {
   assert.equal(downloads.length, 1, `one download (${names.join(', ')})`);
   assert.match(names[0], /\.zip$/, 'the ZIP');
   assert.deepEqual(dialogs, [], 'no browser confirm');
+  // A ZIP result's Download says what it gives (owner, 26 Nov 2026); a PDF result keeps "Download".
+  const sheet = page.getByRole('dialog');
+  assert.equal(await sheet.getByRole('button', { name: 'Download as one ZIP', exact: true }).count(), 1, 'the sheet offers "Download as one ZIP"');
+  assert.equal(await sheet.getByRole('button', { name: 'Download', exact: true }).count(), 0, 'no plain "Download" for a ZIP');
   await page.screenshot({ path: `${output}/auto-twelve-zip-${key}.png` });
   assert.deepEqual(errors, [], 'no page errors');
   results.push(`${key} untouched, 12 parts: "Saves one ZIP with 12 PDFs."; 1 download (${names[0]})`);

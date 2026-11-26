@@ -3,6 +3,7 @@ import { useI18n } from '../../services/i18n/react';
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Loader2, X } from 'lucide-react';
+import { focusablesIn, keepTabInside } from '../../hooks/useDialogFocus';
 
 /**
  * The shared component vocabulary. One button shape, one field shape, one
@@ -368,9 +369,6 @@ export const Sheet: React.FC<{
   useEffect(() => {
     if (!open) return undefined;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const selector = 'button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])';
-    const focusables = (): HTMLElement[] =>
-      panel.current ? Array.from(panel.current.querySelectorAll<HTMLElement>(selector)) : [];
     // A rename field opens focused with its text selected, so typing replaces the old name.
     const field = panel.current?.querySelector<HTMLInputElement>('input[data-sheet-initial-focus]');
     const preferred = panel.current?.querySelector<HTMLElement>('[data-sheet-primary-focus] button:not([disabled])');
@@ -378,7 +376,7 @@ export const Sheet: React.FC<{
       field.focus();
       field.select();
     } else {
-      (preferred || focusables()[0])?.focus();
+      (preferred || focusablesIn(panel.current)[0])?.focus();
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -389,18 +387,7 @@ export const Sheet: React.FC<{
         if (dismissible) onCloseRef.current();
         return;
       }
-      if (event.key !== 'Tab') return;
-      const items = focusables();
-      if (items.length === 0) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
+      keepTabInside(event, panel.current);
     };
 
     document.addEventListener('keydown', onKeyDown);

@@ -84,9 +84,13 @@ test('full-screen PDF previews are named modal dialogs with contained focus', ()
     assert.match(source, /role="dialog"/);
     assert.match(source, /aria-modal="true"/);
     assert.match(source, /aria-labelledby=\{titleId\}/);
-    assert.match(source, /event\.key !== 'Tab'/);
-    assert.match(source, /previous\?\.isConnected/);
+    assert.match(source, /useDialogFocus\(panelRef, onClose\);/);
   }
+  // One hook holds the focus for these and for the large page preview.
+  assert.match(read('components/Tool/LargePagePreview.tsx'), /useDialogFocus\(dialogRef, onClose, \{ initial: closeRef, opener, lockScroll: false \}\);/);
+  const dialog = read('hooks/useDialogFocus.ts');
+  assert.match(dialog, /event\.key !== 'Tab'/);
+  assert.match(dialog, /previous\?\.isConnected/);
 });
 
 test('Extract Pages exposes one selection control per page', () => {

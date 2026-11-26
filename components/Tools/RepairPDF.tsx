@@ -121,11 +121,13 @@ export const RepairPDF: React.FC = () => {
         />
       )}
       notice={notice}
-      action={(
-        <button type="button" onClick={() => void handleRepair()} disabled={status.isProcessing} className="tk-primary chef-pressable">
+      onRun={() => void handleRepair()}
+      runDisabled={status.isProcessing}
+      runLabel={(
+        <>
           <Wrench aria-hidden size={18} />
           <span>{t("repair-pdf.save.repaired.pdf.ac389a")}</span>
-        </button>
+        </>
       )}
       progress={status.isProcessing ? (
         <ProgressLine label={status.message} percent={formatPercent(Math.max(0, Math.min(100, status.progress)))} value={status.progress} />

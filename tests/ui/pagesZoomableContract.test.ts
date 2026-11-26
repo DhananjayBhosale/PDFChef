@@ -58,7 +58,7 @@ test('Crop and Header & Footer have Watermark\'s expand button and open their li
 
 test('Make Fillable zooms its page with − % + and two fingers, and a second finger never draws', () => {
   const source = read('components/Tools/MakeFillable.tsx');
-  assert.match(source, /usePdfPinchZoom\(\{ zoom, setZoom: setExactZoom, min: 1, max: 4 \}\)/);
+  assert.match(source, /usePdfPinchZoom\(\{ zoom, setZoom: setExactZoom, min: 1, max: MAX_ZOOM \}\)/);
   assert.match(source, /<ZoomControls className="tk-fill-zoom"/);
   assert.match(source, /if \(!event\.isPrimary\) \{ dragStart\.current = null; return; \}/);
 });
@@ -89,7 +89,7 @@ test('Create PDF photos, Compare panes, Watermark, Page Numbers, Reorder and que
   assert.match(make, /<PeekButton page=\{index \+ 1\} onOpen=\{\(\) => openPhoto\(index\)\} \/>/);
   assert.match(make, /<PDFPreviewModal file=\{largePhoto\.file\} image=\{largePhoto\.url\}/);
   const compare = read('components/Tools/ComparePDF.tsx');
-  assert.match(compare, /usePanZoom\(\{ max: 4 \}\)/);
+  assert.match(compare, /usePanZoom\(\{ max: MAX_ZOOM \}\)/);
   assert.match(compare, /onOpen=\{\(\) => entry\.large\.open\(pageIndex\)\}/);
   assert.match(compare, /\{!wide && summary\}/);
   assert.match(read('components/Tools/WatermarkPDF.tsx'), /<div ref=\{previewPinchRef\} className="tk-pinchbox">/);
@@ -107,15 +107,23 @@ test('Crop and Header & Footer keep the expand button in the pager row', () => {
 });
 
 test('Read PDF, Image to PDF and Sign zoom to 400%, and Sign reads its fitted view as 100%', () => {
-  assert.match(read('components/Tools/ViewPDF.tsx'), /const READER_MAX_ZOOM = 4;/);
-  assert.match(read('components/Tools/ImageToPDF.tsx'), /const I2P_MAX_ZOOM = 4;/);
+  // One limit for every screen (hooks/useZoom.ts); the large PDF preview alone goes to 500%.
+  const limits = read('hooks/useZoom.ts');
+  assert.match(limits, /export const MAX_ZOOM = 4;/);
+  assert.match(limits, /export const LARGE_PREVIEW_MAX_ZOOM = 5;/);
+  assert.match(read('components/UI/PDFPreviewModal.tsx'), /usePanZoom\(\{ min: 0\.5, max: LARGE_PREVIEW_MAX_ZOOM \}\)/);
+  assert.match(read('components/Tools/ViewPDF.tsx'), /useZoom\(1, 0\.5, MAX_ZOOM, 0\.25\)/);
+  assert.match(read('components/Tools/ImageToPDF.tsx'), /useZoom\(1\.0, 0\.5, MAX_ZOOM, 0\.25\)/);
   const sign = read('components/Tools/SignPDF.tsx');
-  assert.match(sign, /useZoom\(1, 0\.5, SIGN_MAX_ZOOM\)/);
-  assert.match(sign, /usePdfPinchZoom\(\{ zoom: view, setZoom: setExactZoom, max: SIGN_MAX_ZOOM \}\)/);
+  assert.match(sign, /useZoom\(1, 0\.5, MAX_ZOOM\)/);
+  assert.match(sign, /usePdfPinchZoom\(\{ zoom: view, setZoom: setExactZoom, max: MAX_ZOOM \}\)/);
+  for (const path of ['components/Tools/ViewPDF.tsx', 'components/Tools/ImageToPDF.tsx', 'components/Tools/SignPDF.tsx', 'components/Tools/EditPDF.tsx', 'components/Tools/MakeFillable.tsx', 'components/Tool/LargePagePreview.tsx']) {
+    assert.doesNotMatch(read(path), /_MAX_ZOOM = \d|max: 4\b|max=\{4\}/, `${path} keeps no limit of its own`);
+  }
 });
 
 test('PDF to Image zooms its page to 400%, as Compare does (overnight 2026-11-24, B13)', () => {
   const source = read('components/Tools/PDFToImage.tsx');
-  assert.match(source, /usePanZoom\(\{ max: 4 \}\)/);
-  assert.match(source, /<ZoomControls zoom=\{zoom\} onZoomIn=\{zoomIn\} onZoomOut=\{zoomOut\} onReset=\{resetZoom\} max=\{4\} \/>/);
+  assert.match(source, /usePanZoom\(\{ max: MAX_ZOOM \}\)/);
+  assert.match(source, /<ZoomControls zoom=\{zoom\} onZoomIn=\{zoomIn\} onZoomOut=\{zoomOut\} onReset=\{resetZoom\} max=\{MAX_ZOOM\} \/>/);
 });

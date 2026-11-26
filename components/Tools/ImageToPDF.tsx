@@ -13,7 +13,7 @@ import { AlertTriangle, X, ArrowDown, Loader2, FileImage, Plus, Trash2, Move, Ro
 import { v4 as uuidv4 } from 'uuid';
 import { Link } from 'react-router-dom';
 import { ZoomControls } from '../UI/ZoomControls';
-import { useZoom } from '../../hooks/useZoom';
+import { MAX_ZOOM, useZoom } from '../../hooks/useZoom';
 import { usePdfPinchZoom } from '../../hooks/usePdfPinchZoom';
 import { useDragReorder } from '../../hooks/useDragReorder';
 import { useFileDrop } from '../../hooks/useFileDrop';
@@ -30,8 +30,6 @@ import { photoOutputName } from '../UI/format';
 
 const MAX_IMAGE_TO_PDF_FILES = 100;
 const IMAGE_PREPARE_CONCURRENCY = 2;
-/** The pages zoom to 400%, as in Edit PDF (fable-2 item 20). */
-const I2P_MAX_ZOOM = 4;
 
 
 // Data Model
@@ -300,12 +298,12 @@ export const ImageToPDF: React.FC = () => {
   // A count, because the empty screen and a page's own picker can each add images at once.
   const [imagesBeingAdded, setImagesBeingAdded] = useState(0);
   const addingImages = imagesBeingAdded > 0;
-  const { zoom, zoomIn, zoomOut, resetZoom, setExactZoom } = useZoom(1.0, 0.5, I2P_MAX_ZOOM, 0.25);
+  const { zoom, zoomIn, zoomOut, resetZoom, setExactZoom } = useZoom(1.0, 0.5, MAX_ZOOM, 0.25);
   const wide = useWide();
   const viewPop = usePop();
   const canvasViewportRef = useRef<HTMLDivElement | null>(null);
   // Two fingers (or Ctrl+wheel) on the pages zoom them too, as in Read PDF; View keeps − and + (pass 5).
-  const setPinchViewport = usePdfPinchZoom({ zoom, setZoom: setExactZoom, min: 0.5, max: I2P_MAX_ZOOM });
+  const setPinchViewport = usePdfPinchZoom({ zoom, setZoom: setExactZoom, min: 0.5, max: MAX_ZOOM });
   const setCanvasViewport = useCallback((node: HTMLDivElement | null) => {
     canvasViewportRef.current = node;
     setPinchViewport(node);
@@ -680,7 +678,7 @@ export const ImageToPDF: React.FC = () => {
           <span role="status" aria-live="polite" className="sr-only">{addingImages ? t("image-to-pdf.adding.images.8a4d34") : ''}</span>
           <div className="tk-actions">{saveButton}</div>
           <Pop pop={viewPop} id="i2p-view" title={t("image-to-pdf.view.dcc839")}>
-            <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={I2P_MAX_ZOOM} />
+            <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={MAX_ZOOM} />
           </Pop>
         </div>
       )}
@@ -720,7 +718,7 @@ export const ImageToPDF: React.FC = () => {
 
                   <section>
                      <h3 className="tk-i2p-cap">{t("image-to-pdf.view.dcc839")}</h3>
-                     <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={I2P_MAX_ZOOM} />
+                     <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={MAX_ZOOM} />
                   </section>
 
                   <section>

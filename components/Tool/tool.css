@@ -127,7 +127,6 @@
 }
 @media (hover: hover) { .tk-change:hover { background: var(--accent-quiet); } }
 .tk-change:disabled { opacity: 0.5; cursor: not-allowed; }
-.tk-change-icon { display: inline-grid; place-items: center; flex: none; width: 48px; min-height: 48px; padding: 0; }
 .tk-change-word { display: inline-flex; align-items: center; gap: 4px; flex: none; min-height: 48px; padding-inline: 10px 12px; }
 .tk-change-text { display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .tk-change-text > .tk-change-compact { display: none; }
@@ -253,27 +252,29 @@
 .tk-chips:empty { display: none; }
 /* A setting's control in its value's card on a phone (owner decision 2026-11-15, item 1): each
    takes the card's width, so a field or a strip never squeezes beside another. */
-:is(.tk-sheet, .tk-pop) .tk-makepdf-namefield,
-:is(.tk-sheet, .tk-pop) .tk-ocr-limit { flex: 1 1 100%; min-width: 0; }
+:is(.tk-sheet, .tk-pop) .tk-makepdf-namefield { flex: 1 1 100%; min-width: 0; }
 :is(.tk-sheet, .tk-pop) .tk-split-size { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; flex: 1 1 100%; min-width: 0; }
 :is(.tk-sheet, .tk-pop) .tk-split-size .tk-stepper { align-items: center; flex: 1 1 9rem; }
-:is(.tk-sheet, .tk-pop) .tk-split-size .tk-stepper-field,
-:is(.tk-sheet, .tk-pop) .tk-ocr-limit .tk-stepper-field { flex: 0 1 6rem; }
+:is(.tk-sheet, .tk-pop) .tk-split-size .tk-stepper-field { flex: 0 1 6rem; }
 .tk-pop .tk-batch-settings[data-option] { grid-template-columns: minmax(0, 1fr); }
 .tk-sheet > .tk-notice { margin-top: -4px; }
-/* The sheet comes before the body in the document (Tab and screen-reader order, verify V-01)
-   and is drawn at the foot; whatever followed the body before still follows the sheet. */
-.tk-tool:not([data-wide]) > .tk-sheet { order: 1; }
-.tk-tool:not([data-wide]) > .tk-canvas ~ :not(.tk-sheet) { order: 2; }
+/* The settings and the main action are at the foot of every tool, on every screen size (owner,
+   26 Nov 2026). The sheet or band comes before the body in the document (Tab and screen-reader
+   order, verify V-01) and is drawn at the foot; whatever followed the body before still follows it. */
+.tk-tool > :is(.tk-sheet, .tk-band) { order: 1; }
+/* A bar across the foot keeps square corners while it holds the tool's start focus. */
+.tk-tool > .tk-band { border-radius: 0; }
+.tk-tool > .tk-canvas ~ :not(.tk-sheet) { order: 2; }
 
-/* Phone top band for live-preview tools (D3), and the foot bar. */
-.tk-band-top {
+/* Phone, live-preview tools (D3): the sentence as a band under the preview, joined to the foot bar. */
+.tk-band-foot {
   flex: none;
-  padding: 16px 16px 18px;
+  padding: 12px 16px;
   background: var(--surface-raised);
-  border-bottom: 1px solid var(--border-hairline);
+  border-top: 1px solid var(--border-hairline);
 }
-.tk-band-top .tk-notice { margin-top: 10px; }
+.tk-band-foot .tk-notice { margin-top: 10px; }
+.tk-band-foot ~ .tk-footbar { padding-top: 0; border-top: 0; }
 .tk-footbar {
   flex: none;
   display: flex;
@@ -743,14 +744,14 @@
    live-preview tool's band, so the page keeps its room while a card is open (item 4). Each cell
    reads label over value, at every text size. */
 /* Rows carry their own hairlines, so a band of rows needs less padding (item 4). */
-.tk-band-top:has(> .tk-sentence-group .tk-rows) { padding-block: 8px 10px; }
-.tk-band-top .tk-rows[data-many] {
+.tk-band-foot:has(> .tk-sentence-group .tk-rows) { padding-block: 8px 10px; }
+.tk-band-foot .tk-rows[data-many] {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px 12px;
   border-top: 0;
 }
-.tk-band-top .tk-rows[data-many] > .tk-row {
+.tk-band-foot .tk-rows[data-many] > .tk-row {
   position: relative;
   flex-direction: column;
   align-items: flex-start;
@@ -760,16 +761,16 @@
   padding: 0 2px;
 }
 /* A control drawn in the cell (Watermark's colour well) sits beside its label. */
-.tk-band-top .tk-rows[data-many] > .tk-row-inline { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; }
-.tk-band-top .tk-rows[data-many] > .tk-row-inline .tk-swatch { margin-block: -4px; }
-.tk-band-top .tk-rows[data-many] .tk-row-label { flex: none; font-size: 0.75rem; line-height: 1rem; }
-.tk-band-top .tk-rows[data-many] .tk-row-value { max-width: 100%; text-align: start; line-height: 1.25rem; }
-.tk-band-top .tk-rows[data-many] .tk-row-value .tk-slot-text { white-space: normal; }
-.tk-band-top .tk-rows[data-many] > .tk-row:has(> .tk-slot-caret) { padding-inline-end: 22px; }
-.tk-band-top .tk-rows[data-many] > .tk-row > .tk-slot-caret { position: absolute; inset-inline-end: 2px; top: 50%; translate: 0 -50%; }
+.tk-band-foot .tk-rows[data-many] > .tk-row-inline { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; }
+.tk-band-foot .tk-rows[data-many] > .tk-row-inline .tk-swatch { margin-block: -4px; }
+.tk-band-foot .tk-rows[data-many] .tk-row-label { flex: none; font-size: 0.75rem; line-height: 1rem; }
+.tk-band-foot .tk-rows[data-many] .tk-row-value { max-width: 100%; text-align: start; line-height: 1.25rem; }
+.tk-band-foot .tk-rows[data-many] .tk-row-value .tk-slot-text { white-space: normal; }
+.tk-band-foot .tk-rows[data-many] > .tk-row:has(> .tk-slot-caret) { padding-inline-end: 22px; }
+.tk-band-foot .tk-rows[data-many] > .tk-row > .tk-slot-caret { position: absolute; inset-inline-end: 2px; top: 50%; translate: 0 -50%; }
 /* Largest text keeps the two columns too (one column left the page under 30% with a card open);
    a long label or value wraps to a second line, never cut with "…" (s8-02, owner 25 Nov 2026). */
-.tk-band-top .tk-rows[data-many] .tk-row-label { overflow-wrap: anywhere; }
+.tk-band-foot .tk-rows[data-many] .tk-row-label { overflow-wrap: anywhere; }
 
 /* Rows form: each slot as a full-width row, the setting name at the start. */
 .tk-rows { display: flex; flex-direction: column; border-top: 1px solid var(--border-hairline); }
@@ -954,13 +955,10 @@
 /* Low, Medium, High: three across, fewer when a word would not fit (research r3, mobile-03). */
 /* The three choices share the row equally, never "High" alone under the others at 360 px (review 2, item 13). */
 .tk-compress-presets { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
-.tk-compress-mark { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 999px; background: var(--accent-quiet); color: var(--accent-on-quiet); }
 .tk-compress-page { display: flex; flex: 1 1 auto; min-height: 0; }
 .tk-compress-page > * { flex: 1 1 auto; min-height: 0; }
 /* The page fits the panel: a 0-based row lets the image's max-height resolve against it. */
 .tk-compress-page .tk-filepreview-page { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
-.tk-compress-result { width: 100%; }
-.tk-band .tk-compress-result { max-width: 640px; }
 
 /* ---------------------------------------------------------------- Crop --- */
 /* The page stays white in both themes, so the dim outside the frame is fixed ink, not a token. */
@@ -1147,8 +1145,6 @@
   .tk-navlink { position: relative; }
   .tk-navlink::after { content: ""; position: absolute; inset: -6px 0; }
   .tk-change::after { content: ""; position: absolute; inset: -4px 0; }
-  .tk-btn-small { position: relative; }
-  .tk-btn-small::after { content: ""; position: absolute; inset: -5px 0; }
   .tk-brand { display: grid; place-items: center; min-width: 48px; min-height: 48px; }
 }
 
@@ -1164,20 +1160,21 @@
   .tk-top-row { min-height: 52px; gap: 12px; padding-inline: 16px; }
   .tk-top-title { font-size: 1.125rem; line-height: 1.5rem; }
 
-  /* The band (D4): the sentence, chips and line, with the action at its end. */
+  /* The band (D4), at the foot of the tool: the sentence, chips and line, with the action at its end. */
   .tk-band {
     flex: none;
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
     gap: 16px 28px;
     padding: 14px 32px;
     background: var(--surface-raised);
-    border-bottom: 1px solid var(--border-hairline);
+    border-top: 1px solid var(--border-hairline);
   }
-  .tk-band { flex-wrap: wrap; }
   .tk-band-main { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; flex: 1 1 0; min-width: 0; min-height: 40px; }
-  /* The result strip: a row of its own under the sentence and the action, the band's width (T-07). */
-  .tk-band-result { flex: 1 1 100%; }
+  /* The result strip: a row of its own above the sentence and the action, the band's width (T-07),
+     so the main action keeps its place at the foot when a result arrives. */
+  .tk-band-result { order: -1; flex: 1 1 100%; }
   .tk-band-main > .tk-sentence-group { flex: 0 1 auto; min-width: min(100%, 20rem); }
   .tk-band-main > .tk-notice { flex-basis: 100%; }
   .tk-band-end { display: flex; flex-direction: column; align-items: stretch; gap: 10px; flex: none; width: 320px; }
@@ -1228,7 +1225,6 @@
 
 /* A narrower desktop: the action may wrap under the sentence. */
 @media (min-width: 768px) and (min-height: 480px) and (max-width: 1279.98px) {
-  .tk-band { flex-wrap: wrap; }
   .tk-band-end { width: 100%; flex-direction: row; align-items: center; }
   .tk-band-end .tk-actions,
   .tk-band-end .tk-progress-block { flex: 0 1 360px; }
@@ -1236,29 +1232,30 @@
 
 /* Desktop with a settings column (research r2, desktop-04): in the document the column comes
    before the action, so Tab goes sentence, settings, action; on screen the page stays at the
-   start and the action and result strip stay in the band's row. One raised backdrop behind the
-   band's cells keeps it one band. */
+   start and the action and result strip stay in the band's rows at the foot. One raised backdrop
+   behind the band's cells keeps it one band. */
 @media (min-width: 768px) and (min-height: 480px) {
   .tk-split-side { order: 1; }
 }
 @media (min-width: 768px) and (min-height: 480px) {
+  /* Rows: the canvas, the result strip, the sentence with the action, the action on a narrower desktop. */
   .tk-tool[data-tail] {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto auto auto auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto auto auto;
   }
   .tk-tool[data-tail]::before {
     content: "";
     grid-column: 1 / -1;
     grid-row: 2 / 5;
     background: var(--surface-raised);
-    border-bottom: 1px solid var(--border-hairline);
+    border-top: 1px solid var(--border-hairline);
   }
-  .tk-tool[data-tail] > .tk-band { grid-column: 1; grid-row: 2; padding-inline-end: 0; background: transparent; border-bottom: 0; }
+  .tk-tool[data-tail] > .tk-canvas { grid-column: 1 / -1; grid-row: 1; }
+  .tk-tool[data-tail] > .tk-band { grid-column: 1; grid-row: 3; padding-inline-end: 0; background: transparent; border-top: 0; }
   .tk-tool[data-tail] > .tk-band-tail { display: contents; }
-  .tk-tool[data-tail] > .tk-band-tail > .tk-band-end { grid-column: 2; grid-row: 2; align-self: start; margin: 14px 32px 14px 28px; }
-  .tk-tool[data-tail] > .tk-band-tail > .tk-band-result { grid-column: 1 / -1; grid-row: 4; padding: 0 32px 14px; }
-  .tk-tool[data-tail] > .tk-canvas { grid-column: 1 / -1; grid-row: 5; }
+  .tk-tool[data-tail] > .tk-band-tail > .tk-band-end { grid-column: 2; grid-row: 3; align-self: start; margin: 14px 32px 14px 28px; }
+  .tk-tool[data-tail] > .tk-band-tail > .tk-band-result { grid-column: 1 / -1; grid-row: 2; padding: 14px 32px 0; }
   /* A wide screen (research r3, desktop-09): the band's content keeps to a 1240 px column in the
      middle, so the main action stays near the sentence and the page. Tool routes have no rail, so
      the viewport is the tool's width. */
@@ -1268,7 +1265,7 @@
 }
 @media (min-width: 768px) and (min-height: 480px) and (max-width: 1279.98px) {
   .tk-tool[data-tail] > .tk-band { grid-column: 1 / -1; padding-inline-end: 32px; padding-bottom: 0; }
-  .tk-tool[data-tail] > .tk-band-tail > .tk-band-end { grid-column: 1 / -1; grid-row: 3; width: auto; margin: 16px 32px 14px; }
+  .tk-tool[data-tail] > .tk-band-tail > .tk-band-end { grid-column: 1 / -1; grid-row: 4; width: auto; margin: 16px 32px 14px; }
 }
 
 
@@ -1295,7 +1292,6 @@
 .tk-notice-action { margin-inline-start: 6px; vertical-align: middle; }
 .tk-btn-danger { border-color: var(--status-danger-text); background: transparent; color: var(--status-danger-text); }
 .tk-btn-danger:hover:not(:disabled) { background: var(--status-danger-quiet); }
-.tk-btn-small { min-height: 40px; padding-inline: 12px; font-size: 0.8125rem; }
 .tk-primary-inline { display: inline-flex; width: auto; min-height: 48px; }
 .tk-grid-error { color: var(--status-danger-text); }
 .tk-chipgroup { display: inline-flex; flex-wrap: wrap; gap: 8px; }

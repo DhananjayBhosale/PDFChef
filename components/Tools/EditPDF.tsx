@@ -90,12 +90,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { StatusLine } from '../UI/Primitives';
 import { ToolLeaveGuard, ToolScreen } from '../Tool/ToolScreen';
 import { ToolTop, useRouteTool } from '../Tool/ToolTop';
+import { SharpPageLayer } from '../Tool/SharpPageLayer';
 import { ResultSlot, useAnnouncer } from '../Tool/parts';
 import { v4 as uuidv4 } from 'uuid';
 import { Link } from 'react-router-dom';
 import { ZoomControls } from '../UI/ZoomControls';
 import { ClampedNumberInput } from '../UI/ClampedNumberInput';
-import { useZoom } from '../../hooks/useZoom';
+import { MAX_ZOOM, useZoom } from '../../hooks/useZoom';
 import { useDiscardPrompt, useLeaveGuarded } from '../../hooks/useConfirmDiscard';
 import { useWorkInput } from '../UI/workSignature';
 import { useFileDrop } from '../../hooks/useFileDrop';
@@ -171,7 +172,6 @@ const FIELD_TOUCH_TARGET_PX = 24;
 /** iPhone, iPad, or the iOS app, where the dock field is not used yet (see `dockEditing`). */
 const APPLE_TOUCH = Capacitor.getPlatform() === 'ios' || (typeof navigator !== 'undefined'
   && (/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)));
-const EDITOR_MAX_ZOOM = 4;
 /** PDF permission flag for "modify contents", as PDF.js reports it. */
 const PDF_PERMISSION_MODIFY_CONTENTS = 8;
 /** The PDF engine's own refusals, which a save can work around paragraph by paragraph. */
@@ -340,8 +340,9 @@ const PDFPage: React.FC<{
       const cachedPageText = cachedText?.(pageIndex);
       try {
         const page = await pdfDoc.getPage(pageIndex + 1);
-        // Render at a high scale (2.0 unless the page is poster-sized) for sharpness when zooming in
-        // We do NOT re-render on zoom change, we just scale the CSS
+        // Render at a high scale (2.0 unless the page is poster-sized). This canvas is not drawn
+        // again on zoom: CSS scales it, and SharpPageLayer lays the part in sight over it at full
+        // detail once the zoom rests. The colour sampling below reads this canvas only.
         const renderScale = getPdfRenderScale(page);
         const viewport = page.getViewport({ scale: renderScale });
         
@@ -454,6 +455,7 @@ const PDFPage: React.FC<{
         }}
       >
         <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none w-full h-full" />
+        <SharpPageLayer source={{ pdfDoc }} pageIndex={pageIndex} zoom={displayScale} />
         <PdfTextBlockLayer
           blocks={textBlocks}
           fonts={blockFonts}
@@ -1156,7 +1158,7 @@ export const EditPDF: React.FC = () => {
   
   // Editing needs more magnification than reading does. On a phone, body text at eleven points is
   // roughly seven CSS pixels once the page is fitted to the screen, and no caret is usable there.
-  const { zoom, zoomIn, zoomOut, resetZoom, setExactZoom } = useZoom(1.0, 0.5, EDITOR_MAX_ZOOM);
+  const { zoom, zoomIn, zoomOut, resetZoom, setExactZoom } = useZoom(1.0, 0.5, MAX_ZOOM);
 
   useEffect(() => {
     activeNativeFileRef.current = file?.file ?? null;
@@ -1170,7 +1172,7 @@ export const EditPDF: React.FC = () => {
       releaseDocumentEmbeddedFonts(activeFile);
     }
   }, []);
-  const setPdfZoomViewport = usePdfPinchZoom({ zoom, setZoom: setExactZoom, max: EDITOR_MAX_ZOOM });
+  const setPdfZoomViewport = usePdfPinchZoom({ zoom, setZoom: setExactZoom, max: MAX_ZOOM });
   const bindPdfZoomViewport = useCallback((viewport: HTMLDivElement | null) => {
     pdfZoomViewportRef.current = viewport;
     setPdfZoomViewport(viewport);
@@ -1320,7 +1322,7 @@ export const EditPDF: React.FC = () => {
     const legible = zoom * LEGIBLE_EDITING_FONT_PX / renderedFontSize;
     const ceiling = zoom * MINIMUM_EDITING_FONT_PX / renderedFontSize;
     // With the dock field the page only has to show the whole paragraph: the field is where it is read.
-    const target = Math.min(EDITOR_MAX_ZOOM, ceiling, fitOnly ? fitsWidth : Math.max(fitsWidth, legible));
+    const target = Math.min(MAX_ZOOM, ceiling, fitOnly ? fitsWidth : Math.max(fitsWidth, legible));
     // A zoom this editor chose may come down again for a wider paragraph, never below the reader's own.
     const from = autoZoomRef.current?.from ?? zoom;
     const next = Math.max(dockEditing && autoZoomRef.current ? from : zoom, target);
@@ -3427,7 +3429,7 @@ export const EditPDF: React.FC = () => {
                 <button type="button" onClick={() => goToPage(targetPageIndex + 1)} disabled={targetPageIndex >= pageCount - 1} aria-label={t("edit-pdf.next.page.c08ac7")} className="chef-pressable chef-hit-y grid h-9 w-touch shrink-0 place-items-center rounded-[var(--radius-control)] text-[var(--text-secondary)] disabled:opacity-55"><ChevronRight aria-hidden size={19} className="rtl:rotate-180" /></button>
               </div>
             )}
-            <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={EDITOR_MAX_ZOOM} compact keepFocus className="ms-auto" />
+            <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={MAX_ZOOM} compact keepFocus className="ms-auto" />
           </div>
 
           <div className="flex max-h-[48rem] min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-panel)] bg-[var(--surface-sunken)]">
@@ -3617,7 +3619,7 @@ export const EditPDF: React.FC = () => {
                 <div ref={deskBandRef} className="flex items-start gap-2 border-b border-[var(--border-hairline)] bg-[var(--surface-raised)] px-2 py-1.5">
                   {paragraphInspector(false)}
                   <div className="ms-auto shrink-0 [&_button]:h-11 [&_button]:w-11 [&_button]:p-0">
-                    <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={EDITOR_MAX_ZOOM} keepFocus />
+                    <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={MAX_ZOOM} keepFocus />
                   </div>
                 </div>
                 <div

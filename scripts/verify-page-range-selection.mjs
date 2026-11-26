@@ -108,11 +108,14 @@ async function download(page, action) {
   await action.click();
   const dialog = page.getByRole('dialog');
   await dialog.waitFor();
-  for (const name of ['Download', 'Rename', 'Use in another tool', 'Keep in Recent']) {
+  // A ZIP result names its Download "Download as one ZIP" (owner, 26 Nov 2026).
+  const downloadButton = dialog.getByRole('button', { name: /^Download( as one ZIP)?$/ });
+  assert.equal(await downloadButton.count(), 1, 'Download must remain in output menu');
+  for (const name of ['Rename', 'Use in another tool', 'Keep in Recent']) {
     assert.equal(await dialog.getByRole('button', { name, exact: true }).count(), 1, `${name} must remain in output menu`);
   }
   const pending = page.waitForEvent('download');
-  await dialog.getByRole('button', { name: 'Download', exact: true }).click();
+  await downloadButton.click();
   const result = await pending;
   const chunks = [];
   for await (const chunk of await result.createReadStream()) chunks.push(chunk);

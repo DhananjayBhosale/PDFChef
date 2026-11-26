@@ -9,15 +9,16 @@ import { PDFLoadingProgress } from '../UI/PDFLoadingProgress';
 import { ToolScreen } from '../Tool/ToolScreen';
 import { ChangeFile } from '../Tool/ToolTop';
 import { Sentence } from '../Tool/Sentence';
+import { SharpPageLayer } from '../Tool/SharpPageLayer';
 import { StatusToast } from '../UI/StatusToast';
 import { ActionRow, Notice, ResultSlot, useToolAnnounce } from '../Tool/parts';
 import { Pop, openerProps, usePop } from '../Tool/Popover';
 import { formatNumber } from '../../services/i18n/core.ts';
 import { useWide } from '../../hooks/useMediaQuery';
-import { useZoom } from '../../hooks/useZoom';
+import { MAX_ZOOM, useZoom } from '../../hooks/useZoom';
 import { usePdfPinchZoom } from '../../hooks/usePdfPinchZoom';
 import { ZoomControls } from '../UI/ZoomControls';
-import { createFillablePdf, detectVisualFormFields, getPageSelectableTextLines, getPdfFormFields, getPdfPagePreviews, loadDisposablePDFDocument, loadPDFDocument, renderPageAsImage, type PdfPreviewProgress } from '../../services/pdfLazy';
+import { createFillablePdf, detectVisualFormFields, getPageSelectableTextLines, getPdfFormFields, getPdfPagePreviews, loadPDFDocument, type PdfPreviewProgress } from '../../services/pdfLazy';
 import { type FillableFieldKind, type FillableFieldPlacement } from '../../services/fillableForms';
 import { downloadBytes, revokeObjectUrls } from '../../services/pdfShared';
 import { getWorkspaceSettings } from '../../services/workspace';
@@ -73,9 +74,9 @@ export const MakeFillable: React.FC = () => {
 
   // Zoom (REVIEW.md item 6: a checkbox a few millimetres wide cannot be drawn at the fitted size):
   // Sign's − % + and two fingers on the page, from the fitted page (100%) to 400%. The page grows
-  // from its fitted width; a fresh, sharper drawing replaces the small one while zoomed.
-  const { zoom, zoomIn, zoomOut, resetZoom, setExactZoom } = useZoom(1, 1, 4, 0.5);
-  const setPinchViewport = usePdfPinchZoom({ zoom, setZoom: setExactZoom, min: 1, max: 4 });
+  // from its fitted width; SharpPageLayer draws the part in sight at full detail while zoomed.
+  const { zoom, zoomIn, zoomOut, resetZoom, setExactZoom } = useZoom(1, 1, MAX_ZOOM, 0.5);
+  const setPinchViewport = usePdfPinchZoom({ zoom, setZoom: setExactZoom, min: 1, max: MAX_ZOOM });
   const [fitWidth, setFitWidth] = useState(0);
   useLayoutEffect(() => {
     const node = previewRef.current;
@@ -86,36 +87,10 @@ export const MakeFillable: React.FC = () => {
     observer?.observe(node);
     return () => observer?.disconnect();
   }, [zoom, pageIndex, previews, wide]);
-  const [sharp, setSharp] = useState<{ index: number; url: string } | null>(null);
-  const sharpRef = useRef(sharp);
-  const zoomStep = Math.ceil(zoom);
-  useEffect(() => {
-    if (!file || zoomStep <= 1 || !fitWidth) return undefined;
-    let alive = true;
-    const timer = window.setTimeout(async () => {
-      let pdf: any = null;
-      try {
-        pdf = await loadDisposablePDFDocument(file);
-        const page = await pdf.getPage(pageIndex + 1);
-        const width = page.getViewport({ scale: 1 }).width || 1;
-        const scale = Math.min(4, Math.max(1, (fitWidth * zoomStep * Math.min(2, window.devicePixelRatio || 1)) / width));
-        const { objectUrl } = await renderPageAsImage(pdf, pageIndex, { scale, format: 'image/jpeg', quality: 0.9 });
-        if (!alive) { URL.revokeObjectURL(objectUrl); return; }
-        if (sharpRef.current) URL.revokeObjectURL(sharpRef.current.url);
-        sharpRef.current = { index: pageIndex, url: objectUrl };
-        setSharp(sharpRef.current);
-      } catch { /* the fitted drawing stays */ } finally {
-        if (pdf?.destroy) void pdf.destroy();
-      }
-    }, 250);
-    return () => { alive = false; window.clearTimeout(timer); };
-  }, [file, pageIndex, zoomStep, fitWidth]);
-  useEffect(() => () => { if (sharpRef.current) URL.revokeObjectURL(sharpRef.current.url); }, []);
   useEffect(() => { resetZoom(); }, [file, resetZoom]);
-  const pageSrc = zoom > 1 && sharp?.index === pageIndex ? sharp.url : previews[pageIndex];
   const setPageViewport = useCallback((node: HTMLDivElement | null) => setPinchViewport(node), [setPinchViewport]);
   const zoomControls = (
-    <ZoomControls className="tk-fill-zoom" zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} min={1} max={4} />
+    <ZoomControls className="tk-fill-zoom" zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} min={1} max={MAX_ZOOM} />
   );
 
   const fieldsOnPage = useMemo(() => fields.filter((field) => field.pageIndex === pageIndex), [fields, pageIndex]);
@@ -442,7 +417,9 @@ export const MakeFillable: React.FC = () => {
       }}
       onPointerCancel={() => { dragStart.current = null; setTouchDrawMode(false); }}
     >
-      <img src={pageSrc} alt={t("make-fillable.page.c140ba", { v0: pageIndex + 1 })} className="tk-fill-img block max-w-full object-contain" style={zoom > 1 && fitWidth ? { width: '100%', maxWidth: 'none', maxHeight: 'none' } : undefined} draggable={false} />
+      <img src={previews[pageIndex]} alt={t("make-fillable.page.c140ba", { v0: pageIndex + 1 })} className="tk-fill-img block max-w-full object-contain" style={zoom > 1 && fitWidth ? { width: '100%', maxWidth: 'none', maxHeight: 'none' } : undefined} draggable={false} />
+      {/* Above the page picture, under the field boxes. Only while zoomed: at 100% the file is not opened a second time. */}
+      <SharpPageLayer source={{ file }} pageIndex={pageIndex} zoom={zoom > 1 ? zoom : undefined} />
       {fieldsOnPage.map((field) => (
         <button
           key={field.id}

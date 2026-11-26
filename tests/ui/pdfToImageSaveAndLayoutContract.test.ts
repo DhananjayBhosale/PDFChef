@@ -40,7 +40,7 @@ test('every PDF to Image result goes through the awaited save', () => {
 });
 
 test('Convert and the per-image Download stay disabled while a save is running', () => {
-  const convert = between('onClick={handlePrimaryAction}', '>');
+  const convert = between('onRun={handlePrimaryAction}', 'runLabel=');
   assert.match(convert, /status\.isProcessing \|\|/);
   const download = between('onClick={() => void downloadEmbeddedImages([image])}', '>');
   assert.match(download, /disabled=\{status\.isProcessing\}/);

@@ -1,10 +1,12 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import { X } from 'lucide-react';
 import { t } from '../../services/i18n/core.ts';
 import { useI18n } from '../../services/i18n/react';
-import { useZoom } from '../../hooks/useZoom';
+import { MAX_ZOOM, useZoom } from '../../hooks/useZoom';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import { ZoomControls } from '../UI/ZoomControls';
 import { Portal } from '../UI/Primitives';
+import { SharpZoomContext } from './SharpPageLayer';
 
 /**
  * A page preview shown on the whole screen, to look closely (owner 2026-11-15: Page Numbers'
@@ -22,7 +24,7 @@ export const LargePagePreview: React.FC<{
   children: React.ReactNode;
 }> = ({ onClose, width, height, opener, foot, children }) => {
   useI18n();
-  const { zoom, zoomIn, zoomOut, resetZoom, setExactZoom } = useZoom(1, 1, 4, 0.5);
+  const { zoom, zoomIn, zoomOut, resetZoom, setExactZoom } = useZoom(1, 1, MAX_ZOOM, 0.5);
   const closeRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -33,39 +35,9 @@ export const LargePagePreview: React.FC<{
   const centre = useRef<{ x: number; y: number } | null>(null);
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
-  // Read through a ref: a new onClose each render must not run the effect again, which moved focus
-  // to Close after every key on an edge (overnight 2026-11-24, s1-03).
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-
-  useEffect(() => {
-    const back = opener?.current;
-    closeRef.current?.focus();
-    // Every control in the dialog, the edge handles too (s1-02), as the large PDF preview counts them.
-    const selector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onCloseRef.current();
-        return;
-      }
-      if (event.key !== 'Tab' || !dialogRef.current) return;
-      const items: HTMLElement[] = [];
-      dialogRef.current.querySelectorAll<HTMLElement>(selector).forEach((item) => {
-        if (item.getClientRects().length > 0) items.push(item);
-      });
-      if (!items.length) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      back?.focus();
-    };
-  }, [opener]);
+  // Focus starts on Close, Tab reaches every control in the dialog, the edge handles too (s1-02),
+  // and Escape closes. The page behind keeps its scroll, as before.
+  useDialogFocus(dialogRef, onClose, { initial: closeRef, opener, lockScroll: false });
 
   const spread = () => {
     const [a, b]: Array<{ x: number; y: number }> = Array.from(pointers.current.values());
@@ -108,7 +80,7 @@ export const LargePagePreview: React.FC<{
         <button type="button" className="tk-largepreview-dim" onClick={onClose} aria-label={t('watermark-pdf.close.large.preview.10665d')} tabIndex={-1} />
         <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={title} className="tk-largepreview-box">
           <div className="tk-largepreview-bar">
-            <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} min={1} max={4} compact />
+            <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} min={1} max={MAX_ZOOM} compact />
             <button ref={closeRef} type="button" onClick={onClose} className="tk-iconbtn chef-pressable" aria-label={t('watermark-pdf.close.large.preview.10665d')}>
               <X aria-hidden size={20} />
             </button>
@@ -124,7 +96,8 @@ export const LargePagePreview: React.FC<{
             onPointerCancelCapture={onPointerEnd}
           >
             <div className="tk-largepreview-page" style={{ width: `calc(min(100%, (100dvh - 7rem) * ${width / height}) * ${zoom})`, aspectRatio: `${width} / ${height}` }}>
-              {children}
+              {/* A SharpPageLayer in the page draws the part in sight at full detail once this zoom rests. */}
+              <SharpZoomContext.Provider value={zoom}>{children}</SharpZoomContext.Provider>
             </div>
           </div>
           {foot && <p className="tk-largepreview-foot">{foot}</p>}

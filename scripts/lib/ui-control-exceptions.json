@@ -254,6 +254,16 @@
       "from": "Export 0 selected pages",
       "to": "Choose pages to export",
       "reason": "Review 2, item 17: with no page chosen, Extract's main action says what to do (pass 6b, 2026-11-24). The same button, still off until a page is chosen."
+    },
+    {
+      "type": "renamed",
+      "screens": [
+        "split"
+      ],
+      "role": "button",
+      "from": "Download",
+      "to": "Download as one ZIP",
+      "reason": "Owner approved (26 Nov 2026): a ZIP result's Download in the result sheet says it gives one ZIP. The same button; PDF results keep \"Download\"."
     }
   ]
 }

@@ -25,8 +25,9 @@ export const FitStage: React.FC<{
         width: stage.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0),
         height: stage.clientHeight - (parseFloat(style.paddingTop) || 0) - (parseFloat(style.paddingBottom) || 0),
       };
-      if (room.width <= 0 || room.height <= 0) return;
-      const scale = Math.min(room.width / width, room.height / height);
+      // No room (Watermark at 200% text on a 320 px phone: the settings leave the stage 8 px): no
+      // page, rather than the last size spilling over the position chip under the stage.
+      const scale = Math.max(0, Math.min(room.width / width, room.height / height));
       const next = { width: Math.floor(width * scale), height: Math.floor(height * scale) };
       setBox((current) => (current && current.width === next.width && current.height === next.height ? current : next));
     };

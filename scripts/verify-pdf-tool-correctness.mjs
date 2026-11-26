@@ -117,7 +117,7 @@ try {
     await page.locator('input[type=file]').nth(1).setInputFiles({ name: 'blue-scan.pdf', mimeType: 'application/pdf', buffer: scans[1] });
     await page.getByRole('button', { name: 'Save the summary', exact: true }).click();
     await page.getByRole('heading', { name: 'Comparison summary ready' }).waitFor();
-    const summary = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Comparison summary ready' }) });
+    const summary = page.locator('section.tk-compare-summary').filter({ has: page.getByRole('heading', { name: 'Comparison summary ready' }) });
     assert.ok((await summary.textContent()).includes('These pages need visual comparison'));
     assert.ok(!(await summary.textContent()).includes('100% match'));
   }

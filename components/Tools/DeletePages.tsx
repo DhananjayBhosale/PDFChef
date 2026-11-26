@@ -290,17 +290,11 @@ export const DeletePages: React.FC = () => {
   // The sr-only live line above the grid already speaks this message.
   const notice = selectionMessage ? <Notice id={NOTICE_ID} tone={selectionMessage.tone}>{selectionMessage.text}</Notice> : null;
 
-  const action = (
-    <button
-      type="button"
-      onClick={() => void handleDelete()}
-      disabled={loadingPreviews || noneMarked || allMarked || rangeInvalid || rangeDraft || status.isProcessing}
-      aria-describedby={rangeInvalid && selectionMessage?.tone === 'error' ? NOTICE_ID : undefined}
-      className="tk-primary chef-pressable"
-    >
+  const runLabel = (
+    <>
       <Trash2 aria-hidden size={18} />
       <span>{t("delete-pages.save.without.those.pages.3b9676")}</span>
-    </button>
+    </>
   );
 
   const progress = status.isProcessing ? (
@@ -360,7 +354,10 @@ export const DeletePages: React.FC = () => {
       sentence={sentence}
       chips={chips}
       notice={notice}
-      action={action}
+      onRun={() => void handleDelete()}
+      runDisabled={loadingPreviews || noneMarked || allMarked || rangeInvalid || rangeDraft || status.isProcessing}
+      runDescribedBy={rangeInvalid && selectionMessage?.tone === 'error' ? NOTICE_ID : undefined}
+      runLabel={runLabel}
       progress={progress}
       toast={toast}
     />

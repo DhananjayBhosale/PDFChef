@@ -1,9 +1,9 @@
-// Fable's phone layout and Sign's "Fit page" (owner decisions of 2026-11-15,
+// The phone layout and Sign's "Fit page" (owner decisions of 2026-11-15,
 // output/web/ui-redesign/audit/prompts/phone-fable-build.md). One check per contract, on the two
 // phone sizes (390×844, 360×800) unless a size is named. Each check passes on the new build and
 // fails on f2 (output/web/build/f2-dist), except where the detail says it held already.
 //
-//   PDF_CHEF_URL=http://127.0.0.1:4173 node tests/browser/phoneFableChecks.mjs [--only=a,b] [--shots=dir] [--label=after]
+//   PDF_CHEF_URL=http://127.0.0.1:4173 node tests/browser/phoneLayoutChecks.mjs [--only=a,b] [--shots=dir] [--label=after]
 //
 // QA files only: qa-sample.pdf, tests/fixtures/ui and tests/fixtures/photos. Works on preview or dev.
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -51,8 +51,9 @@ const check = async (id, sizes, run) => {
 const assertThat = (condition, message) => { if (!condition) throw new Error(message); };
 const open = (page, route, files) => loadFixture(page, route, files, { origin });
 const openCard = async (page, slot) => {
-  await slot.click();
+  // Read before the press: a value under the page (Watermark's position) is hidden while its own card is open.
   const id = await slot.getAttribute('aria-controls');
+  await slot.click();
   assertThat(id, 'the value opens no card');
   const card = page.locator(`[id="${id}"]`);
   await card.waitFor({ state: 'visible', timeout: 4000 });
@@ -65,7 +66,7 @@ const primary = (page) => page.locator('.tk-primary').filter({ visible: true }).
 /** The visible form controls in the foot sheet or the top band that are not part of the sentence. */
 const loose = (page) => page.evaluate(() => {
   const shown = (el) => el.getClientRects().length > 0 && !el.closest('[hidden]');
-  return [...document.querySelectorAll('.tk-sheet, .tk-band-top')].flatMap((area) => [...area.querySelectorAll(
+  return [...document.querySelectorAll('.tk-sheet, .tk-band-foot')].flatMap((area) => [...area.querySelectorAll(
     'input:not([type="checkbox"]), select, textarea, [role="slider"], [role="radio"], [role="radiogroup"], .tk-step',
   )].filter((el) => shown(el) && !el.closest('.tk-sentence-group, .tk-result, .tk-actions'))
     .map((el) => el.getAttribute('aria-label') || el.closest('label')?.textContent?.trim() || el.getAttribute('placeholder') || el.tagName));
@@ -211,7 +212,7 @@ for (const tool of [
 ]) {
   await check(`preview-${tool.id}`, phones, async (page, size) => {
     await open(page, tool.route, [qaPdf]);
-    const openers = page.locator('.tk-band-top [aria-haspopup="dialog"], .tk-pframe [aria-haspopup="dialog"]').filter({ visible: true });
+    const openers = page.locator('.tk-band-foot [aria-haspopup="dialog"], .tk-pframe [aria-haspopup="dialog"]').filter({ visible: true });
     const count = await openers.count();
     assertThat(count > 0, 'no values to open');
     // Polish item 2: a card that needs more room may take the preview down to 30%; one that fits
@@ -226,7 +227,7 @@ for (const tool of [
         const frame = document.querySelector('.tk-pframe').getBoundingClientRect();
         const pop = document.getElementById(id).getBoundingClientRect();
         return Math.round(pop.top - frame.top);
-      }, await opener.getAttribute('aria-controls'));
+      }, await card.getAttribute('id'));
       seen.push(room);
       assertThat(room >= limit, `"${name}": preview ${room} px, needs ${limit}`);
       assertThat(await card.isVisible(), 'card closed');

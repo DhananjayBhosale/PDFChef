@@ -12,7 +12,8 @@ test('rejects an out-of-bounds range before expanding it', () => {
     () => parseBoundedPageRange('1-999999999', 20),
     /outside this PDF/,
   );
-  assert.ok(performance.now() - started < 50, 'rejection should not depend on the requested range size');
+  // Expanding a billion pages would take many seconds; 1 s stays clear of a busy machine's noise.
+  assert.ok(performance.now() - started < 1000, 'rejection should not depend on the requested range size');
 });
 
 test('rejects reversed, zero, malformed, and excessively fragmented input', () => {

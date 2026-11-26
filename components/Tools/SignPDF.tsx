@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { Link } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { ToolScreen } from '../Tool/ToolScreen';
+import { SharpPageLayer } from '../Tool/SharpPageLayer';
 import { ActionRow, ResultSlot, useAnnouncer } from '../Tool/parts';
 import {
   ChevronLeft,
@@ -22,7 +23,7 @@ import { ChefSliderField } from '../UI/ChefSlider';
 import { ZoomControls } from '../UI/ZoomControls';
 import { Portal } from '../UI/Primitives';
 import { PDFFile, ProcessingStatus } from '../../types';
-import { useZoom } from '../../hooks/useZoom';
+import { MAX_ZOOM, useZoom } from '../../hooks/useZoom';
 import { usePdfPinchZoom } from '../../hooks/usePdfPinchZoom';
 import { useFileDrop } from '../../hooks/useFileDrop';
 import { useDiscardPrompt, useLeaveGuarded } from '../../hooks/useConfirmDiscard';
@@ -61,8 +62,6 @@ const getPoint = (event: PointerEvent | React.PointerEvent) => ({ x: event.clien
  * to, where a 50 MP photo kept whole froze the page and made a 100 MB PDF.
  */
 const MAX_SIGNATURE_PIXELS = 2_000_000;
-/** The page zooms to 400% of its fitted view, as in the other viewers (fable-2 item 15). */
-const SIGN_MAX_ZOOM = 4;
 
 /** Decode the picked picture once, upright and at signature size, before anything else uses it. */
 const shrinkSignatureImage = (file: File) => normalizeImageFile(file, { maxPixels: MAX_SIGNATURE_PIXELS });
@@ -439,6 +438,7 @@ const PDFPageCanvas: React.FC<{
           </div>
         )}
         <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" />
+        <SharpPageLayer source={{ pdfDoc }} pageIndex={pageIndex} zoom={zoom} />
         {signatures.map((signature) => (
           <SignatureOverlay
             key={signature.localId}
@@ -501,12 +501,12 @@ export const SignPDF: React.FC = () => {
   // to the width on a phone, 100% on a wider screen. That view reads 100%, as fit width does in the
   // other viewers (fable-2 item 15), and Reset returns to it. Its name is "Fit page" on every
   // screen (owner decision 2026-11-15). `zoom` is the page's drawn scale.
-  const { zoom: view, zoomIn, zoomOut, setExactZoom } = useZoom(1, 0.5, SIGN_MAX_ZOOM);
+  const { zoom: view, zoomIn, zoomOut, setExactZoom } = useZoom(1, 0.5, MAX_ZOOM);
   const [startZoom, setStartZoom] = useState(1);
   const startZoomRef = useRef(1);
   const zoom = view * startZoom;
   const resetZoom = useCallback(() => setExactZoom(1), [setExactZoom]);
-  const setPdfZoomViewport = usePdfPinchZoom({ zoom: view, setZoom: setExactZoom, max: SIGN_MAX_ZOOM });
+  const setPdfZoomViewport = usePdfPinchZoom({ zoom: view, setZoom: setExactZoom, max: MAX_ZOOM });
   // The page view is measured so the start zoom shows the whole page width at every size (final
   // fix, item 11: on a 768–834 px portrait tablet 100% cut the page off). It is measured again
   // whenever the page view changes size (a turned phone, a narrower window; fix round 2, item 9),
@@ -1226,7 +1226,7 @@ export const SignPDF: React.FC = () => {
                   onZoomIn={zoomIn}
                   onZoomOut={zoomOut}
                   onReset={resetZoom}
-                  max={SIGN_MAX_ZOOM}
+                  max={MAX_ZOOM}
                   resetLabel={t('sign-pdf.fit.page')}
                 />
                 <div className="tk-sign-actions">{signButtons}</div>
@@ -1262,7 +1262,7 @@ export const SignPDF: React.FC = () => {
         <div className="tk-sign-doc">
           {pageView}
           {/* The page frame (T-13): zoom at the top end, outside the page at rest; the pager at the bottom centre. */}
-          <ZoomControls className="tk-sign-zoom" zoom={view} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={SIGN_MAX_ZOOM} resetLabel={t('sign-pdf.fit.page')} />
+          <ZoomControls className="tk-sign-zoom" zoom={view} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} max={MAX_ZOOM} resetLabel={t('sign-pdf.fit.page')} />
           <div className="tk-sign-pagebar">{pager}</div>
         </div>
       ) : stampsPanel}

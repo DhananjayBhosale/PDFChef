@@ -1,14 +1,28 @@
 import assert from 'node:assert/strict';
+import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import test from 'node:test';
 import { sameWork, type WorkSnapshot } from '../../components/UI/workSignature.ts';
 
-// The code review's fixes (output/web/ui-redesign/audit/prompts/review-fixes.md).
+// "Earlier result": what the result strip compares to tell a result is out of date.
+// Fix round 2 (output/web/ui-redesign/audit/prompts/final-fix-2.md): the contracts behind each item.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 const snap = (wide: boolean, entries: Record<string, string>): WorkSnapshot => ({ wide, entries: new Map(Object.entries(entries)) });
+
+test('item 1: the earlier-result snapshot reads every input from the screen, not a list per tool', () => {
+  const signature = read('components/UI/workSignature.ts');
+  assert.match(signature, /const READ = 'input, select, textarea, \[role="slider"\], \[aria-pressed\], \[aria-checked\], \[aria-selected\], \[data-work-item\], \[data-page-item\]'/);
+  assert.match(signature, /attributeFilter: \['aria-pressed', 'aria-checked', 'aria-selected', 'aria-valuenow', 'data-work-item', 'data-page-item', 'value', 'data-kind'\]/);
+  assert.match(read('components/Tool/QueueRow.tsx'), /data-work-item=\{`\$\{name\}:\$\{file\.size\}`\}/);
+  assert.match(read('components/UI/PageThumbnail.tsx'), /data-work-item=\{`\$\{pageIndex\}:\$\{normalizedRotation\}`\}/);
+  for (const [tool, model] of [['EditPDF', 'currentSnapshot'], ['SignPDF', 'signatures'], ['ImageToPDF', 'pages'], ['MakeFillable', 'fields']]) {
+    assert.match(read(`components/Tools/${tool}.tsx`), new RegExp(`useWorkInput\\(${model}\\)`), tool);
+  }
+  // Every input back as it was: the result is current again.
+  assert.match(read('components/UI/OutputCenter.tsx'), /if \(sameWork\(now, base\.baseline\)\) \{ setStale\(false\); return; \}/);
+});
 
 test('finding 4: "Earlier result" compares by name, and a layout change alone changes nothing', () => {
   const phone = snap(false, { 'part:source': 'a.pdf', 'part:sentence:narrow:t': 'medium', 'DIV:Quality|aria-valuenow': '50' });
@@ -19,16 +33,4 @@ test('finding 4: "Earlier result" compares by name, and a layout change alone ch
   assert.equal(sameWork(phone, snap(false, { 'DIV:Quality|aria-valuenow': '50', 'part:sentence:narrow:t': 'medium', 'part:source': 'a.pdf' })), true);
   assert.equal(sameWork(phone, snap(false, { 'part:source': 'a.pdf', 'part:sentence:narrow:t': 'medium' })), false);
   assert.equal(sameWork(phone, snap(false, { ...Object.fromEntries(phone.entries), extra: '1' })), false);
-});
-
-test('findings 1, 3, 5, 6, 7: one heavy-job gate, Create PDF and Compare inputs, no repeat, Open PDF asks', () => {
-  const screen = read('components/Tool/ToolScreen.tsx');
-  assert.match(screen, /export const pressMainAction = /);
-  assert.match(screen, /const HEAVY_ACTION = '\[data-heavy-action\]';/);
-  assert.match(screen, /if \(event\.repeat \|\| isOff\(main\)\) return;/);
-  for (const tool of ['UnlockPDF', 'SecurityPDF']) assert.match(read(`components/Tools/${tool}.tsx`), /pressMainAction\(event\.currentTarget\)\) event\.preventDefault\(\);/, tool);
-  assert.match(read('components/Tools/SplitPDF.tsx'), /data-heavy-action=""/);
-  assert.match(read('components/Tools/MakePDF.tsx'), /className="tk-mtile" data-work-item=\{image\.id\}/);
-  assert.match(read('components/Tools/ComparePDF.tsx'), /useWorkInput\(`\$\{file1\?\.name/);
-  assert.match(read('components/UI/OutputCenter.tsx'), /navigate\('\/view', \{ state: \{ openTools: openTools && !accessLocked, openedPdfId: opened\.id, leavesWork: !openTools \} \}\);/);
 });

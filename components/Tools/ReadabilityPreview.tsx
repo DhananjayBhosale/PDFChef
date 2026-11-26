@@ -18,6 +18,7 @@ import {
 import { Portal } from '../UI/Primitives';
 import { ChefSlider } from '../UI/ChefSlider';
 import { type AdaptiveConfig, generatePreviewPair, getInterpolatedConfig } from '../../services/pdfBrowser';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 
 interface Props {
   file: File;
@@ -73,56 +74,7 @@ export const ReadabilityPreview: React.FC<Props> = ({ file, files, config: initi
   const titleId = useId();
   const reduceMotion = useReducedMotion();
 
-  useEffect(() => {
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const selector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-    const focusables = (): HTMLElement[] => {
-      const panel = panelRef.current;
-      if (!panel) return [];
-      const items: HTMLElement[] = [];
-      panel.querySelectorAll(selector).forEach((item) => {
-        if (item instanceof HTMLElement && item.getClientRects().length > 0) items.push(item);
-      });
-      return items;
-    };
-    (focusables()[0] || panelRef.current)?.focus();
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const items = focusables();
-      if (items.length === 0) {
-        event.preventDefault();
-        panelRef.current?.focus();
-        return;
-      }
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (!panelRef.current?.contains(document.activeElement)) {
-        event.preventDefault();
-        first.focus();
-      } else if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    const { overflow } = document.body.style;
-    document.body.style.overflow = 'hidden';
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = overflow;
-      if (previous?.isConnected) previous.focus();
-    };
-  }, [onClose]);
+  useDialogFocus(panelRef, onClose);
 
   const previewFiles = useMemo(() => {
     return files?.length ? files : [{ file, name: file.name }];

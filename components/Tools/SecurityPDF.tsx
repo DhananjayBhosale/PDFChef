@@ -229,17 +229,14 @@ export const SecurityPDF: React.FC = () => {
         />
       )}
       notice={notice}
-      action={(
-        <button
-          type="button"
-          disabled={!canProtect || status.isProcessing}
-          aria-describedby={validationMessage ? validationId : undefined}
-          onClick={() => void handleProtect()}
-          className="tk-primary chef-pressable"
-        >
+      onRun={() => void handleProtect()}
+      runDisabled={!canProtect || status.isProcessing}
+      runDescribedBy={validationMessage ? validationId : undefined}
+      runLabel={(
+        <>
           <Lock aria-hidden size={18} />
           <span>{t("security-pdf.protect.with.password.b73965")}</span>
-        </button>
+        </>
       )}
       progress={status.isProcessing ? (
         <ProgressLine label={status.message} percent={formatPercent(Math.max(0, Math.min(100, status.progress)))} value={status.progress} />

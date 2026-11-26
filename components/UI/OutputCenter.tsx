@@ -472,9 +472,10 @@ export const OutputCenter: React.FC = () => {
       onClick={() => void act(() => openPdf(false), t("output-center.that.file.could.not.be.saved.4d740f"))}
     >{t("output-center.open.pdf.5b1034")}</Button>
   );
+  // A ZIP result (several parts) says what Download gives: "Download as one ZIP" (owner, 26 Nov 2026).
   // Split set to separate PDFs (owner decision 2026-11-17): the parts are what was saved, so their
-  // status leads the sheet and the ZIP is a plain "Download as one ZIP", not the filled button that
-  // invites saving everything a second time.
+  // status leads the sheet and the ZIP is a plain button, not the filled button that invites
+  // saving everything a second time.
   const partsFirst = isArchive && separate.visible && (separate.done || separate.saving || Boolean(record?.separateSave));
   const downloadButton = (primary === 'save' || !isPdf) && (
     <Button
@@ -483,7 +484,7 @@ export const OutputCenter: React.FC = () => {
       busy={busy}
       icon={<Download aria-hidden size={16} />}
       onClick={() => void act(downloadResult, t("output-center.that.file.could.not.be.saved.4d740f"))}
-    >{partsFirst ? t('output-center.download.asZip') : t("output-center.download.9ce5b1")}</Button>
+    >{isArchive ? t('output-center.download.asZip') : t("output-center.download.9ce5b1")}</Button>
   );
   const primaryAction = primary === 'save' ? downloadButton : primary === 'share' ? shareButton : openButton;
 

@@ -240,7 +240,29 @@ export interface SplitResult {
   /** True when more than one part was produced and the parts had to be zipped to be delivered. */
   isArchive: boolean;
   partCount: number;
+  /**
+   * The ZIP's PDFs under their entry names, in order, when the caller asked for them (`keepParts`):
+   * parts saved one by one need not be read back out of the ZIP.
+   */
+  parts?: SplitPart[];
 }
+
+export interface SplitPart { name: string; blob: Blob }
+
+/** Zips the parts; with `keepParts`, also hands them back as PDFs. */
+const zipSplitParts = async (entries: Array<{ name: string; bytes: Uint8Array }>, keepParts: boolean, signal?: AbortSignal): Promise<SplitResult> => {
+  const zip = new JSZip();
+  entries.forEach((entry) => zip.file(entry.name, entry.bytes));
+  await pdfJobCheckpoint(signal, true);
+  const archive = await zip.generateAsync({ type: 'blob' });
+  await pdfJobCheckpoint(signal, true);
+  return {
+    blob: archive,
+    isArchive: true,
+    partCount: entries.length,
+    ...(keepParts ? { parts: entries.map((entry) => ({ name: entry.name, blob: new Blob([entry.bytes], { type: 'application/pdf' }) })) } : {}),
+  };
+};
 
 /**
  * `SplitPdfToolProcessor` in the Android app.
@@ -256,6 +278,7 @@ export const splitPDFByPagesPerFile = async (
   selectedPageIndices: number[] = [],
   onProgress?: (current: number, total: number) => void,
   signal?: AbortSignal,
+  keepParts = false,
 ): Promise<SplitResult> => {
   await pdfJobCheckpoint(signal);
   const sanitizedPagesPerFile = Math.max(1, Math.floor(pagesPerFile || 1));
@@ -297,7 +320,7 @@ export const splitPDFByPagesPerFile = async (
     };
   }
 
-  const zip = new JSZip();
+  const entries: Array<{ name: string; bytes: Uint8Array }> = [];
   for (let startIndex = 0; startIndex < exportIndices.length; startIndex += sanitizedPagesPerFile) {
     await pdfJobCheckpoint(signal, true);
     const chunk = exportIndices.slice(startIndex, startIndex + sanitizedPagesPerFile);
@@ -310,17 +333,10 @@ export const splitPDFByPagesPerFile = async (
     removeUnusedPdfObjects(partPdf);
     const partBytes = await partPdf.save();
     throwIfPdfJobAborted(signal);
-    zip.file(`part_${partNumber}_${buildPageExportLabel(chunk)}.pdf`, partBytes);
+    entries.push({ name: `part_${partNumber}_${buildPageExportLabel(chunk)}.pdf`, bytes: partBytes });
   }
 
-  await pdfJobCheckpoint(signal, true);
-  const archive = await zip.generateAsync({ type: 'blob' });
-  await pdfJobCheckpoint(signal, true);
-  return {
-    blob: archive,
-    isArchive: true,
-    partCount: totalParts,
-  };
+  return zipSplitParts(entries, keepParts, signal);
 };
 
 /** Greedy, measured split matching Android's maximum-size mode. Every candidate PDF is actually
@@ -332,6 +348,7 @@ export const splitPDFByMaximumSize = async (
   selectedPageIndices: number[] = [],
   onProgress?: (current: number, total: number) => void,
   signal?: AbortSignal,
+  keepParts = false,
 ): Promise<SplitResult> => {
   await pdfJobCheckpoint(signal);
   const maximumBytes = Math.floor(maximumSizeMb * 1024 * 1024);
@@ -393,11 +410,7 @@ export const splitPDFByMaximumSize = async (
   if (parts.length === 1) {
     return { blob: new Blob([parts[0].bytes], { type: 'application/pdf' }), isArchive: false, partCount: 1 };
   }
-  const zip = new JSZip();
-  parts.forEach((part, index) => zip.file(`part_${index + 1}_${buildPageExportLabel(part.indices)}.pdf`, part.bytes));
-  const archive = await zip.generateAsync({ type: 'blob' });
-  await pdfJobCheckpoint(signal, true);
-  return { blob: archive, isArchive: true, partCount: parts.length };
+  return zipSplitParts(parts.map((part, index) => ({ name: `part_${index + 1}_${buildPageExportLabel(part.indices)}.pdf`, bytes: part.bytes })), keepParts, signal);
 };
 
 /**

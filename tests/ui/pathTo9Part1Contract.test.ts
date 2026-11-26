@@ -16,7 +16,7 @@ test('item 1: a phone editor closes on a pick or Enter, and has one close contro
   assert.match(pop, /event\.key !== 'Enter' \|\| event\.defaultPrevented \|\| event\.nativeEvent\.isComposing/);
   assert.match(pop, /field\.getAttribute\('aria-invalid'\) === 'true' \|\| field\.closest\('\[data-enter-invalid\]'\)/);
   // Owner decision 2026-11-15, item 5: Done is gone; every card has the one close control
-  // (tests/ui/phoneFable.test.ts pins it).
+  // (tests/ui/phoneLayout.test.ts pins it).
   assert.doesNotMatch(pop, /tk-pop-done/);
 });
 

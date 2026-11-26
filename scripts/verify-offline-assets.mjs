@@ -254,6 +254,10 @@ for (const path of effectiveRuntimePaths.slice(0, 4)) {
   }
 }
 const indexHtml = await readFile(indexPath, 'utf8');
+// The worker tells a page of its own build by this entry script (isOwnShell in public/sw.js).
+// If the built page stopped matching, every load would look like another build.
+const ownEntry = (indexHtml.match(/<script\b[^>]*>/gi) || []).filter(tag => /\btype="module"/i.test(tag)).map(tag => (/\bsrc="([^"]+)"/i.exec(tag) || [])[1]);
+if (ownEntry.length !== 1 || !manifest.includes(ownEntry[0])) fail('dist/index.html does not name one module entry script that the service worker precaches');
 if (/<script\b[^>]*\bsrc=["']https?:\/\//i.test(indexHtml)) fail('remote script dependency found in dist/index.html');
 if (/<link\b[^>]*\brel=["'](?:stylesheet|modulepreload|preload)["'][^>]*\bhref=["']https?:\/\//i.test(indexHtml)) {
   fail('remote preload or stylesheet dependency found in dist/index.html');

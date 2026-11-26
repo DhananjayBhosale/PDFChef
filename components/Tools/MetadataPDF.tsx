@@ -235,11 +235,13 @@ export const MetadataPDF: React.FC = () => {
       )}
       chips={wide ? <>{chips}{emptiesDescription}</> : undefined}
       notice={wide ? <>{outcome}{emptiesNote}</> : outcome}
-      action={(
-        <button type="button" onClick={() => void handleSave()} disabled={status.isProcessing} className="tk-primary chef-pressable">
+      onRun={() => void handleSave()}
+      runDisabled={status.isProcessing}
+      runLabel={(
+        <>
           <Save aria-hidden size={18} />
           <span>{t("metadata-pdf.save.changes.dd0ae7")}</span>
-        </button>
+        </>
       )}
       progress={status.isProcessing ? (
         <ProgressLine label={status.message} percent={formatPercent(Math.max(0, Math.min(100, status.progress)))} value={status.progress} />

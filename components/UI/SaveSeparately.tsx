@@ -6,7 +6,7 @@ import { triggerBrowserDownload } from '../../services/pdfShared';
 import type { FreshResult } from '../../services/platform/contracts';
 import type { SeparateSaveRequest } from '../../services/pdfShared';
 import {
-  countZipParts, readZipParts, saveParts, separatePath,
+  countZipParts, readZipParts, saveParts, separatePartName, separatePath,
   type SaveOutcome, type SeparatePart, type SeparatePath, type SeparatePlatform,
 } from '../../services/saveSeparately';
 
@@ -77,6 +77,13 @@ export const useSeparateSave = ({
   const parts = useRef<{ id: string; name: string; parts: SeparatePart[] } | null>(null);
   const loadRef = useRef(load);
   loadRef.current = load;
+  // The parts the split handed over in memory, named for the result's name now; null when only
+  // the ZIP is there (a result reopened from Recent), which is then read.
+  const autoRef = useRef(auto);
+  autoRef.current = auto;
+  const handedParts = (forName: string): SeparatePart[] | null => autoRef.current?.parts?.length
+    ? autoRef.current.parts.map((part) => ({ name: separatePartName(forName, part.name), blob: part.blob }))
+    : null;
   const nameRef = useRef(name);
   nameRef.current = name;
   // The result on screen now, and the result whose save is running (set before its first await, so
@@ -100,7 +107,9 @@ export const useSeparateSave = ({
     pickedFolder.current = null;
     if (!path || !id) return undefined;
     let alive = true;
-    const counting = readFirst
+    const handed = handedParts(nameRef.current);
+    if (handed) parts.current = { id, name: nameRef.current, parts: handed };
+    const counting = handed ? Promise.resolve(handed.length) : readFirst
       ? loadRef.current().then(async (zip) => {
         if (!zip) return 0;
         const readName = nameRef.current;
@@ -124,6 +133,7 @@ export const useSeparateSave = ({
     void (async () => {
       try {
         let all = parts.current?.id === owner && parts.current.name === name ? parts.current.parts : null;
+        if (!all) all = handedParts(name);
         if (!all) {
           const zip = await loadRef.current();
           if (!zip) throw new Error('The ZIP is not available.');

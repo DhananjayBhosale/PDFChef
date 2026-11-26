@@ -261,7 +261,7 @@ try {
   await both.waitForTimeout(1_000);
   assert.equal(early.length, 0, 'nothing is saved by itself');
   const zipDownload = both.waitForEvent('download', { timeout: 30_000 });
-  await bothSheet.getByRole('button', { name: 'Download', exact: true }).click();
+  await bothSheet.getByRole('button', { name: /^Download( as one ZIP)?$/ }).click();
   const zipFile = await zipDownload;
   assert.match(zipFile.suggestedFilename(), /\.zip$/, 'one ZIP');
   const zipChunks = [];

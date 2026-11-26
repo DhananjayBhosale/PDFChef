@@ -872,6 +872,32 @@ html[data-system-text-scale='large'] .chef-clamp-2 {
 .chef-slider-row[data-titled] > .contents > .chef-slider-value { grid-column: 2; }
 .chef-slider-row[data-titled] > .tk-taps { grid-column: 1 / -1; grid-row: 2; }
 
+/* Large text only (the app's Largest, or the phone's text at 110% or more; Popover's LARGE_TEXT):
+   a card with two sliders keeps both in view (26 Nov 2026). Normal text sizes do not match. */
+/* The tap choices size to their own words and share one row when they fit, as dense choices do. */
+:root:is([data-text-scale="larger"], [data-system-text-scale="large"]) .tk-pop .tk-sliders .tk-taps:not([style]) { display: flex; flex-wrap: wrap; }
+:root:is([data-text-scale="larger"], [data-system-text-scale="large"]) .tk-pop .tk-sliders .tk-taps:not([style]) > .tk-tap { flex: 1 1 auto; padding-inline: 6px; white-space: nowrap; }
+/* A fixed grid (Page Numbers' 3 x 2 places) keeps its three columns, which map to the page's left,
+   centre and right, and shares the card's width: each label wraps inside its cell ("Bottom /
+   center"), and a word wider than its cell breaks rather than run past the card (26 Nov 2026).
+   The inline columns of `Taps` are `auto`, which never shrink below a whole word. */
+:root:is([data-text-scale="larger"], [data-system-text-scale="large"]) .tk-pop .tk-taps[style*="repeat(3,"] { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; column-gap: 4px; }
+:root:is([data-text-scale="larger"], [data-system-text-scale="large"]) .tk-pop .tk-taps[style*="repeat(3,"] > .tk-tap { padding-inline: 2px; overflow-wrap: anywhere; hyphens: auto; }
+/* The number box is a touch target already; it stops growing with the text at 48 px. */
+:root:is([data-text-scale="larger"], [data-system-text-scale="large"]) .tk-pop .tk-sliders .chef-slider-value { height: min(2rem, 48px); padding-inline: min(0.5rem, 8px); }
+/* Six digits wide ("100.00"), not 3.5rem, so the label and the box share a line more often. */
+:root:is([data-text-scale="larger"], [data-system-text-scale="large"]) .tk-pop .tk-sliders .chef-slider-value input { width: min(3.5rem, 6ch); }
+/* When the label and the number box still do not fit side by side, the box goes under the label. */
+:root:is([data-text-scale="larger"], [data-system-text-scale="large"]) .tk-pop .tk-sliders > div > .flex.min-h-8 { min-height: min(2rem, 48px); flex-wrap: wrap; gap: 4px 8px; }
+/* A one-row slider whose card is too narrow for its label, slider and number side by side
+   (the slider was 15 px wide at 200% on a 320 px phone) puts the slider on its own line. */
+:root:is([data-text-scale="larger"], [data-system-text-scale="large"]) .tk-pop .tk-sliders { container-type: inline-size; }
+@container (max-width: 16rem) {
+  :root:is([data-text-scale="larger"], [data-system-text-scale="large"]) .chef-slider-row:not([data-titled]) { grid-template-columns: minmax(0, 1fr) auto; }
+  :root:is([data-text-scale="larger"], [data-system-text-scale="large"]) .chef-slider-row:not([data-titled]) > .contents > .chef-slider-value { grid-column: 2; }
+  :root:is([data-text-scale="larger"], [data-system-text-scale="large"]) .chef-slider-row:not([data-titled]) > .chef-slider { grid-column: 1 / -1; grid-row: 2; }
+}
+
 /* The value field draws the ring around the whole field, so the ring of the number inside it
    never cuts through the unit (Page Numbers' "14 pt" on Android, 2026-11-15). */
 .chef-slider-value:focus-within {

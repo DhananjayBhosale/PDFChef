@@ -137,6 +137,15 @@ export const PREVIEW_FLOOR = 0.3;
 export const PREVIEW_FLOOR_TALL = 0.2;
 /** The smallest height a card keeps, so its controls stay usable at very large text. */
 const CARD_FLOOR = 136;
+/** The app's own Largest text, or the phone's text at 110% or more (the gate of index.css's large-text slider rules). */
+const LARGE_TEXT = '[data-text-scale="larger"], [data-system-text-scale="large"]';
+/**
+ * A card that asked for more room (a `previewFloor` below the default) at large text: at 200% on a
+ * small phone the settings rows fill most of the screen and the page is a strip, so such a card ends
+ * above the main action (covering the rows) and may rise to the top of the screen. It stays
+ * content-sized. Watermark's two sliders had 36 px to scroll in (26 Nov 2026).
+ */
+const roomyAtLargeText = (previewFloor: number) => previewFloor < PREVIEW_FLOOR && document.documentElement.matches(LARGE_TEXT);
 
 /**
  * Whether a tap on `option` settles the editor (path to 9, item 1): a slider's tap choice does
@@ -176,10 +185,10 @@ export const Pop: React.FC<{
   useI18n();
   const wide = useWide();
   const { open, hide, anchor, openerRef } = pop;
-  // Phone: a sentence drawn in the band above the page (a live-preview tool) has the editor open
-  // at the foot, below it; the page shrinks into the room above the card (`quiet`).
-  const inTopBand = open && !wide && Boolean(openerRef.current?.closest('.tk-band-top'));
-  const quiet = quietProp || inTopBand;
+  // Phone: a sentence drawn in the band under the page (a live-preview tool) has the editor open
+  // above it; the page shrinks into the room above the card (`quiet`).
+  const inFootBand = open && !wide && Boolean(openerRef.current?.closest('.tk-band-foot'));
+  const quiet = quietProp || inFootBand;
   // Phone, live-preview tool: the card never takes the preview below 40% of the screen (owner
   // decision 2026-11-15, item 4). Its height is capped; what does not fit scrolls inside it.
   const [cardCap, setCardCap] = useState<number | null>(null);
@@ -210,9 +219,9 @@ export const Pop: React.FC<{
       const tool = openerRef.current?.closest('.tk-tool') as HTMLElement | null | undefined;
       const rows = tool ? Array.from(tool.querySelectorAll<HTMLElement>(':scope > .tk-sheet > .tk-actions, :scope > .tk-sheet > .tk-progress-block, :scope > .tk-footbar > .tk-actions, :scope > .tk-footbar > .tk-progress-block')) : [];
       const actionRow = rows.find((item) => item.getClientRects().length > 0);
-      // A sentence in the foot sheet sits above the main action: the editor then ends above the
-      // sentence, so the next slot stays in view and tappable as well as the main action.
-      const sentence = openerRef.current?.closest('.tk-sheet > .tk-sentence-group') as HTMLElement | null | undefined;
+      // A sentence in the foot sheet or the foot band sits above the main action: the editor then
+      // ends above the sentence, so the next slot stays in view and tappable as well as the main action.
+      const sentence = roomyAtLargeText(previewFloor) ? null : openerRef.current?.closest(':is(.tk-sheet, .tk-band-foot) > .tk-sentence-group') as HTMLElement | null | undefined;
       const row = sentence && sentence.getClientRects().length > 0 ? sentence : actionRow;
       const top = row?.getBoundingClientRect().top ?? window.innerHeight;
       // An on-screen keyboard that overlays the page (iOS Safari) shrinks only the visual
@@ -236,7 +245,7 @@ export const Pop: React.FC<{
       window.visualViewport?.removeEventListener('resize', schedule);
       window.visualViewport?.removeEventListener('scroll', schedule);
     };
-  }, [open, wide, openerRef]);
+  }, [open, wide, openerRef, previewFloor]);
 
   // Phone, live-preview tool (a quiet editor): the page shrinks into the room above the open
   // editor, so the stamp, number or frame being changed stays in view. On a 375×667 phone the
@@ -261,7 +270,9 @@ export const Pop: React.FC<{
         // the card may cover the page and the rows above it, up to the top of the tool (Android
         // sync, 2026-11-15: at 200% text the From and To boxes had 36 px to scroll in).
         const typing = document.documentElement.hasAttribute('data-chef-keyboard');
-        const top = typing ? Math.max(0, tool.getBoundingClientRect().top) : room.top + window.innerHeight * previewFloor;
+        const top = roomyAtLargeText(previewFloor) ? 0
+          : typing ? Math.max(0, tool.getBoundingClientRect().top)
+          : room.top + window.innerHeight * previewFloor;
         const cap = Math.max(CARD_FLOOR, Math.floor(bottom - top - 8));
         setCardCap((current) => (current === cap ? current : cap));
       }
@@ -274,7 +285,7 @@ export const Pop: React.FC<{
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
     observer?.observe(node);
     const keyboard = new MutationObserver(measure);
-    keyboard.observe(document.documentElement, { attributes: true, attributeFilter: ['data-chef-keyboard'] });
+    keyboard.observe(document.documentElement, { attributes: true, attributeFilter: ['data-chef-keyboard', 'data-text-scale', 'data-system-text-scale'] });
     return () => {
       observer?.disconnect();
       keyboard.disconnect();
@@ -322,14 +333,18 @@ export const Pop: React.FC<{
     if (anchor.width >= panelWidth * 0.8) left = anchor.left;
     left = Math.min(Math.max(left, margin), window.innerWidth - panelWidth - margin);
     const bottom = visibleBottom();
-    const below = bottom - anchor.bottom - margin >= Math.min(rect.height, 360) || anchor.top < rect.height;
+    // The sentence is at the foot of the tool, so most editors open above their slot. Below when
+    // it fits there; otherwise on the side with more room, where it scrolls inside if it must.
+    const roomBelow = bottom - anchor.bottom - 6 - margin;
+    const roomAbove = anchor.top - 6 - margin;
+    const below = roomBelow >= Math.min(rect.height, 360) || roomBelow >= roomAbove;
     setStyle({
       position: 'fixed',
       width: panelWidth,
       left,
       ...(below ? { top: anchor.bottom + 6 } : { bottom: window.innerHeight - anchor.top + 6 }),
-      // Never under an on-screen keyboard: the editor scrolls inside instead.
-      ...(below ? { maxHeight: Math.max(160, bottom - anchor.bottom - 6 - margin) } : {}),
+      // Never under an on-screen keyboard or off the top of the screen: the editor scrolls inside instead.
+      maxHeight: Math.max(160, below ? roomBelow : Math.min(roomAbove, 560)),
       transformOrigin: `${Math.round(anchor.left + anchor.width / 2 - left)}px ${below ? '0%' : '100%'}`,
     });
   }, [open, anchor, wide, width, viewportTick]);

@@ -1,7 +1,12 @@
 
 import { useState, useCallback } from 'react';
 
-export const useZoom = (initial = 1, min = 0.5, max = 2.0, step = 0.25) => {
+/** How far a page zooms on every screen: 400%. */
+export const MAX_ZOOM = 4;
+/** The large PDF preview (`PDFPreviewModal`) is the dialog for looking closely: 500% (owner, 26 Nov 2026). */
+export const LARGE_PREVIEW_MAX_ZOOM = 5;
+
+export const useZoom = (initial = 1, min = 0.5, max = MAX_ZOOM, step = 0.25) => {
   const [zoom, setZoom] = useState(initial);
 
   // Steps land on the step grid, so a zoom set by a pinch or a paragraph tap (say 249%) goes to

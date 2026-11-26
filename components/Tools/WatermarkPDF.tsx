@@ -11,10 +11,11 @@ import { StatusToast } from '../UI/StatusToast';
 import { ToolScreen } from '../Tool/ToolScreen';
 import { ChangeFile } from '../Tool/ToolTop';
 import { ChipEditor, Sentence } from '../Tool/Sentence';
-import { EnterCloses } from '../Tool/Popover';
+import { EnterCloses, PREVIEW_FLOOR_TALL } from '../Tool/Popover';
 import { Notice, ProgressLine } from '../Tool/parts';
 import { FitStage } from '../Tool/FitStage';
 import { LargePagePreview } from '../Tool/LargePagePreview';
+import { SharpPageLayer } from '../Tool/SharpPageLayer';
 import { PreviewFrame } from '../Tool/PreviewFrame';
 import { usePinchToOpen } from '../Tool/PagePeek';
 import { clip, clipLength, degrees, pair, percent, points } from '../Tool/values';
@@ -40,6 +41,8 @@ const WatermarkPreviewSurface: React.FC<{
   large: boolean;
   isDragging: boolean;
   imageUrl: string | null;
+  /** The PDF the picture is page 1 of: the large preview draws it sharp when zoomed. */
+  file: File | null;
   layout: ReturnType<typeof watermarkLayout>;
   pageWidth: number;
   pageHeight: number;
@@ -53,6 +56,7 @@ const WatermarkPreviewSurface: React.FC<{
   large,
   isDragging,
   imageUrl,
+  file,
   layout,
   pageWidth,
   pageHeight,
@@ -71,7 +75,11 @@ const WatermarkPreviewSurface: React.FC<{
       onPointerDown={onPointerDown}
     >
       {imageUrl ? (
-        <img src={imageUrl} alt={t("watermark-pdf.watermark.preview.bb6d55")} className="h-full w-full object-contain" draggable={false} />
+        <>
+          <img src={imageUrl} alt={t("watermark-pdf.watermark.preview.bb6d55")} className="h-full w-full object-contain" draggable={false} />
+          {/* Above the picture, under the watermark text. */}
+          <SharpPageLayer source={{ file }} pageIndex={0} />
+        </>
       ) : (
         <div className="flex h-full items-center justify-center text-xs text-[var(--text-tertiary)]">{t("watermark-pdf.no.preview.4b8bac")}</div>
       )}
@@ -567,6 +575,9 @@ export const WatermarkPDF: React.FC = () => {
           bidi: 'ltr',
           icon: <Blend size={15} strokeWidth={2} />,
           quiet: true,
+          // Two sliders with their tap choices: taller than other cards when it needs to be, as
+          // Page Numbers' position card is, so Rotation is not cut on a short phone.
+          previewFloor: PREVIEW_FLOOR_TALL,
           ...settingSlot('opacity', <div className="tk-sliders">{opacityEditor}{rotationEditor}</div>),
         },
       }}
@@ -588,6 +599,7 @@ export const WatermarkPDF: React.FC = () => {
         large={false}
         isDragging={isDragging}
         imageUrl={originalPreviewUrl}
+        file={file?.file ?? null}
         layout={layout}
         pageWidth={previewDimensions.width}
         pageHeight={previewDimensions.height}
@@ -619,6 +631,8 @@ export const WatermarkPDF: React.FC = () => {
           text={positionText}
           editor={positionEditor}
           quiet
+          // Two sliders, as Page Numbers' Position card: both show whole at large text.
+          previewFloor={PREVIEW_FLOOR_TALL}
           disabled={status.isProcessing}
         />
       )}
@@ -643,16 +657,11 @@ export const WatermarkPDF: React.FC = () => {
     </div>
   ) : undefined;
 
-  const action = (
-    <button
-      type="button"
-      onClick={handleApplyWatermark}
-      disabled={!canSave}
-      className="tk-primary chef-pressable"
-    >
+  const runLabel = (
+    <>
       <Droplets aria-hidden size={18} />
       <span>{t("watermark-pdf.save.stamped.pdf.4051c0")}</span>
-    </button>
+    </>
   );
 
   const progress = status.isProcessing ? (
@@ -678,7 +687,9 @@ export const WatermarkPDF: React.FC = () => {
         side={settings}
         sentence={sentence}
         notice={!wide && textValidationMessage ? <Notice tone="error" id="watermark-text-error" role="alert">{textValidationMessage}</Notice> : undefined}
-        action={action}
+        onRun={handleApplyWatermark}
+        runDisabled={!canSave}
+        runLabel={runLabel}
         progress={progress}
         toast={toast}
       />
@@ -698,6 +709,7 @@ export const WatermarkPDF: React.FC = () => {
             large
             isDragging={isDragging}
             imageUrl={originalPreviewUrl}
+            file={file.file}
             layout={layout}
             pageWidth={previewDimensions.width}
             pageHeight={previewDimensions.height}

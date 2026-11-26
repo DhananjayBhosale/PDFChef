@@ -111,11 +111,13 @@ export const FlattenPDF: React.FC = () => {
           <span className={wide ? undefined : 'sr-only'}>{t("flatten-pdf.preview.pdf.f53f8f")}</span>
         </button>
       )}
-      action={(
-        <button type="button" disabled={status.isProcessing} onClick={() => void handleFlatten()} className="tk-primary chef-pressable">
+      onRun={() => void handleFlatten()}
+      runDisabled={status.isProcessing}
+      runLabel={(
+        <>
           <Maximize aria-hidden size={18} />
           <span>{t("flatten-pdf.lock.the.answers.and.save.264d62")}</span>
-        </button>
+        </>
       )}
       progress={status.isProcessing ? (
         <ProgressLine label={status.message} percent={formatPercent(Math.max(0, Math.min(100, status.progress)))} value={status.progress} />
